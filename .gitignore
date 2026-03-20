@@ -1,3 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Baza de date
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic artefacte accidentale
+backend/=*
+
+# Node
 node_modules/
 dist/
+.vite/
+
+# Env
 .env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
