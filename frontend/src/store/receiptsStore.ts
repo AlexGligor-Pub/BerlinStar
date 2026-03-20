@@ -83,7 +83,11 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
     body: JSON.stringify(body),
   });
 
-  if (!res.ok) throw new Error("Eroare la salvarea bonului.");
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
   const created = mapFromApi(await res.json());
   setReceipts([created, ...receipts()]);
   localStorage.setItem(CACHE_KEY, JSON.stringify(receipts()));

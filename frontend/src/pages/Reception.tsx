@@ -1,10 +1,13 @@
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, connectSSE, disconnectSSE, sseStatus, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
+import { setResume } from "../store/resumeStore";
 
 const METODE = ["Platit cash", "Platit cu cardul", "Platit prin OP", "Platit Partial"];
 
 function ReceiptCard(props: { receipt: Receipt }) {
+  const navigate = useNavigate();
   const [expanded, setExpanded] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
   const [metodaDraft, setMetodaDraft] = createSignal(props.receipt.metodaPlata ?? "");
@@ -44,6 +47,23 @@ function ReceiptCard(props: { receipt: Receipt }) {
               {r.metodaPlata ?? "Neplatit"}
             </span>
           </div>
+          <Show when={!r.metodaPlata}>
+            <button
+              class="btn btn-sm btn-primary rcard-continua-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setResume({
+                  titlu: r.titlu,
+                  descriere: r.descriere ?? "",
+                  dateTehn: r.dateTehn ?? "",
+                  items: r.items,
+                });
+                navigate("/");
+              }}
+            >
+              Continua
+            </button>
+          </Show>
           <span class="rcard-chevron">{expanded() ? "▲" : "▼"}</span>
         </div>
       </div>

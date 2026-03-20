@@ -58,6 +58,10 @@ export function clearCart() {
   setCart("items", []);
 }
 
+export function replaceCart(items: CartItem[]) {
+  setCart("items", [...items]);
+}
+
 export function cartTotal() {
   return cart.items.reduce((sum, i) => sum + i.price * i.qty, 0);
 }

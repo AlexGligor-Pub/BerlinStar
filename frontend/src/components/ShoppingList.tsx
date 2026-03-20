@@ -1,7 +1,8 @@
-import { For, Show, createSignal } from "solid-js";
-import { cart, updateQty, clearCart, cartTotal } from "../store/cartStore";
+import { For, Show, createSignal, onMount } from "solid-js";
+import { cart, updateQty, clearCart, cartTotal, replaceCart } from "../store/cartStore";
 import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
+import { consumeResume } from "../store/resumeStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -13,6 +14,17 @@ export default function ShoppingList() {
   const [modalDraft, setModalDraft] = createSignal("");
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
   const [showSuccess, setShowSuccess] = createSignal(false);
+  const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
+
+  onMount(() => {
+    const r = consumeResume();
+    if (r) {
+      setTitlu(r.titlu);
+      setDescriere(r.descriere);
+      setDateTehn(r.dateTehn);
+      replaceCart(r.items);
+    }
+  });
 
   let warnTimer: ReturnType<typeof setTimeout>;
   let successTimer: ReturnType<typeof setTimeout>;
@@ -37,22 +49,26 @@ export default function ShoppingList() {
   async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
-    await saveReceipt({
-      date: new Date().toISOString(),
-      casier: auth.user ?? "—",
-      titlu: titlu().trim(),
-      descriere: descriere().trim() || undefined,
-      dateTehn: dateTehn().trim() || undefined,
-      items: [...cart.items],
-      total: cartTotal(),
-    });
-    clearCart();
-    setTitlu("");
-    setDescriere("");
-    setDateTehn("");
-    setShowSuccess(true);
-    clearTimeout(successTimer);
-    successTimer = setTimeout(() => setShowSuccess(false), 1000);
+    try {
+      await saveReceipt({
+        date: new Date().toISOString(),
+        casier: auth.user ?? "—",
+        titlu: titlu().trim(),
+        descriere: descriere().trim() || undefined,
+        dateTehn: dateTehn().trim() || undefined,
+        items: [...cart.items],
+        total: cartTotal(),
+      });
+      clearCart();
+      setTitlu("");
+      setDescriere("");
+      setDateTehn("");
+      setShowSuccess(true);
+      clearTimeout(successTimer);
+      successTimer = setTimeout(() => setShowSuccess(false), 1000);
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "Eroare necunoscuta.");
+    }
   }
 
   return (
@@ -125,6 +141,20 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Error modal */}
+      <Show when={errorMsg() !== null}>
+        <div class="sl-modal-overlay" onClick={() => setErrorMsg(null)}>
+          <div class="sl-error-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-error-modal-header">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Eroare la salvare</span>
+            </div>
+            <p class="sl-error-modal-msg">{errorMsg()}</p>
+            <button class="btn btn-primary btn-sm" onClick={() => setErrorMsg(null)}>OK</button>
+          </div>
+        </div>
+      </Show>
 
       {/* Success modal */}
       <Show when={showSuccess()}>
