@@ -23,5 +23,7 @@ class CategoryRead(BaseModel):
     name: str
     theme_id: int
     image_path: str | None
+    created_at: datetime
+    updated_at: datetime | None
     is_deleted: bool
     deleted_at: datetime | None

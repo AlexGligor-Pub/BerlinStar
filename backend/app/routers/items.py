@@ -110,6 +110,7 @@ async def update_item(
         raise HTTPException(404, "Item-ul nu a fost gasit.")
     for k, v in body.model_dump().items():
         setattr(item, k, v)
+    item.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(item)
     return item
@@ -127,6 +128,7 @@ async def patch_item(
         raise HTTPException(404, "Item-ul nu a fost gasit.")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
+    item.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(item)
     return item

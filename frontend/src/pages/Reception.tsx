@@ -1,5 +1,5 @@
-import { For, Show, createSignal } from "solid-js";
-import { receipts, deleteReceipt, type Receipt } from "../store/receiptsStore";
+import { For, Show, createSignal, onMount } from "solid-js";
+import { receipts, deleteReceipt, loadReceipts, type Receipt } from "../store/receiptsStore";
 
 function generatePDF(r: Receipt) {
   import("jspdf").then(({ jsPDF }) => {
@@ -126,6 +126,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 }
 
 export default function Reception() {
+  onMount(() => { loadReceipts(); });
   return (
     <div class="page-content">
       <div class="page-header">

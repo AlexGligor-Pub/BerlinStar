@@ -34,10 +34,10 @@ export default function ShoppingList() {
     setModal(null);
   }
 
-  function handleFinalize() {
+  async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
-    saveReceipt({
+    await saveReceipt({
       date: new Date().toISOString(),
       casier: auth.user ?? "—",
       titlu: titlu().trim(),
@@ -67,6 +67,7 @@ export default function ShoppingList() {
           class="input-titlu"
           type="text"
           placeholder="Titlu *"
+          maxlength={200}
           value={titlu()}
           onInput={(e) => setTitlu(e.currentTarget.value)}
         />
@@ -143,6 +144,7 @@ export default function ShoppingList() {
             <textarea
               class="sl-modal-textarea"
               placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Date tehnice..."}
+              maxlength={200}
               value={modalDraft()}
               onInput={(e) => setModalDraft(e.currentTarget.value)}
               rows={10}

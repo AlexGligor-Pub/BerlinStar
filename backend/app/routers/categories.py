@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -81,6 +82,7 @@ async def update_category(
         raise HTTPException(404, "Categoria nu a fost gasita.")
     for k, v in body.model_dump().items():
         setattr(cat, k, v)
+    cat.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(cat)
     return cat
@@ -98,6 +100,7 @@ async def patch_category(
         raise HTTPException(404, "Categoria nu a fost gasita.")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(cat, k, v)
+    cat.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(cat)
     return cat

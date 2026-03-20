@@ -23,5 +23,7 @@ class ThemeRead(BaseModel):
     name: str
     description: str | None
     image_path: str | None
+    created_at: datetime
+    updated_at: datetime | None
     is_deleted: bool
     deleted_at: datetime | None

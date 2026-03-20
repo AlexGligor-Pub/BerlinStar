@@ -1,4 +1,5 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,6 +84,7 @@ async def update_theme(
         raise HTTPException(404, "Theme negasit.")
     for k, v in body.model_dump().items():
         setattr(theme, k, v)
+    theme.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(theme)
     return theme
@@ -100,6 +102,7 @@ async def patch_theme(
         raise HTTPException(404, "Theme negasit.")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(theme, k, v)
+    theme.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(theme)
     return theme
