@@ -480,10 +480,17 @@ body {
   border-color: var(--accent);
 }
 
+.pos-employee-pct {
+  margin-left: 6px;
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
 /* ===== POS PAGE ===== */
 .pos-layout {
   display: grid;
   grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr;
   gap: 16px;
   flex: 1;
   min-height: 0;
@@ -526,6 +533,7 @@ body {
   .pos-panel-inner  { height: auto; }
   .pos-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
     flex: none;
     overflow: visible;
   }

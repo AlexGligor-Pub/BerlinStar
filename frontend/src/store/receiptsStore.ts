@@ -37,6 +37,7 @@ function mapFromApi(r: any): Receipt {
       unit: i.unit,
       employeeId: i.employee_id ?? null,
       employeeName: i.employee_name ?? null,
+      employeeTargetPct: i.employee_target_pct ?? null,
     })),
     total: parseFloat(r.total),
   };

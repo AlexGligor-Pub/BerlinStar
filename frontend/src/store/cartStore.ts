@@ -11,6 +11,7 @@ export interface CartItem {
   qty: number;
   employeeId: number | null;
   employeeName: string | null;
+  employeeTargetPct: number | null;
 }
 
 interface CartState {
@@ -43,7 +44,7 @@ export function addToCart(product: Pick<CartItem, "id" | "name" | "price" | "uni
   } else {
     setCart("items", (items) => [
       ...items,
-      { ...product, lineId, qty: 1, employeeId: empId, employeeName: empName },
+      { ...product, lineId, qty: 1, employeeId: empId, employeeName: empName, employeeTargetPct: null },
     ]);
   }
 }

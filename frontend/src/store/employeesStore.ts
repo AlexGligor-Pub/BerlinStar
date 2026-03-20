@@ -5,6 +5,8 @@ export interface Employee {
   id: number;
   name: string;
   description: string | null;
+  target: number;
+  currentTargetAccumulation: number;
 }
 
 const [employees, setEmployees] = createSignal<Employee[]>([]);
@@ -31,6 +33,8 @@ export async function loadEmployees() {
       id: e.id,
       name: e.name,
       description: e.description ?? null,
+      target: parseFloat(e.target),
+      currentTargetAccumulation: parseFloat(e.current_target_accumulation),
     })));
   } catch {}
 }

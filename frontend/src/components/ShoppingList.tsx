@@ -95,7 +95,6 @@ export default function ShoppingList() {
     <div class="shopping-list">
       <div class="shopping-list-header">
         <div class="sl-header-left">
-          <span class="shopping-list-title">Lista</span>
           <Show when={selectedEmployeeName() !== null}>
             <span class="sl-employee-badge">{selectedEmployeeName()}</span>
           </Show>
@@ -223,7 +222,7 @@ export default function ShoppingList() {
         <div class="sl-modal-overlay" onClick={() => setErrorMsg(null)}>
           <div class="sl-error-modal" onClick={(e) => e.stopPropagation()}>
             <div class="sl-error-modal-header">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               <span>Eroare la salvare</span>
             </div>
             <p class="sl-error-modal-msg">{errorMsg()}</p>
@@ -236,7 +235,7 @@ export default function ShoppingList() {
       <Show when={showSuccess()}>
         <div class="sl-modal-overlay sl-success-overlay">
           <div class="sl-success-modal">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             <span>Bon salvat cu succes!</span>
           </div>
         </div>

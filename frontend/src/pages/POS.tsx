@@ -161,6 +161,11 @@ export default function POS() {
                       onClick={() => selectEmployee(e.id)}
                     >
                       {e.name}
+                      {e.target > 0 && (
+                        <span class="pos-employee-pct">
+                          {Math.round(e.currentTargetAccumulation / e.target * 100)}%
+                        </span>
+                      )}
                     </button>
                   )}
                 </For>

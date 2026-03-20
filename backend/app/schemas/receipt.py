@@ -33,10 +33,14 @@ class ReceiptItemRead(BaseModel):
     unit: str
     employee_id: int | None
     employee_name: str | None = None
+    employee_target_pct: float | None = None
 
     @classmethod
     def from_orm_item(cls, item: object) -> "ReceiptItemRead":
         emp = getattr(item, "employee", None)
+        pct: float | None = None
+        if emp and emp.target and emp.target > 0:
+            pct = round(float(emp.current_target_accumulation / emp.target * 100), 1)
         return cls.model_validate({
             "id": item.id,  # type: ignore[attr-defined]
             "name": item.name,  # type: ignore[attr-defined]
@@ -45,6 +49,7 @@ class ReceiptItemRead(BaseModel):
             "unit": item.unit,  # type: ignore[attr-defined]
             "employee_id": item.employee_id,  # type: ignore[attr-defined]
             "employee_name": emp.name if emp else None,
+            "employee_target_pct": pct,
         })
 
 
