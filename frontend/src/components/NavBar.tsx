@@ -32,9 +32,7 @@ export default function NavBar() {
 
   return (
     <>
-      <Show when={isOffline()}>
-        <div class="offline-banner" />
-      </Show>
+      <div class="offline-banner" classList={{ "offline-banner--online": !isOffline() }} />
       <nav class="navbar">
         <div class="logo-menu" style="position:relative">
           <button
@@ -53,9 +51,6 @@ export default function NavBar() {
               </button>
               <button class="logo-dropdown-item" onClick={() => handleNavigate("/receptie")}>
                 Receptie
-                <Show when={cartCount() > 0}>
-                  <span class="badge" style="margin-left:6px">{cartCount()}</span>
-                </Show>
               </button>
               <div class="logo-dropdown-divider" />
               <button class="logo-dropdown-item" onClick={() => { toggleTheme(); }} aria-label="Schimba tema">

@@ -2,12 +2,7 @@ import { createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { login } from "../store/authStore";
 import ThemeToggle from "../components/ThemeToggle";
-
-// Credentiale demo — in Faza 2 vor fi verificate prin API
-const DEMO_USERS: Record<string, string> = {
-  admin: "admin123",
-  casier: "casier123",
-};
+import logo from "../assets/logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -21,17 +16,22 @@ export default function Login() {
     setError("");
     setLoading(true);
 
-    // Simulare delay retea
-    await new Promise((r) => setTimeout(r, 300));
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username().trim(), password: password() }),
+      });
 
-    const user = username().trim().toLowerCase();
-    const pass = password();
-
-    if (DEMO_USERS[user] && DEMO_USERS[user] === pass) {
-      login(user, `demo-token-${user}`);
-      navigate("/");
-    } else {
-      setError("Utilizator sau parola incorecta.");
+      if (res.ok) {
+        const data = await res.json();
+        login(username().trim(), data.access_token);
+        navigate("/");
+      } else {
+        setError("Utilizator sau parola incorecta.");
+      }
+    } catch {
+      setError("Serverul nu raspunde. Incearca din nou.");
     }
 
     setLoading(false);
@@ -43,9 +43,14 @@ export default function Login() {
         <ThemeToggle />
       </div>
 
+      <a class="login-news-link" href="https://professorprime.ro/" target="_blank" rel="noopener noreferrer">
+        Afla cele mai recente noutati pe professorprime.ro
+      </a>
+
       <div class="login-card">
-        <div class="login-title">BerlinStar</div>
-        <div class="login-subtitle">Autentificare POS</div>
+        <img src={logo} alt="Berlin Star" class="login-logo" />
+        <div class="login-subtitle">Berlin Star</div>
+        <div class="login-powered">Powered by Professor Prime S.R.L</div>
 
         {error() && <div class="login-error">{error()}</div>}
 
