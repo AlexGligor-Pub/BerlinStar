@@ -702,6 +702,12 @@ body {
   border-radius: 4px;
   padding: 1px 6px;
   white-space: nowrap;
+  text-align: right;
+}
+
+.rcard-metoda--neplatit {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .rcard-right {
@@ -732,6 +738,45 @@ body {
   background: var(--bg);
   display: flex;
   justify-content: center;
+}
+
+.rcard-body-inner {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  max-width: 700px;
+}
+
+.rcard-extra-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rcard-extra-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.rcard-extra-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 6px;
+}
+
+.rcard-extra-text {
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 /* ===== RECEIPT PAGE ===== */
@@ -841,6 +886,24 @@ body {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 4px;
+}
+
+.receipt-confirm-delete {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.receipt-confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .receipt-empty {

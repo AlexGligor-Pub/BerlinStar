@@ -56,6 +56,7 @@ function generatePDF(r: Receipt) {
 
 function ReceiptCard(props: { receipt: Receipt }) {
   const [expanded, setExpanded] = createSignal(false);
+  const [confirmDelete, setConfirmDelete] = createSignal(false);
   const r = props.receipt;
   const date = new Date(r.date);
   const dateStr = date.toLocaleDateString("ro-RO");
@@ -72,7 +73,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
         <div class="rcard-right">
           <div class="rcard-right-col">
             <span class="rcard-total">{r.total.toFixed(2)} lei</span>
-            {r.metodaPlata && <span class="rcard-metoda">{r.metodaPlata}</span>}
+            <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !r.metodaPlata }}>
+              {r.metodaPlata ?? "Neplatit"}
+            </span>
           </div>
           <span class="rcard-chevron">{expanded() ? "▲" : "▼"}</span>
         </div>
@@ -81,15 +84,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
       {/* Receipt detaliat */}
       <Show when={expanded()}>
         <div class="rcard-body">
+          <div class="rcard-body-inner">
           <div class="receipt">
-            <div class="receipt-header">
-              <div class="receipt-meta">
-                <span>{dateStr} {timeStr}</span>
-                <span>Casier: {r.casier}</span>
-                {r.metodaPlata && <span>Plata: {r.metodaPlata}</span>}
-              </div>
-            </div>
-
             <div class="receipt-divider" />
 
             <div class="receipt-items">
@@ -121,13 +117,43 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="receipt-divider receipt-divider--dashed" />
 
             <div class="receipt-actions">
-              <button class="btn btn-danger btn-sm" onClick={() => deleteReceipt(r.id)}>
+              <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
                 Sterge
               </button>
               <button class="btn btn-primary btn-sm" onClick={() => generatePDF(r)}>
                 Descarca PDF
               </button>
             </div>
+
+            <Show when={confirmDelete()}>
+              <div class="receipt-confirm-delete">
+                <span>Esti sigur ca vrei sa stergi acest bon?</span>
+                <div class="receipt-confirm-actions">
+                  <button class="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>Anuleaza</button>
+                  <button class="btn btn-danger btn-sm" onClick={() => deleteReceipt(r.id)}>Sterge definitiv</button>
+                </div>
+              </div>
+            </Show>
+          </div>
+
+          {/* Coloane dreapta: Descriere + Date tehnice */}
+          <Show when={!!(r.descriere || r.dateTehn)}>
+            <div class="rcard-extra-col">
+              <Show when={!!r.descriere}>
+                <div class="rcard-extra-card">
+                  <div class="rcard-extra-title">Descriere</div>
+                  <div class="rcard-extra-text">{r.descriere}</div>
+                </div>
+              </Show>
+              <Show when={!!r.dateTehn}>
+                <div class="rcard-extra-card">
+                  <div class="rcard-extra-title">Date tehnice</div>
+                  <div class="rcard-extra-text">{r.dateTehn}</div>
+                </div>
+              </Show>
+            </div>
+          </Show>
+
           </div>
         </div>
       </Show>
