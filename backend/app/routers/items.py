@@ -21,6 +21,7 @@ router = APIRouter()
 def _with_category_name(item: Item) -> ItemRead:
     data = ItemRead.model_validate(item)
     data.category_name = item.category.name if item.category else None
+    data.theme_id = item.category.theme_id if item.category else None
     return data
 
 

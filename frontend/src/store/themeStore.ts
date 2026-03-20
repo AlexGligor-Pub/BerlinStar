@@ -1,7 +1,7 @@
 import { createSignal, createEffect } from "solid-js";
 
-export type Theme = "light" | "dark" | "gray";
-const THEMES: Theme[] = ["light", "dark", "gray"];
+export type Theme = "light" | "dark" | "gray" | "apple";
+const THEMES: Theme[] = ["light", "dark", "gray", "apple"];
 
 const STORAGE_KEY = "bs_theme";
 const saved = (localStorage.getItem(STORAGE_KEY) as Theme) ?? "light";
@@ -20,4 +20,4 @@ export function toggleTheme() {
   });
 }
 
-export { theme };
+export { theme, setTheme };

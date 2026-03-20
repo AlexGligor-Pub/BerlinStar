@@ -8,6 +8,7 @@ export interface Product {
   unit: string;
   category: string;
   type: string;
+  themeId: number | null;
 }
 
 const CACHE_KEY = "bs_products_cache";
@@ -37,6 +38,7 @@ export async function loadProducts() {
       unit: item.unit,
       category: item.category_name ?? "",
       type: item.type ?? "Produs",
+      themeId: item.theme_id ?? null,
     }));
     setProducts(mapped);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));

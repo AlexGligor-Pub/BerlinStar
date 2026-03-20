@@ -45,3 +45,4 @@ class ItemRead(BaseModel):
     type: ItemType
     category_id: int
     category_name: str | None = None
+    theme_id: int | None = None
