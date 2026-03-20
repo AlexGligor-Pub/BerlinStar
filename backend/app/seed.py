@@ -14,6 +14,8 @@ from app.models.account import Account
 from app.models.theme import Theme
 from app.models.category import Category
 from app.models.item import Item, ItemType
+from app.models.employee import Employee
+from app.models.location import Location, employee_locations
 
 SEED_DATA = [
     {
@@ -263,6 +265,70 @@ async def seed() -> None:
                             category_id=category.id,
                             account_id=account.id,
                         ))
+
+        await db.commit()
+
+    async with AsyncSessionLocal() as db:
+        # Locatia Timisoara
+        location = (await db.execute(
+            select(Location).where(Location.name == "Timisoara", Location.account_id == account.id)
+        )).scalar_one_or_none()
+        if not location:
+            location = Location(name="Timisoara", account_id=account.id)
+            db.add(location)
+            await db.flush()
+
+        EMPLOYEES = [
+            ("Alexandru Ionescu",   "Mecanic auto senior"),
+            ("Maria Popescu",       "Receptioner"),
+            ("Andrei Constantin",   "Mecanic auto"),
+            ("Elena Dumitrescu",    "Contabil"),
+            ("Mihai Gheorghe",      "Electrician auto"),
+            ("Ana Stoica",          "Manager service"),
+            ("Cristian Munteanu",   "Mecanic auto"),
+            ("Ioana Moldovan",      "Asistent manager"),
+            ("Radu Popa",           "Vulcanizator"),
+            ("Laura Nistor",        "Operator vanzari"),
+            ("Bogdan Dima",         "Mecanic auto senior"),
+            ("Simona Vlad",         "Administrator"),
+            ("Florin Barbu",        "Tehnician diagnosticare"),
+            ("Gabriela Stan",       "Receptioner"),
+            ("Ionut Rusu",          "Mecanic auto"),
+            ("Roxana Tudor",        "Contabil"),
+            ("Catalin Lazar",       "Electrician auto senior"),
+            ("Diana Oprea",         "Operator achizitii"),
+            ("Marian Serban",       "Mecanic auto"),
+            ("Teodora Vasile",      "Asistent contabil"),
+            ("Silviu Matei",        "Sef atelier"),
+            ("Nicoleta Anghel",     "Receptioner"),
+            ("Dragos Ciobanu",      "Mecanic auto"),
+            ("Alina Niculescu",     "Manager vanzari"),
+            ("Octavian Dobre",      "Vulcanizator senior"),
+            ("Camelia Ene",         "Operator logistica"),
+            ("Lucian Apostol",      "Mecanic auto"),
+            ("Mihaela Feraru",      "Receptioner"),
+            ("George Marinescu",    "Electrician auto"),
+            ("Corina Badea",        "Director general"),
+        ]
+
+        for emp_name, emp_desc in EMPLOYEES:
+            exists = (await db.execute(
+                select(Employee).where(Employee.name == emp_name, Employee.account_id == account.id)
+            )).scalar_one_or_none()
+            if not exists:
+                emp = Employee(
+                    name=emp_name,
+                    description=emp_desc,
+                    account_id=account.id,
+                )
+                db.add(emp)
+                await db.flush()
+                await db.execute(
+                    employee_locations.insert().values(
+                        employee_id=emp.id,
+                        location_id=location.id,
+                    )
+                )
 
         await db.commit()
     print("Seed complet.")

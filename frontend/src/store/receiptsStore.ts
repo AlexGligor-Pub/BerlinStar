@@ -30,10 +30,13 @@ function mapFromApi(r: any): Receipt {
     partialPay: r.partial_pay != null ? parseFloat(r.partial_pay) : undefined,
     items: r.receipt_items.map((i: any) => ({
       id: i.id,
+      lineId: `${i.id}_${i.employee_id ?? ""}`,
       name: i.name,
       price: parseFloat(i.price),
       qty: i.qty,
       unit: i.unit,
+      employeeId: i.employee_id ?? null,
+      employeeName: i.employee_name ?? null,
     })),
     total: parseFloat(r.total),
   };
@@ -47,18 +50,45 @@ function loadCache(): Receipt[] {
   return [];
 }
 
+const PAGE_SIZE = 10;
+
 const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
+const [nextCursor, setNextCursor] = createSignal<number | null>(null);
+const [hasMore, setHasMore] = createSignal(false);
+const [loadingMore, setLoadingMore] = createSignal(false);
+
+export { hasMore, loadingMore };
 
 export async function loadReceipts() {
   try {
-    const res = await apiFetch("/api/receipts?limit=100&sort=-id");
+    const res = await apiFetch(`/api/receipts?limit=${PAGE_SIZE}&sort=-id`);
     if (!res.ok) return;
     const data = await res.json();
     const mapped: Receipt[] = data.items.map(mapFromApi);
     setReceipts(mapped);
+    setNextCursor(data.next_cursor ?? null);
+    setHasMore(data.next_cursor !== null);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
   } catch {
     // ramane cache-ul existent
+  }
+}
+
+export async function loadMoreReceipts() {
+  const cursor = nextCursor();
+  if (cursor === null || loadingMore()) return;
+  setLoadingMore(true);
+  try {
+    const res = await apiFetch(`/api/receipts?limit=${PAGE_SIZE}&sort=-id&last_id=${cursor}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const appended = [...receipts(), ...data.items.map(mapFromApi)];
+    setReceipts(appended);
+    setNextCursor(data.next_cursor ?? null);
+    setHasMore(data.next_cursor !== null);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(appended));
+  } catch {} finally {
+    setLoadingMore(false);
   }
 }
 
@@ -74,6 +104,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
       price: i.price.toFixed(2),
       qty: i.qty,
       unit: i.unit,
+      employee_id: i.employeeId ?? null,
     })),
     total: receipt.total.toFixed(2),
   };

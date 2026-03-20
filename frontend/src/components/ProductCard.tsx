@@ -11,7 +11,7 @@ export default function ProductCard({ product }: Props) {
       onKeyDown={(e) => e.key === "Enter" && addToCart(product)}>
       <div class="product-card-name">{product.name}</div>
       <div class="product-card-price">
-        {product.price.toFixed(2)} lei
+        {product.price.toFixed(1)} lei
         <span class="product-card-per"> / {product.unit}</span>
       </div>
       <div class="product-card-unit">{product.type}</div>

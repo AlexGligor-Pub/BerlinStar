@@ -1,6 +1,7 @@
 import { For, createMemo, createSignal, onMount } from "solid-js";
 import { products, loadProducts } from "../store/productsStore";
 import { catalogThemes, loadCatalogThemes } from "../store/catalogThemesStore";
+import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
 
@@ -26,6 +27,7 @@ export default function POS() {
   onMount(() => {
     loadProducts();
     loadCatalogThemes();
+    loadEmployees();
   });
 
   const categories = createMemo(() => {
@@ -117,7 +119,8 @@ export default function POS() {
               </button>
             </div>
             <div class="pos-theme-center">
-              <h2 class="pos-theme-title">Selecteaza Tema</h2>
+
+              <h2 class="pos-theme-title">Tema</h2>
               <div class="pos-theme-grid">
                 <button
                   class="pos-theme-card"
@@ -140,6 +143,29 @@ export default function POS() {
                   )}
                 </For>
               </div>
+
+              <h2 class="pos-theme-title" style="margin-top:28px">Angajati</h2>
+              <div class="pos-employee-grid">
+                <button
+                  class="pos-employee-card"
+                  classList={{ "pos-employee-card--active": selectedEmployeeId() === null }}
+                  onClick={() => selectEmployee(null)}
+                >
+                  Toti
+                </button>
+                <For each={employees()}>
+                  {(e) => (
+                    <button
+                      class="pos-employee-card"
+                      classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
+                      onClick={() => selectEmployee(e.id)}
+                    >
+                      {e.name}
+                    </button>
+                  )}
+                </For>
+              </div>
+
             </div>
           </div>
         </div>

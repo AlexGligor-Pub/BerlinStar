@@ -1,8 +1,9 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { cart, updateQty, clearCart, cartTotal, replaceCart } from "../store/cartStore";
+import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, type CartItem } from "../store/cartStore";
 import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
 import { consumeResume } from "../store/resumeStore";
+import { selectedEmployeeName } from "../store/employeesStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -15,6 +16,25 @@ export default function ShoppingList() {
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
   const [showSuccess, setShowSuccess] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
+  const [editItem, setEditItem] = createSignal<CartItem | null>(null);
+  const [editQty, setEditQty] = createSignal("1");
+  const [editPrice, setEditPrice] = createSignal("0");
+
+  function openEditItem(item: CartItem) {
+    setEditItem(item);
+    setEditQty(String(item.qty));
+    setEditPrice(String(item.price));
+  }
+
+  function confirmEditItem() {
+    const item = editItem();
+    if (!item) return;
+    const qty = parseInt(editQty()) || 0;
+    const price = parseFloat(editPrice()) || 0;
+    updateItemPrice(item.lineId, price);
+    setItemQty(item.lineId, qty);
+    setEditItem(null);
+  }
 
   onMount(() => {
     const r = consumeResume();
@@ -74,7 +94,12 @@ export default function ShoppingList() {
   return (
     <div class="shopping-list">
       <div class="shopping-list-header">
-        <span class="shopping-list-title">Lista</span>
+        <div class="sl-header-left">
+          <span class="shopping-list-title">Lista</span>
+          <Show when={selectedEmployeeName() !== null}>
+            <span class="sl-employee-badge">{selectedEmployeeName()}</span>
+          </Show>
+        </div>
         <Show when={cart.items.length > 0}>
           <button class="btn btn-ghost btn-sm" onClick={clearCart}>Sterge tot</button>
         </Show>
@@ -114,12 +139,17 @@ export default function ShoppingList() {
         >
           <For each={cart.items}>
             {(item) => (
-              <div class="list-item">
-                <span class="list-item-name">{item.name}</span>
-                <div class="list-item-qty">
-                  <button class="qty-btn" onClick={() => updateQty(item.id, -1)}>−</button>
+              <div class="list-item" onClick={() => openEditItem(item)}>
+                <div class="list-item-info">
+                  <span class="list-item-name">{item.name}</span>
+                  <Show when={item.employeeName}>
+                    <span class="list-item-employee">{item.employeeName}</span>
+                  </Show>
+                </div>
+                <div class="list-item-qty" onClick={(e) => e.stopPropagation()}>
+                  <button class="qty-btn" onClick={() => updateQty(item.lineId, -1)}>−</button>
                   <span class="qty-value">{item.qty}</span>
-                  <button class="qty-btn" onClick={() => updateQty(item.id, +1)}>+</button>
+                  <button class="qty-btn" onClick={() => updateQty(item.lineId, +1)}>+</button>
                 </div>
                 <span class="list-item-price">{(item.price * item.qty).toFixed(2)}</span>
               </div>
@@ -141,6 +171,52 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Edit item modal */}
+      <Show when={editItem() !== null}>
+        <div class="sl-modal-overlay" onClick={() => setEditItem(null)}>
+          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">{editItem()!.name}</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>✕</button>
+            </div>
+            <div class="sl-edit-item-body">
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Cantitate</label>
+                <input
+                  class="input sl-edit-input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={editQty()}
+                  onInput={(e) => setEditQty(e.currentTarget.value)}
+                  autofocus
+                />
+              </div>
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Pret (lei)</label>
+                <input
+                  class="input sl-edit-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editPrice()}
+                  onInput={(e) => setEditPrice(e.currentTarget.value)}
+                />
+              </div>
+              <div class="sl-edit-item-total">
+                Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-danger btn-sm" onClick={() => { removeFromCart(editItem()!.lineId); setEditItem(null); }}>Sterge</button>
+              <div style="flex:1" />
+              <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>Anuleaza</button>
+              <button class="btn btn-primary btn-sm" onClick={confirmEditItem}>Salveaza</button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Error modal */}
       <Show when={errorMsg() !== null}>

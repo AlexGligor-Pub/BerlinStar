@@ -51,9 +51,16 @@ class ReceiptItem(Base):
     receipt_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False
     )
+    employee_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
 
     receipt: Mapped[Receipt] = relationship("Receipt", back_populates="receipt_items")
+    employee: Mapped[Employee | None] = relationship("Employee", back_populates="receipt_items")
+
+
+from app.models.employee import Employee  # noqa: E402

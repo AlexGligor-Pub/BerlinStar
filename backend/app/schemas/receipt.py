@@ -10,6 +10,7 @@ class ReceiptItemCreate(BaseModel):
     price: Decimal = Field(..., ge=0, decimal_places=2)
     qty: int = Field(..., ge=1)
     unit: str = Field(..., max_length=50)
+    employee_id: int | None = None
 
 
 class ReceiptCreate(BaseModel):
@@ -30,6 +31,21 @@ class ReceiptItemRead(BaseModel):
     price: Decimal
     qty: int
     unit: str
+    employee_id: int | None
+    employee_name: str | None = None
+
+    @classmethod
+    def from_orm_item(cls, item: object) -> "ReceiptItemRead":
+        emp = getattr(item, "employee", None)
+        return cls.model_validate({
+            "id": item.id,  # type: ignore[attr-defined]
+            "name": item.name,  # type: ignore[attr-defined]
+            "price": item.price,  # type: ignore[attr-defined]
+            "qty": item.qty,  # type: ignore[attr-defined]
+            "unit": item.unit,  # type: ignore[attr-defined]
+            "employee_id": item.employee_id,  # type: ignore[attr-defined]
+            "employee_name": emp.name if emp else None,
+        })
 
 
 class ReceiptPatch(BaseModel):

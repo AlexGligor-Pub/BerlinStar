@@ -11,13 +11,21 @@ from app.broadcaster import broadcaster
 from app.database import get_db
 from app.dependencies import get_account_id, get_account_id_from_query
 from app.models.receipt import Receipt, ReceiptItem
-from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead
+from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
 router = APIRouter()
+
+
+def _serialize(receipt: Receipt) -> dict:
+    data = ReceiptRead.model_validate(receipt).model_dump()
+    data["receipt_items"] = [
+        ReceiptItemRead.from_orm_item(it).model_dump() for it in receipt.receipt_items
+    ]
+    return data
 
 
 @router.get("", response_model=Page[ReceiptRead])
@@ -34,13 +42,13 @@ async def list_receipts(
     limit = min(limit, 100)
     stmt = (
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items))
+        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
         .where(Receipt.account_id == account_id)
     )
     if not include_deleted:
         stmt = stmt.where(Receipt.is_deleted == False)
     if last_id is not None:
-        stmt = stmt.where(Receipt.id > last_id)
+        stmt = stmt.where(Receipt.id < last_id)
     if q:
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
     stmt = apply_filters(stmt, Receipt, filters)
@@ -50,7 +58,7 @@ async def list_receipts(
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return {"items": [_serialize(r) for r in page], "next_cursor": page[-1].id if has_more else None}
 
 
 @router.post("", response_model=ReceiptRead, status_code=201)
@@ -79,18 +87,19 @@ async def create_receipt(
             price=it.price,
             qty=it.qty,
             unit=it.unit,
+            employee_id=it.employee_id,
         ))
 
     await db.commit()
 
     result = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items))
+        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
         .where(Receipt.id == receipt.id)
     )).scalar_one()
 
     await broadcaster.notify(account_id)
-    return result
+    return _serialize(result)
 
 
 # IMPORTANT: /events must be registered before /{receipt_id}
@@ -132,12 +141,12 @@ async def get_receipt(
 ):
     receipt = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items))
+        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
         .where(Receipt.id == receipt_id)
     )).scalar_one_or_none()
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
-    return receipt
+    return _serialize(receipt)
 
 
 @router.patch("/{receipt_id}", response_model=ReceiptRead)
@@ -156,12 +165,12 @@ async def patch_receipt(
     await db.commit()
     result = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items))
+        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
         .where(Receipt.id == receipt_id)
     )).scalar_one()
 
     await broadcaster.notify(account_id)
-    return result
+    return _serialize(result)
 
 
 @router.delete("/{receipt_id}", status_code=204)
