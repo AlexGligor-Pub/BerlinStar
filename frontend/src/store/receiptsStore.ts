@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
 
 export interface Receipt {
@@ -118,3 +119,44 @@ export async function deleteReceipt(id: string) {
 }
 
 export { receipts };
+
+export type SseStatus = "connected" | "connecting" | "disconnected";
+const [sseStatus, setSseStatus] = createSignal<SseStatus>("disconnected");
+export { sseStatus };
+
+let _es: EventSource | null = null;
+let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function connectSSE(): void {
+  if (_es) return;
+  _openSSE();
+}
+
+export function disconnectSSE(): void {
+  if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+  if (_es) { _es.close(); _es = null; }
+  setSseStatus("disconnected");
+}
+
+function _openSSE(): void {
+  const token = auth.token;
+  if (!token) return;
+  setSseStatus("connecting");
+  const es = new EventSource(`/api/receipts/events?token=${encodeURIComponent(token)}`);
+  _es = es;
+  es.onopen = () => setSseStatus("connected");
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === "receipts_changed") loadReceipts();
+    } catch {}
+  };
+  es.onerror = () => {
+    setSseStatus("connecting");
+    if (es.readyState === EventSource.CLOSED) {
+      es.close();
+      _es = null;
+      _reconnectTimer = setTimeout(() => { _reconnectTimer = null; _openSSE(); }, 5000);
+    }
+  };
+}

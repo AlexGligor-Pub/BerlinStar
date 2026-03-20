@@ -1,5 +1,5 @@
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
-import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, connectSSE, disconnectSSE, sseStatus, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
 
 const METODE = ["Platit cash", "Platit cu cardul", "Platit prin OP", "Platit Partial"];
@@ -178,10 +178,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
 const FILTER_OPTIONS = ["Neplatit", ...METODE];
 
 export default function Reception() {
-  onMount(() => { loadReceipts(); });
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [search, setSearch] = createSignal("");
+
+  onMount(() => {
+    loadReceipts();
+    connectSSE();
+  });
+
+  onCleanup(() => disconnectSSE());
 
   function toggleOption(opt: string) {
     setSelected((prev) => {
@@ -221,6 +227,16 @@ export default function Reception() {
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
           />
+          <span
+            class="sse-status"
+            classList={{
+              "sse-status--connected":    sseStatus() === "connected",
+              "sse-status--connecting":   sseStatus() === "connecting",
+              "sse-status--disconnected": sseStatus() === "disconnected",
+            }}
+          >
+            {sseStatus() === "connected" ? "Live" : sseStatus() === "connecting" ? "Reconectare..." : "Deconectat"}
+          </span>
           <div class="filter-dropdown">
             <button
               class="btn btn-sm btn-ghost filter-dropdown-btn"

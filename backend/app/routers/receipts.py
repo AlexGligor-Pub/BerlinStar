@@ -1,11 +1,15 @@
 from __future__ import annotations
+import asyncio
+import json
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broadcaster import broadcaster
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_account_id_from_query
 from app.models.receipt import Receipt, ReceiptItem
 from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead
 from app.schemas.common import Page
@@ -84,7 +88,40 @@ async def create_receipt(
         .options(selectinload(Receipt.receipt_items))
         .where(Receipt.id == receipt.id)
     )).scalar_one()
+
+    await broadcaster.notify(account_id)
     return result
+
+
+# IMPORTANT: /events must be registered before /{receipt_id}
+@router.get("/events")
+async def receipt_events(
+    account_id: int = Depends(get_account_id_from_query),
+):
+    q = broadcaster.subscribe(account_id)
+
+    async def stream():
+        try:
+            yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+            while True:
+                try:
+                    event_type = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield f"data: {json.dumps({'type': event_type})}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            broadcaster.unsubscribe(account_id, q)
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{receipt_id}", response_model=ReceiptRead)
@@ -122,6 +159,8 @@ async def patch_receipt(
         .options(selectinload(Receipt.receipt_items))
         .where(Receipt.id == receipt_id)
     )).scalar_one()
+
+    await broadcaster.notify(account_id)
     return result
 
 
@@ -135,3 +174,4 @@ async def delete_receipt(
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await soft_delete(db, Receipt, receipt_id)
+    await broadcaster.notify(account_id)

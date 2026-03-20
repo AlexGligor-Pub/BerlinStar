@@ -1,9 +1,12 @@
 import { createSignal, createEffect } from "solid-js";
 
-const STORAGE_KEY = "bs_theme";
-const saved = (localStorage.getItem(STORAGE_KEY) as "light" | "dark") ?? "light";
+export type Theme = "light" | "dark" | "gray";
+const THEMES: Theme[] = ["light", "dark", "gray"];
 
-const [theme, setTheme] = createSignal<"light" | "dark">(saved);
+const STORAGE_KEY = "bs_theme";
+const saved = (localStorage.getItem(STORAGE_KEY) as Theme) ?? "light";
+
+const [theme, setTheme] = createSignal<Theme>(saved);
 
 createEffect(() => {
   document.documentElement.setAttribute("data-theme", theme());
@@ -11,7 +14,10 @@ createEffect(() => {
 });
 
 export function toggleTheme() {
-  setTheme((t) => (t === "light" ? "dark" : "light"));
+  setTheme((t) => {
+    const idx = THEMES.indexOf(t);
+    return THEMES[(idx + 1) % THEMES.length];
+  });
 }
 
 export { theme };

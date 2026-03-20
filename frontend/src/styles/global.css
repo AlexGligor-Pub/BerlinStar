@@ -31,6 +31,21 @@
   --shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
 
+[data-theme="gray"] {
+  --bg: #1c1c1e;
+  --surface: #2c2c2e;
+  --surface2: #3a3a3c;
+  --border: #48484a;
+  --text: #f2f2f7;
+  --text-muted: #aeaeb2;
+  --accent: #0a84ff;
+  --accent-hover: #409cff;
+  --accent-text: #ffffff;
+  --danger: #ff453a;
+  --success: #30d158;
+  --shadow: 0 1px 3px rgba(0,0,0,0.5);
+}
+
 /* ===== RESET ===== */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -486,6 +501,31 @@ body {
   gap: 8px;
 }
 
+.sl-success-overlay {
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+.sl-success-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 32px 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--success);
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  animation: success-pop 0.15s ease;
+}
+
+@keyframes success-pop {
+  from { transform: scale(0.85); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
 .titlu-warn-toast {
   position: absolute;
   bottom: 80px;
@@ -732,6 +772,34 @@ body {
   width: 180px;
   padding: 5px 10px;
   font-size: 0.85rem;
+}
+
+.sse-status {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.sse-status--connected {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.sse-status--connecting {
+  background: color-mix(in srgb, #f59e0b 15%, transparent);
+  color: #f59e0b;
+  border-color: #f59e0b;
+}
+
+.sse-status--disconnected {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .rcard-list {

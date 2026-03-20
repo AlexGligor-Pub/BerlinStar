@@ -12,8 +12,10 @@ export default function ShoppingList() {
   const [modal, setModal] = createSignal<ModalType>(null);
   const [modalDraft, setModalDraft] = createSignal("");
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
+  const [showSuccess, setShowSuccess] = createSignal(false);
 
   let warnTimer: ReturnType<typeof setTimeout>;
+  let successTimer: ReturnType<typeof setTimeout>;
   function triggerTitluWarn() {
     setShowTitluWarn(true);
     clearTimeout(warnTimer);
@@ -48,6 +50,9 @@ export default function ShoppingList() {
     setTitlu("");
     setDescriere("");
     setDateTehn("");
+    setShowSuccess(true);
+    clearTimeout(successTimer);
+    successTimer = setTimeout(() => setShowSuccess(false), 1000);
   }
 
   return (
@@ -120,6 +125,16 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Success modal */}
+      <Show when={showSuccess()}>
+        <div class="sl-modal-overlay sl-success-overlay">
+          <div class="sl-success-modal">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>Bon salvat cu succes!</span>
+          </div>
+        </div>
+      </Show>
 
       {/* Titlu warning toast */}
       <Show when={showTitluWarn()}>
