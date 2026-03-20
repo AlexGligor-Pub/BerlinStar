@@ -301,6 +301,17 @@ body {
   gap: 10px;
 }
 
+.type-cycle-btn {
+  border: 1px solid var(--border);
+  min-width: 76px;
+}
+
+.filter-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+
 @media (max-width: 480px) {
   .product-grid {
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
@@ -342,6 +353,12 @@ body {
   font-size: 0.8rem;
   color: var(--accent);
   font-weight: 500;
+}
+
+.product-card-per {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 .product-card-unit {
@@ -562,6 +579,27 @@ body {
   border-top: 1px solid var(--border);
 }
 
+.metoda-plata-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.metoda-btn {
+  flex: 1;
+  font-size: 0.72rem;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.metoda-btn--active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
 .total-row {
   display: flex;
   justify-content: space-between;
@@ -640,14 +678,30 @@ body {
   gap: 2px;
 }
 
-.rcard-date {
-  font-size: 0.875rem;
+.rcard-titlu {
+  font-size: 0.9rem;
   font-weight: 600;
 }
 
-.rcard-casier {
-  font-size: 0.78rem;
+.rcard-meta {
+  font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.rcard-right-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.rcard-metoda {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
 }
 
 .rcard-right {
@@ -772,6 +826,14 @@ body {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.5px;
+}
+
+.receipt-plata {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 4px;
 }
 
 .receipt-actions {

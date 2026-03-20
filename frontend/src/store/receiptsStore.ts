@@ -9,6 +9,7 @@ export interface Receipt {
   titlu: string;
   descriere?: string;
   dateTehn?: string;
+  metodaPlata?: string;
   items: CartItem[];
   total: number;
 }
@@ -23,6 +24,7 @@ function mapFromApi(r: any): Receipt {
     titlu: r.titlu,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
+    metodaPlata: r.metoda_plata ?? undefined,
     items: r.receipt_items.map((i: any) => ({
       id: i.id,
       name: i.name,
@@ -63,6 +65,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
+    metoda_plata: receipt.metodaPlata ?? null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),

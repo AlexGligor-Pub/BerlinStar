@@ -66,12 +66,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
       {/* Header card — click pentru expand */}
       <div class="rcard-header" onClick={() => setExpanded((v) => !v)}>
         <div class="rcard-info">
-          <span class="rcard-date">{dateStr} {timeStr}</span>
-          <span class="rcard-casier">{r.casier}</span>
+          <span class="rcard-titlu">{r.titlu}</span>
+          <span class="rcard-meta">{dateStr} {timeStr} &middot; {r.casier}</span>
         </div>
         <div class="rcard-right">
-          <span class="rcard-total">{r.total.toFixed(2)} lei</span>
-          <span class="rcard-count">{r.items.reduce((s, i) => s + i.qty, 0)} buc</span>
+          <div class="rcard-right-col">
+            <span class="rcard-total">{r.total.toFixed(2)} lei</span>
+            {r.metodaPlata && <span class="rcard-metoda">{r.metodaPlata}</span>}
+          </div>
           <span class="rcard-chevron">{expanded() ? "▲" : "▼"}</span>
         </div>
       </div>
@@ -84,6 +86,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <div class="receipt-meta">
                 <span>{dateStr} {timeStr}</span>
                 <span>Casier: {r.casier}</span>
+                {r.metodaPlata && <span>Plata: {r.metodaPlata}</span>}
               </div>
             </div>
 
@@ -107,6 +110,13 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <span>TOTAL</span>
               <span>{r.total.toFixed(2)} lei</span>
             </div>
+
+            {r.metodaPlata && (
+              <div class="receipt-plata">
+                <span>Metoda de plata</span>
+                <span>{r.metodaPlata}</span>
+              </div>
+            )}
 
             <div class="receipt-divider receipt-divider--dashed" />
 

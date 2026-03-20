@@ -2,12 +2,10 @@ import { For, Show, createSignal } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal } from "../store/cartStore";
 import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
-import { useNavigate } from "@solidjs/router";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
 export default function ShoppingList() {
-  const navigate = useNavigate();
   const [titlu, setTitlu] = createSignal("");
   const [descriere, setDescriere] = createSignal("");
   const [dateTehn, setDateTehn] = createSignal("");
@@ -50,7 +48,6 @@ export default function ShoppingList() {
     setTitlu("");
     setDescriere("");
     setDateTehn("");
-    navigate("/receptie");
   }
 
   return (

@@ -7,6 +7,7 @@ export interface Product {
   price: number;
   unit: string;
   category: string;
+  type: string;
 }
 
 const CACHE_KEY = "bs_products_cache";
@@ -24,7 +25,7 @@ const [isOffline, setIsOffline] = createSignal(false);
 
 export async function loadProducts() {
   try {
-    const res = await apiFetch("/api/items?type=Produs&limit=100", {
+    const res = await apiFetch("/api/items?limit=100", {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error("API error");
@@ -35,6 +36,7 @@ export async function loadProducts() {
       price: parseFloat(item.price),
       unit: item.unit,
       category: item.category_name ?? "",
+      type: item.type ?? "Produs",
     }));
     setProducts(mapped);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));

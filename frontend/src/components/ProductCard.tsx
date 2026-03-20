@@ -10,8 +10,11 @@ export default function ProductCard({ product }: Props) {
     <div class="product-card" onClick={() => addToCart(product)} role="button" tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && addToCart(product)}>
       <div class="product-card-name">{product.name}</div>
-      <div class="product-card-price">{product.price.toFixed(2)} lei</div>
-      <div class="product-card-unit">{product.unit}</div>
+      <div class="product-card-price">
+        {product.price.toFixed(2)} lei
+        <span class="product-card-per"> / {product.unit}</span>
+      </div>
+      <div class="product-card-unit">{product.type}</div>
     </div>
   );
 }
