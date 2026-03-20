@@ -1,6 +1,6 @@
-import { For, Show, createEffect, createMemo, createSignal, on, onMount, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, updateMetodaPlata, connectSSE, disconnectSSE, sseStatus, hasMore, loadingMore, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, connectSSE, disconnectSSE, sseStatus, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
 import { setResume } from "../store/resumeStore";
 
@@ -202,30 +202,10 @@ export default function Reception() {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [search, setSearch] = createSignal("");
 
-  let sentinelRef!: HTMLDivElement;
-
   onMount(() => {
     loadReceipts();
     connectSSE();
-
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMoreReceipts(); },
-      { rootMargin: "200px" }
-    );
-    observer.observe(sentinelRef);
-    onCleanup(() => observer.disconnect());
   });
-
-  // Dacă după un load sentinel-ul rămâne vizibil (lista scurtă),
-  // continuă să încarce fără să fie nevoie de scroll
-  createEffect(on(loadingMore, (isLoading, wasLoading) => {
-    if (wasLoading && !isLoading && hasMore()) {
-      const rect = sentinelRef?.getBoundingClientRect();
-      if (rect && rect.top <= window.innerHeight + 200) {
-        loadMoreReceipts();
-      }
-    }
-  }));
 
   onCleanup(() => disconnectSSE());
 
@@ -334,11 +314,6 @@ export default function Reception() {
         </div>
       </Show>
 
-      <div ref={sentinelRef} class="rcard-sentinel">
-        <Show when={loadingMore()}>
-          <span class="rcard-loading">Se incarca...</span>
-        </Show>
-      </div>
     </div>
   );
 }

@@ -51,45 +51,18 @@ function loadCache(): Receipt[] {
   return [];
 }
 
-const PAGE_SIZE = 10;
-
 const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
-const [nextCursor, setNextCursor] = createSignal<number | null>(null);
-const [hasMore, setHasMore] = createSignal(false);
-const [loadingMore, setLoadingMore] = createSignal(false);
-
-export { hasMore, loadingMore };
 
 export async function loadReceipts() {
   try {
-    const res = await apiFetch(`/api/receipts?limit=${PAGE_SIZE}&sort=-id`);
+    const res = await apiFetch(`/api/receipts?limit=1000&sort=-id`);
     if (!res.ok) return;
     const data = await res.json();
     const mapped: Receipt[] = data.items.map(mapFromApi);
     setReceipts(mapped);
-    setNextCursor(data.next_cursor ?? null);
-    setHasMore(data.next_cursor !== null);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
   } catch {
     // ramane cache-ul existent
-  }
-}
-
-export async function loadMoreReceipts() {
-  const cursor = nextCursor();
-  if (cursor === null || loadingMore()) return;
-  setLoadingMore(true);
-  try {
-    const res = await apiFetch(`/api/receipts?limit=${PAGE_SIZE}&sort=-id&last_id=${cursor}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const appended = [...receipts(), ...data.items.map(mapFromApi)];
-    setReceipts(appended);
-    setNextCursor(data.next_cursor ?? null);
-    setHasMore(data.next_cursor !== null);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(appended));
-  } catch {} finally {
-    setLoadingMore(false);
   }
 }
 

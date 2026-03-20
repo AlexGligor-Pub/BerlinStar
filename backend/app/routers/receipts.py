@@ -39,7 +39,7 @@ async def list_receipts(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    limit = min(limit, 100)
+    limit = min(limit, 1000)
     stmt = (
         select(Receipt)
         .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
