@@ -639,6 +639,101 @@ body {
 }
 
 /* ===== RECEIPT CARDS LIST ===== */
+.reception-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-dropdown {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-dropdown-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-badge {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0 5px;
+  line-height: 1.6;
+}
+
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 8px;
+  min-width: 200px;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.filter-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  background: transparent;
+  color: var(--text);
+}
+
+.filter-menu-item:hover {
+  background: var(--surface2);
+}
+
+.filter-menu-item--active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+
+.filter-menu-item--active:hover {
+  background: var(--accent-hover);
+}
+
+.filter-chevron {
+  font-size: 0.7rem;
+}
+
+.filter-clear-btn {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 0.78rem;
+}
+
+.reception-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.reception-search {
+  width: 180px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+
 .rcard-list {
   display: flex;
   flex-direction: column;

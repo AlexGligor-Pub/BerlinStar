@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
 
@@ -175,25 +175,104 @@ function ReceiptCard(props: { receipt: Receipt }) {
   );
 }
 
+const FILTER_OPTIONS = ["Neplatit", ...METODE];
+
 export default function Reception() {
   onMount(() => { loadReceipts(); });
+  const [selected, setSelected] = createSignal<Set<string>>(new Set());
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  const [search, setSearch] = createSignal("");
+
+  function toggleOption(opt: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(opt) ? next.delete(opt) : next.add(opt);
+      return next;
+    });
+  }
+
+  function onOutside(e: MouseEvent) {
+    if (!(e.target as HTMLElement).closest(".filter-dropdown")) setMenuOpen(false);
+  }
+  document.addEventListener("click", onOutside);
+  onCleanup(() => document.removeEventListener("click", onOutside));
+
+  const filtered = createMemo(() => {
+    const sel = selected();
+    const q = search().toLowerCase().trim();
+    return receipts().filter((r) => {
+      const matchMetoda = sel.size === 0 || sel.has(r.metodaPlata ?? "Neplatit");
+      const matchSearch = !q || r.titlu.toLowerCase().includes(q);
+      return matchMetoda && matchSearch;
+    });
+  });
+
+  const hasFilter = () => selected().size > 0;
+
   return (
     <div class="page-content">
       <div class="page-header">
         <h1 class="page-title">Receptie</h1>
-        <span class="text-muted" style="font-size:0.85rem">{receipts().length} bonuri</span>
+        <div class="reception-header-right">
+          <input
+            class="input reception-search"
+            type="search"
+            placeholder="Cauta dupa titlu..."
+            value={search()}
+            onInput={(e) => setSearch(e.currentTarget.value)}
+          />
+          <div class="filter-dropdown">
+            <button
+              class="btn btn-sm btn-ghost filter-dropdown-btn"
+              classList={{ "filter-dropdown-btn--active": hasFilter() }}
+              onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }}
+            >
+              Filtru
+              {hasFilter() && <span class="filter-badge">{selected().size}</span>}
+              <span class="filter-chevron">{menuOpen() ? "▲" : "▼"}</span>
+            </button>
+
+            <Show when={menuOpen()}>
+              <div class="filter-menu">
+                <For each={FILTER_OPTIONS}>
+                  {(opt) => (
+                    <button
+                      class="filter-menu-item"
+                      classList={{ "filter-menu-item--active": selected().has(opt) }}
+                      onClick={() => toggleOption(opt)}
+                    >
+                      {opt}
+                    </button>
+                  )}
+                </For>
+                <Show when={hasFilter()}>
+                  <button
+                    class="btn btn-ghost btn-sm filter-clear-btn"
+                    onClick={() => setSelected(new Set())}
+                  >
+                    Sterge filtre
+                  </button>
+                </Show>
+              </div>
+            </Show>
+          </div>
+          <span class="reception-count">{filtered().length} / {receipts().length} bonuri</span>
+        </div>
       </div>
 
+
       <Show
-        when={receipts().length > 0}
+        when={filtered().length > 0}
         fallback={
           <div class="card" style="text-align:center;padding:48px 16px">
-            <div class="text-muted">Nu exista bonuri inregistrate.</div>
+            <div class="text-muted">
+              {receipts().length === 0 ? "Nu exista bonuri inregistrate." : "Niciun bon pentru filtrul selectat."}
+            </div>
           </div>
         }
       >
         <div class="rcard-list">
-          <For each={receipts()}>
+          <For each={filtered()}>
             {(r) => <ReceiptCard receipt={r} />}
           </For>
         </div>
