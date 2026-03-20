@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.receipt import Receipt, ReceiptItem
-from app.schemas.receipt import ReceiptCreate, ReceiptRead
+from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
@@ -101,6 +101,28 @@ async def get_receipt(
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     return receipt
+
+
+@router.patch("/{receipt_id}", response_model=ReceiptRead)
+async def patch_receipt(
+    receipt_id: int,
+    body: ReceiptPatch,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id:
+        raise HTTPException(404, "Bonul nu a fost gasit.")
+    receipt.pay_method = body.pay_method
+    receipt.partial_pay = body.partial_pay
+    receipt.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    await db.commit()
+    result = (await db.execute(
+        select(Receipt)
+        .options(selectinload(Receipt.receipt_items))
+        .where(Receipt.id == receipt_id)
+    )).scalar_one()
+    return result
 
 
 @router.delete("/{receipt_id}", status_code=204)

@@ -10,6 +10,7 @@ export interface Receipt {
   descriere?: string;
   dateTehn?: string;
   metodaPlata?: string;
+  partialPay?: number;
   items: CartItem[];
   total: number;
 }
@@ -24,7 +25,8 @@ function mapFromApi(r: any): Receipt {
     titlu: r.titlu,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
-    metodaPlata: r.metoda_plata ?? undefined,
+    metodaPlata: r.pay_method !== "Neplatit" ? r.pay_method : undefined,
+    partialPay: r.partial_pay != null ? parseFloat(r.partial_pay) : undefined,
     items: r.receipt_items.map((i: any) => ({
       id: i.id,
       name: i.name,
@@ -65,7 +67,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
-    metoda_plata: receipt.metodaPlata ?? null,
+    pay_method: receipt.metodaPlata ?? "Neplatit",
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),
@@ -85,6 +87,27 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
   setReceipts([created, ...receipts()]);
   localStorage.setItem(CACHE_KEY, JSON.stringify(receipts()));
   return created;
+}
+
+export async function updateMetodaPlata(id: string, metodaPlata: string | null, partialPay?: number) {
+  const pay_method = metodaPlata ?? "Neplatit";
+  const res = await apiFetch(`/api/receipts/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      pay_method,
+      partial_pay: pay_method === "Platit Partial" ? (partialPay ?? 100) : null,
+    }),
+  });
+  if (!res.ok) return;
+  const updated = receipts().map((r) =>
+    r.id === id ? {
+      ...r,
+      metodaPlata: pay_method !== "Neplatit" ? pay_method : undefined,
+      partialPay: pay_method === "Platit Partial" ? (partialPay ?? 100) : undefined,
+    } : r
+  );
+  setReceipts(updated);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 }
 
 export async function deleteReceipt(id: string) {

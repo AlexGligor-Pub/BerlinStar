@@ -32,6 +32,11 @@ class ReceiptItemRead(BaseModel):
     unit: str
 
 
+class ReceiptPatch(BaseModel):
+    pay_method: PayMethod
+    partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
+
+
 class ReceiptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
