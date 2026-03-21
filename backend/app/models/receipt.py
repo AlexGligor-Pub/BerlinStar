@@ -28,7 +28,7 @@ class Receipt(Base):
     descriere: Mapped[str | None] = mapped_column(Text, nullable=True)
     date_tehn: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)

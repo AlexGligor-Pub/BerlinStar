@@ -19,7 +19,7 @@ class Category(Base):
         Integer, ForeignKey("themes.id", ondelete="CASCADE"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
