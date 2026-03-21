@@ -28,8 +28,9 @@ services:
       dockerfile: deploy/frontend.Dockerfile
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`${SERVER_IP}`)"
+      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
       - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
       # --- Uncomment pentru HTTPS când ai domeniu ---
       # - "traefik.http.routers.frontend-secure.rule=Host(`${SERVER_IP}`)"
@@ -47,10 +48,9 @@ services:
       - .env
     labels:
       - "traefik.enable=true"
-      # NOTE: FastAPI are deja prefix-ul /api în toate rutele sale (ex: /api/auth, /api/items).
-      # NU facem strip prefix — Traefik forwardează calea completă către backend.
-      - "traefik.http.routers.backend.rule=Host(`${SERVER_IP}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
       - "traefik.http.routers.backend.entrypoints=web"
+      - "traefik.http.routers.backend.priority=10"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
       # flushinterval=-1 necesar pentru SSE (Server-Sent Events) la /api/receipts/events
       - "traefik.http.services.backend.loadbalancer.responseforwarding.flushinterval=-1"
