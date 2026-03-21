@@ -1,6 +1,10 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from app.routers import auth, accounts, themes, categories, items, receipts, employees
 
@@ -18,7 +22,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:2000"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:2000").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
