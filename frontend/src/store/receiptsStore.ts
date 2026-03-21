@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
 
@@ -151,7 +151,7 @@ function _openSSE(): void {
   const token = auth.token;
   if (!token) return;
   setSseStatus("connecting");
-  const es = new EventSource(`/api/receipts/events?token=${encodeURIComponent(token)}`);
+  const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}`);
   _es = es;
   es.onopen = () => setSseStatus("connected");
   es.onmessage = (e) => {

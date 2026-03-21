@@ -19,7 +19,7 @@ function Protected(props: { component: () => any }) {
 
 export default function App() {
   return (
-    <Router>
+    <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
       <Route path="/login" component={Login} />
       <Route path="/" component={() => <Protected component={POS} />} />
       <Route path="/receptie" component={() => <Protected component={Reception} />} />

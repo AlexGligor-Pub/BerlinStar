@@ -268,7 +268,7 @@ export async function generateReceiptPdf(r: Receipt): Promise<void> {
   // Incarca logo in paralel
   let logoB64: string | null = null;
   try {
-    const resp = await fetch("/logo.png");
+    const resp = await fetch(import.meta.env.BASE_URL + "logo.png");
     const blob = await resp.blob();
     logoB64 = await new Promise((res) => {
       const reader = new FileReader();

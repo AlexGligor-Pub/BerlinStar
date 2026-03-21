@@ -1,5 +1,7 @@
 import { auth } from "../store/authStore";
 
+export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
 export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -8,5 +10,5 @@ export function apiFetch(url: string, options: RequestInit = {}): Promise<Respon
   if (auth.token) {
     headers["Authorization"] = `Bearer ${auth.token}`;
   }
-  return fetch(url, { ...options, headers });
+  return fetch(API_BASE + url, { ...options, headers });
 }
