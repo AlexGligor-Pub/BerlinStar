@@ -1,43 +1,11 @@
 services:
 
-  traefik:
-    image: traefik:v3.3
-    environment:
-      - DOCKER_API_VERSION=1.41
-    command:
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      # --- Uncomment pentru HTTPS cu Let's Encrypt când ai domeniu ---
-      # - "--entrypoints.websecure.address=:443"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
-      # - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      # - "--certificatesresolvers.letsencrypt.acme.email=your@email.com"
-      # - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      # - "443:443"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      # - "letsencrypt:/letsencrypt"
-    networks:
-      - web
-    restart: unless-stopped
-
   frontend:
     build:
       context: ..
       dockerfile: deploy/frontend.Dockerfile
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.frontend.entrypoints=web"
-      - "traefik.http.routers.frontend.priority=1"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
-      # --- Uncomment pentru HTTPS când ai domeniu ---
-      # - "traefik.http.routers.frontend-secure.rule=Host(`${SERVER_IP}`)"
-      # - "traefik.http.routers.frontend-secure.entrypoints=websecure"
-      # - "traefik.http.routers.frontend-secure.tls.certresolver=letsencrypt"
+    ports:
+      - "80:80"
     networks:
       - web
     restart: unless-stopped
@@ -48,18 +16,6 @@ services:
       dockerfile: deploy/backend.Dockerfile
     env_file:
       - .env
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.backend.rule=PathPrefix(`/api`)"
-      - "traefik.http.routers.backend.entrypoints=web"
-      - "traefik.http.routers.backend.priority=10"
-      - "traefik.http.services.backend.loadbalancer.server.port=8000"
-      # flushinterval=-1 necesar pentru SSE (Server-Sent Events) la /api/receipts/events
-      - "traefik.http.services.backend.loadbalancer.responseforwarding.flushinterval=-1"
-      # --- Uncomment pentru HTTPS când ai domeniu ---
-      # - "traefik.http.routers.backend-secure.rule=Host(`${SERVER_IP}`) && PathPrefix(`/api`)"
-      # - "traefik.http.routers.backend-secure.entrypoints=websecure"
-      # - "traefik.http.routers.backend-secure.tls.certresolver=letsencrypt"
     networks:
       - web
       - internal
@@ -75,7 +31,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # Portul 5432 NU este expus în afară — accesibil doar din rețeaua "internal"
     networks:
       - internal
     restart: unless-stopped
@@ -86,4 +41,3 @@ networks:
 
 volumes:
   postgres_data:
-  # letsencrypt:
