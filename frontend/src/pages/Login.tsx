@@ -1,6 +1,7 @@
 import { createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { login } from "../store/authStore";
+import { API_BASE } from "../utils/api";
 import ThemeToggle from "../components/ThemeToggle";
 import logo from "../assets/logo.png";
 
@@ -17,7 +18,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username().trim(), password: password() }),
