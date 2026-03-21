@@ -19,9 +19,8 @@ RUN npm run build
 # ---- Stage 2: Serve cu nginx ----
 FROM nginx:alpine
 
-# Copiază build-ul static în subfolderul corespunzător base path-ului
-ARG VITE_BASE_PATH=/berlinstar/
-COPY --from=builder /app/dist /usr/share/nginx/html${VITE_BASE_PATH}
+# Copiază build-ul static — nginx serveste de la root, Rockhost face strip la /berlinstar
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Configurare nginx pentru SPA + proxy API
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
