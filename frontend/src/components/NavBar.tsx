@@ -1,6 +1,5 @@
 import { useNavigate } from "@solidjs/router";
 import { auth, logout } from "../store/authStore";
-import { cartCount } from "../store/cartStore";
 import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
 import { Show, createSignal, onCleanup } from "solid-js";
