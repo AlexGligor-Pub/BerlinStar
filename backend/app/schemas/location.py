@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class LocationCreate(BaseModel):
     name: str = Field(..., max_length=200)
     description: str | None = None
+    disclaimer_id: int | None = None
 
 
 class LocationRead(BaseModel):
@@ -13,6 +14,7 @@ class LocationRead(BaseModel):
     id: int
     name: str
     description: str | None
+    disclaimer_id: int | None
     account_id: int
     created_at: datetime
     updated_at: datetime | None

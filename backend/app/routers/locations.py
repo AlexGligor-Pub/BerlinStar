@@ -21,6 +21,7 @@ def _to_detail(loc: Location) -> LocationDetail:
         id=loc.id,
         name=loc.name,
         description=loc.description,
+        disclaimer_id=loc.disclaimer_id,
         account_id=loc.account_id,
         created_at=loc.created_at,
         updated_at=loc.updated_at,
@@ -77,7 +78,7 @@ async def create_location(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    location = Location(name=body.name, description=body.description, account_id=account_id)
+    location = Location(name=body.name, description=body.description, disclaimer_id=body.disclaimer_id, account_id=account_id)
     db.add(location)
     await db.commit()
     await db.refresh(location)
@@ -106,6 +107,7 @@ async def update_location(
         raise HTTPException(404, "Locația nu a fost găsită.")
     location.name = body.name
     location.description = body.description
+    location.disclaimer_id = body.disclaimer_id
     await db.commit()
     await db.refresh(location)
     return location

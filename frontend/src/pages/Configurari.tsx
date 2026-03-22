@@ -1,7 +1,7 @@
 import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
 
-interface Location { id: number; name: string; description: string | null; department_ids: number[]; employee_ids: number[]; }
+interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; department_ids: number[]; employee_ids: number[]; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
@@ -127,13 +127,16 @@ function LocatiiPanel() {
   const [editId, setEditId]               = createSignal<number | null>(null);
   const [editName, setEditName]           = createSignal("");
   const [editDesc, setEditDesc]           = createSignal("");
+  const [editDisclaimerId, setEditDisclaimerId] = createSignal<number | null>(null);
   const [editDepartmentIds, setEditDepartmentIds] = createSignal<Set<number>>(new Set<number>());
   const [editEmpIds, setEditEmpIds]       = createSignal<Set<number>>(new Set<number>());
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
+  const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; text: string }[]>([]);
   const [editLoading, setEditLoading]     = createSignal(false);
   let cachedDepartments: Department[] | null = null;
   let cachedEmployees: Employee[] | null = null;
+  let cachedDisclaimers: { id: number; text: string }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
   const [newName, setNewName] = createSignal("");
@@ -168,24 +171,28 @@ function LocatiiPanel() {
     setEditId(loc.id);
     setEditName(loc.name);
     setEditDesc(loc.description ?? "");
+    setEditDisclaimerId(loc.disclaimer_id);
     setAddMode(false);
     setError(null);
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
 
-    if (cachedDepartments && cachedEmployees) {
+    if (cachedDepartments && cachedEmployees && cachedDisclaimers) {
       setAllDepartments(cachedDepartments);
       setAllEmployees(cachedEmployees);
+      setAllDisclaimers(cachedDisclaimers);
       return;
     }
 
     setAllDepartments([]);
     setAllEmployees([]);
+    setAllDisclaimers([]);
     setEditLoading(true);
     try {
       const fetches: Promise<Response>[] = [];
       if (!cachedDepartments) fetches.push(apiFetch("/api/departments?limit=200"));
       if (!cachedEmployees)   fetches.push(apiFetch("/api/employees?limit=200"));
+      if (!cachedDisclaimers) fetches.push(apiFetch("/api/disclaimers?limit=200"));
 
       const results = await Promise.all(fetches);
       if (results.some(r => !r.ok)) throw new Error();
@@ -194,9 +201,11 @@ function LocatiiPanel() {
       let idx = 0;
       if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
       if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
+      if (!cachedDisclaimers) { cachedDisclaimers = jsons[idx++].items ?? []; }
 
       setAllDepartments(cachedDepartments!);
       setAllEmployees(cachedEmployees!);
+      setAllDisclaimers(cachedDisclaimers!);
     } catch {
       setError("Eroare la încărcarea datelor.");
     } finally {
@@ -221,7 +230,7 @@ function LocatiiPanel() {
       await Promise.all([
         apiFetch(`/api/locations/${id}`, {
           method: "PATCH",
-          body: JSON.stringify({ name: editName().trim(), description: editDesc().trim() || null }),
+          body: JSON.stringify({ name: editName().trim(), description: editDesc().trim() || null, disclaimer_id: editDisclaimerId() }),
         }),
         apiFetch(`/api/locations/${id}/departments`, {
           method: "PUT",
@@ -340,6 +349,11 @@ function LocatiiPanel() {
                     <Show when={loc.description}>
                       <span class="cfg-location-desc">{loc.description}</span>
                     </Show>
+                    <Show when={loc.disclaimer_id !== null}>
+                      <span class="cfg-location-desc" style="opacity:0.6;font-style:italic">
+                        Disclaimer #{loc.disclaimer_id}
+                      </span>
+                    </Show>
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(loc)}>Editează</button>
@@ -356,6 +370,31 @@ function LocatiiPanel() {
 
                 <Show when={editLoading()}>
                   <p class="cfg-hint">Se încarcă departamente și angajați...</p>
+                </Show>
+
+                <Show when={!editLoading()}>
+                  <div class="cfg-assoc-section">
+                    <div class="cfg-assoc-header">
+                      <span class="cfg-assoc-label">Disclaimer</span>
+                    </div>
+                    <select
+                      class="input"
+                      value={editDisclaimerId() ?? 0}
+                      onChange={e => {
+                        const v = parseInt(e.currentTarget.value);
+                        setEditDisclaimerId(v === 0 ? null : v);
+                      }}
+                    >
+                      <option value={0}>— Fără disclaimer —</option>
+                      <For each={allDisclaimers()}>
+                        {(d) => (
+                          <option value={d.id}>
+                            {d.text.length > 80 ? d.text.slice(0, 80) + "…" : d.text}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </div>
                 </Show>
 
                 <Show when={!editLoading() && allDepartments().length > 0}>
@@ -821,154 +860,166 @@ function AngajatiPanel() {
   );
 }
 
-// ─── Disclaimers panel ────────────────────────────────────────────────────────
+// ─── Mențiuni panel ───────────────────────────────────────────────────────────
 
 interface DisclaimerItem { id: number; text: string; }
 
 function DisclaimersPanel() {
-  const PAGE = 20;
-  const [items, setItems] = createSignal<DisclaimerItem[]>([]);
-  const [loading, setLoading] = createSignal(false);
-  const [hasMore, setHasMore] = createSignal(false);
-  const [nextCursor, setNextCursor] = createSignal<number | null>(null);
+  const [items, setItems]     = createSignal<DisclaimerItem[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [search, setSearch]   = createSignal("");
 
-  const [editId, setEditId] = createSignal<number | null>(null);
+  const [editId, setEditId]     = createSignal<number | null>(null);
   const [editText, setEditText] = createSignal("");
-  const [addOpen, setAddOpen] = createSignal(false);
-  const [addText, setAddText] = createSignal("");
-  const [deleteId, setDeleteId] = createSignal<number | null>(null);
+  const [addOpen, setAddOpen]   = createSignal(false);
+  const [addText, setAddText]   = createSignal("");
+  const [deleteTarget, setDeleteTarget] = createSignal<DisclaimerItem | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [error, setError]   = createSignal<string | null>(null);
 
-  async function loadPage(cursor: number | null, append: boolean) {
+  const filtered = createMemo(() => {
+    const q = search().toLowerCase();
+    return q ? items().filter(d => d.text.toLowerCase().includes(q)) : items();
+  });
+
+  async function load() {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: String(PAGE) });
-      if (cursor !== null) params.set("last_id", String(cursor));
-      const res = await apiFetch(`/api/disclaimers?${params}`);
+      const res = await apiFetch("/api/disclaimers?limit=200");
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      const newItems: DisclaimerItem[] = (data.items ?? []).map((d: any) => ({ id: d.id, text: d.text }));
-      setItems(append ? [...items(), ...newItems] : newItems);
-      setHasMore(data.next_cursor !== null && data.next_cursor !== undefined);
-      setNextCursor(data.next_cursor ?? null);
-    } finally {
-      setLoading(false);
-    }
+      setItems((data.items ?? []).map((d: any) => ({ id: d.id, text: d.text })));
+    } catch {
+      setError("Eroare la încărcare.");
+    } finally { setLoading(false); }
   }
 
-  onMount(() => loadPage(null, false));
+  onMount(load);
 
-  function startEdit(d: DisclaimerItem) { setEditId(d.id); setEditText(d.text); }
+  function startEdit(d: DisclaimerItem) { setEditId(d.id); setEditText(d.text); setAddOpen(false); setError(null); }
   function cancelEdit() { setEditId(null); setEditText(""); }
 
   async function saveEdit(id: number) {
-    setSaving(true);
+    if (!editText().trim()) return;
+    setSaving(true); setError(null);
     try {
-      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ text: editText() }) });
-      setItems(items().map(d => d.id === id ? { ...d, text: editText() } : d));
+      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ text: editText().trim() }) });
+      setItems(items().map(d => d.id === id ? { ...d, text: editText().trim() } : d));
       cancelEdit();
+    } catch {
+      setError("Eroare la salvare.");
     } finally { setSaving(false); }
   }
 
   async function saveAdd() {
     if (!addText().trim()) return;
-    setSaving(true);
+    setSaving(true); setError(null);
     try {
-      const res = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ text: addText() }) });
+      const res = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ text: addText().trim() }) });
+      if (!res.ok) throw new Error();
       const created = await res.json();
       setItems([...items(), { id: created.id, text: created.text }]);
       setAddText(""); setAddOpen(false);
+    } catch {
+      setError("Eroare la adăugare.");
     } finally { setSaving(false); }
   }
 
   async function confirmDelete() {
-    const id = deleteId();
-    if (id === null) return;
-    setSaving(true);
+    const d = deleteTarget();
+    if (!d) return;
+    setSaving(true); setError(null); setDeleteTarget(null);
     try {
-      await apiFetch(`/api/disclaimers/${id}`, { method: "DELETE" });
-      setItems(items().filter(d => d.id !== id));
-      setDeleteId(null);
+      await apiFetch(`/api/disclaimers/${d.id}`, { method: "DELETE" });
+      setItems(items().filter(x => x.id !== d.id));
+    } catch {
+      setError("Eroare la ștergere.");
     } finally { setSaving(false); }
+  }
+
+  function doExportCSV() {
+    exportCSV("Mentiuni", ["#", "Text"], filtered().map((d, i) => [String(i + 1), d.text]));
+  }
+  function doExportPDF() {
+    exportPDF("Mențiuni", ["#", "Text"], filtered().map((d, i) => [String(i + 1), d.text]));
   }
 
   return (
     <div class="cfg-panel">
+      <Show when={deleteTarget()}>
+        <DeleteModal
+          label={`mențiunea #${deleteTarget()!.id}`}
+          saving={saving()}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      </Show>
+
       <div class="cfg-panel-header">
-        <span class="cfg-panel-title">Disclaimers</span>
-        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); }}>
-          + Adaugă disclaimer
+        <h2 class="cfg-panel-title">Mențiuni</h2>
+        <input class="input cfg-search" placeholder="Caută..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
+        <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); setError(null); }}>
+          + Adaugă
         </button>
       </div>
 
+      <Show when={error()}><p class="cfg-error">{error()}</p></Show>
+
       <Show when={addOpen()}>
-        <div class="cfg-form">
+        <div class="cfg-location-row cfg-location-row--edit">
           <textarea
-            class="cfg-input"
+            class="cfg-textarea"
             rows={4}
-            placeholder="Textul disclaimerului..."
+            placeholder="Textul mențiunii..."
             value={addText()}
             onInput={e => setAddText(e.currentTarget.value)}
           />
-          <div class="cfg-form-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveAdd}>Salvează</button>
+          <div class="cfg-location-actions">
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addText().trim()} onClick={saveAdd}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setAddText(""); }}>Anulează</button>
           </div>
         </div>
       </Show>
 
+      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!loading() && filtered().length === 0}>
+        <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există mențiuni. Apasă \"+ Adaugă\" pentru a crea una."}</p>
+      </Show>
+
       <div class="cfg-location-list">
-        <For each={items()}>
+        <For each={filtered()}>
           {(d) => (
-            <div class="cfg-location-row">
-              <Show when={editId() === d.id}
-                fallback={
-                  <>
+            <Show
+              when={editId() === d.id}
+              fallback={
+                <div class="cfg-location-row">
+                  <div class="cfg-location-info">
                     <span class="cfg-location-name" style="white-space:pre-wrap">{d.text}</span>
-                    <div class="cfg-location-actions">
-                      <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
-                      <button class="btn btn-sm btn-danger" onClick={() => setDeleteId(d.id)}>Șterge</button>
-                    </div>
-                  </>
-                }
-              >
-                <div class="cfg-form" style="flex:1">
-                  <textarea
-                    class="cfg-input"
-                    rows={4}
-                    value={editText()}
-                    onInput={e => setEditText(e.currentTarget.value)}
-                  />
-                  <div class="cfg-form-actions">
-                    <button class="btn btn-sm btn-primary" disabled={saving()} onClick={() => saveEdit(d.id)}>Salvează</button>
-                    <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  </div>
+                  <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
                   </div>
                 </div>
-              </Show>
-            </div>
+              }
+            >
+              <div class="cfg-location-row cfg-location-row--edit">
+                <textarea
+                  class="cfg-textarea"
+                  rows={4}
+                  value={editText()}
+                  onInput={e => setEditText(e.currentTarget.value)}
+                />
+                <div class="cfg-location-actions">
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editText().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                </div>
+              </div>
+            </Show>
           )}
         </For>
       </div>
-
-      <Show when={loading()}><p class="cfg-loading">Se încarcă...</p></Show>
-
-      <Show when={hasMore() && !loading()}>
-        <button class="btn btn-sm btn-ghost cfg-load-more" onClick={() => loadPage(nextCursor(), true)}>
-          Încarcă mai mult
-        </button>
-      </Show>
-
-      <Show when={deleteId() !== null}>
-        <div class="modal-backdrop">
-          <div class="modal">
-            <p class="modal-title">Șterge disclaimer?</p>
-            <p class="modal-body">Această acțiune nu poate fi anulată.</p>
-            <div class="modal-actions">
-              <button class="btn btn-sm btn-danger" disabled={saving()} onClick={confirmDelete}>Șterge</button>
-              <button class="btn btn-sm btn-ghost" onClick={() => setDeleteId(null)}>Anulează</button>
-            </div>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }
@@ -1685,8 +1736,8 @@ const TOPICS = [
   { id: "departamente",   label: "Departamente",         panel: DepartamentePanel },
   { id: "angajati",       label: "Angajați",             panel: AngajatiPanel },
   { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
-  { id: "companii",       label: "Companii",             panel: CompaniiPanel },
-  { id: "disclaimers",    label: "Disclaimers",           panel: DisclaimersPanel },
+  { id: "companii",       label: "Companiile mele",       panel: CompaniiPanel },
+  { id: "disclaimers",    label: "Mențiuni",               panel: DisclaimersPanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -1731,9 +1782,9 @@ function WelcomePanel() {
           </span>
         </div>
         <div class="cfg-welcome-item">
-          <span class="cfg-welcome-item-title">Disclaimers</span>
+          <span class="cfg-welcome-item-title">Mențiuni</span>
           <span class="cfg-welcome-item-desc">
-            Gestionează textele de disclaimer afișate pe bonuri sau documente. Adaugă, modifică sau șterge disclaimer-uri.
+            Gestionează textele de mențiuni afișate pe bonuri sau documente. Adaugă, modifică sau șterge mențiunile.
           </span>
         </div>
       </div>
