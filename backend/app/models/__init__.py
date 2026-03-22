@@ -10,5 +10,6 @@ from .device import Device
 from .client import Client
 from .company import Company
 from .disclaimer import Disclaimer
+from .register import Register
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register"]

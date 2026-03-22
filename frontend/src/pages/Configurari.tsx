@@ -1,7 +1,8 @@
 import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
 
-interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; department_ids: number[]; employee_ids: number[]; }
+interface CompanyAssignment { company_id: number; is_primary: boolean; }
+interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; department_ids: number[]; employee_ids: number[]; company_assignments: CompanyAssignment[]; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
@@ -130,13 +131,17 @@ function LocatiiPanel() {
   const [editDisclaimerId, setEditDisclaimerId] = createSignal<number | null>(null);
   const [editDepartmentIds, setEditDepartmentIds] = createSignal<Set<number>>(new Set<number>());
   const [editEmpIds, setEditEmpIds]       = createSignal<Set<number>>(new Set<number>());
+  // company_id → is_primary
+  const [editCompanyMap, setEditCompanyMap] = createSignal<Map<number, boolean>>(new Map());
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
   const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; title: string; text: string }[]>([]);
+  const [allCompanies, setAllCompanies]   = createSignal<{ id: number; name: string; cui: number }[]>([]);
   const [editLoading, setEditLoading]     = createSignal(false);
   let cachedDepartments: Department[] | null = null;
   let cachedEmployees: Employee[] | null = null;
   let cachedDisclaimers: { id: number; title: string; text: string }[] | null = null;
+  let cachedCompanies: { id: number; name: string; cui: number }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
   const [newName, setNewName] = createSignal("");
@@ -187,23 +192,29 @@ function LocatiiPanel() {
     setError(null);
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
+    const cm = new Map<number, boolean>();
+    for (const a of loc.company_assignments) cm.set(a.company_id, a.is_primary);
+    setEditCompanyMap(cm);
 
-    if (cachedDepartments && cachedEmployees && cachedDisclaimers) {
+    if (cachedDepartments && cachedEmployees && cachedDisclaimers && cachedCompanies) {
       setAllDepartments(cachedDepartments);
       setAllEmployees(cachedEmployees);
       setAllDisclaimers(cachedDisclaimers);
+      setAllCompanies(cachedCompanies);
       return;
     }
 
     setAllDepartments([]);
     setAllEmployees([]);
     setAllDisclaimers([]);
+    setAllCompanies([]);
     setEditLoading(true);
     try {
       const fetches: Promise<Response>[] = [];
       if (!cachedDepartments) fetches.push(apiFetch("/api/departments?limit=200"));
       if (!cachedEmployees)   fetches.push(apiFetch("/api/employees?limit=200"));
       if (!cachedDisclaimers) fetches.push(apiFetch("/api/disclaimers?limit=200"));
+      if (!cachedCompanies)   fetches.push(apiFetch("/api/companies?limit=200"));
 
       const results = await Promise.all(fetches);
       if (results.some(r => !r.ok)) throw new Error();
@@ -213,10 +224,12 @@ function LocatiiPanel() {
       if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
       if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
       if (!cachedDisclaimers) { cachedDisclaimers = (jsons[idx++].items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })); }
+      if (!cachedCompanies)   { cachedCompanies   = (jsons[idx++].items ?? []).map((c: any) => ({ id: c.id, name: c.name, cui: c.cui })); }
 
       setAllDepartments(cachedDepartments!);
       setAllEmployees(cachedEmployees!);
       setAllDisclaimers(cachedDisclaimers!);
+      setAllCompanies(cachedCompanies!);
     } catch {
       setError("Eroare la încărcarea datelor.");
     } finally {
@@ -238,6 +251,7 @@ function LocatiiPanel() {
     setError(null);
     try {
       const id = editId()!;
+      const assignments = Array.from(editCompanyMap().entries()).map(([company_id, is_primary]) => ({ company_id, is_primary }));
       await Promise.all([
         apiFetch(`/api/locations/${id}`, {
           method: "PATCH",
@@ -250,6 +264,10 @@ function LocatiiPanel() {
         apiFetch(`/api/locations/${id}/employees`, {
           method: "PUT",
           body: JSON.stringify({ ids: Array.from(editEmpIds()) }),
+        }),
+        apiFetch(`/api/locations/${id}/companies`, {
+          method: "PUT",
+          body: JSON.stringify({ assignments }),
         }),
       ]);
       setEditId(null);
@@ -365,6 +383,15 @@ function LocatiiPanel() {
                         Disclaimer: {allDisclaimers().find(d => d.id === loc.disclaimer_id)?.title ?? `#${loc.disclaimer_id}`}
                       </span>
                     </Show>
+                    <Show when={loc.company_assignments.length > 0}>
+                      <span class="cfg-location-desc">
+                        {loc.company_assignments.map(a => {
+                          const c = allCompanies().find(x => x.id === a.company_id);
+                          const label = c ? c.name : `#${a.company_id}`;
+                          return a.is_primary ? `★ ${label}` : label;
+                        }).join(" · ")}
+                      </span>
+                    </Show>
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(loc)}>Editează</button>
@@ -445,6 +472,56 @@ function LocatiiPanel() {
                             onClick={() => setEditEmpIds(toggleNum(editEmpIds(), e.id))}
                           >{e.name}</button>
                         )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={!editLoading() && allCompanies().length > 0}>
+                  <div class="cfg-assoc-section">
+                    <div class="cfg-assoc-header">
+                      <span class="cfg-assoc-label">Companii</span>
+                      <div class="cfg-assoc-btns">
+                        <button class="cfg-assoc-btn" onClick={() => setEditCompanyMap(new Map<number, boolean>())}>Niciuna</button>
+                      </div>
+                    </div>
+                    <div class="cfg-company-assign-list">
+                      <For each={allCompanies()}>
+                        {(c) => {
+                          const included = () => editCompanyMap().has(c.id);
+                          const isPrimary = () => editCompanyMap().get(c.id) === true;
+                          function toggleInclude() {
+                            const m = new Map(editCompanyMap());
+                            if (m.has(c.id)) { m.delete(c.id); }
+                            else { m.set(c.id, false); }
+                            setEditCompanyMap(m);
+                          }
+                          function makePrimary() {
+                            const m = new Map(editCompanyMap());
+                            // clear existing primary
+                            for (const [k] of m) m.set(k, false);
+                            m.set(c.id, true);
+                            setEditCompanyMap(m);
+                          }
+                          return (
+                            <div class="cfg-company-assign-row" classList={{ "cfg-company-assign-row--included": included() }}>
+                              <label class="cfg-checkbox-row" style="flex:1;margin:0">
+                                <input type="checkbox" checked={included()} onChange={toggleInclude} />
+                                <span>{c.name} <span style="opacity:0.5;font-size:0.8em">CUI {c.cui}</span></span>
+                              </label>
+                              <Show when={included()}>
+                                <button
+                                  class="cfg-primary-btn"
+                                  classList={{ "cfg-primary-btn--active": isPrimary() }}
+                                  onClick={makePrimary}
+                                  title="Marchează ca principală"
+                                >
+                                  {isPrimary() ? "★ Principală" : "☆ Secundară"}
+                                </button>
+                              </Show>
+                            </div>
+                          );
+                        }}
                       </For>
                     </div>
                   </div>
@@ -1055,8 +1132,8 @@ function ProduseSiServiciiPanel() {
   const [error, setError] = createSignal<string | null>(null);
 
   // ── accordion ──
-  const [catOpen, setCatOpen] = createSignal(true);
-  const [itemOpen, setItemOpen] = createSignal(true);
+  const [catOpen, setCatOpen] = createSignal(false);
+  const [itemOpen, setItemOpen] = createSignal(false);
 
   // ── categories ──
   const [categories, setCategories] = createSignal<Category[]>([]);
@@ -1750,6 +1827,226 @@ function CompaniiPanel() {
   );
 }
 
+// ─── Register panel ───────────────────────────────────────────────────────────
+
+const REGISTER_TYPES = ["Deviz", "Factura", "Chitanta", "Aviz"] as const;
+type RegisterType = typeof REGISTER_TYPES[number];
+
+interface RegisterItem { id: number; type: string; serie: string; numar: number; }
+
+const REGISTER_TYPE_LABEL: Record<string, string> = {
+  Deviz: "Deviz",
+  Factura: "Factură",
+  Chitanta: "Chitanță",
+  Aviz: "Aviz de însoțire a mărfii",
+};
+
+function RegisterPanel() {
+  const [items, setItems]     = createSignal<RegisterItem[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [filterType, setFilterType] = createSignal<RegisterType | "all">("all");
+
+  const [editId, setEditId]       = createSignal<number | null>(null);
+  const [editType, setEditType]   = createSignal<string>("Deviz");
+  const [editSerie, setEditSerie] = createSignal("");
+  const [editNumar, setEditNumar] = createSignal(0);
+  const [addOpen, setAddOpen]     = createSignal(false);
+  const [addType, setAddType]     = createSignal<string>("Deviz");
+  const [addSerie, setAddSerie]   = createSignal("");
+  const [addNumar, setAddNumar]   = createSignal(0);
+  const [deleteTarget, setDeleteTarget] = createSignal<RegisterItem | null>(null);
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError]   = createSignal<string | null>(null);
+
+  const filtered = createMemo(() => {
+    const t = filterType();
+    return t === "all" ? items() : items().filter(r => r.type === t);
+  });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/api/registers?limit=200");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setItems((data.items ?? []).map((r: any) => ({ id: r.id, type: r.type, serie: r.serie, numar: r.numar })));
+    } catch {
+      setError("Eroare la încărcare.");
+    } finally { setLoading(false); }
+  }
+
+  onMount(load);
+
+  function startEdit(r: RegisterItem) {
+    setEditId(r.id); setEditType(r.type); setEditSerie(r.serie); setEditNumar(r.numar);
+    setAddOpen(false); setError(null);
+  }
+  function cancelEdit() { setEditId(null); }
+
+  async function saveEdit(id: number) {
+    if (!editSerie().trim()) return;
+    setSaving(true); setError(null);
+    try {
+      await apiFetch(`/api/registers/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ type: editType(), serie: editSerie().trim(), numar: editNumar() }),
+      });
+      setItems(items().map(r => r.id === id ? { ...r, type: editType(), serie: editSerie().trim(), numar: editNumar() } : r));
+      cancelEdit();
+    } catch {
+      setError("Eroare la salvare.");
+    } finally { setSaving(false); }
+  }
+
+  async function saveAdd() {
+    if (!addSerie().trim()) return;
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch("/api/registers", {
+        method: "POST",
+        body: JSON.stringify({ type: addType(), serie: addSerie().trim(), numar: addNumar() }),
+      });
+      if (!res.ok) throw new Error();
+      const created = await res.json();
+      setItems([...items(), { id: created.id, type: created.type, serie: created.serie, numar: created.numar }]);
+      setAddSerie(""); setAddNumar(0); setAddOpen(false);
+    } catch {
+      setError("Eroare la adăugare.");
+    } finally { setSaving(false); }
+  }
+
+  async function confirmDelete() {
+    const r = deleteTarget(); if (!r) return;
+    setSaving(true); setError(null); setDeleteTarget(null);
+    try {
+      await apiFetch(`/api/registers/${r.id}`, { method: "DELETE" });
+      setItems(items().filter(x => x.id !== r.id));
+    } catch {
+      setError("Eroare la ștergere.");
+    } finally { setSaving(false); }
+  }
+
+  function doExportCSV() {
+    exportCSV("Registre", ["Tip", "Serie", "Număr curent"],
+      filtered().map(r => [REGISTER_TYPE_LABEL[r.type] ?? r.type, r.serie, String(r.numar)]));
+  }
+  function doExportPDF() {
+    exportPDF("Registre", ["Tip", "Serie", "Număr curent"],
+      filtered().map(r => [REGISTER_TYPE_LABEL[r.type] ?? r.type, r.serie, String(r.numar)]));
+  }
+
+  function TypeForm(props: { type: string; setType: (v: string) => void }) {
+    return (
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <For each={REGISTER_TYPES}>
+          {(t) => (
+            <button
+              class={`btn btn-sm ${props.type === t ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => props.setType(t)}
+            >{REGISTER_TYPE_LABEL[t]}</button>
+          )}
+        </For>
+      </div>
+    );
+  }
+
+  return (
+    <div class="cfg-panel">
+      <Show when={deleteTarget()}>
+        <DeleteModal
+          label={`${deleteTarget()!.serie} (${REGISTER_TYPE_LABEL[deleteTarget()!.type] ?? deleteTarget()!.type})`}
+          saving={saving()}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      </Show>
+
+      <div class="cfg-panel-header">
+        <h2 class="cfg-panel-title">Registre</h2>
+        <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); setError(null); }}>
+          + Adaugă
+        </button>
+      </div>
+
+      {/* type filter */}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+        <button class={`btn btn-sm ${filterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterType("all")}>Toate</button>
+        <For each={REGISTER_TYPES}>
+          {(t) => (
+            <button class={`btn btn-sm ${filterType() === t ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterType(t)}>
+              {REGISTER_TYPE_LABEL[t]}
+            </button>
+          )}
+        </For>
+      </div>
+
+      <Show when={error()}><p class="cfg-error">{error()}</p></Show>
+
+      <Show when={addOpen()}>
+        <div class="cfg-location-row cfg-location-row--edit">
+          <div class="cfg-location-fields">
+            <TypeForm type={addType()} setType={setAddType} />
+            <input class="input" placeholder="Serie *" value={addSerie()} onInput={e => setAddSerie(e.currentTarget.value)} />
+            <div style="display:flex;align-items:center;gap:8px">
+              <label style="font-size:13px;opacity:0.7;white-space:nowrap">Număr curent</label>
+              <input class="input" style="width:120px" type="number" min="0" value={addNumar()} onInput={e => setAddNumar(parseInt(e.currentTarget.value) || 0)} />
+            </div>
+          </div>
+          <div class="cfg-location-actions">
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addSerie().trim()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setError(null); }}>Anulează</button>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!loading() && filtered().length === 0}>
+        <p class="cfg-hint">{filterType() !== "all" ? `Nu există registre de tip ${REGISTER_TYPE_LABEL[filterType() as string]}.` : "Nu există registre."}</p>
+      </Show>
+
+      <div class="cfg-location-list">
+        <For each={filtered()}>
+          {(r) => (
+            <Show when={editId() === r.id}
+              fallback={
+                <div class="cfg-location-row">
+                  <div class="cfg-location-info">
+                    <span class="cfg-location-name">
+                      {r.serie}
+                      <span class="client-tip-badge">{REGISTER_TYPE_LABEL[r.type] ?? r.type}</span>
+                    </span>
+                    <span class="cfg-location-desc">Număr curent: {r.numar}</span>
+                  </div>
+                  <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => startEdit(r)}>Editează</button>
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(r)}>Șterge</button>
+                  </div>
+                </div>
+              }
+            >
+              <div class="cfg-location-row cfg-location-row--edit">
+                <div class="cfg-location-fields">
+                  <TypeForm type={editType()} setType={setEditType} />
+                  <input class="input" placeholder="Serie *" value={editSerie()} onInput={e => setEditSerie(e.currentTarget.value)} />
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <label style="font-size:13px;opacity:0.7;white-space:nowrap">Număr curent</label>
+                    <input class="input" style="width:120px" type="number" min="0" value={editNumar()} onInput={e => setEditNumar(parseInt(e.currentTarget.value) || 0)} />
+                  </div>
+                </div>
+                <div class="cfg-location-actions">
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editSerie().trim()} onClick={() => saveEdit(r.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                </div>
+              </div>
+            </Show>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 // ─── Topics ──────────────────────────────────────────────────────────────────
 
 const TOPICS = [
@@ -1759,6 +2056,7 @@ const TOPICS = [
   { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
   { id: "companii",       label: "Companiile mele",       panel: CompaniiPanel },
   { id: "disclaimers",    label: "Disclaimers",             panel: DisclaimersPanel },
+  { id: "registre",       label: "Registre",                panel: RegisterPanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -1808,6 +2106,12 @@ function WelcomePanel() {
             Gestionează disclaimerele afișate pe bonuri sau documente. Adaugă, modifică sau șterge disclaimerele.
           </span>
         </div>
+        <div class="cfg-welcome-item">
+          <span class="cfg-welcome-item-title">Registre</span>
+          <span class="cfg-welcome-item-desc">
+            Gestionează seriile și numerele curente pentru Devize, Facturi, Chitanțe și Avize de însoțire a mărfii.
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1838,6 +2142,7 @@ export default function Configurari() {
           <Match when={active() === "produse"}><ProduseSiServiciiPanel /></Match>
           <Match when={active() === "companii"}><CompaniiPanel /></Match>
           <Match when={active() === "disclaimers"}><DisclaimersPanel /></Match>
+          <Match when={active() === "registre"}><RegisterPanel /></Match>
         </Switch>
       </main>
     </div>
