@@ -51,66 +51,98 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
 
 function ClientSection(props: { receipt: Receipt }) {
   const r = () => props.receipt;
-  const [search, setSearch] = createSignal("");
-  const [results, setResults] = createSignal<ClientItem[]>([]);
-  const [searching, setSearching] = createSignal(false);
+  const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic">("juridic");
+  const [searchCui, setSearchCui] = createSignal("");
+  const [searchNume, setSearchNume] = createSignal("");
+  const [resultsCui, setResultsCui] = createSignal<ClientItem[]>([]);
+  const [resultsNume, setResultsNume] = createSignal<ClientItem[]>([]);
+  const [searchingCui, setSearchingCui] = createSignal(false);
+  const [searchingNume, setSearchingNume] = createSignal(false);
+  const [anafResult, setAnafResult] = createSignal<{ name: string; cui: string; adresa: string } | null>(null);
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [editing, setEditing] = createSignal(false);
   const [showModal, setShowModal] = createSignal(false);
   const [modalForm, setModalForm] = createSignal(emptyClientForm());
   const [saving, setSaving] = createSignal(false);
   const [modalError, setModalError] = createSignal<string | null>(null);
-  const [anafLoading, setAnafLoading] = createSignal(false);
 
-  let debounce: ReturnType<typeof setTimeout>;
+  // track whether a search was already triggered (to know when to show "no results")
+  const [searchedCui, setSearchedCui] = createSignal(false);
+  const [searchedNume, setSearchedNume] = createSignal(false);
 
-  function onInput(val: string) {
-    setSearch(val);
-    clearTimeout(debounce);
-    if (!val.trim()) { setResults([]); return; }
-    debounce = setTimeout(() => doSearch(val.trim()), 300);
+  function clearSearch() {
+    setSearchCui(""); setResultsCui([]); setAnafResult(null); setSearchedCui(false);
+    setSearchNume(""); setResultsNume([]); setSearchedNume(false);
   }
 
-  async function doSearch(q: string) {
-    setSearching(true);
+  function changeTip(tip: "fizic" | "juridic") {
+    setTipFilter(tip);
+    clearSearch();
+  }
+
+  async function searchByCui() {
+    const cui = searchCui().trim();
+    if (!cui) return;
+    setResultsCui([]); setAnafResult(null); setSearchedCui(false);
+    setSearchingCui(true);
     try {
-      const isCui = /^\d+$/.test(q);
-      const url = isCui
-        ? `/api/clienti?cui=${encodeURIComponent(q)}&limit=20`
-        : `/api/clienti?q=${encodeURIComponent(q)}&limit=20`;
-      const res = await apiFetch(url);
+      const res = await apiFetch(`/api/clienti?cui=${encodeURIComponent(cui)}&limit=20`);
       if (!res.ok) return;
-      const data = await res.json();
-      setResults(data.items ?? []);
-    } finally { setSearching(false); }
+      const items: ClientItem[] = (await res.json()).items ?? [];
+      setResultsCui(items);
+      setSearchedCui(true);
+      if (items.length === 0 && /^\d{4,10}$/.test(cui)) {
+        fetchAnaf(cui);
+      }
+    } finally { setSearchingCui(false); }
+  }
+
+  async function fetchAnaf(cui: string) {
+    setAnafLoading(true);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      if (res.ok) {
+        const d = await res.json();
+        setAnafResult({ name: d.name ?? "", cui: String(d.cui ?? cui), adresa: d.address ?? "" });
+      }
+    } catch {} finally { setAnafLoading(false); }
+  }
+
+  async function searchByNume() {
+    const q = searchNume().trim();
+    if (!q) return;
+    setResultsNume([]); setSearchedNume(false);
+    setSearchingNume(true);
+    try {
+      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(q)}&limit=20`);
+      if (!res.ok) return;
+      setResultsNume((await res.json()).items ?? []);
+      setSearchedNume(true);
+    } finally { setSearchingNume(false); }
   }
 
   async function assign(client: ClientItem) {
     await updateReceiptClient(r().id, client.id);
-    setSearch(""); setResults([]);
+    clearSearch(); setEditing(false);
   }
 
   async function remove() {
     await updateReceiptClient(r().id, null);
+    setEditing(false);
   }
 
-  async function openAddModal() {
-    const q = search().trim();
+  function openAddModalFromAnaf() {
+    const af = anafResult();
     const form = emptyClientForm();
-    if (/^\d{4,10}$/.test(q)) {
-      setAnafLoading(true);
-      try {
-        const res = await apiFetch(`/api/companies/anaf/${q}`);
-        if (res.ok) {
-          const d = await res.json();
-          form.tip = "juridic";
-          form.nume = d.name ?? "";
-          form.cui = String(d.cui ?? q);
-          form.adresa = d.address ?? "";
-        }
-      } catch {} finally { setAnafLoading(false); }
-    }
-    setModalForm(form);
-    setModalError(null);
-    setShowModal(true);
+    form.tip = "juridic";
+    if (af) { form.nume = af.name; form.cui = af.cui; form.adresa = af.adresa; }
+    setModalForm(form); setModalError(null); setShowModal(true);
+  }
+
+  function openAddModal() {
+    const form = emptyClientForm();
+    form.tip = tipFilter();
+    setModalForm(form); setModalError(null); setShowModal(true);
   }
 
   async function saveNewClient() {
@@ -139,28 +171,83 @@ function ClientSection(props: { receipt: Receipt }) {
     <div class="rcard-extra-card">
       <div class="rcard-extra-title">Client</div>
 
-      <Show when={r().clientId !== null}>
+      <Show when={r().clientId !== null && !editing()}>
         <div class="rclient-assigned">
           <div class="rclient-name">{r().clientNume}</div>
-          <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={remove}>✕ Elimină</button>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
+            <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={remove}>✕ Elimină</button>
+          </div>
         </div>
       </Show>
 
-      <Show when={r().clientId === null}>
+      <Show when={r().clientId === null || editing()}>
         <div class="rclient-search-wrap">
-          <input
-            class="input"
-            style="font-size:0.82rem"
-            placeholder="Caută după nume sau CUI..."
-            value={search()}
-            onInput={e => onInput(e.currentTarget.value)}
-          />
-          <Show when={searching()}>
-            <div class="rclient-hint">Se caută...</div>
+
+          {/* Toggle tip persoana */}
+          <div class="rclient-tip-toggle">
+            <button class={`btn btn-sm ${tipFilter() === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => changeTip("fizic")}>Pers. fizică</button>
+            <button class={`btn btn-sm ${tipFilter() === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => changeTip("juridic")}>Pers. juridică</button>
+          </div>
+
+          {/* CUI — doar pentru juridic */}
+          <Show when={tipFilter() === "juridic"}>
+            <div class="rclient-search-row">
+              <input class="input" style="font-size:0.82rem" placeholder="CUI..." value={searchCui()}
+                onInput={e => { setSearchCui(e.currentTarget.value); setResultsCui([]); setAnafResult(null); setSearchedCui(false); }}
+                onKeyDown={e => e.key === "Enter" && searchByCui()}
+              />
+              <button class="btn btn-sm btn-ghost" disabled={searchingCui() || anafLoading()} onClick={searchByCui}>
+                {searchingCui() ? "..." : "Caută"}
+              </button>
+            </div>
+            <Show when={anafLoading()}>
+              <div class="rclient-hint">Se interogează ANAF...</div>
+            </Show>
+            <Show when={!searchingCui() && resultsCui().length > 0}>
+              <div class="rclient-results">
+                <For each={resultsCui()}>
+                  {(c) => (
+                    <button class="rclient-result-item" onClick={() => assign(c)}>
+                      <span class="rclient-result-name">{c.nume}</span>
+                      <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
+                    </button>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={searchedCui() && !searchingCui() && resultsCui().length === 0 && !anafLoading()}>
+              <div class="rclient-no-results">
+                <span class="rclient-hint">{anafResult() === null ? "Niciun rezultat." : ""}</span>
+                <Show when={anafResult() === null}>
+                  <button class="btn btn-sm btn-ghost" style="font-size:0.78rem" onClick={openAddModal}>+ Adaugă client nou</button>
+                </Show>
+              </div>
+            </Show>
+            <Show when={anafResult() !== null}>
+              <div class="rclient-anaf-suggest">
+                <span class="rclient-hint" style="margin-bottom:2px">Găsit în ANAF:</span>
+                <button class="rclient-result-item" onClick={openAddModalFromAnaf}>
+                  <span class="rclient-result-name">{anafResult()!.name}</span>
+                  <span class="rclient-result-meta">CUI {anafResult()!.cui} · click pentru a adăuga</span>
+                </button>
+              </div>
+            </Show>
           </Show>
-          <Show when={!searching() && results().length > 0}>
+
+          {/* Nume */}
+          <div class="rclient-search-row">
+            <input class="input" style="font-size:0.82rem" placeholder="Nume..." value={searchNume()}
+              onInput={e => { setSearchNume(e.currentTarget.value); setResultsNume([]); setSearchedNume(false); }}
+              onKeyDown={e => e.key === "Enter" && searchByNume()}
+            />
+            <button class="btn btn-sm btn-ghost" disabled={searchingNume()} onClick={searchByNume}>
+              {searchingNume() ? "..." : "Caută"}
+            </button>
+          </div>
+          <Show when={!searchingNume() && resultsNume().length > 0}>
             <div class="rclient-results">
-              <For each={results()}>
+              <For each={resultsNume()}>
                 {(c) => (
                   <button class="rclient-result-item" onClick={() => assign(c)}>
                     <span class="rclient-result-name">{c.nume}</span>
@@ -170,18 +257,15 @@ function ClientSection(props: { receipt: Receipt }) {
               </For>
             </div>
           </Show>
-          <Show when={!searching() && search().trim().length > 0 && results().length === 0}>
+          <Show when={searchedNume() && !searchingNume() && resultsNume().length === 0}>
             <div class="rclient-no-results">
               <span class="rclient-hint">Niciun rezultat.</span>
-              <button
-                class="btn btn-sm btn-ghost"
-                style="font-size:0.78rem"
-                disabled={anafLoading()}
-                onClick={openAddModal}
-              >
-                {anafLoading() ? "Se interogează ANAF..." : "+ Adaugă client nou"}
-              </button>
+              <button class="btn btn-sm btn-ghost" style="font-size:0.78rem" onClick={openAddModal}>+ Adaugă client nou</button>
             </div>
+          </Show>
+
+          <Show when={editing()}>
+            <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;margin-top:2px;align-self:flex-start" onClick={() => { clearSearch(); setEditing(false); }}>← Înapoi</button>
           </Show>
         </div>
       </Show>

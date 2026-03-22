@@ -57,7 +57,7 @@ const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
 
 export async function loadReceipts() {
   try {
-    const res = await apiFetch(`/api/receipts?limit=1000&sort=-id`);
+    const res = await apiFetch(`/api/receipts?limit=200&sort=-id`);
     if (!res.ok) return;
     const data = await res.json();
     const mapped: Receipt[] = data.items.map(mapFromApi);
@@ -151,6 +151,12 @@ export { posCount };
 
 let _es: EventSource | null = null;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let _reloadTimer: ReturnType<typeof setTimeout> | undefined;
+
+function scheduleReload() {
+  clearTimeout(_reloadTimer);
+  _reloadTimer = setTimeout(() => loadReceipts(), 800);
+}
 
 let _posEs: EventSource | null = null;
 
@@ -194,7 +200,7 @@ function _openSSE(): void {
   es.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
-      if (data.type === "receipts_changed") loadReceipts();
+      if (data.type === "receipts_changed") scheduleReload();
       else if (data.type === "connected" && data.pos_count != null) setPosCount(data.pos_count);
       else if (data.type === "pos_count") setPosCount(data.count);
     } catch {}

@@ -2430,6 +2430,28 @@ body {
   flex-direction: column;
   gap: 4px;
 }
+.rclient-tip-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.rclient-search-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.rclient-search-row .input {
+  flex: 1;
+  min-width: 0;
+}
+.rclient-anaf-suggest {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 4px 0 0;
+}
 .rclient-hint {
   font-size: 0.75rem;
   opacity: 0.5;
