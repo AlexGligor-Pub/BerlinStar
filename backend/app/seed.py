@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.database import AsyncSessionLocal, engine
 from app.models.base import Base
 from app.models.account import Account
-from app.models.theme import Theme
+from app.models.department import Department
 from app.models.category import Category
 from app.models.item import Item, ItemType
 from app.models.employee import Employee
@@ -19,7 +19,7 @@ from app.models.location import Location, employee_locations
 
 SEED_DATA = [
     {
-        "theme": "Alimentatie",
+        "department": "Alimentatie",
         "categories": [
             {
                 "name": "Bauturi",
@@ -51,7 +51,7 @@ SEED_DATA = [
         ],
     },
     {
-        "theme": "Piese Auto",
+        "department": "Piese Auto",
         "categories": [
             {
                 "name": "Filtre",
@@ -109,7 +109,7 @@ SEED_DATA = [
         ],
     },
     {
-        "theme": "Servicii Mecanica",
+        "department": "Servicii Mecanica",
         "categories": [
             {
                 "name": "Revizie",
@@ -158,7 +158,7 @@ SEED_DATA = [
         ],
     },
     {
-        "theme": "Anvelope si Jante",
+        "department": "Anvelope si Jante",
         "categories": [
             {
                 "name": "Anvelope Vara",
@@ -222,26 +222,26 @@ async def seed() -> None:
             db.add(account)
             await db.flush()
 
-        for theme_data in SEED_DATA:
-            theme = (await db.execute(
-                select(Theme).where(Theme.name == theme_data["theme"])
+        for dept_data in SEED_DATA:
+            department = (await db.execute(
+                select(Department).where(Department.name == dept_data["department"])
             )).scalar_one_or_none()
-            if not theme:
-                theme = Theme(name=theme_data["theme"], account_id=account.id)
-                db.add(theme)
+            if not department:
+                department = Department(name=dept_data["department"], account_id=account.id)
+                db.add(department)
                 await db.flush()
 
-            for cat_data in theme_data["categories"]:
+            for cat_data in dept_data["categories"]:
                 category = (await db.execute(
                     select(Category).where(
                         Category.name == cat_data["name"],
-                        Category.theme_id == theme.id,
+                        Category.department_id == department.id,
                     )
                 )).scalar_one_or_none()
                 if not category:
                     category = Category(
                         name=cat_data["name"],
-                        theme_id=theme.id,
+                        department_id=department.id,
                         account_id=account.id,
                     )
                     db.add(category)

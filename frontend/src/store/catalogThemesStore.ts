@@ -1,23 +1,23 @@
 import { createSignal } from "solid-js";
 import { apiFetch } from "../utils/api";
 
-export interface CatalogTheme {
+export interface CatalogDepartment {
   id: number;
   name: string;
 }
 
-const [catalogThemes, setCatalogThemes] = createSignal<CatalogTheme[]>([]);
+const [catalogDepartments, setCatalogDepartments] = createSignal<CatalogDepartment[]>([]);
 
-export async function loadCatalogThemes(locationId?: number | null) {
+export async function loadCatalogDepartments(locationId?: number | null) {
   try {
     const qs = locationId != null ? `&location_id=${locationId}` : "";
-    const res = await apiFetch(`/api/themes?limit=100${qs}`);
+    const res = await apiFetch(`/api/departments?limit=100${qs}`);
     if (!res.ok) return;
     const data = await res.json();
-    setCatalogThemes(
-      data.items.map((t: any) => ({ id: t.id, name: t.name }))
+    setCatalogDepartments(
+      data.items.map((d: any) => ({ id: d.id, name: d.name }))
     );
   } catch {}
 }
 
-export { catalogThemes };
+export { catalogDepartments };

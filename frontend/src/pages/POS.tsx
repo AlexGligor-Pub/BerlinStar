@@ -1,6 +1,6 @@
 import { For, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { products, loadProducts } from "../store/productsStore";
-import { catalogThemes, loadCatalogThemes } from "../store/catalogThemesStore";
+import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
 import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
 import { connectPosSSE, disconnectPosSSE } from "../store/receiptsStore";
 import { device } from "../store/deviceStore";
@@ -9,7 +9,7 @@ import ShoppingList from "../components/ShoppingList";
 
 export default function POS() {
   const [panel, setPanel] = createSignal(0);
-  const [selectedThemeId, setSelectedThemeId] = createSignal<number | null>(null);
+  const [selectedDepartmentId, setSelectedDepartmentId] = createSignal<number | null>(null);
   const [search, setSearch] = createSignal("");
   const [category, setCategory] = createSignal("Toate");
   const TYPE_CYCLE = ["Produse/Servicii", "Servicii", "Produse"] as const;
@@ -20,15 +20,15 @@ export default function POS() {
     setTypeFilter(TYPE_CYCLE[(idx + 1) % TYPE_CYCLE.length]);
   }
 
-  function selectCatalogTheme(id: number | null) {
-    setSelectedThemeId(id);
+  function selectCatalogDepartment(id: number | null) {
+    setSelectedDepartmentId(id);
     setCategory("Toate");
     if (selectedEmployeeId() !== null) setPanel(0);
   }
 
   onMount(() => {
     loadProducts();
-    loadCatalogThemes(device()?.locationId);
+    loadCatalogDepartments(device()?.locationId);
     loadEmployees(device()?.locationId);
     connectPosSSE();
   });
@@ -43,8 +43,8 @@ export default function POS() {
   });
 
   const categories = createMemo(() => {
-    const tid = selectedThemeId();
-    const base = tid === null ? products() : products().filter((p) => p.themeId === tid);
+    const tid = selectedDepartmentId();
+    const base = tid === null ? products() : products().filter((p) => p.departmentId === tid);
     const cats = new Set(base.map((p) => p.category));
     return ["Toate", ...Array.from(cats)];
   });
@@ -52,20 +52,20 @@ export default function POS() {
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
     const tf = typeFilter();
-    const tid = selectedThemeId();
+    const tid = selectedDepartmentId();
     return products().filter((p) => {
       const matchCat = category() === "Toate" || p.category === category();
       const matchSearch = !q || p.name.toLowerCase().includes(q);
       const matchType = tf === "Produse/Servicii" || p.type === (tf === "Servicii" ? "Serviciu" : "Produs");
-      const matchTheme = tid === null || p.themeId === tid;
+      const matchTheme = tid === null || p.departmentId === tid;
       return matchCat && matchSearch && matchType && matchTheme;
     });
   });
 
-  const activeThemeName = createMemo(() => {
-    const tid = selectedThemeId();
+  const activeDepartmentName = createMemo(() => {
+    const tid = selectedDepartmentId();
     if (tid === null) return null;
-    return catalogThemes().find((t) => t.id === tid)?.name ?? null;
+    return catalogDepartments().find((t) => t.id === tid)?.name ?? null;
   });
 
   return (
@@ -102,12 +102,12 @@ export default function POS() {
               <button
                 class="btn btn-sm pos-panel-slide-btn"
                 classList={{
-                  "btn-primary": selectedThemeId() !== null,
-                  "btn-ghost": selectedThemeId() === null,
+                  "btn-primary": selectedDepartmentId() !== null,
+                  "btn-ghost": selectedDepartmentId() === null,
                 }}
                 onClick={() => setPanel(1)}
               >
-                {activeThemeName() ?? "Tema"} ▶
+                {activeDepartmentName() ?? "Departament"} ▶
               </button>
             </div>
 
@@ -136,22 +136,22 @@ export default function POS() {
             </div>
             <div class="pos-theme-center">
 
-              <h2 class="pos-theme-title">Tema</h2>
+              <h2 class="pos-theme-title">Departament</h2>
               <div class="pos-theme-grid">
                 <button
                   class="pos-theme-card"
-                  classList={{ "pos-theme-card--active": selectedThemeId() === null }}
-                  onClick={() => selectCatalogTheme(null)}
+                  classList={{ "pos-theme-card--active": selectedDepartmentId() === null }}
+                  onClick={() => selectCatalogDepartment(null)}
                 >
                   <div class="pos-theme-preview pos-theme-preview--all" />
                   <span class="pos-theme-label">Toate</span>
                 </button>
-                <For each={catalogThemes()}>
+                <For each={catalogDepartments()}>
                   {(t, i) => (
                     <button
                       class="pos-theme-card"
-                      classList={{ "pos-theme-card--active": selectedThemeId() === t.id }}
-                      onClick={() => selectCatalogTheme(t.id)}
+                      classList={{ "pos-theme-card--active": selectedDepartmentId() === t.id }}
+                      onClick={() => selectCatalogDepartment(t.id)}
                     >
                       <div class={`pos-theme-preview pos-theme-preview--c${(i() % 6) + 1}`} />
                       <span class="pos-theme-label">{t.name}</span>

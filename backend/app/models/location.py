@@ -12,11 +12,11 @@ employee_locations = Table(
     Column("location_id", Integer, ForeignKey("locations.id", ondelete="CASCADE"), primary_key=True),
 )
 
-location_themes = Table(
-    "location_themes",
+location_departments = Table(
+    "location_departments",
     Base.metadata,
     Column("location_id", Integer, ForeignKey("locations.id", ondelete="CASCADE"), primary_key=True),
-    Column("theme_id", Integer, ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True),
+    Column("department_id", Integer, ForeignKey("departments.id", ondelete="CASCADE"), primary_key=True),
 )
 
 
@@ -40,12 +40,12 @@ class Location(Base):
     employees: Mapped[list[Employee]] = relationship(
         "Employee", secondary=employee_locations, back_populates="locations"
     )
-    themes: Mapped[list[Theme]] = relationship(
-        "Theme", secondary=location_themes, back_populates="locations"
+    departments: Mapped[list[Department]] = relationship(
+        "Department", secondary=location_departments, back_populates="locations"
     )
     devices: Mapped[list[Device]] = relationship("Device", back_populates="location")
 
 
 from .employee import Employee  # noqa: E402
 from .device import Device  # noqa: E402
-from .theme import Theme  # noqa: E402
+from .department import Department  # noqa: E402

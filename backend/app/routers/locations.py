@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.location import Location
-from app.models.theme import Theme
+from app.models.department import Department
 from app.models.employee import Employee
 from app.schemas.location import LocationCreate, LocationRead, LocationDetail, IdsBody
 from app.schemas.common import Page
@@ -25,7 +25,7 @@ def _to_detail(loc: Location) -> LocationDetail:
         created_at=loc.created_at,
         updated_at=loc.updated_at,
         is_deleted=loc.is_deleted,
-        theme_ids=[t.id for t in loc.themes],
+        department_ids=[d.id for d in loc.departments],
         employee_ids=[e.id for e in loc.employees],
     )
 
@@ -33,7 +33,7 @@ def _to_detail(loc: Location) -> LocationDetail:
 async def _get_with_relations(db: AsyncSession, location_id: int, account_id: int) -> Location:
     result = await db.execute(
         select(Location)
-        .options(selectinload(Location.themes), selectinload(Location.employees))
+        .options(selectinload(Location.departments), selectinload(Location.employees))
         .where(Location.id == location_id, Location.account_id == account_id)
     )
     loc = result.scalar_one_or_none()
@@ -42,7 +42,7 @@ async def _get_with_relations(db: AsyncSession, location_id: int, account_id: in
     return loc
 
 
-@router.get("", response_model=Page[LocationRead])
+@router.get("", response_model=Page[LocationDetail])
 async def list_locations(
     last_id: int | None = None,
     limit: int = 100,
@@ -52,7 +52,11 @@ async def list_locations(
     account_id: int = Depends(get_account_id),
 ):
     limit = min(limit, 200)
-    stmt = select(Location).where(Location.account_id == account_id)
+    stmt = (
+        select(Location)
+        .options(selectinload(Location.departments), selectinload(Location.employees))
+        .where(Location.account_id == account_id)
+    )
     if not include_deleted:
         stmt = stmt.where(Location.is_deleted == False)
     if last_id is not None:
@@ -64,7 +68,7 @@ async def list_locations(
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return Page(items=[_to_detail(loc) for loc in page], next_cursor=page[-1].id if has_more else None)
 
 
 @router.post("", response_model=LocationRead, status_code=201)
@@ -107,18 +111,18 @@ async def update_location(
     return location
 
 
-@router.put("/{location_id}/themes", response_model=LocationDetail)
-async def set_location_themes(
+@router.put("/{location_id}/departments", response_model=LocationDetail)
+async def set_location_departments(
     location_id: int,
     body: IdsBody,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
     loc = await _get_with_relations(db, location_id, account_id)
-    themes = (await db.execute(
-        select(Theme).where(Theme.id.in_(body.ids), Theme.account_id == account_id)
+    departments = (await db.execute(
+        select(Department).where(Department.id.in_(body.ids), Department.account_id == account_id)
     )).scalars().all()
-    loc.themes = list(themes)
+    loc.departments = list(departments)
     await db.commit()
     loc = await _get_with_relations(db, location_id, account_id)
     return _to_detail(loc)

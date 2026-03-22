@@ -21,7 +21,7 @@ router = APIRouter()
 def _with_category_name(item: Item) -> ItemRead:
     data = ItemRead.model_validate(item)
     data.category_name = item.category.name if item.category else None
-    data.theme_id = item.category.theme_id if item.category else None
+    data.department_id = item.category.department_id if item.category else None
     return data
 
 
@@ -33,7 +33,7 @@ async def list_items(
     filters: str | None = None,
     sort: str | None = None,
     category_id: int | None = None,
-    theme_id: int | None = None,
+    department_id: int | None = None,
     type: ItemType | None = None,
     include_deleted: bool = False,
     db: AsyncSession = Depends(get_db),
@@ -44,7 +44,7 @@ async def list_items(
         select(Item)
         .options(selectinload(Item.category))
         .join(Item.category)
-        .join(Category.theme)
+        .join(Category.department)
         .where(Item.account_id == account_id)
     )
 
@@ -56,8 +56,8 @@ async def list_items(
         stmt = stmt.where(Item.name.ilike(f"%{q}%"))
     if category_id is not None:
         stmt = stmt.where(Item.category_id == category_id)
-    if theme_id is not None:
-        stmt = stmt.where(Category.theme_id == theme_id)
+    if department_id is not None:
+        stmt = stmt.where(Category.department_id == department_id)
     if type is not None:
         stmt = stmt.where(Item.type == type)
 

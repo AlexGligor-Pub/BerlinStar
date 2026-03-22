@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routers import auth, accounts, themes, categories, items, receipts, employees, devices, locations
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti
 
 
 @asynccontextmanager
@@ -30,13 +30,14 @@ app.add_middleware(
 
 app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
 app.include_router(accounts.router,   prefix="/api/accounts",   tags=["accounts"])
-app.include_router(themes.router,     prefix="/api/themes",     tags=["themes"])
+app.include_router(departments.router, prefix="/api/departments", tags=["departments"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 app.include_router(items.router,      prefix="/api/items",      tags=["items"])
 app.include_router(receipts.router,   prefix="/api/receipts",   tags=["receipts"])
 app.include_router(employees.router,  prefix="/api/employees",  tags=["employees"])
 app.include_router(devices.router,    prefix="/api/devices",    tags=["devices"])
 app.include_router(locations.router,  prefix="/api/locations",  tags=["locations"])
+app.include_router(clienti.router,    prefix="/api/clienti",    tags=["clienti"])
 
 
 @app.get("/health")

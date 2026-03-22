@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import POS from "./pages/POS";
 import Reception from "./pages/Reception";
 import Configurari from "./pages/Configurari";
+import Clienti from "./pages/Clienti";
 
 function Protected(props: { component: () => any }) {
   return (
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/" component={() => <Protected component={POS} />} />
       <Route path="/receptie" component={() => <Protected component={Reception} />} />
       <Route path="/configurari" component={() => <Protected component={Configurari} />} />
+      <Route path="/clienti" component={() => <Protected component={Clienti} />} />
     </Router>
   );
 }

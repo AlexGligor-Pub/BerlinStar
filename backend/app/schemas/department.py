@@ -3,25 +3,25 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class CategoryCreate(BaseModel):
+class DepartmentCreate(BaseModel):
     name: str = Field(..., max_length=100)
-    department_id: int
+    description: str | None = None
     image_path: str | None = Field(None, max_length=500)
 
 
-class CategoryUpdate(BaseModel):
+class DepartmentUpdate(BaseModel):
     name: str | None = Field(None, max_length=100)
-    department_id: int | None = None
+    description: str | None = None
     image_path: str | None = Field(None, max_length=500)
 
 
-class CategoryRead(BaseModel):
+class DepartmentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     account_id: int
     name: str
-    department_id: int
+    description: str | None
     image_path: str | None
     created_at: datetime
     updated_at: datetime | None

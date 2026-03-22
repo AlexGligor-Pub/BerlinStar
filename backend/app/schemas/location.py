@@ -20,7 +20,7 @@ class LocationRead(BaseModel):
 
 
 class LocationDetail(LocationRead):
-    theme_ids: list[int] = []
+    department_ids: list[int] = []
     employee_ids: list[int] = []
 
 

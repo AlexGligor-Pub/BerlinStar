@@ -1534,6 +1534,7 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   padding: 12px;
+  justify-items: center;
 }
 
 .logo-nav-tile {
@@ -1900,6 +1901,22 @@ body {
 .cfg-location-desc {
   font-size: 0.8rem;
   color: var(--text2);
+}
+
+.client-tip-badge {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--bg-elevated, rgba(255,255,255,0.08));
+  color: var(--text2);
+  vertical-align: middle;
+}
+.client-tip-badge--juridic {
+  background: var(--accent, #4f8ef7);
+  color: #fff;
 }
 
 .cfg-location-actions {
