@@ -1218,12 +1218,6 @@ function ProduseSiServiciiPanel() {
     filterDeptId(); // track
     setItemFilterCatId(null);
     loadCategories();
-    loadItems();
-  });
-
-  createEffect(() => {
-    itemFilterCatId(); itemFilterType(); // track
-    loadItems();
   });
 
   // ── categories CRUD ──
@@ -1388,17 +1382,8 @@ function ProduseSiServiciiPanel() {
         <DeleteModal label={itemDeleteTarget()!.name} saving={saving()} onConfirm={confirmItemDelete} onCancel={() => setItemDeleteTarget(null)} />
       </Show>
 
-      {/* ── Department filter ── */}
-      <div class="cfg-panel-header" style="flex-wrap:wrap;gap:6px">
-        <h2 class="cfg-panel-title" style="margin-right:8px">Produse și Servicii</h2>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class={`btn btn-sm ${filterDeptId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(null)}>Toate</button>
-          <For each={departments()}>
-            {(d) => (
-              <button class={`btn btn-sm ${filterDeptId() === d.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(d.id)}>{d.name}</button>
-            )}
-          </For>
-        </div>
+      <div class="cfg-panel-header">
+        <h2 class="cfg-panel-title">Produse și Servicii</h2>
       </div>
 
       <Show when={error()}>
@@ -1495,17 +1480,35 @@ function ProduseSiServiciiPanel() {
 
         <Show when={itemOpen()}>
           {/* filters */}
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-            <button class={`btn btn-sm ${itemFilterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("all")}>Toate</button>
-            <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
-            <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
-            <div class="filter-divider" />
-            <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
-            <For each={categories()}>
-              {(c) => (
-                <button class={`btn btn-sm ${itemFilterCatId() === c.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(c.id)}>{c.name}</button>
-              )}
-            </For>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class={`btn btn-sm ${itemFilterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("all")}>Toate</button>
+              <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
+              <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
+            </div>
+            <Show when={departments().length > 0}>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class={`btn btn-sm ${filterDeptId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(null)}>Toate departamentele</button>
+                <For each={departments()}>
+                  {(d) => (
+                    <button class={`btn btn-sm ${filterDeptId() === d.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(d.id)}>{d.name}</button>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={categories().length > 0}>
+              <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
+                <For each={categories()}>
+                  {(c) => (
+                    <button class={`btn btn-sm ${itemFilterCatId() === c.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(c.id)}>{c.name}</button>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <div>
+              <button class="btn btn-sm btn-primary" onClick={loadItems}>Caută</button>
+            </div>
           </div>
 
           <Show when={itemAddMode()}>
