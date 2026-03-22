@@ -389,6 +389,22 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     y += dl.length * 4 + 3;
   }
 
+  if (r.dateTehn?.trim()) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.gray);
+    doc.text("DATE TEHNICE", ML, y);
+    y += 3.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.black);
+    const dtl: string[] = doc.splitTextToSize(ro(r.dateTehn.trim()), CW);
+    doc.text(dtl, ML, y);
+    y += dtl.length * 4 + 3;
+  }
+
   y = drawDisclaimer(doc, ctx.disclaimer, y);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   drawFooter(doc);
