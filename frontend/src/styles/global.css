@@ -2512,7 +2512,7 @@ body {
 .doc-dropdown-item {
   background: none;
   border: none;
-  color: var(--text, #e5e5e7);
+  color: #ffffff;
   padding: 9px 14px;
   font-size: 0.85rem;
   text-align: left;

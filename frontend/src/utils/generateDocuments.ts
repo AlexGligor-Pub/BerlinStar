@@ -162,23 +162,31 @@ function drawClientBlock(
   return y;
 }
 
-/** Tabel articole — print-friendly (fara fundal alternant, header gri deschis) */
-function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number): number {
-  const rows = r.items.map((item) => [
-    ro(item.name),
-    String(item.qty),
-    ro(item.unit),
-    item.price.toFixed(2),
-    (item.price * item.qty).toFixed(2),
-  ]);
+/** Tabel articole cu TVA per linie */
+function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number): number {
+  const rows = r.items.map((item) => {
+    const net = item.price * item.qty;
+    const tva = net * (tvaPct / 100);
+    const total = net + tva;
+    return [
+      ro(item.name),
+      String(item.qty),
+      ro(item.unit),
+      item.price.toFixed(2),
+      net.toFixed(2),
+      `${tvaPct}%`,
+      tva.toFixed(2),
+      total.toFixed(2),
+    ];
+  });
 
   autoTable(doc, {
     startY: y,
-    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Total net"]],
+    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "TVA%", "Val. TVA", "Total"]],
     body: rows,
     styles: {
-      fontSize: 8,
-      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      fontSize: 7.5,
+      cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
       textColor: [...C.black],
       lineColor: [...C.lightGray],
       lineWidth: 0.1,
@@ -186,18 +194,21 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number): number
     headStyles: {
       fillColor: [...C.veryLight],
       textColor: [...C.black],
-      fontSize: 7.5,
+      fontSize: 7,
       fontStyle: "bold",
       lineColor: [...C.lightGray],
       lineWidth: 0.2,
     },
-    alternateRowStyles: {},  // fara alternare
+    alternateRowStyles: {},
     columnStyles: {
       0: { cellWidth: "auto" },
-      1: { halign: "center", cellWidth: 14 },
-      2: { halign: "center", cellWidth: 14 },
-      3: { halign: "right", cellWidth: 24 },
-      4: { halign: "right", cellWidth: 26, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: 11 },
+      2: { halign: "center", cellWidth: 11 },
+      3: { halign: "right", cellWidth: 20 },
+      4: { halign: "right", cellWidth: 20 },
+      5: { halign: "center", cellWidth: 14 },
+      6: { halign: "right", cellWidth: 20 },
+      7: { halign: "right", cellWidth: 22, fontStyle: "bold" },
     },
     margin: { left: ML, right: MR },
     tableWidth: CW,
@@ -335,7 +346,7 @@ async function loadPdf() {
 export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  const tvaPct = ctx.company?.tva_percentage;
+  const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
 
   let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
@@ -358,7 +369,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
 
-  y = drawItemsTable(doc, autoTable, r, y);
+  y = drawItemsTable(doc, autoTable, r, y, tvaPct);
   y = drawTotals(doc, r, y, tvaPct);
 
   if (r.descriere?.trim()) {
@@ -389,7 +400,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
 export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  const tvaPct = ctx.company?.tva_percentage;
+  const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
 
   let y = drawHeader(doc, "FACTURA FISCALA", ctx.serie, ctx.nr, date);
@@ -412,7 +423,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
 
-  y = drawItemsTable(doc, autoTable, r, y);
+  y = drawItemsTable(doc, autoTable, r, y, tvaPct);
   y = drawTotals(doc, r, y, tvaPct);
 
   if (r.metodaPlata) {
