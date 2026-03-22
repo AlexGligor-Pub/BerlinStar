@@ -1,11 +1,27 @@
-import { For, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { products, loadProducts } from "../store/productsStore";
 import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
 import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
-import { connectPosSSE, disconnectPosSSE } from "../store/receiptsStore";
+import { receipts, loadReceipts, connectPosSSE, disconnectPosSSE, type Receipt } from "../store/receiptsStore";
+import { triggerLoad } from "../store/resumeStore";
 import { device } from "../store/deviceStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
+
+const PAGE_SIZE = 20;
+
+function formatDevizTime(dateStr: string): string {
+  const now = Date.now();
+  const then = new Date(dateStr).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  if (diff < 120) return "acum 1 min";
+  if (diff < 3600) return `acum ${Math.floor(diff / 60)} min`;
+  if (diff < 7200) return "acum 1 ora";
+  if (diff < 86400) return `acum ${Math.floor(diff / 3600)} ore`;
+  const d = new Date(dateStr);
+  const months = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}, ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
 
 export default function POS() {
   const [panel, setPanel] = createSignal(0);
@@ -14,6 +30,34 @@ export default function POS() {
   const [category, setCategory] = createSignal("Toate");
   const TYPE_CYCLE = ["Produse/Servicii", "Servicii", "Produse"] as const;
   const [typeFilter, setTypeFilter] = createSignal<typeof TYPE_CYCLE[number]>("Produse/Servicii");
+
+  const [showDevizModal, setShowDevizModal] = createSignal(false);
+  const [devizSearch, setDevizSearch] = createSignal("");
+  const [visibleCount, setVisibleCount] = createSignal(PAGE_SIZE);
+
+  const unpaidFiltered = createMemo(() => {
+    const q = devizSearch().toLowerCase().trim();
+    return receipts()
+      .filter((r) => r.metodaPlata === undefined)
+      .filter((r) => !q || r.titlu.toLowerCase().includes(q));
+  });
+
+  function openDevizModal() {
+    setDevizSearch("");
+    setVisibleCount(PAGE_SIZE);
+    loadReceipts();
+    setShowDevizModal(true);
+  }
+
+  function selectDeviz(r: Receipt) {
+    triggerLoad({
+      titlu: r.titlu,
+      descriere: r.descriere ?? "",
+      dateTehn: r.dateTehn ?? "",
+      items: r.items,
+    });
+    setShowDevizModal(false);
+  }
 
   function cycleType() {
     const idx = TYPE_CYCLE.indexOf(typeFilter());
@@ -99,6 +143,9 @@ export default function POS() {
                   )}
                 </For>
               </div>
+              <button class="btn btn-sm btn-ghost" onClick={openDevizModal}>
+                Deviz existent
+              </button>
               <button
                 class="btn btn-sm pos-panel-slide-btn"
                 classList={{
@@ -185,6 +232,46 @@ export default function POS() {
         </div>
 
       </div>
+
+      <Show when={showDevizModal()}>
+        <div class="sl-modal-overlay" onClick={() => setShowDevizModal(false)}>
+          <div class="deviz-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Devize neplatite</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowDevizModal(false)}>✕</button>
+            </div>
+            <input
+              class="input"
+              type="search"
+              placeholder="Cauta dupa nume..."
+              value={devizSearch()}
+              onInput={(e) => { setDevizSearch(e.currentTarget.value); setVisibleCount(PAGE_SIZE); }}
+              autofocus
+            />
+            <div
+              class="deviz-modal-list"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+                  setVisibleCount((c) => Math.min(c + PAGE_SIZE, unpaidFiltered().length));
+                }
+              }}
+            >
+              <Show when={unpaidFiltered().length === 0}>
+                <div class="deviz-modal-empty">Niciun deviz neplatit</div>
+              </Show>
+              <For each={unpaidFiltered().slice(0, visibleCount())}>
+                {(r) => (
+                  <button class="deviz-modal-row" onClick={() => selectDeviz(r)}>
+                    <span class="deviz-modal-row-title">{r.titlu}</span>
+                    <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

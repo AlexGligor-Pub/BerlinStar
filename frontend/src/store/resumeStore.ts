@@ -21,3 +21,16 @@ export function consumeResume(): ResumeData | null {
 }
 
 export { resumeData };
+
+// Reactive load for already-mounted ShoppingList (e.g. loading from "Deviz existent")
+const [pendingLoad, setPendingLoad] = createSignal<ResumeData | null>(null);
+
+export function triggerLoad(data: ResumeData) {
+  setPendingLoad(data);
+}
+
+export function clearPendingLoad() {
+  setPendingLoad(null);
+}
+
+export { pendingLoad };

@@ -1,7 +1,7 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { saveReceipt } from "../store/receiptsStore";
-import { consumeResume } from "../store/resumeStore";
+import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployeeName, selectEmployee } from "../store/employeesStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
@@ -70,6 +70,16 @@ export default function ShoppingList() {
     }
   });
 
+  createEffect(() => {
+    const d = pendingLoad();
+    if (!d) return;
+    clearPendingLoad();
+    setTitlu(d.titlu);
+    setDescriere(d.descriere);
+    setDateTehn(d.dateTehn);
+    replaceCart(d.items);
+  });
+
   let warnTimer: ReturnType<typeof setTimeout>;
   let successTimer: ReturnType<typeof setTimeout>;
   function triggerTitluWarn() {
@@ -97,6 +107,8 @@ export default function ShoppingList() {
       await saveReceipt({
         date: new Date().toISOString(),
         titlu: titlu().trim(),
+        clientId: null,
+        clientNume: null,
         descriere: descriere().trim() || undefined,
         dateTehn: dateTehn().trim() || undefined,
         items: [...cart.items],
