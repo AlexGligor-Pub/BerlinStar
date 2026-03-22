@@ -43,7 +43,7 @@ async def create_disclaimer(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    d = Disclaimer(text=body.text, account_id=account_id)
+    d = Disclaimer(title=body.title, text=body.text, account_id=account_id)
     db.add(d)
     await db.commit()
     await db.refresh(d)

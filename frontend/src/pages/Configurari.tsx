@@ -132,11 +132,11 @@ function LocatiiPanel() {
   const [editEmpIds, setEditEmpIds]       = createSignal<Set<number>>(new Set<number>());
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
-  const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; text: string }[]>([]);
+  const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; title: string; text: string }[]>([]);
   const [editLoading, setEditLoading]     = createSignal(false);
   let cachedDepartments: Department[] | null = null;
   let cachedEmployees: Employee[] | null = null;
-  let cachedDisclaimers: { id: number; text: string }[] | null = null;
+  let cachedDisclaimers: { id: number; title: string; text: string }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
   const [newName, setNewName] = createSignal("");
@@ -165,7 +165,18 @@ function LocatiiPanel() {
     }
   }
 
-  onMount(loadLocations);
+  async function loadDisclaimersCache() {
+    if (cachedDisclaimers) { setAllDisclaimers(cachedDisclaimers); return; }
+    try {
+      const res = await apiFetch("/api/disclaimers?limit=200");
+      if (!res.ok) return;
+      const data = await res.json();
+      cachedDisclaimers = (data.items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text }));
+      setAllDisclaimers(cachedDisclaimers!);
+    } catch {}
+  }
+
+  onMount(() => { loadLocations(); loadDisclaimersCache(); });
 
   async function startEdit(loc: Location) {
     setEditId(loc.id);
@@ -201,7 +212,7 @@ function LocatiiPanel() {
       let idx = 0;
       if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
       if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
-      if (!cachedDisclaimers) { cachedDisclaimers = jsons[idx++].items ?? []; }
+      if (!cachedDisclaimers) { cachedDisclaimers = (jsons[idx++].items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })); }
 
       setAllDepartments(cachedDepartments!);
       setAllEmployees(cachedEmployees!);
@@ -285,12 +296,12 @@ function LocatiiPanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Locatii", ["Nume", "Descriere"],
-      filtered().map(l => [l.name, l.description ?? ""]));
+    exportCSV("Locatii", ["#", "Nume", "Descriere"],
+      filtered().map((l, i) => [String(i + 1), l.name, l.description ?? ""]));
   }
   function doExportPDF() {
-    exportPDF("Locații", ["Nume", "Descriere"],
-      filtered().map(l => [l.name, l.description ?? ""]));
+    exportPDF("Locații", ["#", "Nume", "Descriere"],
+      filtered().map((l, i) => [String(i + 1), l.name, l.description ?? ""]));
   }
 
   return (
@@ -351,7 +362,7 @@ function LocatiiPanel() {
                     </Show>
                     <Show when={loc.disclaimer_id !== null}>
                       <span class="cfg-location-desc" style="opacity:0.6;font-style:italic">
-                        Disclaimer #{loc.disclaimer_id}
+                        Mențiune: {allDisclaimers().find(d => d.id === loc.disclaimer_id)?.title ?? `#${loc.disclaimer_id}`}
                       </span>
                     </Show>
                   </div>
@@ -387,11 +398,7 @@ function LocatiiPanel() {
                     >
                       <option value={0}>— Fără disclaimer —</option>
                       <For each={allDisclaimers()}>
-                        {(d) => (
-                          <option value={d.id}>
-                            {d.text.length > 80 ? d.text.slice(0, 80) + "…" : d.text}
-                          </option>
-                        )}
+                        {(d) => <option value={d.id}>{d.title}</option>}
                       </For>
                     </select>
                   </div>
@@ -559,12 +566,12 @@ function DepartamentePanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Departamente", ["Nume", "Descriere"],
-      filtered().map(d => [d.name, d.description ?? ""]));
+    exportCSV("Departamente", ["#", "Nume", "Descriere"],
+      filtered().map((d, i) => [String(i + 1), d.name, d.description ?? ""]));
   }
   function doExportPDF() {
-    exportPDF("Departamente", ["Nume", "Descriere"],
-      filtered().map(d => [d.name, d.description ?? ""]));
+    exportPDF("Departamente", ["#", "Nume", "Descriere"],
+      filtered().map((d, i) => [String(i + 1), d.name, d.description ?? ""]));
   }
 
   return (
@@ -768,12 +775,12 @@ function AngajatiPanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Angajati", ["Nume", "Descriere", "Target lunar"],
-      filtered().map(e => [e.name, e.description ?? "", e.target]));
+    exportCSV("Angajati", ["#", "Nume", "Descriere", "Target lunar"],
+      filtered().map((e, i) => [String(i + 1), e.name, e.description ?? "", e.target]));
   }
   function doExportPDF() {
-    exportPDF("Angajați", ["Nume", "Descriere"],
-      filtered().map(e => [e.name, e.description ?? ""]));
+    exportPDF("Angajați", ["#", "Nume", "Descriere", "Target lunar"],
+      filtered().map((e, i) => [String(i + 1), e.name, e.description ?? "", e.target]));
   }
 
   return (
@@ -862,24 +869,26 @@ function AngajatiPanel() {
 
 // ─── Mențiuni panel ───────────────────────────────────────────────────────────
 
-interface DisclaimerItem { id: number; text: string; }
+interface DisclaimerItem { id: number; title: string; text: string; }
 
 function DisclaimersPanel() {
   const [items, setItems]     = createSignal<DisclaimerItem[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch]   = createSignal("");
 
-  const [editId, setEditId]     = createSignal<number | null>(null);
-  const [editText, setEditText] = createSignal("");
-  const [addOpen, setAddOpen]   = createSignal(false);
-  const [addText, setAddText]   = createSignal("");
+  const [editId, setEditId]       = createSignal<number | null>(null);
+  const [editTitle, setEditTitle] = createSignal("");
+  const [editText, setEditText]   = createSignal("");
+  const [addOpen, setAddOpen]     = createSignal(false);
+  const [addTitle, setAddTitle]   = createSignal("");
+  const [addText, setAddText]     = createSignal("");
   const [deleteTarget, setDeleteTarget] = createSignal<DisclaimerItem | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [error, setError]   = createSignal<string | null>(null);
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    return q ? items().filter(d => d.text.toLowerCase().includes(q)) : items();
+    return q ? items().filter(d => d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q)) : items();
   });
 
   async function load() {
@@ -888,7 +897,7 @@ function DisclaimersPanel() {
       const res = await apiFetch("/api/disclaimers?limit=200");
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setItems((data.items ?? []).map((d: any) => ({ id: d.id, text: d.text })));
+      setItems((data.items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })));
     } catch {
       setError("Eroare la încărcare.");
     } finally { setLoading(false); }
@@ -896,15 +905,18 @@ function DisclaimersPanel() {
 
   onMount(load);
 
-  function startEdit(d: DisclaimerItem) { setEditId(d.id); setEditText(d.text); setAddOpen(false); setError(null); }
-  function cancelEdit() { setEditId(null); setEditText(""); }
+  function startEdit(d: DisclaimerItem) {
+    setEditId(d.id); setEditTitle(d.title); setEditText(d.text);
+    setAddOpen(false); setError(null);
+  }
+  function cancelEdit() { setEditId(null); setEditTitle(""); setEditText(""); }
 
   async function saveEdit(id: number) {
-    if (!editText().trim()) return;
+    if (!editTitle().trim()) return;
     setSaving(true); setError(null);
     try {
-      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ text: editText().trim() }) });
-      setItems(items().map(d => d.id === id ? { ...d, text: editText().trim() } : d));
+      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ title: editTitle().trim(), text: editText().trim() }) });
+      setItems(items().map(d => d.id === id ? { ...d, title: editTitle().trim(), text: editText().trim() } : d));
       cancelEdit();
     } catch {
       setError("Eroare la salvare.");
@@ -912,14 +924,14 @@ function DisclaimersPanel() {
   }
 
   async function saveAdd() {
-    if (!addText().trim()) return;
+    if (!addTitle().trim()) return;
     setSaving(true); setError(null);
     try {
-      const res = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ text: addText().trim() }) });
+      const res = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ title: addTitle().trim(), text: addText().trim() }) });
       if (!res.ok) throw new Error();
       const created = await res.json();
-      setItems([...items(), { id: created.id, text: created.text }]);
-      setAddText(""); setAddOpen(false);
+      setItems([...items(), { id: created.id, title: created.title, text: created.text }]);
+      setAddTitle(""); setAddText(""); setAddOpen(false);
     } catch {
       setError("Eroare la adăugare.");
     } finally { setSaving(false); }
@@ -938,17 +950,17 @@ function DisclaimersPanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Mentiuni", ["#", "Text"], filtered().map((d, i) => [String(i + 1), d.text]));
+    exportCSV("Mentiuni", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
   }
   function doExportPDF() {
-    exportPDF("Mențiuni", ["#", "Text"], filtered().map((d, i) => [String(i + 1), d.text]));
+    exportPDF("Mențiuni", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
   }
 
   return (
     <div class="cfg-panel">
       <Show when={deleteTarget()}>
         <DeleteModal
-          label={`mențiunea #${deleteTarget()!.id}`}
+          label={deleteTarget()!.title || `mențiunea #${deleteTarget()!.id}`}
           saving={saving()}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -968,16 +980,19 @@ function DisclaimersPanel() {
 
       <Show when={addOpen()}>
         <div class="cfg-location-row cfg-location-row--edit">
-          <textarea
-            class="cfg-textarea"
-            rows={4}
-            placeholder="Textul mențiunii..."
-            value={addText()}
-            onInput={e => setAddText(e.currentTarget.value)}
-          />
+          <div class="cfg-location-fields">
+            <input class="input" placeholder="Titlu *" value={addTitle()} onInput={e => setAddTitle(e.currentTarget.value)} />
+            <textarea
+              class="cfg-textarea"
+              rows={4}
+              placeholder="Textul mențiunii..."
+              value={addText()}
+              onInput={e => setAddText(e.currentTarget.value)}
+            />
+          </div>
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !addText().trim()} onClick={saveAdd}>Salvează</button>
-            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setAddText(""); }}>Anulează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addTitle().trim()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setAddTitle(""); setAddText(""); }}>Anulează</button>
           </div>
         </div>
       </Show>
@@ -995,7 +1010,10 @@ function DisclaimersPanel() {
               fallback={
                 <div class="cfg-location-row">
                   <div class="cfg-location-info">
-                    <span class="cfg-location-name" style="white-space:pre-wrap">{d.text}</span>
+                    <span class="cfg-location-name">{d.title}</span>
+                    <Show when={d.text}>
+                      <span class="cfg-location-desc" style="white-space:pre-wrap">{d.text}</span>
+                    </Show>
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
@@ -1005,14 +1023,17 @@ function DisclaimersPanel() {
               }
             >
               <div class="cfg-location-row cfg-location-row--edit">
-                <textarea
-                  class="cfg-textarea"
-                  rows={4}
-                  value={editText()}
-                  onInput={e => setEditText(e.currentTarget.value)}
-                />
+                <div class="cfg-location-fields">
+                  <input class="input" placeholder="Titlu *" value={editTitle()} onInput={e => setEditTitle(e.currentTarget.value)} />
+                  <textarea
+                    class="cfg-textarea"
+                    rows={4}
+                    value={editText()}
+                    onInput={e => setEditText(e.currentTarget.value)}
+                  />
+                </div>
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editText().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editTitle().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
                 </div>
               </div>
