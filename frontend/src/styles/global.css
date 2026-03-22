@@ -1836,7 +1836,53 @@ body {
 .cfg-panel-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cfg-panel-header .cfg-panel-title {
+  flex: 0 0 auto;
+  margin-right: auto;
+}
+
+.cfg-search {
+  width: 180px;
+  flex: 0 0 auto;
+}
+
+.cfg-export-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.cfg-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  z-index: 100;
+  min-width: 110px;
+  overflow: hidden;
+  animation: dropdown-in 0.1s ease;
+}
+
+.cfg-export-item {
+  display: block;
+  width: 100%;
+  padding: 9px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.cfg-export-item:hover {
+  background: var(--surface2);
 }
 
 .cfg-panel-title {
@@ -2102,4 +2148,23 @@ body {
   font-size: 0.82rem;
   color: var(--text2);
   line-height: 1.5;
+}
+
+.cfg-subsection {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+
+.cfg-subsection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.cfg-subsection-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text1);
 }

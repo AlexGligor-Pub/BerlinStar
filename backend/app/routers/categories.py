@@ -24,6 +24,7 @@ async def list_categories(
     filters: str | None = None,
     sort: str | None = None,
     include_deleted: bool = False,
+    department_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -33,6 +34,8 @@ async def list_categories(
         stmt = stmt.where(Category.is_deleted == False)
     if last_id is not None:
         stmt = stmt.where(Category.id > last_id)
+    if department_id is not None:
+        stmt = stmt.where(Category.department_id == department_id)
     if q:
         stmt = stmt.where(Category.name.ilike(f"%{q}%"))
     stmt = apply_filters(stmt, Category, filters)
