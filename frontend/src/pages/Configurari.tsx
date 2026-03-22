@@ -1917,12 +1917,12 @@ function RegisterPanel() {
 
   function doExportCSV() {
     exportCSV("Registre",
-      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz Serie", "Aviz Nr"],
+      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
       items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
   function doExportPDF() {
     exportPDF("Registre",
-      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz Serie", "Aviz Nr"],
+      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
       items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
 
@@ -1945,7 +1945,7 @@ function RegisterPanel() {
           <input class="input" placeholder="Serie" value={f().chitanta_serie} onInput={e => s({ chitanta_serie: e.currentTarget.value })} />
           <input class="input" type="number" min="0" placeholder="Număr" value={f().chitanta_numar} onInput={e => s({ chitanta_numar: parseInt(e.currentTarget.value) || 0 })} />
 
-          <span class="cfg-register-label">Aviz</span>
+          <span class="cfg-register-label">Aviz însoțire</span>
           <input class="input" placeholder="Serie" value={f().aviz_serie} onInput={e => s({ aviz_serie: e.currentTarget.value })} />
           <input class="input" type="number" min="0" placeholder="Număr" value={f().aviz_numar} onInput={e => s({ aviz_numar: parseInt(e.currentTarget.value) || 0 })} />
         </div>
@@ -2001,7 +2001,7 @@ function RegisterPanel() {
                       Deviz: {r.deviz_serie || "—"} / {r.deviz_numar} &nbsp;·&nbsp;
                       Factură: {r.factura_serie || "—"} / {r.factura_numar} &nbsp;·&nbsp;
                       Chitanță: {r.chitanta_serie || "—"} / {r.chitanta_numar} &nbsp;·&nbsp;
-                      Aviz: {r.aviz_serie || "—"} / {r.aviz_numar}
+                      Aviz însoțire: {r.aviz_serie || "—"} / {r.aviz_numar}
                     </span>
                   </div>
                   <div class="cfg-location-actions">
