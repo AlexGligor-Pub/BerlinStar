@@ -7,7 +7,7 @@ until python -c "import asyncpg; import asyncio; asyncio.run(asyncpg.connect('$D
 done
 
 echo "Running Alembic migrations..."
-alembic upgrade head
+alembic upgrade heads
 
 echo "Starting server..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000
