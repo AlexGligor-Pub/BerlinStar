@@ -1407,7 +1407,7 @@ function ProduseSiServiciiPanel() {
           <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
           <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
         </div>
-        <Show when={categories().length > 0}>
+        <Show when={activeTab() === "produse" && categories().length > 0}>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
             <For each={categories()}>

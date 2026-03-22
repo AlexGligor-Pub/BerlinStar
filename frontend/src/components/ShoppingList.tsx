@@ -1,6 +1,5 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
-import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
 import { consumeResume } from "../store/resumeStore";
 import { selectedEmployeeName, selectEmployee } from "../store/employeesStore";
