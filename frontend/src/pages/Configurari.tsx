@@ -362,7 +362,7 @@ function LocatiiPanel() {
                     </Show>
                     <Show when={loc.disclaimer_id !== null}>
                       <span class="cfg-location-desc" style="opacity:0.6;font-style:italic">
-                        Mențiune: {allDisclaimers().find(d => d.id === loc.disclaimer_id)?.title ?? `#${loc.disclaimer_id}`}
+                        Disclaimer: {allDisclaimers().find(d => d.id === loc.disclaimer_id)?.title ?? `#${loc.disclaimer_id}`}
                       </span>
                     </Show>
                   </div>
@@ -867,7 +867,7 @@ function AngajatiPanel() {
   );
 }
 
-// ─── Mențiuni panel ───────────────────────────────────────────────────────────
+// ─── Disclaimers panel ────────────────────────────────────────────────────────
 
 interface DisclaimerItem { id: number; title: string; text: string; }
 
@@ -950,17 +950,17 @@ function DisclaimersPanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Mentiuni", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
+    exportCSV("Disclaimers", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
   }
   function doExportPDF() {
-    exportPDF("Mențiuni", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
+    exportPDF("Disclaimers", ["Titlu", "Text"], filtered().map(d => [d.title, d.text]));
   }
 
   return (
     <div class="cfg-panel">
       <Show when={deleteTarget()}>
         <DeleteModal
-          label={deleteTarget()!.title || `mențiunea #${deleteTarget()!.id}`}
+          label={deleteTarget()!.title || `disclaimer #${deleteTarget()!.id}`}
           saving={saving()}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -968,7 +968,7 @@ function DisclaimersPanel() {
       </Show>
 
       <div class="cfg-panel-header">
-        <h2 class="cfg-panel-title">Mențiuni</h2>
+        <h2 class="cfg-panel-title">Disclaimers</h2>
         <input class="input cfg-search" placeholder="Caută..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
         <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
         <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); setError(null); }}>
@@ -985,7 +985,7 @@ function DisclaimersPanel() {
             <textarea
               class="cfg-textarea"
               rows={4}
-              placeholder="Textul mențiunii..."
+              placeholder="Textul disclaimerului..."
               value={addText()}
               onInput={e => setAddText(e.currentTarget.value)}
             />
@@ -999,7 +999,7 @@ function DisclaimersPanel() {
 
       <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
       <Show when={!loading() && filtered().length === 0}>
-        <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există mențiuni. Apasă \"+ Adaugă\" pentru a crea una."}</p>
+        <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există disclaimere. Apasă \"+ Adaugă\" pentru a crea unul."}</p>
       </Show>
 
       <div class="cfg-location-list">
@@ -1610,9 +1610,9 @@ function CompaniiPanel() {
 
   function doExportCSV() {
     exportCSV("Companii",
-      ["CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "Telefon", "Cod poștal", "Plătitor TVA", "Descriere", "Comentarii"],
-      filtered().map(c => [
-        String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
+      ["#", "CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "Telefon", "Cod poștal", "Plătitor TVA", "Descriere", "Comentarii"],
+      filtered().map((c, i) => [
+        String(i + 1), String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
         c.phone ?? "", c.postal_code ?? "",
         c.is_vat_payer === true ? "Da" : c.is_vat_payer === false ? "Nu" : "",
         c.description ?? "", c.comments ?? "",
@@ -1620,9 +1620,9 @@ function CompaniiPanel() {
   }
   function doExportPDF() {
     exportPDF("Companii",
-      ["CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "TVA"],
-      filtered().map(c => [
-        String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
+      ["#", "CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "TVA"],
+      filtered().map((c, i) => [
+        String(i + 1), String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
         c.is_vat_payer === true ? "Da" : c.is_vat_payer === false ? "Nu" : "",
       ]));
   }
@@ -1758,7 +1758,7 @@ const TOPICS = [
   { id: "angajati",       label: "Angajați",             panel: AngajatiPanel },
   { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
   { id: "companii",       label: "Companiile mele",       panel: CompaniiPanel },
-  { id: "disclaimers",    label: "Mențiuni",               panel: DisclaimersPanel },
+  { id: "disclaimers",    label: "Disclaimers",             panel: DisclaimersPanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -1803,9 +1803,9 @@ function WelcomePanel() {
           </span>
         </div>
         <div class="cfg-welcome-item">
-          <span class="cfg-welcome-item-title">Mențiuni</span>
+          <span class="cfg-welcome-item-title">Disclaimers</span>
           <span class="cfg-welcome-item-desc">
-            Gestionează textele de mențiuni afișate pe bonuri sau documente. Adaugă, modifică sau șterge mențiunile.
+            Gestionează disclaimerele afișate pe bonuri sau documente. Adaugă, modifică sau șterge disclaimerele.
           </span>
         </div>
       </div>
