@@ -1144,8 +1144,8 @@ function ProduseSiServiciiPanel() {
   const [error, setError] = createSignal<string | null>(null);
 
   // ── accordion ──
-  const [catOpen, setCatOpen] = createSignal(false);
-  const [itemOpen, setItemOpen] = createSignal(false);
+  const [catOpen, setCatOpen] = createSignal(true);
+  const [itemOpen, setItemOpen] = createSignal(true);
 
   // ── categories ──
   const [categories, setCategories] = createSignal<Category[]>([]);
