@@ -2012,7 +2012,7 @@ function RegisterPanel() {
         <div class="cfg-location-row cfg-location-row--edit">
           <RegFormFields f={addForm()} setF={setAddForm} />
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !addForm().name.trim()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addForm().name.trim() || !addForm().company_id} onClick={saveAdd}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setError(null); }}>Anulează</button>
           </div>
         </div>
@@ -2051,7 +2051,7 @@ function RegisterPanel() {
               <div class="cfg-location-row cfg-location-row--edit">
                 <RegFormFields f={editForm()} setF={setEditForm} />
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim()} onClick={() => saveEdit(r.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim() || !editForm().company_id} onClick={() => saveEdit(r.id)}>Salvează</button>
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
                 </div>
               </div>
