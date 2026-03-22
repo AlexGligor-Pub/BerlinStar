@@ -7,6 +7,8 @@ export interface Receipt {
   id: string;
   date: string;
   titlu: string;
+  clientId: number | null;
+  clientNume: string | null;
   descriere?: string;
   dateTehn?: string;
   metodaPlata?: string;
@@ -22,6 +24,8 @@ function mapFromApi(r: any): Receipt {
     id: String(r.id),
     date: r.created_at,
     titlu: r.titlu,
+    clientId: r.client_id ?? null,
+    clientNume: r.client_nume ?? null,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
     metodaPlata: r.pay_method !== "Neplatit" ? r.pay_method : undefined,
@@ -122,6 +126,18 @@ export async function deleteReceipt(id: string) {
   const updated = receipts().filter((r) => r.id !== id);
   setReceipts(updated);
   localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+}
+
+export async function updateReceiptClient(id: string, clientId: number | null): Promise<void> {
+  const res = await apiFetch(`/api/receipts/${id}/client`, {
+    method: "PATCH",
+    body: JSON.stringify({ client_id: clientId }),
+  });
+  if (!res.ok) return;
+  const updated = mapFromApi(await res.json());
+  const next = receipts().map((r) => r.id === id ? updated : r);
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 }
 
 export { receipts };

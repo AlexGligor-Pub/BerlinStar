@@ -20,6 +20,7 @@ async def list_clienti(
     limit: int = 100,
     q: str | None = None,
     tip: str | None = None,
+    cui: str | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -31,6 +32,8 @@ async def list_clienti(
         stmt = stmt.where(Client.nume.ilike(f"%{q}%"))
     if tip:
         stmt = stmt.where(Client.tip == tip)
+    if cui:
+        stmt = stmt.where(Client.cui == cui)
     stmt = stmt.order_by(Client.nume, Client.id).limit(limit + 1)
 
     rows = (await db.execute(stmt)).scalars().all()

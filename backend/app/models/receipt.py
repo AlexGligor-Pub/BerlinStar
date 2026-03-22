@@ -37,10 +37,12 @@ class Receipt(Base):
     partial_pay: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    client_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("clienti.id", ondelete="SET NULL"), nullable=True)
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
     )
+    client: Mapped["Client | None"] = relationship("Client")
 
 
 class ReceiptItem(Base):
@@ -69,3 +71,4 @@ class ReceiptItem(Base):
 
 
 from app.models.employee import Employee  # noqa: E402
+from app.models.client import Client  # noqa: E402

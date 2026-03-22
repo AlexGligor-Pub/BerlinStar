@@ -2344,3 +2344,58 @@ body {
   opacity: 0.7;
   white-space: nowrap;
 }
+
+/* ─── Receipt Client Section ─── */
+.rclient-assigned {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(var(--primary-rgb, 99,102,241), 0.08);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.rclient-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.rclient-search-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rclient-hint {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  padding: 2px 4px;
+}
+.rclient-results {
+  border: 1px solid rgba(128,128,128,0.2);
+  border-radius: 6px;
+  overflow: hidden;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.rclient-result-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-bottom: 1px solid rgba(128,128,128,0.1);
+}
+.rclient-result-item:last-child { border-bottom: none; }
+.rclient-result-item:hover { background: rgba(128,128,128,0.08); }
+.rclient-result-name { font-size: 0.83rem; font-weight: 500; }
+.rclient-result-meta { font-size: 0.72rem; opacity: 0.55; }
+.rclient-no-results {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}

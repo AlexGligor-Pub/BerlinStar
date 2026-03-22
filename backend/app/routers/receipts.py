@@ -11,7 +11,8 @@ from app.broadcaster import broadcaster
 from app.database import get_db
 from app.dependencies import get_account_id, get_account_id_from_query
 from app.models.receipt import Receipt, ReceiptItem
-from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead
+from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch
+from app.models.client import Client
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
@@ -25,6 +26,7 @@ def _serialize(receipt: Receipt) -> dict:
     data["receipt_items"] = [
         ReceiptItemRead.from_orm_item(it).model_dump() for it in receipt.receipt_items
     ]
+    data["client_nume"] = receipt.client.nume if receipt.client else None
     return data
 
 
@@ -42,7 +44,10 @@ async def list_receipts(
     limit = min(limit, 1000)
     stmt = (
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+        )
         .where(Receipt.account_id == account_id)
     )
     if not include_deleted:
@@ -70,6 +75,7 @@ async def create_receipt(
     receipt = Receipt(
         account_id=account_id,
         titlu=body.titlu,
+        client_id=body.client_id,
         descriere=body.descriere,
         date_tehn=body.date_tehn,
         total=body.total,
@@ -195,6 +201,30 @@ async def patch_receipt(
 
     await broadcaster.notify(account_id)
     return _serialize(result)
+
+
+@router.patch("/{receipt_id}/client", response_model=ReceiptRead)
+async def patch_receipt_client(
+    receipt_id: int,
+    body: ReceiptClientPatch,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
+        raise HTTPException(404, "Bonul nu a fost găsit.")
+    receipt.client_id = body.client_id
+    await db.commit()
+    result = await db.execute(
+        select(Receipt)
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+        )
+        .where(Receipt.id == receipt_id)
+    )
+    receipt = result.scalar_one()
+    return _serialize(receipt)
 
 
 @router.delete("/{receipt_id}", status_code=204)

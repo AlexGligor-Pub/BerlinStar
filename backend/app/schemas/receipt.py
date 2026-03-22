@@ -21,6 +21,7 @@ class ReceiptCreate(BaseModel):
     total: Decimal = Field(..., ge=0, decimal_places=2)
     pay_method: PayMethod = PayMethod.NEPLATIT
     partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
+    client_id: int | None = None
 
 
 class ReceiptItemRead(BaseModel):
@@ -59,6 +60,10 @@ class ReceiptPatch(BaseModel):
     partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
+class ReceiptClientPatch(BaseModel):
+    client_id: int | None
+
+
 class ReceiptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -71,6 +76,8 @@ class ReceiptRead(BaseModel):
     total: Decimal
     pay_method: PayMethod
     partial_pay: Decimal | None
+    client_id: int | None
+    client_nume: str | None = None
     is_deleted: bool
     deleted_at: datetime | None
     receipt_items: list[ReceiptItemRead]
