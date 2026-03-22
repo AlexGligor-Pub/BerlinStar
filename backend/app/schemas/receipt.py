@@ -27,6 +27,7 @@ class ReceiptCreate(BaseModel):
 class ReceiptItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    account_id: int | None
     name: str
     price: Decimal
     qty: int
@@ -43,6 +44,7 @@ class ReceiptItemRead(BaseModel):
             pct = round(float(emp.current_target_accumulation / emp.target * 100), 1)
         return cls.model_validate({
             "id": item.id,  # type: ignore[attr-defined]
+            "account_id": item.account_id,  # type: ignore[attr-defined]
             "name": item.name,  # type: ignore[attr-defined]
             "price": item.price,  # type: ignore[attr-defined]
             "qty": item.qty,  # type: ignore[attr-defined]

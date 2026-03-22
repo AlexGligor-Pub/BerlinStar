@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, type CartItem } from "../store/cartStore";
+import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
 import { consumeResume } from "../store/resumeStore";
@@ -19,6 +19,31 @@ export default function ShoppingList() {
   const [editItem, setEditItem] = createSignal<CartItem | null>(null);
   const [editQty, setEditQty] = createSignal("1");
   const [editPrice, setEditPrice] = createSignal("0");
+
+  const [showManual, setShowManual] = createSignal(false);
+  const [manualName, setManualName] = createSignal("");
+  const [manualQty, setManualQty] = createSignal("1");
+  const [manualPrice, setManualPrice] = createSignal("");
+  const [manualTip, setManualTip] = createSignal("Produs");
+  const [manualUnit, setManualUnit] = createSignal("buc");
+
+  function openManual() {
+    setManualName("");
+    setManualQty("1");
+    setManualPrice("");
+    setManualTip("Produs");
+    setManualUnit("buc");
+    setShowManual(true);
+  }
+
+  function confirmManual() {
+    const name = manualName().trim();
+    if (!name) return;
+    const qty = parseInt(manualQty()) || 1;
+    const price = parseFloat(manualPrice()) || 0;
+    addManualItem(name, qty, price, manualUnit().trim() || "buc");
+    setShowManual(false);
+  }
 
   function openEditItem(item: CartItem) {
     setEditItem(item);
@@ -99,9 +124,12 @@ export default function ShoppingList() {
             <span class="sl-employee-badge">{selectedEmployeeName()}</span>
           </Show>
         </div>
-        <Show when={cart.items.length > 0}>
-          <button class="btn btn-ghost btn-sm" onClick={clearCart}>Sterge tot</button>
-        </Show>
+        <div class="sl-header-right">
+          <button class="btn btn-ghost btn-sm" onClick={openManual} title="Adauga produs manual">+ Manual</button>
+          <Show when={cart.items.length > 0}>
+            <button class="btn btn-ghost btn-sm" onClick={clearCart}>Sterge tot</button>
+          </Show>
+        </div>
       </div>
 
       <div class="shopping-list-titlu">
@@ -245,6 +273,91 @@ export default function ShoppingList() {
       <Show when={showTitluWarn()}>
         <div class="titlu-warn-toast">
           Scrie un titlu pentru a finaliza!
+        </div>
+      </Show>
+
+      {/* Manual item modal */}
+      <Show when={showManual()}>
+        <div class="sl-modal-overlay" onClick={() => setShowManual(false)}>
+          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Adauga produs manual</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>✕</button>
+            </div>
+            <div class="sl-edit-item-body">
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Nume *</label>
+                <input
+                  class="input sl-edit-input"
+                  type="text"
+                  placeholder="Ex: Transport, Consultanta..."
+                  value={manualName()}
+                  onInput={(e) => setManualName(e.currentTarget.value)}
+                  autofocus
+                />
+              </div>
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Tip</label>
+                <select
+                  class="input sl-edit-input"
+                  value={manualTip()}
+                  onChange={(e) => {
+                    setManualTip(e.currentTarget.value);
+                    setManualUnit(e.currentTarget.value === "Serviciu" ? "ora" : "buc");
+                  }}
+                >
+                  <option value="Produs">Produs</option>
+                  <option value="Serviciu">Serviciu</option>
+                </select>
+              </div>
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">U.M.</label>
+                <input
+                  class="input sl-edit-input"
+                  type="text"
+                  placeholder="buc, ora, kg, m..."
+                  value={manualUnit()}
+                  onInput={(e) => setManualUnit(e.currentTarget.value)}
+                />
+              </div>
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Cantitate</label>
+                <input
+                  class="input sl-edit-input"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={manualQty()}
+                  onInput={(e) => setManualQty(e.currentTarget.value)}
+                />
+              </div>
+              <div class="sl-edit-item-row">
+                <label class="sl-edit-label">Pret (lei)</label>
+                <input
+                  class="input sl-edit-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={manualPrice()}
+                  onInput={(e) => setManualPrice(e.currentTarget.value)}
+                />
+              </div>
+              <div class="sl-edit-item-total">
+                Total: {((parseFloat(manualPrice()) || 0) * (parseInt(manualQty()) || 0)).toFixed(2)} lei
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>Anuleaza</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={manualName().trim() === ""}
+                onClick={confirmManual}
+              >
+                Adauga
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
 

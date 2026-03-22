@@ -8,6 +8,7 @@ from .base import Base
 class Category(Base):
     __tablename__ = "categories"
     __table_args__ = (
+        Index("ix_categories_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
         Index("ix_categories_theme_id_is_deleted_id", "theme_id", "is_deleted", "id"),
     )
 

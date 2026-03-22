@@ -18,6 +18,7 @@ class ItemType(str, enum.Enum):
 class Item(Base):
     __tablename__ = "items"
     __table_args__ = (
+        Index("ix_items_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
         Index("ix_items_category_id_is_deleted_id", "category_id", "is_deleted", "id"),
         Index("ix_items_is_deleted_id", "is_deleted", "id"),
         Index("ix_items_type_is_deleted_id", "type", "is_deleted", "id"),

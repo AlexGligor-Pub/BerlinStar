@@ -756,7 +756,7 @@ body {
 .sl-edit-input {
   flex: 1;
   font-size: 1rem;
-  text-align: right;
+  text-align: left;
 }
 
 .sl-edit-item-total {

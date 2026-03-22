@@ -83,6 +83,19 @@ export function setItemQty(lineId: string, qty: number) {
   if (idx >= 0) setCart("items", idx, "qty", qty);
 }
 
+let _manualCounter = 0;
+
+export function addManualItem(name: string, qty: number, price: number, unit: string) {
+  const empId = selectedEmployeeId();
+  const empName = selectedEmployeeName();
+  const uniqueId = -(++_manualCounter);
+  const lineId = `manual_${uniqueId}_${empId ?? ""}`;
+  setCart("items", (items) => [
+    ...items,
+    { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null },
+  ]);
+}
+
 export function cartTotal() {
   return cart.items.reduce((sum, i) => sum + i.price * i.qty, 0);
 }

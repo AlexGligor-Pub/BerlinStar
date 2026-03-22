@@ -7,7 +7,7 @@ services:
       args:
         - VITE_BASE_PATH=${VITE_BASE_PATH:-/berlinstar/}
     ports:
-      - "80:80"
+      - "8080:80"
     networks:
       - web
     restart: unless-stopped
@@ -22,7 +22,8 @@ services:
       - web
       - internal
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   db:
@@ -38,6 +39,11 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 networks:
   web:

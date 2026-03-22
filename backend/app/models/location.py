@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Table, Column
+from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Index, Table, Column
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -15,6 +15,9 @@ employee_locations = Table(
 
 class Location(Base):
     __tablename__ = "locations"
+    __table_args__ = (
+        Index("ix_locations_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False)
@@ -30,6 +33,8 @@ class Location(Base):
     employees: Mapped[list[Employee]] = relationship(
         "Employee", secondary=employee_locations, back_populates="locations"
     )
+    devices: Mapped[list[Device]] = relationship("Device", back_populates="location")
 
 
 from .employee import Employee  # noqa: E402
+from .device import Device  # noqa: E402

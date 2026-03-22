@@ -83,6 +83,7 @@ async def create_receipt(
     for it in body.items:
         db.add(ReceiptItem(
             receipt_id=receipt.id,
+            account_id=account_id,
             name=it.name,
             price=it.price,
             qty=it.qty,

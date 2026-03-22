@@ -46,10 +46,16 @@ class Receipt(Base):
 
 class ReceiptItem(Base):
     __tablename__ = "receipt_items"
+    __table_args__ = (
+        Index("ix_receipt_items_account_id", "account_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     receipt_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("receipts.id", ondelete="CASCADE"), nullable=False
+    )
+    account_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
     )
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True

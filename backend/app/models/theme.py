@@ -8,6 +8,7 @@ from .base import Base
 class Theme(Base):
     __tablename__ = "themes"
     __table_args__ = (
+        Index("ix_themes_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
         Index("ix_themes_is_deleted_id", "is_deleted", "id"),
     )
 

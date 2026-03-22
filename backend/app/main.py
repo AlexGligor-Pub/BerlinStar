@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.routers import auth, accounts, themes, categories, items, receipts, employees
+from app.routers import auth, accounts, themes, categories, items, receipts, employees, devices, locations
 
 
 @asynccontextmanager
@@ -35,6 +35,8 @@ app.include_router(categories.router, prefix="/api/categories", tags=["categorie
 app.include_router(items.router,      prefix="/api/items",      tags=["items"])
 app.include_router(receipts.router,   prefix="/api/receipts",   tags=["receipts"])
 app.include_router(employees.router,  prefix="/api/employees",  tags=["employees"])
+app.include_router(devices.router,    prefix="/api/devices",    tags=["devices"])
+app.include_router(locations.router,  prefix="/api/locations",  tags=["locations"])
 
 
 @app.get("/health")
