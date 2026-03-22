@@ -1713,7 +1713,7 @@ function CompaniiPanel() {
         <h2 class="cfg-panel-title">Companii</h2>
         <input class="input cfg-search" placeholder="Caută CUI / denumire..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
         <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
-        <button class="btn btn-sm btn-primary" onClick={() => { setAddMode(true); setEditId(null); setForm({}); setCuiInput(""); setAnafError(null); }}>
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddMode(true); setEditId(null); setForm({ tva_percentage: 21 }); setCuiInput(""); setAnafError(null); }}>
           + Adaugă
         </button>
       </div>
@@ -1746,12 +1746,16 @@ function CompaniiPanel() {
             <input class="input" placeholder="Cod poștal" value={f().postal_code ?? ""} onInput={e => patchForm("postal_code", e.currentTarget.value)} />
             <input class="input" placeholder="Status înregistrare" value={f().registration_status ?? ""} onInput={e => patchForm("registration_status", e.currentTarget.value)} />
             <label class="cfg-checkbox-row">
-              <input type="checkbox" checked={f().is_vat_payer ?? false} onChange={e => patchForm("is_vat_payer", e.currentTarget.checked)} />
+              <input type="checkbox" checked={f().is_vat_payer ?? false} onChange={e => {
+                const checked = e.currentTarget.checked;
+                patchForm("is_vat_payer", checked);
+                if (checked && !f().tva_percentage) patchForm("tva_percentage", 21);
+              }} />
               Plătitor TVA
             </label>
             <Show when={f().is_vat_payer}>
               <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
-                value={f().tva_percentage ?? ""} onInput={e => patchForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                value={f().tva_percentage ?? 21} onInput={e => patchForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
             </Show>
             <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
             <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
@@ -1803,12 +1807,16 @@ function CompaniiPanel() {
                   <input class="input" placeholder="Cod poștal" value={ef().postal_code ?? ""} onInput={e => patchEditForm("postal_code", e.currentTarget.value)} />
                   <input class="input" placeholder="Status înregistrare" value={ef().registration_status ?? ""} onInput={e => patchEditForm("registration_status", e.currentTarget.value)} />
                   <label class="cfg-checkbox-row">
-                    <input type="checkbox" checked={ef().is_vat_payer ?? false} onChange={e => patchEditForm("is_vat_payer", e.currentTarget.checked)} />
+                    <input type="checkbox" checked={ef().is_vat_payer ?? false} onChange={e => {
+                      const checked = e.currentTarget.checked;
+                      patchEditForm("is_vat_payer", checked);
+                      if (checked && !ef().tva_percentage) patchEditForm("tva_percentage", 21);
+                    }} />
                     Plătitor TVA
                   </label>
                   <Show when={ef().is_vat_payer}>
                     <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
-                      value={ef().tva_percentage ?? ""} onInput={e => patchEditForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                      value={ef().tva_percentage ?? 21} onInput={e => patchEditForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
                   </Show>
                   <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />

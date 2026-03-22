@@ -1,14 +1,12 @@
 /**
- * generateDocuments.ts
- *
- * Generator PDF pentru Deviz, Factură fiscală, Chitanță — Berlin Star.
- * Paletă Tesla-like: negru/alb/gri, minimalist profesional.
- * Format: A4 portret, jsPDF + jspdf-autotable.
+ * generateDocuments.ts — Deviz, Factura fiscala, Chitanta
+ * Design print-friendly: fara fundal inchis, cerneala minima.
+ * Caractere romane convertite la ASCII pentru compatibilitate jsPDF.
  */
 
 import type { Receipt } from "../store/receiptsStore";
 
-// ─── Context documente ────────────────────────────────────────────────────────
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 export interface DocContext {
   serie: string;
@@ -20,28 +18,44 @@ export interface DocContext {
     address?: string | null;
     nr_reg_com?: string | null;
     phone?: string | null;
+    tva_percentage?: number | null;
   } | null;
   disclaimer: { title: string; text: string } | null;
 }
 
-// ─── Culori Tesla-like ────────────────────────────────────────────────────────
+// ─── Culori ───────────────────────────────────────────────────────────────────
 
 const C = {
-  black:     [10, 10, 10]     as [number, number, number],
-  darkGray:  [28, 28, 30]     as [number, number, number],
-  midGray:   [110, 110, 115]  as [number, number, number],
-  lightGray: [245, 245, 247]  as [number, number, number],
-  separator: [229, 229, 229]  as [number, number, number],
-  white:     [255, 255, 255]  as [number, number, number],
+  black:     [20, 20, 20]      as [number, number, number],
+  gray:      [100, 100, 100]   as [number, number, number],
+  lightGray: [180, 180, 180]   as [number, number, number],
+  veryLight: [240, 240, 240]   as [number, number, number],  // header tabel
+  white:     [255, 255, 255]   as [number, number, number],
 };
 
-const ML = 18;
-const MR = 18;
+const ML = 15;
+const MR = 15;
 const PAGE_W = 210;
-const CONTENT_W = PAGE_W - ML - MR;
-const MT = 18;
+const CW = PAGE_W - ML - MR;  // content width
+const MT = 14;
+const PAGE_H = 297;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Encoding helper ──────────────────────────────────────────────────────────
+// jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1
+
+function ro(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/[ăÅ£]/g, (c) => c === c.toLowerCase() ? "a" : "A")
+    .replace(/Ă/g, "A")
+    .replace(/ă/g, "a")
+    .replace(/â/g, "a").replace(/Â/g, "A")
+    .replace(/î/g, "i").replace(/Î/g, "I")
+    .replace(/[șşȘŞ]/g, (c) => /[A-Z]/.test(c) ? "S" : "s")
+    .replace(/[țţȚŢ]/g, (c) => /[A-Z]/.test(c) ? "T" : "t");
+}
+
+// ─── Format helpers ───────────────────────────────────────────────────────────
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -52,211 +66,263 @@ function fmtNow() {
   return new Date().toLocaleDateString("ro-RO");
 }
 
-function drawSeparator(doc: any, y: number, width = 0.3): number {
-  doc.setDrawColor(...C.separator);
-  doc.setLineWidth(width);
-  doc.line(ML, y, PAGE_W - MR, y);
-  return y + 4;
+function lei(n: number) {
+  return `${n.toFixed(2)} lei`;
 }
 
-function drawHeaderBand(doc: any, title: string, serie: string, nr: number, date: string): number {
-  // Fundal negru header band
-  doc.setFillColor(...C.black);
-  doc.rect(0, 0, PAGE_W, 26, "F");
+// ─── Componente desenare ──────────────────────────────────────────────────────
 
-  // Titlu document (stânga)
+/** Linie orizontala subtire */
+function hline(doc: any, y: number, color = C.lightGray, w = 0.2): void {
+  doc.setDrawColor(...color);
+  doc.setLineWidth(w);
+  doc.line(ML, y, PAGE_W - MR, y);
+}
+
+/** Header document: titlu + serie/nr + data, fara fundal */
+function drawHeader(doc: any, title: string, serie: string, nr: number, date: string): number {
+  let y = MT;
+
+  // Titlu document
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(...C.white);
-  doc.text(title, ML, 17);
+  doc.setFontSize(16);
+  doc.setTextColor(...C.black);
+  doc.text(ro(title), ML, y);
 
-  // Serie + Nr (dreapta sus)
+  // Serie + Nr + Data — dreapta
   const serieNr = `${serie ? serie + " " : ""}Nr. ${nr}`;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.text(serieNr, PAGE_W - MR, 12, { align: "right" });
-  doc.text(`Data: ${date}`, PAGE_W - MR, 18, { align: "right" });
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.gray);
+  doc.text(serieNr, PAGE_W - MR, y - 4, { align: "right" });
+  doc.text(`Data: ${date}`, PAGE_W - MR, y + 1, { align: "right" });
 
-  return 34;
+  y += 4;
+  hline(doc, y, C.black, 0.5);
+  return y + 5;
 }
 
-function drawCompanyBlock(doc: any, label: string, company: DocContext["company"], x: number, y: number, blockW: number): number {
+/** Bloc companie: eticheta + camp info */
+function drawCompanyBlock(
+  doc: any, label: string, company: DocContext["company"],
+  x: number, y: number, bw: number
+): number {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.midGray);
-  doc.text(label.toUpperCase(), x, y);
-  y += 4;
+  doc.setFontSize(7);
+  doc.setTextColor(...C.gray);
+  doc.text(ro(label).toUpperCase(), x, y);
+  y += 3.5;
 
   if (!company) {
-    doc.setFont("helvetica", "italic");
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...C.midGray);
-    doc.text("—", x, y);
-    return y + 6;
+    doc.setTextColor(...C.lightGray);
+    doc.text("-", x, y);
+    return y + 4;
   }
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...C.black);
-  const nameLines: string[] = doc.splitTextToSize(company.name, blockW);
+  const nameLines: string[] = doc.splitTextToSize(ro(company.name), bw);
   doc.text(nameLines, x, y);
-  y += nameLines.length * 4.5;
+  y += nameLines.length * 4.2;
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...C.darkGray);
-
-  if (company.cui) { doc.text(`CUI: ${company.cui}`, x, y); y += 4; }
-  if (company.nr_reg_com) { doc.text(`Nr.Reg.Com.: ${company.nr_reg_com}`, x, y); y += 4; }
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  if (company.cui) { doc.text(`CUI: ${company.cui}`, x, y); y += 3.5; }
+  if (company.nr_reg_com) { doc.text(`Reg.Com.: ${ro(company.nr_reg_com)}`, x, y); y += 3.5; }
   if (company.address) {
-    const addrLines: string[] = doc.splitTextToSize(company.address, blockW);
-    doc.text(addrLines, x, y);
-    y += addrLines.length * 4;
+    const al: string[] = doc.splitTextToSize(ro(company.address), bw);
+    doc.text(al, x, y);
+    y += al.length * 3.5;
   }
-  if (company.phone) { doc.text(`Tel: ${company.phone}`, x, y); y += 4; }
-
+  if (company.phone) { doc.text(`Tel: ${ro(company.phone)}`, x, y); y += 3.5; }
   return y;
 }
 
-function drawClientBlock(doc: any, label: string, clientNume: string | null, x: number, y: number): number {
+/** Bloc client */
+function drawClientBlock(
+  doc: any, label: string, clientNume: string | null,
+  x: number, y: number, bw: number
+): number {
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.midGray);
-  doc.text(label.toUpperCase(), x, y);
-  y += 4;
+  doc.setFontSize(7);
+  doc.setTextColor(...C.gray);
+  doc.text(ro(label).toUpperCase(), x, y);
+  y += 3.5;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...C.black);
-  doc.text(clientNume ?? "—", x, y);
-  y += 5;
-
+  const lines: string[] = doc.splitTextToSize(ro(clientNume ?? "-"), bw);
+  doc.text(lines, x, y);
+  y += lines.length * 4.2;
   return y;
 }
 
+/** Tabel articole — print-friendly (fara fundal alternant, header gri deschis) */
 function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number): number {
   const rows = r.items.map((item) => [
-    item.name,
+    ro(item.name),
     String(item.qty),
-    item.unit,
-    `${item.price.toFixed(2)} lei`,
-    `${(item.price * item.qty).toFixed(2)} lei`,
+    ro(item.unit),
+    item.price.toFixed(2),
+    (item.price * item.qty).toFixed(2),
   ]);
 
   autoTable(doc, {
     startY: y,
-    head: [["Denumire", "Cant.", "U.M.", "Preț unitar", "Total"]],
+    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Total net"]],
     body: rows,
-    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [...C.black] },
-    headStyles: {
-      fillColor: [...C.black],
-      textColor: [...C.white],
-      fontSize: 8.5,
-      fontStyle: "bold",
+    styles: {
+      fontSize: 8,
+      cellPadding: { top: 1.8, bottom: 1.8, left: 2, right: 2 },
+      textColor: [...C.black],
+      lineColor: [...C.lightGray],
+      lineWidth: 0.1,
     },
-    alternateRowStyles: { fillColor: [...C.lightGray] },
+    headStyles: {
+      fillColor: [...C.veryLight],
+      textColor: [...C.black],
+      fontSize: 7.5,
+      fontStyle: "bold",
+      lineColor: [...C.lightGray],
+      lineWidth: 0.2,
+    },
+    alternateRowStyles: {},  // fara alternare
     columnStyles: {
       0: { cellWidth: "auto" },
-      1: { halign: "center", cellWidth: 16 },
-      2: { halign: "center", cellWidth: 16 },
-      3: { halign: "right", cellWidth: 28 },
-      4: { halign: "right", cellWidth: 30, fontStyle: "bold" },
+      1: { halign: "center", cellWidth: 14 },
+      2: { halign: "center", cellWidth: 14 },
+      3: { halign: "right", cellWidth: 24 },
+      4: { halign: "right", cellWidth: 26, fontStyle: "bold" },
     },
     margin: { left: ML, right: MR },
-    tableLineColor: [...C.separator],
-    tableLineWidth: 0.2,
+    tableWidth: CW,
   });
 
-  return (doc as any).lastAutoTable.finalY + 4;
+  return (doc as any).lastAutoTable.finalY + 3;
 }
 
-function drawTotalRow(doc: any, r: Receipt, y: number): number {
-  // Fundal negru pentru total
-  doc.setFillColor(...C.black);
-  doc.rect(ML, y, CONTENT_W, 10, "F");
+/** Sectiune totale (cu TVA optional) */
+function drawTotals(
+  doc: any, r: Receipt, y: number, tvaPct: number | null | undefined
+): number {
+  const rightX = PAGE_W - MR;
+  const labelX = rightX - 60;
 
+  const hasTva = tvaPct != null && tvaPct > 0;
+  const net = r.total;
+  const tvaAmt = hasTva ? net * (tvaPct! / 100) : 0;
+  const totalCuTva = net + tvaAmt;
+
+  hline(doc, y, C.lightGray, 0.2);
+  y += 4;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.gray);
+
+  if (hasTva) {
+    // Subtotal fara TVA
+    doc.text("Subtotal (fara TVA):", labelX, y);
+    doc.text(lei(net), rightX, y, { align: "right" });
+    y += 4.5;
+
+    // TVA
+    doc.text(`TVA ${tvaPct}%:`, labelX, y);
+    doc.text(lei(tvaAmt), rightX, y, { align: "right" });
+    y += 4.5;
+
+    hline(doc, y, C.lightGray, 0.2);
+    y += 4;
+  }
+
+  // Total de plata
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(...C.white);
-  doc.text("TOTAL DE PLATĂ", ML + 4, y + 7);
-  doc.text(`${r.total.toFixed(2)} lei`, PAGE_W - MR - 2, y + 7, { align: "right" });
-  y += 14;
+  doc.setTextColor(...C.black);
+  doc.text("TOTAL DE PLATA:", labelX, y);
+  doc.text(lei(hasTva ? totalCuTva : net), rightX, y, { align: "right" });
+  y += 5;
 
   if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...C.midGray);
-    doc.text(`Avans achitat: ${r.partialPay.toFixed(2)} lei`, ML, y);
-    const rest = r.total - r.partialPay;
-    doc.text(`Rest de plată: ${rest.toFixed(2)} lei`, PAGE_W - MR, y, { align: "right" });
-    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gray);
+    const restVal = (hasTva ? totalCuTva : net) - r.partialPay;
+    doc.text(`Avans: ${lei(r.partialPay)}`, labelX, y);
+    doc.text(`Rest: ${lei(restVal)}`, rightX, y, { align: "right" });
+    y += 4.5;
   }
 
   return y + 2;
 }
 
+/** Disclaimer — 6pt, gri deschis */
 function drawDisclaimer(doc: any, disclaimer: DocContext["disclaimer"], y: number): number {
   if (!disclaimer?.text) return y;
-  if (y > 240) { doc.addPage(); y = MT; }
+  if (y > PAGE_H - 30) { doc.addPage(); y = MT; }
 
-  y = drawSeparator(doc, y);
+  hline(doc, y, C.veryLight, 0.2);
+  y += 3;
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.midGray);
-  doc.text((disclaimer.title || "DISCLAIMER").toUpperCase(), ML, y);
-  y += 4;
+  if (disclaimer.title) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(...C.lightGray);
+    doc.text(ro(disclaimer.title).toUpperCase(), ML, y);
+    y += 3;
+  }
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.midGray);
-  const lines: string[] = doc.splitTextToSize(disclaimer.text, CONTENT_W);
+  doc.setFontSize(6);
+  doc.setTextColor(...C.lightGray);
+  const lines: string[] = doc.splitTextToSize(ro(disclaimer.text), CW);
   doc.text(lines, ML, y);
-  y += lines.length * 3.8 + 4;
-
+  y += lines.length * 2.8 + 3;
   return y;
 }
 
-function drawSignatureRow(doc: any, y: number): number {
-  if (y > 248) { doc.addPage(); y = MT; }
-  y += 6;
+/** Doua rubrici de semnatura */
+function drawSignatures(doc: any, leftLabel: string, rightLabel: string, y: number): number {
+  if (y > PAGE_H - 22) { doc.addPage(); y = MT; }
+  y += 8;
 
-  const colW = CONTENT_W / 2 - 6;
-  const col2X = ML + colW + 12;
+  const colW = CW / 2 - 8;
+  const col2X = ML + colW + 16;
 
-  // Linii semnătură
-  doc.setDrawColor(...C.separator);
-  doc.setLineWidth(0.4);
+  doc.setDrawColor(...C.lightGray);
+  doc.setLineWidth(0.3);
   doc.line(ML, y, ML + colW, y);
   doc.line(col2X, y, col2X + colW, y);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...C.midGray);
-  doc.text("Semnătură Angajat", ML, y + 4.5);
-  doc.text("Semnătură Client", col2X, y + 4.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  doc.text(ro(leftLabel), ML, y + 4);
+  doc.text(ro(rightLabel), col2X, y + 4);
 
   return y + 12;
 }
 
-function drawFooter(doc: any) {
-  const pageCount = (doc as any).internal.getNumberOfPages();
+/** Footer pagina */
+function drawFooter(doc: any): void {
+  const n = (doc as any).internal.getNumberOfPages();
   const now = fmtNow();
-  for (let i = 1; i <= pageCount; i++) {
+  for (let i = 1; i <= n; i++) {
     doc.setPage(i);
     const h = doc.internal.pageSize.getHeight();
-    doc.setDrawColor(...C.separator);
-    doc.setLineWidth(0.2);
-    doc.line(ML, h - 12, PAGE_W - MR, h - 12);
+    hline(doc, h - 10, C.veryLight, 0.2);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(...C.midGray);
-    doc.text(`Generat: ${now}`, ML, h - 7);
-    doc.text(`Pagina ${i} / ${pageCount}`, PAGE_W - MR, h - 7, { align: "right" });
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.lightGray);
+    doc.text(`Generat: ${now}`, ML, h - 5.5);
+    doc.text(`Pagina ${i} / ${n}`, PAGE_W - MR, h - 5.5, { align: "right" });
   }
 }
-
-// ─── Helper: încarcă jsPDF + autoTable ───────────────────────────────────────
 
 async function loadPdf() {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
@@ -271,242 +337,248 @@ async function loadPdf() {
 export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
+  const tvaPct = ctx.company?.tva_percentage;
   const date = fmtDate(r.date);
-  let y = drawHeaderBand(doc, "DEVIZ", ctx.serie, ctx.nr, date);
+
+  let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
 
   // Titlu bon
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setTextColor(...C.black);
-  doc.text(r.titlu, ML, y);
-  y += 7;
+  const titluLines: string[] = doc.splitTextToSize(ro(r.titlu), CW);
+  doc.text(titluLines, ML, y);
+  y += titluLines.length * 4.5 + 3;
 
-  // Companie + Client — 2 coloane
-  const blockW = CONTENT_W / 2 - 4;
-  const col2X = ML + blockW + 8;
-  const yCompany = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, blockW);
-  const yClient  = drawClientBlock(doc, "Beneficiar", r.clientNume, col2X, y);
-  y = Math.max(yCompany, yClient) + 4;
+  // Prestator + Beneficiar
+  const bw = CW / 2 - 5;
+  const col2X = ML + bw + 10;
+  const y1 = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, bw);
+  const y2 = drawClientBlock(doc, "Beneficiar", r.clientNume, col2X, y, bw);
+  y = Math.max(y1, y2) + 4;
 
-  y = drawSeparator(doc, y);
+  hline(doc, y, C.lightGray, 0.2);
+  y += 4;
+
   y = drawItemsTable(doc, autoTable, r, y);
-  y = drawTotalRow(doc, r, y);
+  y = drawTotals(doc, r, y, tvaPct);
 
   if (r.descriere?.trim()) {
-    y = drawSeparator(doc, y);
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...C.midGray);
+    doc.setFontSize(7);
+    doc.setTextColor(...C.gray);
     doc.text("DESCRIERE", ML, y);
-    y += 4;
+    y += 3.5;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
+    doc.setFontSize(8);
     doc.setTextColor(...C.black);
-    const lines: string[] = doc.splitTextToSize(r.descriere.trim(), CONTENT_W);
-    doc.text(lines, ML, y);
-    y += lines.length * 4.5 + 4;
+    const dl: string[] = doc.splitTextToSize(ro(r.descriere.trim()), CW);
+    doc.text(dl, ML, y);
+    y += dl.length * 4 + 3;
   }
 
   y = drawDisclaimer(doc, ctx.disclaimer, y);
-  y = drawSignatureRow(doc, y);
+  y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   drawFooter(doc);
 
   doc.save(`deviz-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
 }
 
-// ─── FACTURĂ ──────────────────────────────────────────────────────────────────
+// ─── FACTURA ──────────────────────────────────────────────────────────────────
 
 export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
+  const tvaPct = ctx.company?.tva_percentage;
   const date = fmtDate(r.date);
-  let y = drawHeaderBand(doc, "FACTURĂ FISCALĂ", ctx.serie, ctx.nr, date);
+
+  let y = drawHeader(doc, "FACTURA FISCALA", ctx.serie, ctx.nr, date);
 
   // Titlu bon
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(10);
   doc.setTextColor(...C.black);
-  doc.text(r.titlu, ML, y);
-  y += 7;
+  const titluLines: string[] = doc.splitTextToSize(ro(r.titlu), CW);
+  doc.text(titluLines, ML, y);
+  y += titluLines.length * 4.5 + 3;
 
-  // Furnizor + Cumpărător — 2 coloane
-  const blockW = CONTENT_W / 2 - 4;
-  const col2X = ML + blockW + 8;
-  const yFurnizor   = drawCompanyBlock(doc, "Furnizor", ctx.company, ML, y, blockW);
-  const yCumparator = drawClientBlock(doc, "Cumpărător", r.clientNume, col2X, y);
-  y = Math.max(yFurnizor, yCumparator) + 4;
+  // Furnizor + Cumparator
+  const bw = CW / 2 - 5;
+  const col2X = ML + bw + 10;
+  const y1 = drawCompanyBlock(doc, "Furnizor", ctx.company, ML, y, bw);
+  const y2 = drawClientBlock(doc, "Cumparator", r.clientNume, col2X, y, bw);
+  y = Math.max(y1, y2) + 4;
 
-  y = drawSeparator(doc, y);
+  hline(doc, y, C.lightGray, 0.2);
+  y += 4;
+
   y = drawItemsTable(doc, autoTable, r, y);
-  y = drawTotalRow(doc, r, y);
+  y = drawTotals(doc, r, y, tvaPct);
 
-  // Metodă plată
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.setTextColor(...C.midGray);
-    doc.text(`Modalitate de plată: ${r.metodaPlata}`, ML, y);
-    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gray);
+    doc.text(`Modalitate plata: ${ro(r.metodaPlata)}`, ML, y);
+    y += 5;
   }
 
   y = drawDisclaimer(doc, ctx.disclaimer, y);
-  y = drawSignatureRow(doc, y);
+  y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   drawFooter(doc);
 
   doc.save(`factura-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
 }
 
-// ─── CHITANȚĂ ────────────────────────────────────────────────────────────────
+// ─── CHITANTA ────────────────────────────────────────────────────────────────
 
 export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-
+  const tvaPct = ctx.company?.tva_percentage;
+  const hasTva = tvaPct != null && tvaPct > 0;
+  const totalNet = r.total;
+  const totalFinal = hasTva ? totalNet * (1 + tvaPct! / 100) : totalNet;
   const date = fmtDate(r.date);
-  let y = drawHeaderBand(doc, "CHITANȚĂ", ctx.serie, ctx.nr, date);
 
-  // Corp chitanță
+  let y = drawHeader(doc, "CHITANTA", ctx.serie, ctx.nr, date);
   y += 4;
 
+  // Am primit de la
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.darkGray);
+  doc.setTextColor(...C.gray);
   doc.text("Am primit de la", ML, y);
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...C.black);
-  doc.text(r.clientNume ?? "—", ML + 38, y);
-  y += 10;
+  doc.text(ro(r.clientNume ?? "-"), ML + 40, y);
+  y += 9;
 
-  // Linie separator sub "Am primit de la ..."
-  drawSeparator(doc, y, 0.2);
-  y += 2;
+  hline(doc, y, C.veryLight, 0.2);
+  y += 4;
 
-  // Suma în cifre
+  // Suma
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.darkGray);
+  doc.setTextColor(...C.gray);
   doc.text("Suma de", ML, y);
-
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(14);
   doc.setTextColor(...C.black);
-  doc.text(`${r.total.toFixed(2)} lei`, ML + 24, y);
-  y += 8;
+  doc.text(lei(totalFinal), ML + 26, y);
+  y += 6;
 
-  // Suma în litere
-  const inLitere = sumInLitere(r.total);
+  // TVA breakdown daca exista
+  if (hasTva) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...C.gray);
+    doc.text(`(din care: net ${lei(totalNet)}, TVA ${tvaPct}% = ${lei(totalNet * tvaPct! / 100)})`, ML + 26, y);
+    y += 4;
+  }
+
+  // In litere
+  const inLitere = sumInLitere(totalFinal);
   doc.setFont("helvetica", "italic");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.midGray);
-  doc.text(`(${inLitere})`, ML, y);
-  y += 10;
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.gray);
+  doc.text(`(${ro(inLitere)})`, ML, y);
+  y += 9;
 
-  // Reprezentând
+  hline(doc, y, C.veryLight, 0.2);
+  y += 4;
+
+  // Reprezentand
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.darkGray);
-  doc.text("Reprezentând", ML, y);
-
+  doc.setTextColor(...C.gray);
+  doc.text("Reprezentand", ML, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
   doc.setTextColor(...C.black);
-  const repLines: string[] = doc.splitTextToSize(r.titlu, CONTENT_W - 36);
-  doc.text(repLines, ML + 34, y);
-  y += repLines.length * 5.5 + 6;
+  const repLines: string[] = doc.splitTextToSize(ro(r.titlu), CW - 38);
+  doc.text(repLines, ML + 36, y);
+  y += repLines.length * 5 + 4;
 
-  y = drawSeparator(doc, y);
-
-  // Metodă plată
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(...C.midGray);
-    doc.text(`Modalitate: ${r.metodaPlata}`, ML, y);
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.gray);
+    doc.text(`Modalitate: ${ro(r.metodaPlata)}`, ML, y);
     y += 6;
   }
 
-  y += 10;
+  y += 8;
 
-  // Rubrică casier + semnătură companie
-  const colW = CONTENT_W / 2 - 6;
-  doc.setDrawColor(...C.separator);
-  doc.setLineWidth(0.4);
+  // Casier + date companie
+  const colW = CW / 2 - 6;
+  const col2X = ML + colW + 12;
+
+  doc.setDrawColor(...C.lightGray);
+  doc.setLineWidth(0.3);
   doc.line(ML, y, ML + colW, y);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(...C.midGray);
-  doc.text("Casier / Operator", ML, y + 4.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  doc.text("Casier / Operator", ML, y + 4);
 
-  // Date companie jos-dreapta
   if (ctx.company) {
-    const col2X = ML + colW + 12;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(...C.black);
-    doc.text(ctx.company.name, col2X, y - 8);
+    doc.text(ro(ctx.company.name), col2X, y - 6);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
-    doc.setTextColor(...C.midGray);
-    if (ctx.company.cui) { doc.text(`CUI: ${ctx.company.cui}`, col2X, y - 4); }
+    doc.setTextColor(...C.gray);
+    let cy = y - 2;
+    if (ctx.company.cui) { doc.text(`CUI: ${ctx.company.cui}`, col2X, cy); cy += 3.5; }
     if (ctx.company.address) {
-      const addrLines: string[] = doc.splitTextToSize(ctx.company.address, colW);
-      doc.text(addrLines, col2X, y);
+      const al: string[] = doc.splitTextToSize(ro(ctx.company.address), colW);
+      doc.text(al, col2X, cy);
     }
   }
 
   drawFooter(doc);
-
   doc.save(`chitanta-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
 }
 
-// ─── Suma în litere ───────────────────────────────────────────────────────────
+// ─── Suma in litere ───────────────────────────────────────────────────────────
 
 function sumInLitere(n: number): string {
   const total = Math.round(n);
-  const bani = Math.round((n - total) * 100);
+  const bani = Math.round((n - Math.floor(n)) * 100);
   const s = numarInLitere(total);
-  if (bani > 0) return `${s} lei și ${numarInLitere(bani)} bani`;
+  if (bani > 0) return `${s} lei si ${numarInLitere(bani)} bani`;
   return `${s} lei`;
 }
 
 function numarInLitere(n: number): string {
   if (n === 0) return "zero";
-  const unitati = ["", "unu", "doi", "trei", "patru", "cinci", "șase", "șapte", "opt", "nouă",
+  const u = ["", "unu", "doi", "trei", "patru", "cinci", "sase", "sapte", "opt", "noua",
     "zece", "unsprezece", "doisprezece", "treisprezece", "paisprezece", "cincisprezece",
-    "șaisprezece", "șaptesprezece", "optsprezece", "nouăsprezece"];
-  const zeci = ["", "", "douăzeci", "treizeci", "patruzeci", "cincizeci", "șaizeci", "șaptezeci", "optzeci", "nouăzeci"];
+    "saisprezece", "saptesprezece", "optsprezece", "nouasprezece"];
+  const z = ["", "", "douazeci", "treizeci", "patruzeci", "cincizeci", "saizeci", "saptezeci", "optzeci", "nouazeci"];
 
   function sub100(x: number): string {
-    if (x < 20) return unitati[x];
-    const z = Math.floor(x / 10);
-    const u = x % 10;
-    return u === 0 ? zeci[z] : `${zeci[z]} și ${unitati[u]}`;
+    if (x < 20) return u[x];
+    const zd = Math.floor(x / 10), ud = x % 10;
+    return ud === 0 ? z[zd] : `${z[zd]} si ${u[ud]}`;
   }
 
   function sub1000(x: number): string {
     if (x < 100) return sub100(x);
-    const h = Math.floor(x / 100);
-    const rest = x % 100;
-    const prefix = h === 1 ? "o sută" : h === 2 ? "două sute" : `${sub100(h)} sute`;
+    const h = Math.floor(x / 100), rest = x % 100;
+    const prefix = h === 1 ? "o suta" : h === 2 ? "doua sute" : `${sub100(h)} sute`;
     return rest === 0 ? prefix : `${prefix} ${sub100(rest)}`;
   }
 
   let result = "";
-  if (n >= 1000000) {
-    const m = Math.floor(n / 1000000);
-    result += `${sub1000(m)} ${m === 1 ? "milion" : "milioane"} `;
-    n %= 1000000;
-  }
-  if (n >= 1000) {
-    const k = Math.floor(n / 1000);
-    result += `${sub1000(k)} ${k === 1 ? "mie" : "mii"} `;
-    n %= 1000;
-  }
+  if (n >= 1_000_000) { const m = Math.floor(n / 1_000_000); result += `${sub1000(m)} ${m === 1 ? "milion" : "milioane"} `; n %= 1_000_000; }
+  if (n >= 1_000)     { const k = Math.floor(n / 1_000);     result += `${sub1000(k)} ${k === 1 ? "mie" : "mii"} `;     n %= 1_000; }
   if (n > 0) result += sub1000(n);
   return result.trim();
 }
