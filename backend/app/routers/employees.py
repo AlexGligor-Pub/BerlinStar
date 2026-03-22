@@ -1,5 +1,6 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,9 +8,10 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.employee import Employee
 from app.models.location import employee_locations
-from app.schemas.employee import EmployeeRead
+from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
 router = APIRouter()
@@ -51,3 +53,46 @@ async def list_employees(
     has_more = len(rows) > limit
     page = rows[:limit]
     return Page(items=page, next_cursor=page[-1].id if has_more else None)
+
+
+@router.post("", response_model=EmployeeRead, status_code=201)
+async def create_employee(
+    body: EmployeeCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    employee = Employee(**body.model_dump(), account_id=account_id)
+    db.add(employee)
+    await db.commit()
+    await db.refresh(employee)
+    return employee
+
+
+@router.patch("/{employee_id}", response_model=EmployeeRead)
+async def update_employee(
+    employee_id: int,
+    body: EmployeeUpdate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    employee = await db.get(Employee, employee_id)
+    if employee is None or employee.account_id != account_id or employee.is_deleted:
+        raise HTTPException(404, "Angajatul nu a fost găsit.")
+    for k, v in body.model_dump(exclude_unset=True).items():
+        setattr(employee, k, v)
+    employee.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(employee)
+    return employee
+
+
+@router.delete("/{employee_id}", status_code=204)
+async def delete_employee(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    employee = await db.get(Employee, employee_id)
+    if employee is None or employee.account_id != account_id:
+        raise HTTPException(404, "Angajatul nu a fost găsit.")
+    await soft_delete(db, Employee, employee_id)
