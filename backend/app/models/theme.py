@@ -20,10 +20,16 @@ class Theme(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     categories: Mapped[list[Category]] = relationship(
         "Category", back_populates="theme", lazy="select"
     )
+    locations: Mapped[list[Location]] = relationship(
+        "Location", secondary="location_themes", back_populates="themes"
+    )
+
+
+from .location import Location  # noqa: E402

@@ -17,3 +17,12 @@ class LocationRead(BaseModel):
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool
+
+
+class LocationDetail(LocationRead):
+    theme_ids: list[int] = []
+    employee_ids: list[int] = []
+
+
+class IdsBody(BaseModel):
+    ids: list[int]

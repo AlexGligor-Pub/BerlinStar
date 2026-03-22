@@ -2,15 +2,44 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.location import Location
-from app.schemas.location import LocationCreate, LocationRead
+from app.models.theme import Theme
+from app.models.employee import Employee
+from app.schemas.location import LocationCreate, LocationRead, LocationDetail, IdsBody
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
+
+
+def _to_detail(loc: Location) -> LocationDetail:
+    return LocationDetail(
+        id=loc.id,
+        name=loc.name,
+        description=loc.description,
+        account_id=loc.account_id,
+        created_at=loc.created_at,
+        updated_at=loc.updated_at,
+        is_deleted=loc.is_deleted,
+        theme_ids=[t.id for t in loc.themes],
+        employee_ids=[e.id for e in loc.employees],
+    )
+
+
+async def _get_with_relations(db: AsyncSession, location_id: int, account_id: int) -> Location:
+    result = await db.execute(
+        select(Location)
+        .options(selectinload(Location.themes), selectinload(Location.employees))
+        .where(Location.id == location_id, Location.account_id == account_id)
+    )
+    loc = result.scalar_one_or_none()
+    if loc is None or loc.is_deleted:
+        raise HTTPException(404, "Locația nu a fost găsită.")
+    return loc
 
 
 @router.get("", response_model=Page[LocationRead])
@@ -44,15 +73,72 @@ async def create_location(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    location = Location(
-        name=body.name,
-        description=body.description,
-        account_id=account_id,
-    )
+    location = Location(name=body.name, description=body.description, account_id=account_id)
     db.add(location)
     await db.commit()
     await db.refresh(location)
     return location
+
+
+@router.get("/{location_id}", response_model=LocationDetail)
+async def get_location(
+    location_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    loc = await _get_with_relations(db, location_id, account_id)
+    return _to_detail(loc)
+
+
+@router.patch("/{location_id}", response_model=LocationRead)
+async def update_location(
+    location_id: int,
+    body: LocationCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    location = await db.get(Location, location_id)
+    if location is None or location.account_id != account_id or location.is_deleted:
+        raise HTTPException(404, "Locația nu a fost găsită.")
+    location.name = body.name
+    location.description = body.description
+    await db.commit()
+    await db.refresh(location)
+    return location
+
+
+@router.put("/{location_id}/themes", response_model=LocationDetail)
+async def set_location_themes(
+    location_id: int,
+    body: IdsBody,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    loc = await _get_with_relations(db, location_id, account_id)
+    themes = (await db.execute(
+        select(Theme).where(Theme.id.in_(body.ids), Theme.account_id == account_id)
+    )).scalars().all()
+    loc.themes = list(themes)
+    await db.commit()
+    loc = await _get_with_relations(db, location_id, account_id)
+    return _to_detail(loc)
+
+
+@router.put("/{location_id}/employees", response_model=LocationDetail)
+async def set_location_employees(
+    location_id: int,
+    body: IdsBody,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    loc = await _get_with_relations(db, location_id, account_id)
+    employees = (await db.execute(
+        select(Employee).where(Employee.id.in_(body.ids), Employee.account_id == account_id)
+    )).scalars().all()
+    loc.employees = list(employees)
+    await db.commit()
+    loc = await _get_with_relations(db, location_id, account_id)
+    return _to_detail(loc)
 
 
 @router.delete("/{location_id}", status_code=204)

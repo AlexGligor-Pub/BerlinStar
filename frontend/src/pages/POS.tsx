@@ -1,7 +1,9 @@
-import { For, createMemo, createSignal, onMount } from "solid-js";
+import { For, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { products, loadProducts } from "../store/productsStore";
 import { catalogThemes, loadCatalogThemes } from "../store/catalogThemesStore";
 import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
+import { connectPosSSE, disconnectPosSSE } from "../store/receiptsStore";
+import { device } from "../store/deviceStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
 
@@ -21,13 +23,23 @@ export default function POS() {
   function selectCatalogTheme(id: number | null) {
     setSelectedThemeId(id);
     setCategory("Toate");
-    setPanel(0);
+    if (selectedEmployeeId() !== null) setPanel(0);
   }
 
   onMount(() => {
     loadProducts();
-    loadCatalogThemes();
-    loadEmployees();
+    loadCatalogThemes(device()?.locationId);
+    loadEmployees(device()?.locationId);
+    connectPosSSE();
+  });
+
+  onCleanup(() => disconnectPosSSE());
+
+  // Daca nu e angajat selectat si lista e incarcata → shift la panel 1
+  createEffect(() => {
+    if (employees().length > 0 && selectedEmployeeId() === null) {
+      setPanel(1);
+    }
   });
 
   const categories = createMemo(() => {
@@ -114,7 +126,11 @@ export default function POS() {
         <div class="pos-panel pos-panel--theme">
           <div class="pos-panel-inner">
             <div class="pos-theme-header">
-              <button class="btn btn-sm btn-ghost" onClick={() => setPanel(0)}>
+              <button
+                class="btn btn-sm btn-ghost"
+                disabled={selectedEmployeeId() === null}
+                onClick={() => setPanel(0)}
+              >
                 ◀ POS
               </button>
             </div>
@@ -146,19 +162,12 @@ export default function POS() {
 
               <h2 class="pos-theme-title" style="margin-top:28px">Angajati</h2>
               <div class="pos-employee-grid">
-                <button
-                  class="pos-employee-card"
-                  classList={{ "pos-employee-card--active": selectedEmployeeId() === null }}
-                  onClick={() => selectEmployee(null)}
-                >
-                  Toti
-                </button>
                 <For each={employees()}>
                   {(e) => (
                     <button
                       class="pos-employee-card"
                       classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
-                      onClick={() => selectEmployee(e.id)}
+                      onClick={() => { selectEmployee(e.id); setPanel(0); }}
                     >
                       {e.name}
                       {e.target > 0 && (

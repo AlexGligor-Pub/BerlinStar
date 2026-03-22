@@ -8,9 +8,10 @@ export interface CatalogTheme {
 
 const [catalogThemes, setCatalogThemes] = createSignal<CatalogTheme[]>([]);
 
-export async function loadCatalogThemes() {
+export async function loadCatalogThemes(locationId?: number | null) {
   try {
-    const res = await apiFetch("/api/themes?limit=100");
+    const qs = locationId != null ? `&location_id=${locationId}` : "";
+    const res = await apiFetch(`/api/themes?limit=100${qs}`);
     if (!res.ok) return;
     const data = await res.json();
     setCatalogThemes(

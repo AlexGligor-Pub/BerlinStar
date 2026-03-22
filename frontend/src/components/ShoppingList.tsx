@@ -3,7 +3,7 @@ import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, se
 import { auth } from "../store/authStore";
 import { saveReceipt } from "../store/receiptsStore";
 import { consumeResume } from "../store/resumeStore";
-import { selectedEmployeeName } from "../store/employeesStore";
+import { selectedEmployeeName, selectEmployee } from "../store/employeesStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -105,6 +105,7 @@ export default function ShoppingList() {
         total: cartTotal(),
       });
       clearCart();
+      selectEmployee(null);
       setTitlu("");
       setDescriere("");
       setDateTehn("");

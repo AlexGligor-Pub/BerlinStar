@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -106,17 +106,41 @@ async def create_receipt(
 # IMPORTANT: /events must be registered before /{receipt_id}
 @router.get("/events")
 async def receipt_events(
+    request: Request,
     account_id: int = Depends(get_account_id_from_query),
+    client_type: str = "reception",
 ):
+    if client_type == "pos":
+        broadcaster.pos_connect(account_id)
+        await broadcaster.notify_pos_count(account_id)
+
+        async def pos_stream():
+            try:
+                yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+                while True:
+                    await asyncio.sleep(5)
+                    if await request.is_disconnected():
+                        break
+                    yield ": keepalive\n\n"
+            finally:
+                broadcaster.pos_disconnect(account_id)
+                await broadcaster.notify_pos_count(account_id)
+
+        return StreamingResponse(
+            pos_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     q = broadcaster.subscribe(account_id)
 
     async def stream():
         try:
-            yield f"data: {json.dumps({'type': 'connected'})}\n\n"
+            yield f"data: {json.dumps({'type': 'connected', 'pos_count': broadcaster.get_pos_count(account_id)})}\n\n"
             while True:
                 try:
-                    event_type = await asyncio.wait_for(q.get(), timeout=30.0)
-                    yield f"data: {json.dumps({'type': event_type})}\n\n"
+                    event_data = await asyncio.wait_for(q.get(), timeout=30.0)
+                    yield f"data: {json.dumps(event_data)}\n\n"
                 except asyncio.TimeoutError:
                     yield ": keepalive\n\n"
         except asyncio.CancelledError:

@@ -26,11 +26,15 @@ async def list_themes(
     filters: str | None = None,
     sort: str | None = None,
     include_deleted: bool = False,
+    location_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
     limit = min(limit, 100)
     stmt = select(Theme).where(Theme.account_id == account_id)
+    if location_id is not None:
+        from app.models.location import Location
+        stmt = stmt.where(Theme.locations.any(Location.id == location_id))
     if not include_deleted:
         stmt = stmt.where(Theme.is_deleted == False)
     if last_id is not None:

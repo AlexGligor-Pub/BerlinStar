@@ -24,9 +24,10 @@ export function selectedEmployeeName(): string | null {
 
 export { selectedEmployeeId };
 
-export async function loadEmployees() {
+export async function loadEmployees(locationId?: number | null) {
   try {
-    const res = await apiFetch("/api/employees?limit=200&sort=name");
+    const qs = locationId != null ? `&location_id=${locationId}` : "";
+    const res = await apiFetch(`/api/employees?limit=200&sort=name${qs}`);
     if (!res.ok) return;
     const data = await res.json();
     setEmployees(data.items.map((e: any) => ({

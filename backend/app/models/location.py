@@ -12,6 +12,13 @@ employee_locations = Table(
     Column("location_id", Integer, ForeignKey("locations.id", ondelete="CASCADE"), primary_key=True),
 )
 
+location_themes = Table(
+    "location_themes",
+    Base.metadata,
+    Column("location_id", Integer, ForeignKey("locations.id", ondelete="CASCADE"), primary_key=True),
+    Column("theme_id", Integer, ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Location(Base):
     __tablename__ = "locations"
@@ -26,15 +33,19 @@ class Location(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     employees: Mapped[list[Employee]] = relationship(
         "Employee", secondary=employee_locations, back_populates="locations"
+    )
+    themes: Mapped[list[Theme]] = relationship(
+        "Theme", secondary=location_themes, back_populates="locations"
     )
     devices: Mapped[list[Device]] = relationship("Device", back_populates="location")
 
 
 from .employee import Employee  # noqa: E402
 from .device import Device  # noqa: E402
+from .theme import Theme  # noqa: E402

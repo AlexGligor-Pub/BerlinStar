@@ -30,14 +30,14 @@ class Receipt(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     pay_method: Mapped[PayMethod] = mapped_column(
         SAEnum(PayMethod, name="pay_method"), nullable=False, default=PayMethod.NEPLATIT
     )
     partial_pay: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"

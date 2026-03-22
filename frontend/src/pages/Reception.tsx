@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, connectSSE, disconnectSSE, sseStatus, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
 import { setResume } from "../store/resumeStore";
 
@@ -61,7 +61,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 navigate("/");
               }}
             >
-              Continua
+              →POS
             </button>
           </Show>
           <span class="rcard-chevron">{expanded() ? "▲" : "▼"}</span>
@@ -247,16 +247,6 @@ export default function Reception() {
             value={search()}
             onInput={(e) => setSearch(e.currentTarget.value)}
           />
-          <span
-            class="sse-status"
-            classList={{
-              "sse-status--connected":    sseStatus() === "connected",
-              "sse-status--connecting":   sseStatus() === "connecting",
-              "sse-status--disconnected": sseStatus() === "disconnected",
-            }}
-          >
-            {sseStatus() === "connected" ? "Live" : sseStatus() === "connecting" ? "Reconectare..." : "Deconectat"}
-          </span>
           <div class="filter-dropdown">
             <button
               class="btn btn-sm btn-ghost filter-dropdown-btn"
@@ -293,6 +283,7 @@ export default function Reception() {
             </Show>
           </div>
           <span class="reception-count">{filtered().length} / {receipts().length} bonuri</span>
+          <span class="reception-pos-count" title="POS-uri active">· {posCount()} POS</span>
         </div>
       </div>
 

@@ -133,8 +133,32 @@ export type SseStatus = "connected" | "connecting" | "disconnected";
 const [sseStatus, setSseStatus] = createSignal<SseStatus>("disconnected");
 export { sseStatus };
 
+const [posCount, setPosCount] = createSignal(0);
+export { posCount };
+
 let _es: EventSource | null = null;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+let _posEs: EventSource | null = null;
+
+export function connectPosSSE(): void {
+  if (_posEs) return;
+  const token = auth.token;
+  if (!token) return;
+  const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}&client_type=pos`);
+  _posEs = es;
+  es.onerror = () => {
+    if (es.readyState === EventSource.CLOSED) {
+      es.close();
+      _posEs = null;
+      setTimeout(() => connectPosSSE(), 5000);
+    }
+  };
+}
+
+export function disconnectPosSSE(): void {
+  if (_posEs) { _posEs.close(); _posEs = null; }
+}
 
 export function connectSSE(): void {
   if (_es) return;
@@ -151,13 +175,15 @@ function _openSSE(): void {
   const token = auth.token;
   if (!token) return;
   setSseStatus("connecting");
-  const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}`);
+  const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}&client_type=reception`);
   _es = es;
   es.onopen = () => setSseStatus("connected");
   es.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
       if (data.type === "receipts_changed") loadReceipts();
+      else if (data.type === "connected" && data.pos_count != null) setPosCount(data.pos_count);
+      else if (data.type === "pos_count") setPosCount(data.count);
     } catch {}
   };
   es.onerror = () => {
