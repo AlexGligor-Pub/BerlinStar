@@ -1,16 +1,19 @@
 from __future__ import annotations
 import asyncio
 import json
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import select, func, extract, update, or_, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broadcaster import broadcaster
 from app.database import get_db
 from app.dependencies import get_account_id, get_account_id_from_query
-from app.models.receipt import Receipt, ReceiptItem
+from app.models.employee import Employee
+from app.models.receipt import Receipt, ReceiptItem, PayMethod
 from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
 from app.models.client import Client
 from app.models.location import Location
@@ -23,6 +26,35 @@ from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
 router = APIRouter()
+
+
+async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids: set[int]) -> None:
+    """Recalculează current_target_accumulation pentru angajații afectați (luna curentă)."""
+    if not employee_ids:
+        return
+    now = datetime.now(timezone.utc)
+    rows = (await db.execute(
+        select(ReceiptItem.employee_id, func.coalesce(func.sum(ReceiptItem.price * ReceiptItem.qty), 0))
+        .join(Receipt, Receipt.id == ReceiptItem.receipt_id)
+        .where(
+            ReceiptItem.employee_id.in_(employee_ids),
+            Receipt.account_id == account_id,
+            Receipt.is_deleted == False,
+            Receipt.pay_method != PayMethod.NEPLATIT,
+            extract("year",  Receipt.created_at) == now.year,
+            extract("month", Receipt.created_at) == now.month,
+        )
+        .group_by(ReceiptItem.employee_id)
+    )).all()
+
+    totals = {emp_id: Decimal(str(total)) for emp_id, total in rows}
+
+    for emp_id in employee_ids:
+        await db.execute(
+            update(Employee)
+            .where(Employee.id == emp_id)
+            .values(current_target_accumulation=totals.get(emp_id, Decimal("0.00")))
+        )
 
 
 def _serialize(receipt: Receipt) -> dict:
@@ -42,6 +74,9 @@ async def list_receipts(
     filters: str | None = None,
     sort: str | None = None,
     include_deleted: bool = False,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    unpaid_days: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -60,6 +95,22 @@ async def list_receipts(
         stmt = stmt.where(Receipt.id < last_id)
     if q:
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
+
+    # Filtru dupa data cu OR pentru neplatite recente
+    date_conditions = []
+    if date_from is not None or date_to is not None:
+        range_clauses = []
+        if date_from is not None:
+            range_clauses.append(Receipt.created_at >= datetime(date_from.year, date_from.month, date_from.day, 0, 0, 0, tzinfo=timezone.utc))
+        if date_to is not None:
+            dt_to = datetime(date_to.year, date_to.month, date_to.day, 0, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
+            range_clauses.append(Receipt.created_at < dt_to)
+        date_conditions.append(and_(*range_clauses))
+    if unpaid_days is not None and unpaid_days > 0:
+        past = datetime.now(timezone.utc) - timedelta(days=unpaid_days)
+        date_conditions.append(and_(Receipt.created_at >= past, Receipt.pay_method == PayMethod.NEPLATIT))
+    if date_conditions:
+        stmt = stmt.where(or_(*date_conditions))
     stmt = apply_filters(stmt, Receipt, filters)
     stmt = apply_sort(stmt, Receipt, sort)
     stmt = stmt.limit(limit + 1)
@@ -100,6 +151,10 @@ async def create_receipt(
             employee_id=it.employee_id,
         ))
 
+    await db.commit()
+
+    emp_ids = {it.employee_id for it in body.items if it.employee_id}
+    await _refresh_accumulations(db, account_id, emp_ids)
     await db.commit()
 
     result = (await db.execute(
@@ -193,10 +248,20 @@ async def patch_receipt(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+
+    emp_id_rows = (await db.execute(
+        select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
+    )).scalars().all()
+    emp_ids = {eid for eid in emp_id_rows if eid}
+
     receipt.pay_method = body.pay_method
     receipt.partial_pay = body.partial_pay
-    receipt.updated_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+    receipt.updated_at = datetime.now(timezone.utc)
     await db.commit()
+
+    await _refresh_accumulations(db, account_id, emp_ids)
+    await db.commit()
+
     result = (await db.execute(
         select(Receipt)
         .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
@@ -297,6 +362,9 @@ async def assign_number(
                 "nr_reg_com": company.nr_reg_com,
                 "phone": company.phone,
                 "tva_percentage": company.tva_percentage,
+                "logo_path": company.logo_path,
+                "background_path": company.background_path,
+                "website": company.website,
             }
 
     # Load disclaimer
@@ -318,5 +386,13 @@ async def delete_receipt(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+
+    emp_id_rows = (await db.execute(
+        select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
+    )).scalars().all()
+    emp_ids = {eid for eid in emp_id_rows if eid}
+
     await soft_delete(db, Receipt, receipt_id)
+    await _refresh_accumulations(db, account_id, emp_ids)
+    await db.commit()
     await broadcaster.notify(account_id)

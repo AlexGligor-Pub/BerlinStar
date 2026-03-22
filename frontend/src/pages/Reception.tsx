@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
+import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta } from "../utils/generateDocuments";
@@ -6,6 +7,94 @@ import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
+
+const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+const RO_DAYS_SHORT = ["Lu","Ma","Mi","Jo","Vi","Sâ","Du"];
+
+function toYMD(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function fmtDateShort(ymd: string): string {
+  const d = new Date(ymd + "T12:00:00");
+  return `${d.getDate()} ${RO_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function MiniCalendar(props: {
+  value: string;
+  onChange: (v: string) => void;
+  minDate?: string;
+  maxDate: string;
+}) {
+  const initDate = new Date(props.value + "T12:00:00");
+  const [viewYear, setViewYear] = createSignal(initDate.getFullYear());
+  const [viewMonth, setViewMonth] = createSignal(initDate.getMonth());
+
+  function prevMonth() {
+    if (viewMonth() === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    const max = new Date(props.maxDate + "T12:00:00");
+    if (viewYear() === max.getFullYear() && viewMonth() >= max.getMonth()) return;
+    if (viewMonth() === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+  }
+
+  const cells = createMemo(() => {
+    const year = viewYear(), month = viewMonth();
+    const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Mon=0
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const arr: Array<{ day: number | null; date: string | null }> = [];
+    for (let i = 0; i < firstDow; i++) arr.push({ day: null, date: null });
+    for (let d = 1; d <= daysInMonth; d++) {
+      arr.push({ day: d, date: `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}` });
+    }
+    return arr;
+  });
+
+  const canNext = createMemo(() => {
+    const max = new Date(props.maxDate + "T12:00:00");
+    return !(viewYear() === max.getFullYear() && viewMonth() === max.getMonth());
+  });
+
+  const todayYMD = toYMD(new Date());
+
+  return (
+    <div class="mini-cal">
+      <div class="mini-cal-header">
+        <button class="mini-cal-nav" type="button" onClick={prevMonth}>‹</button>
+        <span class="mini-cal-title">{RO_MONTHS_FULL[viewMonth()]} {viewYear()}</span>
+        <button class="mini-cal-nav" type="button" onClick={nextMonth} disabled={!canNext()}>›</button>
+      </div>
+      <div class="mini-cal-grid">
+        <For each={RO_DAYS_SHORT}>{(d) => <span class="mini-cal-dow">{d}</span>}</For>
+        <For each={cells()}>
+          {(cell) => {
+            if (!cell.date) return <span />;
+            const disabled = () =>
+              cell.date! > props.maxDate ||
+              (props.minDate !== undefined && cell.date! < props.minDate);
+            return (
+              <button
+                type="button"
+                class="mini-cal-day"
+                classList={{
+                  "mini-cal-day--selected": cell.date === props.value,
+                  "mini-cal-day--today": cell.date === todayYMD && cell.date !== props.value,
+                  "mini-cal-day--disabled": disabled(),
+                }}
+                disabled={disabled()}
+                onClick={() => props.onChange(cell.date!)}
+              >{cell.day}</button>
+            );
+          }}
+        </For>
+      </div>
+    </div>
+  );
+}
 
 interface ClientItem {
   id: number;
@@ -435,9 +524,11 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="receipt-divider receipt-divider--dashed" />
 
             <div class="receipt-actions">
-              <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
-                Sterge
-              </button>
+              <Show when={adminVisible()}>
+                <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
+                  Sterge
+                </button>
+              </Show>
               <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
                 {docLoading() === "deviz" ? "..." : "Deviz"}
               </button>
@@ -540,8 +631,36 @@ export default function Reception() {
   const [menuOpen, setMenuOpen] = createSignal(false);
   const [search, setSearch] = createSignal("");
 
+  const todayYMD = toYMD(new Date());
+  const [dateStart, setDateStart] = createSignal(todayYMD);
+  const [dateEnd, setDateEnd] = createSignal(todayYMD);
+  const [showDateModal, setShowDateModal] = createSignal(false);
+  const [draftStart, setDraftStart] = createSignal(todayYMD);
+  const [draftEnd, setDraftEnd] = createSignal(todayYMD);
+
+  const dateRangeLabel = createMemo(() => {
+    if (dateStart() === todayYMD && dateEnd() === todayYMD) return "AZI";
+    if (dateStart() === dateEnd()) return fmtDateShort(dateStart());
+    return `${fmtDateShort(dateStart())} - ${fmtDateShort(dateEnd())}`;
+  });
+
+  function openDateModal() {
+    setDraftStart(dateStart());
+    setDraftEnd(dateEnd());
+    setShowDateModal(true);
+  }
+
+  function applyDateFilter() {
+    const ds = draftStart();
+    const de = draftEnd();
+    setDateStart(ds);
+    setDateEnd(de);
+    setShowDateModal(false);
+    loadReceipts(ds, de);
+  }
+
   onMount(() => {
-    loadReceipts();
+    loadReceipts(todayYMD, todayYMD);
     connectSSE();
   });
 
@@ -576,7 +695,12 @@ export default function Reception() {
   return (
     <div class="page-content">
       <div class="page-header">
-        <h1 class="page-title">Receptie</h1>
+        <h1 class="page-title">
+          Receptie
+          <button class="btn btn-sm btn-ghost date-range-btn" onClick={openDateModal}>
+            {dateRangeLabel()}
+          </button>
+        </h1>
         <div class="reception-header-right">
           <input
             class="input reception-search"
@@ -643,6 +767,39 @@ export default function Reception() {
         </div>
       </Show>
 
+      <Show when={showDateModal()}>
+        <div class="sl-modal-overlay" onClick={() => setShowDateModal(false)}>
+          <div class="date-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Filtru dupa data</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>✕</button>
+            </div>
+            <div class="date-modal-body">
+              <div class="date-modal-col">
+                <div class="date-modal-col-label">Data inceput</div>
+                <MiniCalendar
+                  value={draftStart()}
+                  onChange={(v) => { setDraftStart(v); if (v > draftEnd()) setDraftEnd(v); }}
+                  maxDate={todayYMD}
+                />
+              </div>
+              <div class="date-modal-col">
+                <div class="date-modal-col-label">Data sfarsit</div>
+                <MiniCalendar
+                  value={draftEnd()}
+                  onChange={setDraftEnd}
+                  minDate={draftStart()}
+                  maxDate={todayYMD}
+                />
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>Anuleaza</button>
+              <button class="btn btn-primary btn-sm" onClick={applyDateFilter}>Aplica</button>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

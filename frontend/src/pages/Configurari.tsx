@@ -1857,7 +1857,7 @@ function CompaniiPanel() {
     if (!id) return;
     setBgUploading(true);
     try {
-      const compressed = await compressToPng(file);
+      const compressed = await compressToPng(file, 1_000_000);
       const fd = new FormData();
       fd.append("file", compressed);
       const token = auth.token;

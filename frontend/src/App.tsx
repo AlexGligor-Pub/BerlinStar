@@ -1,6 +1,7 @@
-import { Router, Route, useNavigate } from "@solidjs/router";
+import { Router, Route, useNavigate, Navigate } from "@solidjs/router";
 import { Show, createEffect } from "solid-js";
 import { auth, trialExpired } from "./store/authStore";
+import { adminVisible } from "./store/adminStore";
 import { deviceReady } from "./store/deviceStore";
 import NavBar from "./components/NavBar";
 import DeviceSetupModal from "./components/DeviceSetupModal";
@@ -40,7 +41,11 @@ export default function App() {
       <Route path="/no-access" component={NoAccess} />
       <Route path="/" component={() => <Protected component={POS} />} />
       <Route path="/receptie" component={() => <Protected component={Reception} />} />
-      <Route path="/configurari" component={() => <Protected component={Configurari} />} />
+      <Route path="/configurari" component={() => (
+        <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Protected component={Configurari} />
+        </Show>
+      )} />
       <Route path="/clienti" component={() => <Protected component={Clienti} />} />
     </Router>
   );

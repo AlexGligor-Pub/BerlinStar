@@ -165,8 +165,8 @@ async def upload_background(
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, "Fișierul trebuie să fie o imagine.")
     data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depăși 5MB.")
+    if len(data) > 1 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea de fundal nu poate depăși 1MB.")
     old_url = company.background_path
     url = upload_image(account_id, "companies/backgrounds", data, file.content_type)
     company.background_path = url

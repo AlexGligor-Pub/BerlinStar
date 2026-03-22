@@ -2,8 +2,10 @@ import { useNavigate } from "@solidjs/router";
 import { auth, logout, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
 import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
+import { adminVisible, setAdminVisible } from "../store/adminStore";
 import { Show, createSignal, onCleanup, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
+import { API_BASE } from "../utils/api";
 
 export default function NavBar() {
   const navigate = useNavigate();
@@ -34,6 +36,35 @@ export default function NavBar() {
   function handleNavigate(path: string) {
     setOpen(false);
     navigate(path);
+  }
+
+  const [showAdminModal, setShowAdminModal] = createSignal(false);
+  const [adminPassword, setAdminPassword] = createSignal("");
+  const [adminError, setAdminError] = createSignal("");
+  const [adminLoading, setAdminLoading] = createSignal(false);
+
+  async function handleAdminSubmit(e: Event) {
+    e.preventDefault();
+    setAdminError("");
+    setAdminLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: auth.user, password: adminPassword() }),
+      });
+      if (res.ok) {
+        setAdminVisible(true);
+        setShowAdminModal(false);
+        setAdminPassword("");
+      } else {
+        setAdminError("Parolă incorectă.");
+      }
+    } catch {
+      setAdminError("Eroare de conexiune.");
+    } finally {
+      setAdminLoading(false);
+    }
   }
 
   // Inchide dropdown-ul cand se face click in afara
@@ -80,16 +111,31 @@ export default function NavBar() {
                   </svg>
                   <span>Clienți</span>
                 </button>
-                <button class="logo-nav-tile" onClick={() => handleNavigate("/configurari")}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  <span>Configurări</span>
-                </button>
+                <Show when={adminVisible()}>
+                  <button class="logo-nav-tile" onClick={() => handleNavigate("/configurari")}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Configurări</span>
+                  </button>
+                </Show>
               </div>
               <div class="logo-dropdown-divider" />
               <button class="logo-dropdown-item" onClick={() => { toggleTheme(); }} aria-label="Schimba tema">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 <span style="margin-left:8px">{{ light: "Light", dark: "Dark", gray: "Gray", apple: "Navy" }[theme()]}</span>
               </button>
+              <div class="logo-dropdown-divider" />
+              <Show
+                when={!adminVisible()}
+                fallback={
+                  <button class="logo-dropdown-item" onClick={() => { setAdminVisible(false); }}>
+                    Anulează vizibilitate
+                  </button>
+                }
+              >
+                <button class="logo-dropdown-item" onClick={() => { setAdminPassword(""); setAdminError(""); setShowAdminModal(true); }}>
+                  Vizibilitate Admin
+                </button>
+              </Show>
               <Show when={auth.user}>
                 <div class="logo-dropdown-divider" />
                 <button class="logo-dropdown-item logo-dropdown-danger" onClick={handleLogout}>
@@ -104,6 +150,39 @@ export default function NavBar() {
           <span class="navbar-trial-badge">{trialBanner()}</span>
         </Show>
       </nav>
+
+      <Show when={showAdminModal()}>
+        <div class="sl-modal-overlay" onClick={() => setShowAdminModal(false)}>
+          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Vizibilitate Admin</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdminModal(false)}>✕</button>
+            </div>
+            <form onSubmit={handleAdminSubmit}>
+              <div class="sl-modal-body" style="padding:20px 24px">
+                <p style="margin:0 0 12px;color:var(--text-muted);font-size:14px">Introdu parola contului pentru a activa vizibilitatea admin.</p>
+                <input
+                  type="password"
+                  class="input"
+                  placeholder="Parolă"
+                  value={adminPassword()}
+                  onInput={(e) => setAdminPassword(e.currentTarget.value)}
+                  autofocus
+                />
+                <Show when={adminError()}>
+                  <p style="margin:8px 0 0;color:var(--danger);font-size:13px">{adminError()}</p>
+                </Show>
+              </div>
+              <div class="sl-modal-footer">
+                <button type="button" class="btn btn-ghost btn-sm" onClick={() => setShowAdminModal(false)}>Anulează</button>
+                <button type="submit" class="btn btn-primary btn-sm" disabled={adminLoading()}>
+                  {adminLoading() ? "..." : "Activează"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Show>
     </>
   );
 }

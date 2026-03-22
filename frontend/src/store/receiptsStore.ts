@@ -67,9 +67,18 @@ function loadCache(): Receipt[] {
 
 const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
 
-export async function loadReceipts() {
+// Parametrii ultimului load — folositi de SSE scheduleReload
+let _lastDateFrom: string | null = null;
+let _lastDateTo: string | null = null;
+
+export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null) {
+  if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
+  if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
   try {
-    const res = await apiFetch(`/api/receipts?limit=200&sort=-id`);
+    let qs = `/api/receipts?limit=500&sort=-id&unpaid_days=30`;
+    if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
+    if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
+    const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = await res.json();
     const mapped: Receipt[] = data.items.map(mapFromApi);

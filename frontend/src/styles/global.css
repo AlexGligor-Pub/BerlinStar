@@ -677,6 +677,12 @@ body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.product-grid::-webkit-scrollbar {
+  display: none;
 }
 
 .type-cycle-btn {
@@ -1389,6 +1395,158 @@ body {
 .reception-pos-count {
   font-size: 0.85rem;
   color: var(--success);
+}
+
+/* ===== DATE RANGE BUTTON ===== */
+.date-range-btn {
+  margin-left: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.date-range-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ===== DATE MODAL ===== */
+.date-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg, 0 8px 40px rgba(0,0,0,0.18));
+  padding: 0;
+  width: auto;
+  max-width: 96vw;
+  margin: 16px;
+}
+
+.date-modal-body {
+  display: flex;
+  gap: 24px;
+  padding: 20px 24px;
+  flex-wrap: wrap;
+}
+
+.date-modal-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.date-modal .sl-modal-header {
+  padding: 16px 24px 12px;
+}
+
+.date-modal .sl-modal-footer {
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.date-modal-col-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+/* ===== MINI CALENDAR ===== */
+.mini-cal {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  user-select: none;
+}
+
+.mini-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mini-cal-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  flex: 1;
+  text-align: center;
+}
+
+.mini-cal-nav {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.1s;
+}
+.mini-cal-nav:hover:not(:disabled) {
+  background: var(--surface2);
+}
+.mini-cal-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.mini-cal-dow {
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 2px 0;
+}
+
+.mini-cal-day {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.1s, color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+.mini-cal-day:hover:not(:disabled) {
+  background: var(--surface2);
+}
+.mini-cal-day--today {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.mini-cal-day--selected {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.mini-cal-day--disabled {
+  opacity: 0.25;
+  cursor: default;
 }
 
 .reception-search {

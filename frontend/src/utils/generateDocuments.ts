@@ -19,6 +19,9 @@ export interface DocContext {
     nr_reg_com?: string | null;
     phone?: string | null;
     tva_percentage?: number | null;
+    logo_path?: string | null;
+    background_path?: string | null;
+    website?: string | null;
   } | null;
   disclaimer: { title: string; text: string } | null;
 }
@@ -66,6 +69,16 @@ function fmtNow() {
   return new Date().toLocaleDateString("ro-RO");
 }
 
+function docFilename(prefix: string, titlu: string): string {
+  const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14); // YYYYMMDDHHmmss
+  const slug = titlu
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // scoate diacritice
+    .replace(/[^a-zA-Z0-9 _-]/g, "")                 // scoate caractere speciale
+    .trim().replace(/\s+/g, "_")
+    .slice(0, 60);
+  return `${prefix}_${slug}_${ts}.pdf`;
+}
+
 function lei(n: number) {
   return `${n.toFixed(2)} lei`;
 }
@@ -79,7 +92,7 @@ function hline(doc: any, y: number, color = C.lightGray, w = 0.2): void {
   doc.line(ML, y, PAGE_W - MR, y);
 }
 
-/** Header document: titlu + serie/nr + data, fara fundal */
+/** Header document: titlu + serie/nr + data (stanga), logo (dreapta via drawLogo) */
 function drawHeader(doc: any, title: string, serie: string, nr: number, date: string): number {
   let y = MT;
 
@@ -89,19 +102,20 @@ function drawHeader(doc: any, title: string, serie: string, nr: number, date: st
   doc.setTextColor(...C.black);
   doc.text(ro(title), ML, y);
 
-  // Serie + Nr + Data — dreapta
+  // Serie + Nr + Data — stanga, sub titlu
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...C.gray);
+  y += 6;
   if (serie) {
-    doc.text(`Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}`, PAGE_W - MR, y - 4, { align: "right" });
+    doc.text(`Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}`, ML, y);
   } else {
-    doc.text(`Nr.: ${String(nr).padStart(2, "0")}`, PAGE_W - MR, y - 4, { align: "right" });
+    doc.text(`Nr.: ${String(nr).padStart(2, "0")}`, ML, y);
   }
-  doc.text(`Data: ${date}`, PAGE_W - MR, y + 1, { align: "right" });
-
   y += 4;
-  hline(doc, y, C.black, 0.5);
+  doc.text(`Data: ${date}`, ML, y);
+
+  y += 5;
   return y + 5;
 }
 
@@ -167,11 +181,12 @@ function drawClientBlock(
 
 /** Tabel articole cu TVA per linie */
 function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number): number {
-  const rows = r.items.map((item) => {
+  const rows = r.items.map((item, idx) => {
     const net = item.price * item.qty;
     const tva = net * (tvaPct / 100);
     const total = net + tva;
     return [
+      String(idx + 1),
       ro(item.name),
       String(item.qty),
       ro(item.unit),
@@ -184,7 +199,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
 
   autoTable(doc, {
     startY: y,
-    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]],
+    head: [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]],
     body: rows,
     styles: {
       fontSize: 7.5,
@@ -203,13 +218,14 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
     },
     alternateRowStyles: {},
     columnStyles: {
-      0: { cellWidth: "auto" },
-      1: { halign: "center", cellWidth: 11 },
+      0: { halign: "center", cellWidth: 8, textColor: [...C.gray] },
+      1: { cellWidth: "auto" },
       2: { halign: "center", cellWidth: 11 },
-      3: { halign: "right", cellWidth: 22 },
+      3: { halign: "center", cellWidth: 11 },
       4: { halign: "right", cellWidth: 22 },
       5: { halign: "right", cellWidth: 22 },
-      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+      6: { halign: "right", cellWidth: 22 },
+      7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
     },
     margin: { left: ML, right: MR },
     tableWidth: CW,
@@ -318,21 +334,6 @@ function drawSignatures(doc: any, leftLabel: string, rightLabel: string, y: numb
   return y + 12;
 }
 
-/** Footer pagina */
-function drawFooter(doc: any): void {
-  const n = (doc as any).internal.getNumberOfPages();
-  const now = fmtNow();
-  for (let i = 1; i <= n; i++) {
-    doc.setPage(i);
-    const h = doc.internal.pageSize.getHeight();
-    hline(doc, h - 10, C.veryLight, 0.2);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...C.lightGray);
-    doc.text(`Generat: ${now}`, ML, h - 5.5);
-    doc.text(`Pagina ${i} / ${n}`, PAGE_W - MR, h - 5.5, { align: "right" });
-  }
-}
 
 async function loadPdf() {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
@@ -342,6 +343,99 @@ async function loadPdf() {
   return { jsPDF, autoTable };
 }
 
+/** Incarca o imagine remote ca dataURL (via Image + canvas, fara CORS fetch) */
+async function loadImageAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("load failed"));
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || 300;
+    canvas.height = img.naturalHeight || 300;
+    canvas.getContext("2d")!.drawImage(img, 0, 0);
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+/** Deseneaza fundalul cu 20% opacitate pe pagina curenta (apeleaza inainte de orice alt continut) */
+async function drawBackground(doc: any, url: string | null | undefined): Promise<void> {
+  if (!url) return;
+  try {
+    const dataUrl = await loadImageAsDataUrl(url);
+    if (!dataUrl) return;
+    const img = new Image();
+    await new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); img.src = dataUrl; });
+    const canvas = document.createElement("canvas");
+    canvas.width = 794; canvas.height = 1123; // ~A4 la 96dpi
+    const ctx2d = canvas.getContext("2d")!;
+    ctx2d.fillStyle = "#ffffff";
+    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
+    ctx2d.globalAlpha = 0.5;
+    ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const faded = canvas.toDataURL("image/png");
+    doc.addImage(faded, "PNG", 0, 0, PAGE_W, PAGE_H, "bg", "FAST");
+  } catch { /* ignore */ }
+}
+
+/** Deseneaza logo-ul in coltul din dreapta-sus */
+async function drawLogo(doc: any, url: string | null | undefined, y: number): Promise<void> {
+  if (!url) return;
+  try {
+    const dataUrl = await loadImageAsDataUrl(url);
+    if (!dataUrl) return;
+    const logoH = 12;
+    const logoW = 30;
+    const x = PAGE_W - MR - logoW;
+    doc.addImage(dataUrl, "PNG", x, y, logoW, logoH, undefined, "FAST");
+  } catch { /* ignore */ }
+}
+
+/** Genereaza QR code ca data URL */
+async function qrDataUrl(text: string): Promise<string | null> {
+  try {
+    const QRCode = await import("qrcode");
+    return await QRCode.toDataURL(text, { width: 80, margin: 1, errorCorrectionLevel: "M" });
+  } catch {
+    return null;
+  }
+}
+
+/** Footer cu website + QR code */
+async function drawFooterWithBranding(doc: any, website: string | null | undefined): Promise<void> {
+  const n = (doc as any).internal.getNumberOfPages();
+  const now = fmtNow();
+  const qr = website ? await qrDataUrl(website) : null;
+
+  for (let i = 1; i <= n; i++) {
+    doc.setPage(i);
+    const h = doc.internal.pageSize.getHeight();
+    hline(doc, h - 10, C.veryLight, 0.2);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.lightGray);
+    doc.text(`Generat: ${now}`, ML, h - 5.5);
+    doc.text(`Pagina ${i} / ${n}`, PAGE_W - MR, h - 5.5, { align: "right" });
+
+    if (website) {
+      doc.setFontSize(6.5);
+      doc.setTextColor(...C.gray);
+      doc.text(website, PAGE_W / 2, h - 5.5, { align: "center" });
+    }
+
+    if (qr && i === 1) {
+      const qrSize = 12;
+      doc.addImage(qr, "PNG", PAGE_W / 2 - qrSize / 2, h - 10 - qrSize - 1, qrSize, qrSize, undefined, "FAST");
+    }
+  }
+}
+
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
 export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> {
@@ -349,6 +443,10 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
+
+  // Background si logo
+  await drawBackground(doc, ctx.company?.background_path);
+  await drawLogo(doc, ctx.company?.logo_path, MT);
 
   let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
 
@@ -407,9 +505,9 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
 
   y = drawDisclaimer(doc, ctx.disclaimer, y);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
-  drawFooter(doc);
+  await drawFooterWithBranding(doc, ctx.company?.website);
 
-  doc.save(`deviz-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
+  doc.save(docFilename("deviz", r.titlu));
 }
 
 // ─── FACTURA ──────────────────────────────────────────────────────────────────
@@ -419,6 +517,9 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
+
+  await drawBackground(doc, ctx.company?.background_path);
+  await drawLogo(doc, ctx.company?.logo_path, MT);
 
   let y = drawHeader(doc, "FACTURA FISCALA", ctx.serie, ctx.nr, date);
 
@@ -453,9 +554,9 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 
   y = drawDisclaimer(doc, ctx.disclaimer, y);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
-  drawFooter(doc);
+  await drawFooterWithBranding(doc, ctx.company?.website);
 
-  doc.save(`factura-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
+  doc.save(docFilename("factura", r.titlu));
 }
 
 // ─── CHITANTA ────────────────────────────────────────────────────────────────
@@ -468,6 +569,9 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   const tvaAmt = totalNet * (tvaPct / 100);
   const totalFinal = totalNet + tvaAmt;
   const date = fmtDate(r.date);
+
+  await drawBackground(doc, ctx.company?.background_path);
+  await drawLogo(doc, ctx.company?.logo_path, MT);
 
   let y = drawHeader(doc, "CHITANTA", ctx.serie, ctx.nr, date);
   y += 4;
@@ -535,6 +639,20 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
     y += 6;
   }
 
+  if (r.facturaNr > 0) {
+    const facturaRef = r.facturaSerie
+      ? `Factura nr. ${r.facturaSerie}${r.facturaNr}`
+      : `Factura nr. ${r.facturaNr}`;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.gray);
+    doc.text("Achita conform", ML, y);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.black);
+    doc.text(facturaRef, ML + 34, y);
+    y += 6;
+  }
+
   y += 8;
 
   // Casier + date companie
@@ -566,8 +684,8 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
     }
   }
 
-  drawFooter(doc);
-  doc.save(`chitanta-${ctx.serie || "BS"}${ctx.nr}-${date.replace(/\./g, "-")}.pdf`);
+  await drawFooterWithBranding(doc, ctx.company?.website);
+  doc.save(docFilename("chitanta", r.titlu));
 }
 
 // ─── Suma in litere ───────────────────────────────────────────────────────────

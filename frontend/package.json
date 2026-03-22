@@ -12,10 +12,12 @@
     "@solidjs/router": "^0.16.1",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
+    "qrcode": "^1.5.4",
     "solid-js": "^1.9.11"
   },
   "devDependencies": {
     "@types/node": "^24.12.0",
+    "@types/qrcode": "^1.5.5",
     "typescript": "~5.9.3",
     "vite": "^5.4.21",
     "vite-plugin-solid": "^2.11.11"

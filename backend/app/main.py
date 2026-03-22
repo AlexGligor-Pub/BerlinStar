@@ -1,4 +1,5 @@
 import os
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,12 +7,22 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from app.logging_config import setup_logging
+from app.middleware import RequestLoggingMiddleware
+from app.database import engine
+
+setup_logging()
+log = logging.getLogger("berlinstar")
+
 from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    log.info("BerlinStar POS API starting up")
     yield
+    log.info("BerlinStar POS API shutting down")
+    await engine.dispose()
 
 
 app = FastAPI(
@@ -20,6 +31,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:2000").split(","),
@@ -45,4 +57,13 @@ app.include_router(registers.router,  prefix="/api/registers",  tags=["registers
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    from sqlalchemy import text
+    from app.database import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        db_status = "ok"
+    except Exception as exc:
+        log.error("Health check: DB unreachable: %s", exc)
+        db_status = "error"
+    return {"status": "ok" if db_status == "ok" else "degraded", "db": db_status}

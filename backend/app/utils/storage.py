@@ -1,7 +1,10 @@
 import boto3
+import logging
 import os
 import uuid
 from botocore.client import Config
+
+log = logging.getLogger("berlinstar.storage")
 
 
 def _s3_client():
@@ -38,5 +41,5 @@ def delete_image_by_url(url: str) -> None:
             return
         key = url[len(public_url) + 1:]
         _s3_client().delete_object(Bucket=bucket, Key=key)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("delete_image_by_url failed for %s: %s", url, exc)
