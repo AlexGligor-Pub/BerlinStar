@@ -206,17 +206,17 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number): number
   return (doc as any).lastAutoTable.finalY + 3;
 }
 
-/** Sectiune totale (cu TVA optional) */
+/** Sectiune totale — TVA afisat intotdeauna (0% daca nu e platitor TVA) */
 function drawTotals(
   doc: any, r: Receipt, y: number, tvaPct: number | null | undefined
 ): number {
   const rightX = PAGE_W - MR;
   const labelX = rightX - 60;
 
-  const hasTva = tvaPct != null && tvaPct > 0;
+  const pct = tvaPct ?? 0;
   const net = r.total;
-  const tvaAmt = hasTva ? net * (tvaPct! / 100) : 0;
-  const totalCuTva = net + tvaAmt;
+  const tvaAmt = net * (pct / 100);
+  const totalFinal = net + tvaAmt;
 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
@@ -225,34 +225,32 @@ function drawTotals(
   doc.setFontSize(8.5);
   doc.setTextColor(...C.gray);
 
-  if (hasTva) {
-    // Subtotal fara TVA
-    doc.text("Subtotal (fara TVA):", labelX, y);
-    doc.text(lei(net), rightX, y, { align: "right" });
-    y += 4.5;
+  // Subtotal fara TVA
+  doc.text("Subtotal (fara TVA):", labelX, y);
+  doc.text(lei(net), rightX, y, { align: "right" });
+  y += 4.5;
 
-    // TVA
-    doc.text(`TVA ${tvaPct}%:`, labelX, y);
-    doc.text(lei(tvaAmt), rightX, y, { align: "right" });
-    y += 4.5;
+  // TVA
+  doc.text(`TVA ${pct}%:`, labelX, y);
+  doc.text(lei(tvaAmt), rightX, y, { align: "right" });
+  y += 4.5;
 
-    hline(doc, y, C.lightGray, 0.2);
-    y += 4;
-  }
+  hline(doc, y, C.lightGray, 0.2);
+  y += 4;
 
   // Total de plata
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...C.black);
   doc.text("TOTAL DE PLATA:", labelX, y);
-  doc.text(lei(hasTva ? totalCuTva : net), rightX, y, { align: "right" });
+  doc.text(lei(totalFinal), rightX, y, { align: "right" });
   y += 5;
 
   if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...C.gray);
-    const restVal = (hasTva ? totalCuTva : net) - r.partialPay;
+    const restVal = totalFinal - r.partialPay;
     doc.text(`Avans: ${lei(r.partialPay)}`, labelX, y);
     doc.text(`Rest: ${lei(restVal)}`, rightX, y, { align: "right" });
     y += 4.5;
@@ -437,10 +435,10 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  const tvaPct = ctx.company?.tva_percentage;
-  const hasTva = tvaPct != null && tvaPct > 0;
+  const tvaPct = ctx.company?.tva_percentage ?? 0;
   const totalNet = r.total;
-  const totalFinal = hasTva ? totalNet * (1 + tvaPct! / 100) : totalNet;
+  const tvaAmt = totalNet * (tvaPct / 100);
+  const totalFinal = totalNet + tvaAmt;
   const date = fmtDate(r.date);
 
   let y = drawHeader(doc, "CHITANTA", ctx.serie, ctx.nr, date);
@@ -471,14 +469,12 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   doc.text(lei(totalFinal), ML + 26, y);
   y += 6;
 
-  // TVA breakdown daca exista
-  if (hasTva) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...C.gray);
-    doc.text(`(din care: net ${lei(totalNet)}, TVA ${tvaPct}% = ${lei(totalNet * tvaPct! / 100)})`, ML + 26, y);
-    y += 4;
-  }
+  // TVA breakdown
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  doc.text(`(din care: net ${lei(totalNet)}, TVA ${tvaPct}% = ${lei(tvaAmt)})`, ML + 26, y);
+  y += 4;
 
   // In litere
   const inLitere = sumInLitere(totalFinal);
