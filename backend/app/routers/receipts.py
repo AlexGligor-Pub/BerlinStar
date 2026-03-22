@@ -296,6 +296,7 @@ async def assign_number(
                 "address": company.address,
                 "nr_reg_com": company.nr_reg_com,
                 "phone": company.phone,
+                "tva_percentage": company.tva_percentage,
             }
 
     # Load disclaimer

@@ -2,7 +2,7 @@ import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMou
 import { apiFetch } from "../utils/api";
 
 interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; }
-interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; registration_status: string | null; description: string | null; comments: string | null; }
+interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
 interface EmployeeItem { id: number; name: string; description: string | null; target: string; }
@@ -1611,10 +1611,10 @@ function CompaniiPanel() {
     }
   }
 
-  function patchForm(key: keyof CompanyItem, val: string | boolean | null) {
+  function patchForm(key: keyof CompanyItem, val: string | boolean | number | null) {
     setForm(f => ({ ...f, [key]: val }));
   }
-  function patchEditForm(key: keyof CompanyItem, val: string | boolean | null) {
+  function patchEditForm(key: keyof CompanyItem, val: string | boolean | number | null) {
     setEditForm(f => ({ ...f, [key]: val }));
   }
 
@@ -1749,6 +1749,10 @@ function CompaniiPanel() {
               <input type="checkbox" checked={f().is_vat_payer ?? false} onChange={e => patchForm("is_vat_payer", e.currentTarget.checked)} />
               Plătitor TVA
             </label>
+            <Show when={f().is_vat_payer}>
+              <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
+                value={f().tva_percentage ?? ""} onInput={e => patchForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+            </Show>
             <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
             <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
           </div>
@@ -1802,6 +1806,10 @@ function CompaniiPanel() {
                     <input type="checkbox" checked={ef().is_vat_payer ?? false} onChange={e => patchEditForm("is_vat_payer", e.currentTarget.checked)} />
                     Plătitor TVA
                   </label>
+                  <Show when={ef().is_vat_payer}>
+                    <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
+                      value={ef().tva_percentage ?? ""} onInput={e => patchEditForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                  </Show>
                   <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />
                 </div>

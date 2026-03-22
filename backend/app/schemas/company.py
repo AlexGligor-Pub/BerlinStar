@@ -11,6 +11,7 @@ class CompanyCreate(BaseModel):
     phone: str | None = Field(None, max_length=50)
     postal_code: str | None = Field(None, max_length=20)
     is_vat_payer: bool | None = None
+    tva_percentage: float | None = None
     registration_status: str | None = Field(None, max_length=200)
     description: str | None = None
     comments: str | None = None
@@ -24,6 +25,7 @@ class CompanyUpdate(BaseModel):
     phone: str | None = Field(None, max_length=50)
     postal_code: str | None = Field(None, max_length=20)
     is_vat_payer: bool | None = None
+    tva_percentage: float | None = None
     registration_status: str | None = Field(None, max_length=200)
     description: str | None = None
     comments: str | None = None
@@ -41,6 +43,7 @@ class CompanyRead(BaseModel):
     phone: str | None
     postal_code: str | None
     is_vat_payer: bool | None
+    tva_percentage: float | None
     registration_status: str | None
     description: str | None
     comments: str | None

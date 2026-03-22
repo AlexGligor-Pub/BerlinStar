@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
+import sqlalchemy as sa
 from sqlalchemy import BigInteger, Boolean, DateTime, Integer, String, Text, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
@@ -21,6 +22,7 @@ class Company(Base):
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_vat_payer: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    tva_percentage: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
     registration_status: Mapped[str | None] = mapped_column(String(200), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
