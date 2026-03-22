@@ -38,6 +38,12 @@ class Receipt(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     client_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("clienti.id", ondelete="SET NULL"), nullable=True)
+    deviz_serie: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    deviz_nr: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    factura_serie: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    factura_nr: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    chitanta_serie: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    chitanta_nr: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
