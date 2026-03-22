@@ -308,13 +308,11 @@ function ReceiptCard(props: { receipt: Receipt }) {
     props.receipt.partialPay?.toFixed(2) ?? "100.00"
   );
   const [saving, setSaving] = createSignal(false);
-  const [docMenuOpen, setDocMenuOpen] = createSignal(false);
   const [docLoading, setDocLoading] = createSignal<string | null>(null);
   const r = props.receipt;
 
 
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
-    setDocMenuOpen(false);
     const locationId = device()?.locationId;
     if (!locationId) { alert("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);
@@ -440,22 +438,15 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
                 Sterge
               </button>
-              <div class="doc-download-wrap">
-                <button
-                  class="btn btn-ghost btn-sm doc-download-btn"
-                  onClick={() => setDocMenuOpen(v => !v)}
-                  disabled={docLoading() !== null}
-                >
-                  {docLoading() ? `Se generează ${docLoading()}...` : "Documente ▾"}
-                </button>
-                <Show when={docMenuOpen()}>
-                  <div class="doc-dropdown" onClick={e => e.stopPropagation()}>
-                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("deviz")}>Deviz</button>
-                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("factura")}>Factură</button>
-                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("chitanta")}>Chitanță</button>
-                  </div>
-                </Show>
-              </div>
+              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
+                {docLoading() === "deviz" ? "..." : "Deviz"}
+              </button>
+              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
+                {docLoading() === "factura" ? "..." : "Factura"}
+              </button>
+              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
+                {docLoading() === "chitanta" ? "..." : "Chitanta"}
+              </button>
             </div>
 
           </div>
