@@ -1,13 +1,54 @@
 import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
+import { auth } from "../store/authStore";
 
 interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
-interface EmployeeItem { id: number; name: string; description: string | null; target: string; }
+interface EmployeeItem { id: number; name: string; description: string | null; target: string; image_path: string | null; }
 interface Category { id: number; name: string; department_id: number; }
 interface Item { id: number; name: string; description: string | null; price: string; unit: string; type: string; category_id: number; category_name: string | null; }
+
+// ─── Image compression ────────────────────────────────────────────────────────
+
+function compressToJpeg(file: File, maxBytes = 100_000): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX_DIM = 1200;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0, w, h);
+      let quality = 0.85;
+      const tryNext = () => {
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error("Compresie esuata.")); return; }
+          if (blob.size <= maxBytes || quality <= 0.1) {
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+          } else {
+            quality = Math.max(0.1, +(quality - 0.1).toFixed(2));
+            tryNext();
+          }
+        }, "image/jpeg", quality);
+      };
+      tryNext();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Imagine invalida.")); };
+    img.src = url;
+  });
+}
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
@@ -410,7 +451,6 @@ function LocatiiPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(loc)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(loc)}>Șterge</button>
                   </div>
                 </div>
               }
@@ -540,8 +580,10 @@ function LocatiiPanel() {
                 </Show>
 
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || editLoading() || !editName().trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(loc)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || editLoading() || !editName().trim()} onClick={saveEdit}>Salvează</button>
                 </div>
               </div>
             </Show>
@@ -722,7 +764,6 @@ function DepartamentePanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
                   </div>
                 </div>
               }
@@ -733,8 +774,10 @@ function DepartamentePanel() {
                   <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
                 </div>
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editName().trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={() => setEditId(null)}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editName().trim()} onClick={saveEdit}>Salvează</button>
                 </div>
               </div>
             </Show>
@@ -752,10 +795,13 @@ function AngajatiPanel() {
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch]   = createSignal("");
 
-  const [editId, setEditId]         = createSignal<number | null>(null);
-  const [editName, setEditName]     = createSignal("");
-  const [editDesc, setEditDesc]     = createSignal("");
-  const [editTarget, setEditTarget] = createSignal("");
+  const [editId, setEditId]               = createSignal<number | null>(null);
+  const [editName, setEditName]           = createSignal("");
+  const [editDesc, setEditDesc]           = createSignal("");
+  const [editTarget, setEditTarget]       = createSignal("");
+  const [editImagePath, setEditImagePath] = createSignal<string | null>(null);
+  const [imageUploading, setImageUploading] = createSignal(false);
+  let fileInputRef: HTMLInputElement | undefined;
 
   const [addMode, setAddMode]     = createSignal(false);
   const [newName, setNewName]     = createSignal("");
@@ -782,6 +828,7 @@ function AngajatiPanel() {
         name: e.name,
         description: e.description ?? null,
         target: e.target,
+        image_path: e.image_path ?? null,
       })));
     } catch {
       setError("Eroare la încărcare.");
@@ -797,8 +844,32 @@ function AngajatiPanel() {
     setEditName(e.name);
     setEditDesc(e.description ?? "");
     setEditTarget(e.target);
+    setEditImagePath(e.image_path ?? null);
     setAddMode(false);
     setError(null);
+  }
+
+  async function handleImageFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    setImageUploading(true);
+    setError(null);
+    try {
+      const compressed = await compressToJpeg(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const headers: Record<string, string> = {};
+      if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
+      const res = await fetch(`${API_BASE}/api/employees/${id}/image`, { method: "POST", body: fd, headers });
+      if (!res.ok) throw new Error("Eroare la upload imagine.");
+      const updated = await res.json();
+      setEditImagePath(updated.image_path ?? null);
+      setItems(items().map(e => e.id === id ? { ...e, image_path: updated.image_path ?? null } : e));
+    } catch (ex: any) {
+      setError(ex?.message ?? "Eroare la upload.");
+    } finally {
+      setImageUploading(false);
+    }
   }
 
   async function saveEdit() {
@@ -924,6 +995,16 @@ function AngajatiPanel() {
               when={editId() === e.id}
               fallback={
                 <div class="cfg-location-row">
+                  <Show
+                    when={e.image_path}
+                    fallback={
+                      <div class="cfg-employee-avatar cfg-employee-avatar--sm cfg-employee-avatar--placeholder">
+                        {e.name.charAt(0).toUpperCase()}
+                      </div>
+                    }
+                  >
+                    <img src={e.image_path!} class="cfg-employee-avatar cfg-employee-avatar--sm" alt="avatar" />
+                  </Show>
                   <div class="cfg-location-info">
                     <span class="cfg-location-name">{e.name}</span>
                     <Show when={e.description}>
@@ -932,20 +1013,51 @@ function AngajatiPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(e)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(e)}>Șterge</button>
                   </div>
                 </div>
               }
             >
               <div class="cfg-location-row cfg-location-row--edit">
                 <div class="cfg-location-fields">
+                  <div class="cfg-employee-image-row">
+                    <Show
+                      when={editImagePath()}
+                      fallback={
+                        <div class="cfg-employee-avatar cfg-employee-avatar--placeholder">
+                          {editName().trim().charAt(0).toUpperCase() || "?"}
+                        </div>
+                      }
+                    >
+                      <img src={editImagePath()!} class="cfg-employee-avatar" alt="avatar" />
+                    </Show>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style="display:none"
+                      onChange={(ev) => {
+                        const f = ev.currentTarget.files?.[0];
+                        if (f) handleImageFile(f);
+                        ev.currentTarget.value = "";
+                      }}
+                    />
+                    <button
+                      class="btn btn-sm btn-ghost"
+                      disabled={imageUploading()}
+                      onClick={() => fileInputRef?.click()}
+                    >
+                      {imageUploading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                    </button>
+                  </div>
                   <input class="input" placeholder="Nume *" value={editName()} onInput={(e) => setEditName(e.currentTarget.value)} />
                   <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
                   <input class="input" type="number" placeholder="Target lunar" value={editTarget()} onInput={(e) => setEditTarget(e.currentTarget.value)} />
                 </div>
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editName().trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(e)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={() => setEditId(null)}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editName().trim()} onClick={saveEdit}>Salvează</button>
                 </div>
               </div>
             </Show>
@@ -1106,7 +1218,6 @@ function DisclaimersPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
                   </div>
                 </div>
               }
@@ -1122,8 +1233,10 @@ function DisclaimersPanel() {
                   />
                 </div>
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editTitle().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editTitle().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
                 </div>
               </div>
             </Show>
@@ -1466,7 +1579,6 @@ function ProduseSiServiciiPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatEditDeptId(c.department_id); setError(null); }}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setCatDeleteTarget(c)}>Șterge</button>
                   </div>
                 </div>
               }>
@@ -1478,6 +1590,8 @@ function ProduseSiServiciiPanel() {
                     </select>
                   </div>
                   <div class="cfg-location-actions" style="margin-top:8px">
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setCatDeleteTarget(c)}>Șterge</button>
+                    <div style="flex:1" />
                     <button class="btn btn-sm btn-ghost" onClick={() => setCatEditId(null)}>Anulează</button>
                     <button class="btn btn-sm btn-primary" disabled={saving() || !catEditName().trim()} onClick={saveCatEdit}>Salvează</button>
                   </div>
@@ -1526,13 +1640,14 @@ function ProduseSiServiciiPanel() {
                       setItemEditForm({ name: it.name, description: it.description ?? "", price: it.price, unit: it.unit, type: it.type, category_id: it.category_id });
                       setError(null);
                     }}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
                   </div>
                 </div>
               }>
                 <div class="cfg-location-row cfg-location-row--edit">
                   <ItemForm f={itemEditForm()} setF={setItemEditForm} />
                   <div class="cfg-location-actions" style="margin-top:8px">
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
+                    <div style="flex:1" />
                     <button class="btn btn-sm btn-ghost" onClick={() => setItemEditId(null)}>Anulează</button>
                     <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemEdit}>Salvează</button>
                   </div>
@@ -1792,7 +1907,6 @@ function CompaniiPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(c)}>Șterge</button>
                   </div>
                 </div>
               }
@@ -1822,8 +1936,10 @@ function CompaniiPanel() {
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />
                 </div>
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !ef().name?.trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(c)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={() => setEditId(null)}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !ef().name?.trim()} onClick={saveEdit}>Salvează</button>
                 </div>
               </div>
             </Show>
@@ -2038,7 +2154,6 @@ function RegisterPanel() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(r)}>Editează</button>
-                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(r)}>Șterge</button>
                   </div>
                 </div>
               }
@@ -2046,8 +2161,10 @@ function RegisterPanel() {
               <div class="cfg-location-row cfg-location-row--edit">
                 <RegFormFields f={editForm()} setF={setEditForm} />
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim() || !editForm().company_id} onClick={() => saveEdit(r.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(r)}>Șterge</button>
+                  <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim() || !editForm().company_id} onClick={() => saveEdit(r.id)}>Salvează</button>
                 </div>
               </div>
             </Show>

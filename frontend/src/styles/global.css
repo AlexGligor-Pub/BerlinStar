@@ -599,8 +599,10 @@ body {
   border-radius: var(--radius);
   position: relative;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .sl-header-left {
@@ -2500,6 +2502,37 @@ body {
 .rcard-doc-tag--deviz    { background: #1e3a5f; color: #7eb8f7; }
 .rcard-doc-tag--factura  { background: #1a3d2b; color: #6dd49a; }
 .rcard-doc-tag--chitanta { background: #3d2a1a; color: #f0a96d; }
+
+/* ─── Employee Avatar ─── */
+.cfg-employee-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.cfg-employee-avatar--sm {
+  width: 32px;
+  height: 32px;
+}
+.cfg-employee-avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 1.2rem;
+}
+.cfg-employee-avatar--sm.cfg-employee-avatar--placeholder {
+  font-size: 0.85rem;
+}
+.cfg-employee-image-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 /* ─── Document Download Dropdown ─── */
 .doc-download-wrap {

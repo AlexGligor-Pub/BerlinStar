@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +11,7 @@ from app.models.location import employee_locations
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.storage import upload_employee_image
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -81,6 +82,28 @@ async def update_employee(
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(employee, k, v)
     employee.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(employee)
+    return employee
+
+
+@router.post("/{employee_id}/image", response_model=EmployeeRead)
+async def upload_image(
+    employee_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    employee = await db.get(Employee, employee_id)
+    if employee is None or employee.account_id != account_id or employee.is_deleted:
+        raise HTTPException(404, "Angajatul nu a fost găsit.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    url = upload_employee_image(data, file.content_type)
+    employee.image_path = url
     await db.commit()
     await db.refresh(employee)
     return employee

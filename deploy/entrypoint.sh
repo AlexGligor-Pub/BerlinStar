@@ -10,4 +10,10 @@ echo "Running Alembic migrations..."
 alembic upgrade heads
 
 echo "Starting server..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000
+exec gunicorn app.main:app \
+  -k uvicorn.workers.UvicornWorker \
+  -w 4 \
+  --bind 0.0.0.0:8000 \
+  --worker-connections 1000 \
+  --timeout 120 \
+  --access-logfile -
