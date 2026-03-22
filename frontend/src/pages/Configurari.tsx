@@ -1,8 +1,7 @@
 import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
 
-interface CompanyAssignment { company_id: number; is_primary: boolean; }
-interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; department_ids: number[]; employee_ids: number[]; company_assignments: CompanyAssignment[]; }
+interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
@@ -129,18 +128,20 @@ function LocatiiPanel() {
   const [editName, setEditName]           = createSignal("");
   const [editDesc, setEditDesc]           = createSignal("");
   const [editDisclaimerId, setEditDisclaimerId] = createSignal<number | null>(null);
+  const [editRegisterId, setEditRegisterId]     = createSignal<number | null>(null);
   const [editDepartmentIds, setEditDepartmentIds] = createSignal<Set<number>>(new Set<number>());
   const [editEmpIds, setEditEmpIds]       = createSignal<Set<number>>(new Set<number>());
-  // company_id → is_primary
-  const [editCompanyMap, setEditCompanyMap] = createSignal<Map<number, boolean>>(new Map());
+  const [editCompanyId, setEditCompanyId] = createSignal<number | null>(null);
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
   const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; title: string; text: string }[]>([]);
+  const [allRegisters, setAllRegisters]   = createSignal<{ id: number; name: string }[]>([]);
   const [allCompanies, setAllCompanies]   = createSignal<{ id: number; name: string; cui: number }[]>([]);
   const [editLoading, setEditLoading]     = createSignal(false);
   let cachedDepartments: Department[] | null = null;
   let cachedEmployees: Employee[] | null = null;
   let cachedDisclaimers: { id: number; title: string; text: string }[] | null = null;
+  let cachedRegisters: { id: number; name: string }[] | null = null;
   let cachedCompanies: { id: number; name: string; cui: number }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
@@ -181,25 +182,36 @@ function LocatiiPanel() {
     } catch {}
   }
 
-  onMount(() => { loadLocations(); loadDisclaimersCache(); });
+  async function loadRegistersCache() {
+    if (cachedRegisters) { setAllRegisters(cachedRegisters); return; }
+    try {
+      const res = await apiFetch("/api/registers?limit=200");
+      if (!res.ok) return;
+      const data = await res.json();
+      cachedRegisters = (data.items ?? []).map((r: any) => ({ id: r.id, name: r.name }));
+      setAllRegisters(cachedRegisters!);
+    } catch {}
+  }
+
+  onMount(() => { loadLocations(); loadDisclaimersCache(); loadRegistersCache(); });
 
   async function startEdit(loc: Location) {
     setEditId(loc.id);
     setEditName(loc.name);
     setEditDesc(loc.description ?? "");
     setEditDisclaimerId(loc.disclaimer_id);
+    setEditRegisterId(loc.register_id);
     setAddMode(false);
     setError(null);
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
-    const cm = new Map<number, boolean>();
-    for (const a of loc.company_assignments) cm.set(a.company_id, a.is_primary);
-    setEditCompanyMap(cm);
+    setEditCompanyId(loc.company_id);
 
-    if (cachedDepartments && cachedEmployees && cachedDisclaimers && cachedCompanies) {
+    if (cachedDepartments && cachedEmployees && cachedDisclaimers && cachedRegisters && cachedCompanies) {
       setAllDepartments(cachedDepartments);
       setAllEmployees(cachedEmployees);
       setAllDisclaimers(cachedDisclaimers);
+      setAllRegisters(cachedRegisters);
       setAllCompanies(cachedCompanies);
       return;
     }
@@ -214,6 +226,7 @@ function LocatiiPanel() {
       if (!cachedDepartments) fetches.push(apiFetch("/api/departments?limit=200"));
       if (!cachedEmployees)   fetches.push(apiFetch("/api/employees?limit=200"));
       if (!cachedDisclaimers) fetches.push(apiFetch("/api/disclaimers?limit=200"));
+      if (!cachedRegisters)   fetches.push(apiFetch("/api/registers?limit=200"));
       if (!cachedCompanies)   fetches.push(apiFetch("/api/companies?limit=200"));
 
       const results = await Promise.all(fetches);
@@ -224,11 +237,13 @@ function LocatiiPanel() {
       if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
       if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
       if (!cachedDisclaimers) { cachedDisclaimers = (jsons[idx++].items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })); }
+      if (!cachedRegisters)   { cachedRegisters   = (jsons[idx++].items ?? []).map((r: any) => ({ id: r.id, name: r.name })); }
       if (!cachedCompanies)   { cachedCompanies   = (jsons[idx++].items ?? []).map((c: any) => ({ id: c.id, name: c.name, cui: c.cui })); }
 
       setAllDepartments(cachedDepartments!);
       setAllEmployees(cachedEmployees!);
       setAllDisclaimers(cachedDisclaimers!);
+      setAllRegisters(cachedRegisters!);
       setAllCompanies(cachedCompanies!);
     } catch {
       setError("Eroare la încărcarea datelor.");
@@ -251,11 +266,10 @@ function LocatiiPanel() {
     setError(null);
     try {
       const id = editId()!;
-      const assignments = Array.from(editCompanyMap().entries()).map(([company_id, is_primary]) => ({ company_id, is_primary }));
       await Promise.all([
         apiFetch(`/api/locations/${id}`, {
           method: "PATCH",
-          body: JSON.stringify({ name: editName().trim(), description: editDesc().trim() || null, disclaimer_id: editDisclaimerId() }),
+          body: JSON.stringify({ name: editName().trim(), description: editDesc().trim() || null, disclaimer_id: editDisclaimerId(), register_id: editRegisterId(), company_id: editCompanyId() }),
         }),
         apiFetch(`/api/locations/${id}/departments`, {
           method: "PUT",
@@ -264,10 +278,6 @@ function LocatiiPanel() {
         apiFetch(`/api/locations/${id}/employees`, {
           method: "PUT",
           body: JSON.stringify({ ids: Array.from(editEmpIds()) }),
-        }),
-        apiFetch(`/api/locations/${id}/companies`, {
-          method: "PUT",
-          body: JSON.stringify({ assignments }),
         }),
       ]);
       setEditId(null);
@@ -383,13 +393,14 @@ function LocatiiPanel() {
                         Disclaimer: {allDisclaimers().find(d => d.id === loc.disclaimer_id)?.title ?? `#${loc.disclaimer_id}`}
                       </span>
                     </Show>
-                    <Show when={loc.company_assignments.length > 0}>
+                    <Show when={loc.register_id !== null}>
+                      <span class="cfg-location-desc" style="opacity:0.6;font-style:italic">
+                        Registru: {allRegisters().find(r => r.id === loc.register_id)?.name ?? `#${loc.register_id}`}
+                      </span>
+                    </Show>
+                    <Show when={loc.company_id !== null}>
                       <span class="cfg-location-desc">
-                        {loc.company_assignments.map(a => {
-                          const c = allCompanies().find(x => x.id === a.company_id);
-                          const label = c ? c.name : `#${a.company_id}`;
-                          return a.is_primary ? `★ ${label}` : label;
-                        }).join(" · ")}
+                        {allCompanies().find(c => c.id === loc.company_id)?.name ?? `#${loc.company_id}`}
                       </span>
                     </Show>
                   </div>
@@ -426,6 +437,25 @@ function LocatiiPanel() {
                       <option value={0}>— Fără disclaimer —</option>
                       <For each={allDisclaimers()}>
                         {(d) => <option value={d.id}>{d.title}</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <div class="cfg-assoc-section">
+                    <div class="cfg-assoc-header">
+                      <span class="cfg-assoc-label">Registru</span>
+                    </div>
+                    <select
+                      class="input"
+                      value={editRegisterId() ?? 0}
+                      onChange={e => {
+                        const v = parseInt(e.currentTarget.value);
+                        setEditRegisterId(v === 0 ? null : v);
+                      }}
+                    >
+                      <option value={0}>— Fără registru —</option>
+                      <For each={allRegisters()}>
+                        {(r) => <option value={r.id}>{r.name}</option>}
                       </For>
                     </select>
                   </div>
@@ -477,53 +507,24 @@ function LocatiiPanel() {
                   </div>
                 </Show>
 
-                <Show when={!editLoading() && allCompanies().length > 0}>
+                <Show when={!editLoading()}>
                   <div class="cfg-assoc-section">
                     <div class="cfg-assoc-header">
-                      <span class="cfg-assoc-label">Companii</span>
-                      <div class="cfg-assoc-btns">
-                        <button class="cfg-assoc-btn" onClick={() => setEditCompanyMap(new Map<number, boolean>())}>Niciuna</button>
-                      </div>
+                      <span class="cfg-assoc-label">Companie</span>
                     </div>
-                    <div class="cfg-company-assign-list">
+                    <select
+                      class="input"
+                      value={editCompanyId() ?? 0}
+                      onChange={e => {
+                        const v = parseInt(e.currentTarget.value);
+                        setEditCompanyId(v === 0 ? null : v);
+                      }}
+                    >
+                      <option value={0}>— Fără companie —</option>
                       <For each={allCompanies()}>
-                        {(c) => {
-                          const included = () => editCompanyMap().has(c.id);
-                          const isPrimary = () => editCompanyMap().get(c.id) === true;
-                          function toggleInclude() {
-                            const m = new Map(editCompanyMap());
-                            if (m.has(c.id)) { m.delete(c.id); }
-                            else { m.set(c.id, false); }
-                            setEditCompanyMap(m);
-                          }
-                          function makePrimary() {
-                            const m = new Map(editCompanyMap());
-                            // clear existing primary
-                            for (const [k] of m) m.set(k, false);
-                            m.set(c.id, true);
-                            setEditCompanyMap(m);
-                          }
-                          return (
-                            <div class="cfg-company-assign-row" classList={{ "cfg-company-assign-row--included": included() }}>
-                              <label class="cfg-checkbox-row" style="flex:1;margin:0">
-                                <input type="checkbox" checked={included()} onChange={toggleInclude} />
-                                <span>{c.name} <span style="opacity:0.5;font-size:0.8em">CUI {c.cui}</span></span>
-                              </label>
-                              <Show when={included()}>
-                                <button
-                                  class="cfg-primary-btn"
-                                  classList={{ "cfg-primary-btn--active": isPrimary() }}
-                                  onClick={makePrimary}
-                                  title="Marchează ca principală"
-                                >
-                                  {isPrimary() ? "★ Principală" : "☆ Secundară"}
-                                </button>
-                              </Show>
-                            </div>
-                          );
-                        }}
+                        {(c) => <option value={c.id}>{c.name} (CUI {c.cui})</option>}
                       </For>
-                    </div>
+                    </select>
                   </div>
                 </Show>
 

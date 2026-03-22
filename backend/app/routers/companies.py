@@ -14,7 +14,7 @@ from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
 
-ANAF_URL = "https://webservicesp.anaf.ro/PlatitorTvaRest/api/v8/ws/tva"
+ANAF_URL = "https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva"
 ANAF_TIMEOUT = 15.0
 
 
@@ -58,6 +58,43 @@ async def create_company(
     return company
 
 
+@router.get("/anaf/{cui}")
+async def anaf_lookup(
+    cui: int,
+    account_id: int = Depends(get_account_id),
+):
+    today = date.today().strftime("%Y-%m-%d")
+    payload = [{"cui": cui, "data": today}]
+    try:
+        async with httpx.AsyncClient(timeout=ANAF_TIMEOUT) as client:
+            resp = await client.post(ANAF_URL, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.TimeoutException:
+        raise HTTPException(504, "Timeout la serviciul ANAF.")
+    except Exception:
+        raise HTTPException(502, "Eroare la comunicarea cu ANAF.")
+
+    found = data.get("found", [])
+    if not found:
+        raise HTTPException(404, "CUI-ul nu a fost găsit în ANAF.")
+
+    entry = found[0]
+    dg = entry.get("date_generale", {})
+    tva = entry.get("inregistrare_scop_Tva", {})
+
+    return {
+        "cui": dg.get("cui"),
+        "name": dg.get("denumire", ""),
+        "address": dg.get("adresa"),
+        "nr_reg_com": dg.get("nrRegCom"),
+        "phone": dg.get("telefon") or None,
+        "postal_code": dg.get("codPostal") or None,
+        "is_vat_payer": tva.get("scpTVA"),
+        "registration_status": dg.get("stare_inregistrare"),
+    }
+
+
 @router.get("/{company_id}", response_model=CompanyRead)
 async def get_company(
     company_id: int,
@@ -98,40 +135,3 @@ async def delete_company(
     if company is None or company.account_id != account_id:
         raise HTTPException(404, "Compania nu a fost găsită.")
     await soft_delete(db, Company, company_id)
-
-
-@router.get("/anaf/{cui}")
-async def anaf_lookup(
-    cui: int,
-    account_id: int = Depends(get_account_id),
-):
-    today = date.today().strftime("%Y-%m-%d")
-    payload = [{"cui": cui, "data": today}]
-    try:
-        async with httpx.AsyncClient(timeout=ANAF_TIMEOUT) as client:
-            resp = await client.post(ANAF_URL, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.TimeoutException:
-        raise HTTPException(504, "Timeout la serviciul ANAF.")
-    except Exception:
-        raise HTTPException(502, "Eroare la comunicarea cu ANAF.")
-
-    found = data.get("found", [])
-    if not found:
-        raise HTTPException(404, "CUI-ul nu a fost găsit în ANAF.")
-
-    entry = found[0]
-    dg = entry.get("date_generale", {})
-    tva = entry.get("inregistrare_scop_Tva", {})
-
-    return {
-        "cui": dg.get("cui"),
-        "name": dg.get("denumire", ""),
-        "address": dg.get("adresa"),
-        "nr_reg_com": dg.get("nrRegCom"),
-        "phone": dg.get("telefon") or None,
-        "postal_code": dg.get("codPostal") or None,
-        "is_vat_payer": tva.get("scpTVA"),
-        "registration_status": dg.get("stare_inregistrare"),
-    }

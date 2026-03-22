@@ -7,6 +7,8 @@ class LocationCreate(BaseModel):
     name: str = Field(..., max_length=200)
     description: str | None = None
     disclaimer_id: int | None = None
+    register_id: int | None = None
+    company_id: int | None = None
 
 
 class LocationRead(BaseModel):
@@ -15,6 +17,8 @@ class LocationRead(BaseModel):
     name: str
     description: str | None
     disclaimer_id: int | None
+    register_id: int | None
+    company_id: int | None
     account_id: int
     created_at: datetime
     updated_at: datetime | None

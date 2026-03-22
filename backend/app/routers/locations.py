@@ -22,6 +22,8 @@ def _to_detail(loc: Location) -> LocationDetail:
         name=loc.name,
         description=loc.description,
         disclaimer_id=loc.disclaimer_id,
+        register_id=loc.register_id,
+        company_id=loc.company_id,
         account_id=loc.account_id,
         created_at=loc.created_at,
         updated_at=loc.updated_at,
@@ -78,7 +80,14 @@ async def create_location(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    location = Location(name=body.name, description=body.description, disclaimer_id=body.disclaimer_id, account_id=account_id)
+    location = Location(
+        name=body.name,
+        description=body.description,
+        disclaimer_id=body.disclaimer_id,
+        register_id=body.register_id,
+        company_id=body.company_id,
+        account_id=account_id,
+    )
     db.add(location)
     await db.commit()
     await db.refresh(location)
@@ -108,6 +117,8 @@ async def update_location(
     location.name = body.name
     location.description = body.description
     location.disclaimer_id = body.disclaimer_id
+    location.register_id = body.register_id
+    location.company_id = body.company_id
     await db.commit()
     await db.refresh(location)
     return location

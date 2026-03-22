@@ -31,6 +31,8 @@ class Location(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     disclaimer_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("disclaimers.id"), nullable=True)
+    register_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("registers.id"), nullable=True)
+    company_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -44,9 +46,11 @@ class Location(Base):
     departments: Mapped[list[Department]] = relationship(
         "Department", secondary=location_departments, back_populates="locations"
     )
+    company: Mapped[Company | None] = relationship("Company")
     devices: Mapped[list[Device]] = relationship("Device", back_populates="location")
 
 
 from .employee import Employee  # noqa: E402
 from .device import Device  # noqa: E402
 from .department import Department  # noqa: E402
+from .company import Company  # noqa: E402
