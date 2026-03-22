@@ -2292,6 +2292,45 @@ body {
   color: var(--text1);
 }
 
+.cfg-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--color-border, rgba(128,128,128,0.2));
+  margin-bottom: 16px;
+}
+
+.cfg-tab {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  transition: opacity 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cfg-tab:hover { opacity: 0.9; }
+
+.cfg-tab--active {
+  opacity: 1;
+  border-bottom-color: var(--color-primary, #4f8ef7);
+}
+
+.cfg-tab-count {
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(128,128,128,0.15);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+
 .cfg-register-grid {
   display: grid;
   grid-template-columns: 130px 1fr 110px;

@@ -1143,13 +1143,12 @@ function ProduseSiServiciiPanel() {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  // ── accordion ──
-  const [catOpen, setCatOpen] = createSignal(true);
-  const [itemOpen, setItemOpen] = createSignal(true);
+  // ── tabs ──
+  const [activeTab, setActiveTab] = createSignal<"categorii" | "produse">("categorii");
 
   // ── categories ──
   const [categories, setCategories] = createSignal<Category[]>([]);
-  const [catsLoading, setCatsLoading] = createSignal(true);
+  const [catsLoading, setCatsLoading] = createSignal(false);
   const [catEditId, setCatEditId] = createSignal<number | null>(null);
   const [catEditName, setCatEditName] = createSignal("");
   const [catEditDeptId, setCatEditDeptId] = createSignal<number | null>(null);
@@ -1160,7 +1159,7 @@ function ProduseSiServiciiPanel() {
 
   // ── items ──
   const [items, setItems] = createSignal<Item[]>([]);
-  const [itemsLoading, setItemsLoading] = createSignal(true);
+  const [itemsLoading, setItemsLoading] = createSignal(false);
   const [itemFilterCatId, setItemFilterCatId] = createSignal<number | null>(null);
   const [itemFilterType, setItemFilterType] = createSignal<"all" | "Produs" | "Service">("all");
   const [itemEditId, setItemEditId] = createSignal<number | null>(null);
@@ -1212,10 +1211,17 @@ function ProduseSiServiciiPanel() {
     }
   }
 
-  onMount(() => { loadDepartments(); loadCategories(); loadItems(); });
+  function switchTab(tab: "categorii" | "produse") {
+    setActiveTab(tab);
+    if (tab === "categorii") loadCategories();
+    // produse tab: user must press Caută
+  }
 
+  onMount(() => { loadDepartments(); loadCategories(); });
+
+  // When dept filter changes: refresh category list + reset cat filter
   createEffect(() => {
-    filterDeptId(); // track
+    filterDeptId();
     setItemFilterCatId(null);
     loadCategories();
   });
@@ -1267,12 +1273,8 @@ function ProduseSiServiciiPanel() {
       const res = await apiFetch(`/api/items/${itemEditId()}`, {
         method: "PATCH",
         body: JSON.stringify({
-          name: f.name.trim(),
-          description: f.description.trim() || null,
-          price: parseFloat(f.price),
-          unit: f.unit.trim(),
-          type: f.type,
-          category_id: f.category_id,
+          name: f.name.trim(), description: f.description.trim() || null,
+          price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
         }),
       });
       if (!res.ok) throw new Error();
@@ -1289,12 +1291,8 @@ function ProduseSiServiciiPanel() {
       const res = await apiFetch("/api/items", {
         method: "POST",
         body: JSON.stringify({
-          name: f.name.trim(),
-          description: f.description.trim() || null,
-          price: parseFloat(f.price),
-          unit: f.unit.trim(),
-          type: f.type,
-          category_id: f.category_id,
+          name: f.name.trim(), description: f.description.trim() || null,
+          price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
         }),
       });
       if (!res.ok) throw new Error();
@@ -1336,7 +1334,6 @@ function ProduseSiServiciiPanel() {
       ["Categorie", "Departament"],
       categories().map(c => [c.name, departments().find(d => d.id === c.department_id)?.name ?? ""]));
   }
-
   function doItemCSV() {
     const label = filterLabel();
     exportCSV("Produse_si_Servicii" + (label !== "Toate" ? "_" + label.replace(/[^a-zA-Z0-9]/g, "_") : ""),
@@ -1382,190 +1379,169 @@ function ProduseSiServiciiPanel() {
         <DeleteModal label={itemDeleteTarget()!.name} saving={saving()} onConfirm={confirmItemDelete} onCancel={() => setItemDeleteTarget(null)} />
       </Show>
 
+      {/* ── Header ── */}
       <div class="cfg-panel-header">
         <h2 class="cfg-panel-title">Produse și Servicii</h2>
+        <Show when={activeTab() === "categorii"}>
+          <ExportMenu onCSV={doCatCSV} onPDF={doCatPDF} />
+          <button class="btn btn-sm btn-primary" onClick={() => { setCatAddMode(true); setCatEditId(null); setError(null); }}>+ Adaugă</button>
+        </Show>
+        <Show when={activeTab() === "produse"}>
+          <ExportMenu onCSV={doItemCSV} onPDF={doItemPDF} />
+          <button class="btn btn-sm btn-primary" onClick={() => { setItemAddMode(true); setItemEditId(null); setError(null); }}>+ Adaugă</button>
+        </Show>
       </div>
 
-      <Show when={error()}>
-        <p class="cfg-error">{error()}</p>
+      {/* ── Filters (all at top) ── */}
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
+        <Show when={departments().length > 0}>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class={`btn btn-sm ${filterDeptId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(null)}>Toate departamentele</button>
+            <For each={departments()}>
+              {(d) => <button class={`btn btn-sm ${filterDeptId() === d.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(d.id)}>{d.name}</button>}
+            </For>
+          </div>
+        </Show>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class={`btn btn-sm ${itemFilterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("all")}>Toate</button>
+          <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
+          <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
+        </div>
+        <Show when={categories().length > 0}>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
+            <For each={categories()}>
+              {(c) => <button class={`btn btn-sm ${itemFilterCatId() === c.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(c.id)}>{c.name}</button>}
+            </For>
+          </div>
+        </Show>
+        <Show when={activeTab() === "produse"}>
+          <div><button class="btn btn-sm btn-primary" onClick={loadItems}>Caută</button></div>
+        </Show>
+      </div>
+
+      {/* ── Tabs ── */}
+      <div class="cfg-tabs">
+        <button class="cfg-tab" classList={{ "cfg-tab--active": activeTab() === "categorii" }} onClick={() => switchTab("categorii")}>
+          Categorii <span class="cfg-tab-count">{categories().length}</span>
+        </button>
+        <button class="cfg-tab" classList={{ "cfg-tab--active": activeTab() === "produse" }} onClick={() => switchTab("produse")}>
+          Produse și Servicii <span class="cfg-tab-count">{items().length}</span>
+        </button>
+      </div>
+
+      <Show when={error()}><p class="cfg-error" style="margin-top:8px">{error()}</p></Show>
+
+      {/* ── Categorii tab ── */}
+      <Show when={activeTab() === "categorii"}>
+        <Show when={catAddMode()}>
+          <div class="cfg-location-row cfg-location-row--edit" style="margin-top:12px">
+            <div class="cfg-location-fields">
+              <input class="input" placeholder="Nume categorie *" value={catNewName()} onInput={e => setCatNewName(e.currentTarget.value)} />
+              <select class="input" value={catNewDeptId() ?? 0} onChange={e => setCatNewDeptId(parseInt(e.currentTarget.value))}>
+                <option value={0} disabled>Selectează departament *</option>
+                <For each={departments()}>
+                  {(d) => <option value={d.id}>{d.name}</option>}
+                </For>
+              </select>
+            </div>
+            <div class="cfg-location-actions" style="margin-top:8px">
+              <button class="btn btn-sm btn-ghost" onClick={() => { setCatAddMode(false); setError(null); }}>Anulează</button>
+              <button class="btn btn-sm btn-primary" disabled={saving() || !catNewName().trim() || !catNewDeptId()} onClick={saveCatAdd}>Salvează</button>
+            </div>
+          </div>
+        </Show>
+        <Show when={catsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
+        <Show when={!catsLoading() && categories().length === 0}>
+          <p class="cfg-hint">Nu există categorii{filterDeptId() ? " pentru acest departament" : ""}.</p>
+        </Show>
+        <div class="cfg-location-list">
+          <For each={categories()}>
+            {(c) => (
+              <Show when={catEditId() === c.id} fallback={
+                <div class="cfg-location-row">
+                  <div class="cfg-location-info">
+                    <span class="cfg-location-name">{c.name}</span>
+                    <span class="cfg-location-desc">{departments().find(d => d.id === c.department_id)?.name ?? ""}</span>
+                  </div>
+                  <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatEditDeptId(c.department_id); setError(null); }}>Editează</button>
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setCatDeleteTarget(c)}>Șterge</button>
+                  </div>
+                </div>
+              }>
+                <div class="cfg-location-row cfg-location-row--edit">
+                  <div class="cfg-location-fields">
+                    <input class="input" placeholder="Nume *" value={catEditName()} onInput={e => setCatEditName(e.currentTarget.value)} />
+                    <select class="input" value={catEditDeptId() ?? 0} onChange={e => setCatEditDeptId(parseInt(e.currentTarget.value))}>
+                      <For each={departments()}>{(d) => <option value={d.id}>{d.name}</option>}</For>
+                    </select>
+                  </div>
+                  <div class="cfg-location-actions" style="margin-top:8px">
+                    <button class="btn btn-sm btn-ghost" onClick={() => setCatEditId(null)}>Anulează</button>
+                    <button class="btn btn-sm btn-primary" disabled={saving() || !catEditName().trim()} onClick={saveCatEdit}>Salvează</button>
+                  </div>
+                </div>
+              </Show>
+            )}
+          </For>
+        </div>
       </Show>
 
-      {/* ══ Categorii ══ */}
-      <div class="cfg-subsection">
-        <div class="cfg-subsection-header" style="cursor:pointer" onClick={() => setCatOpen(o => !o)}>
-          <span class="cfg-subsection-title">
-            <span style="margin-right:6px;font-size:11px;opacity:0.6">{catOpen() ? "▾" : "▸"}</span>
-            Categorii
-            <span style="margin-left:8px;font-size:12px;opacity:0.5">({categories().length})</span>
-          </span>
-          <div style="display:flex;gap:6px" onClick={e => e.stopPropagation()}>
-            <ExportMenu onCSV={doCatCSV} onPDF={doCatPDF} />
-            <button class="btn btn-sm btn-primary" onClick={() => { setCatAddMode(true); setCatEditId(null); setError(null); }}>+ Adaugă</button>
-          </div>
-        </div>
-
-        <Show when={catOpen()}>
-          <Show when={catAddMode()}>
-            <div class="cfg-location-row cfg-location-row--edit">
-              <div class="cfg-location-fields">
-                <input class="input" placeholder="Nume categorie *" value={catNewName()} onInput={e => setCatNewName(e.currentTarget.value)} />
-                <select class="input" value={catNewDeptId() ?? 0} onChange={e => setCatNewDeptId(parseInt(e.currentTarget.value))}>
-                  <option value={0} disabled>Selectează departament *</option>
-                  <For each={departments()}>
-                    {(d) => <option value={d.id}>{d.name}</option>}
-                  </For>
-                </select>
-              </div>
-              <div class="cfg-location-actions" style="margin-top:8px">
-                <button class="btn btn-sm btn-ghost" onClick={() => { setCatAddMode(false); setError(null); }}>Anulează</button>
-                <button class="btn btn-sm btn-primary" disabled={saving() || !catNewName().trim() || !catNewDeptId()} onClick={saveCatAdd}>Salvează</button>
-              </div>
+      {/* ── Produse tab ── */}
+      <Show when={activeTab() === "produse"}>
+        <Show when={itemAddMode()}>
+          <div class="cfg-location-row cfg-location-row--edit" style="margin-top:12px;margin-bottom:12px">
+            <ItemForm f={itemNewForm()} setF={setItemNewForm} />
+            <div class="cfg-location-actions" style="margin-top:8px">
+              <button class="btn btn-sm btn-ghost" onClick={() => { setItemAddMode(false); setError(null); }}>Anulează</button>
+              <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemAdd}>Salvează</button>
             </div>
-          </Show>
-
-          <Show when={catsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
-          <Show when={!catsLoading() && categories().length === 0}>
-            <p class="cfg-hint">Nu există categorii{filterDeptId() ? " pentru acest departament" : ""}.</p>
-          </Show>
-
-          <div class="cfg-location-list">
-            <For each={categories()}>
-              {(c) => (
-                <Show when={catEditId() === c.id} fallback={
-                  <div class="cfg-location-row">
-                    <div class="cfg-location-info">
-                      <span class="cfg-location-name">{c.name}</span>
-                      <span class="cfg-location-desc">{departments().find(d => d.id === c.department_id)?.name ?? ""}</span>
-                    </div>
-                    <div class="cfg-location-actions">
-                      <button class="btn btn-sm btn-ghost" onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatEditDeptId(c.department_id); setError(null); }}>Editează</button>
-                      <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setCatDeleteTarget(c)}>Șterge</button>
-                    </div>
-                  </div>
-                }>
-                  <div class="cfg-location-row cfg-location-row--edit">
-                    <div class="cfg-location-fields">
-                      <input class="input" placeholder="Nume *" value={catEditName()} onInput={e => setCatEditName(e.currentTarget.value)} />
-                      <select class="input" value={catEditDeptId() ?? 0} onChange={e => setCatEditDeptId(parseInt(e.currentTarget.value))}>
-                        <For each={departments()}>
-                          {(d) => <option value={d.id}>{d.name}</option>}
-                        </For>
-                      </select>
-                    </div>
-                    <div class="cfg-location-actions" style="margin-top:8px">
-                      <button class="btn btn-sm btn-ghost" onClick={() => setCatEditId(null)}>Anulează</button>
-                      <button class="btn btn-sm btn-primary" disabled={saving() || !catEditName().trim()} onClick={saveCatEdit}>Salvează</button>
-                    </div>
-                  </div>
-                </Show>
-              )}
-            </For>
           </div>
         </Show>
-      </div>
-
-      {/* ══ Produse și Servicii ══ */}
-      <div class="cfg-subsection" style="margin-top:24px">
-        <div class="cfg-subsection-header" style="cursor:pointer" onClick={() => setItemOpen(o => !o)}>
-          <span class="cfg-subsection-title">
-            <span style="margin-right:6px;font-size:11px;opacity:0.6">{itemOpen() ? "▾" : "▸"}</span>
-            Produse și Servicii
-            <span style="margin-left:8px;font-size:12px;opacity:0.5">({items().length})</span>
-          </span>
-          <div style="display:flex;gap:6px" onClick={e => e.stopPropagation()}>
-            <ExportMenu onCSV={doItemCSV} onPDF={doItemPDF} />
-            <button class="btn btn-sm btn-primary" onClick={() => { setItemAddMode(true); setItemEditId(null); setError(null); }}>+ Adaugă</button>
-          </div>
-        </div>
-
-        <Show when={itemOpen()}>
-          {/* filters */}
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class={`btn btn-sm ${itemFilterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("all")}>Toate</button>
-              <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
-              <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
-            </div>
-            <Show when={departments().length > 0}>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class={`btn btn-sm ${filterDeptId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(null)}>Toate departamentele</button>
-                <For each={departments()}>
-                  {(d) => (
-                    <button class={`btn btn-sm ${filterDeptId() === d.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(d.id)}>{d.name}</button>
-                  )}
-                </For>
-              </div>
-            </Show>
-            <Show when={categories().length > 0}>
-              <div style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
-                <For each={categories()}>
-                  {(c) => (
-                    <button class={`btn btn-sm ${itemFilterCatId() === c.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(c.id)}>{c.name}</button>
-                  )}
-                </For>
-              </div>
-            </Show>
-            <div>
-              <button class="btn btn-sm btn-primary" onClick={loadItems}>Caută</button>
-            </div>
-          </div>
-
-          <Show when={itemAddMode()}>
-            <div class="cfg-location-row cfg-location-row--edit" style="margin-bottom:12px">
-              <ItemForm f={itemNewForm()} setF={setItemNewForm} />
-              <div class="cfg-location-actions" style="margin-top:8px">
-                <button class="btn btn-sm btn-ghost" onClick={() => { setItemAddMode(false); setError(null); }}>Anulează</button>
-                <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemAdd}>Salvează</button>
-              </div>
-            </div>
-          </Show>
-
-          <Show when={itemsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
-          <Show when={!itemsLoading() && items().length === 0}>
-            <p class="cfg-hint">Nu există produse sau servicii.</p>
-          </Show>
-
-          <div class="cfg-location-list">
-            <For each={items()}>
-              {(it) => (
-                <Show when={itemEditId() === it.id} fallback={
-                  <div class="cfg-location-row">
-                    <div class="cfg-location-info">
-                      <span class="cfg-location-name">
-                        {it.name}
-                        <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": it.type === "Service" }}>
-                          {it.type === "Service" ? "Serviciu" : "Produs"}
-                        </span>
+        <Show when={itemsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
+        <Show when={!itemsLoading() && items().length === 0}>
+          <p class="cfg-hint">Apasă "Caută" pentru a încărca produsele și serviciile.</p>
+        </Show>
+        <div class="cfg-location-list">
+          <For each={items()}>
+            {(it) => (
+              <Show when={itemEditId() === it.id} fallback={
+                <div class="cfg-location-row">
+                  <div class="cfg-location-info">
+                    <span class="cfg-location-name">
+                      {it.name}
+                      <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": it.type === "Service" }}>
+                        {it.type === "Service" ? "Serviciu" : "Produs"}
                       </span>
-                      <span class="cfg-location-desc">{it.category_name ?? ""} · {parseFloat(it.price).toFixed(2)} RON / {it.unit}</span>
-                      <Show when={it.description}>
-                        <span class="cfg-location-desc" style="font-style:italic">{it.description}</span>
-                      </Show>
-                    </div>
-                    <div class="cfg-location-actions">
-                      <button class="btn btn-sm btn-ghost" onClick={() => {
-                        setItemEditId(it.id);
-                        setItemEditForm({ name: it.name, description: it.description ?? "", price: it.price, unit: it.unit, type: it.type, category_id: it.category_id });
-                        setError(null);
-                      }}>Editează</button>
-                      <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
-                    </div>
+                    </span>
+                    <span class="cfg-location-desc">{it.category_name ?? ""} · {parseFloat(it.price).toFixed(2)} RON / {it.unit}</span>
+                    <Show when={it.description}>
+                      <span class="cfg-location-desc" style="font-style:italic">{it.description}</span>
+                    </Show>
                   </div>
-                }>
-                  <div class="cfg-location-row cfg-location-row--edit">
-                    <ItemForm f={itemEditForm()} setF={setItemEditForm} />
-                    <div class="cfg-location-actions" style="margin-top:8px">
-                      <button class="btn btn-sm btn-ghost" onClick={() => setItemEditId(null)}>Anulează</button>
-                      <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemEdit}>Salvează</button>
-                    </div>
+                  <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => {
+                      setItemEditId(it.id);
+                      setItemEditForm({ name: it.name, description: it.description ?? "", price: it.price, unit: it.unit, type: it.type, category_id: it.category_id });
+                      setError(null);
+                    }}>Editează</button>
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
                   </div>
-                </Show>
-              )}
-            </For>
-          </div>
-        </Show>
-      </div>
+                </div>
+              }>
+                <div class="cfg-location-row cfg-location-row--edit">
+                  <ItemForm f={itemEditForm()} setF={setItemEditForm} />
+                  <div class="cfg-location-actions" style="margin-top:8px">
+                    <button class="btn btn-sm btn-ghost" onClick={() => setItemEditId(null)}>Anulează</button>
+                    <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemEdit}>Salvează</button>
+                  </div>
+                </div>
+              </Show>
+            )}
+          </For>
+        </div>
+      </Show>
     </div>
   );
 }
