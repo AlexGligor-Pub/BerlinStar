@@ -1829,39 +1829,34 @@ function CompaniiPanel() {
 
 // ─── Register panel ───────────────────────────────────────────────────────────
 
-const REGISTER_TYPES = ["Deviz", "Factura", "Chitanta", "Aviz"] as const;
-type RegisterType = typeof REGISTER_TYPES[number];
+interface RegisterItem {
+  id: number; name: string;
+  deviz_serie: string; deviz_numar: number;
+  factura_serie: string; factura_numar: number;
+  chitanta_serie: string; chitanta_numar: number;
+  aviz_serie: string; aviz_numar: number;
+}
 
-interface RegisterItem { id: number; type: string; serie: string; numar: number; }
+type RegForm = Omit<RegisterItem, "id">;
 
-const REGISTER_TYPE_LABEL: Record<string, string> = {
-  Deviz: "Deviz",
-  Factura: "Factură",
-  Chitanta: "Chitanță",
-  Aviz: "Aviz de însoțire a mărfii",
-};
+const emptyRegForm = (): RegForm => ({
+  name: "",
+  deviz_serie: "", deviz_numar: 0,
+  factura_serie: "", factura_numar: 0,
+  chitanta_serie: "", chitanta_numar: 0,
+  aviz_serie: "", aviz_numar: 0,
+});
 
 function RegisterPanel() {
   const [items, setItems]     = createSignal<RegisterItem[]>([]);
   const [loading, setLoading] = createSignal(true);
-  const [filterType, setFilterType] = createSignal<RegisterType | "all">("all");
-
-  const [editId, setEditId]       = createSignal<number | null>(null);
-  const [editType, setEditType]   = createSignal<string>("Deviz");
-  const [editSerie, setEditSerie] = createSignal("");
-  const [editNumar, setEditNumar] = createSignal(0);
-  const [addOpen, setAddOpen]     = createSignal(false);
-  const [addType, setAddType]     = createSignal<string>("Deviz");
-  const [addSerie, setAddSerie]   = createSignal("");
-  const [addNumar, setAddNumar]   = createSignal(0);
+  const [editId, setEditId]   = createSignal<number | null>(null);
+  const [editForm, setEditForm] = createSignal<RegForm>(emptyRegForm());
+  const [addOpen, setAddOpen] = createSignal(false);
+  const [addForm, setAddForm] = createSignal<RegForm>(emptyRegForm());
   const [deleteTarget, setDeleteTarget] = createSignal<RegisterItem | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError]   = createSignal<string | null>(null);
-
-  const filtered = createMemo(() => {
-    const t = filterType();
-    return t === "all" ? items() : items().filter(r => r.type === t);
-  });
+  const [saving, setSaving]   = createSignal(false);
+  const [error, setError]     = createSignal<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -1869,7 +1864,7 @@ function RegisterPanel() {
       const res = await apiFetch("/api/registers?limit=200");
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setItems((data.items ?? []).map((r: any) => ({ id: r.id, type: r.type, serie: r.serie, numar: r.numar })));
+      setItems(data.items ?? []);
     } catch {
       setError("Eroare la încărcare.");
     } finally { setLoading(false); }
@@ -1878,20 +1873,17 @@ function RegisterPanel() {
   onMount(load);
 
   function startEdit(r: RegisterItem) {
-    setEditId(r.id); setEditType(r.type); setEditSerie(r.serie); setEditNumar(r.numar);
-    setAddOpen(false); setError(null);
+    const { id, ...rest } = r;
+    setEditId(id); setEditForm(rest); setAddOpen(false); setError(null);
   }
   function cancelEdit() { setEditId(null); }
 
   async function saveEdit(id: number) {
-    if (!editSerie().trim()) return;
+    if (!editForm().name.trim()) return;
     setSaving(true); setError(null);
     try {
-      await apiFetch(`/api/registers/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ type: editType(), serie: editSerie().trim(), numar: editNumar() }),
-      });
-      setItems(items().map(r => r.id === id ? { ...r, type: editType(), serie: editSerie().trim(), numar: editNumar() } : r));
+      await apiFetch(`/api/registers/${id}`, { method: "PATCH", body: JSON.stringify(editForm()) });
+      setItems(items().map(r => r.id === id ? { id, ...editForm() } : r));
       cancelEdit();
     } catch {
       setError("Eroare la salvare.");
@@ -1899,17 +1891,14 @@ function RegisterPanel() {
   }
 
   async function saveAdd() {
-    if (!addSerie().trim()) return;
+    if (!addForm().name.trim()) return;
     setSaving(true); setError(null);
     try {
-      const res = await apiFetch("/api/registers", {
-        method: "POST",
-        body: JSON.stringify({ type: addType(), serie: addSerie().trim(), numar: addNumar() }),
-      });
+      const res = await apiFetch("/api/registers", { method: "POST", body: JSON.stringify(addForm()) });
       if (!res.ok) throw new Error();
       const created = await res.json();
-      setItems([...items(), { id: created.id, type: created.type, serie: created.serie, numar: created.numar }]);
-      setAddSerie(""); setAddNumar(0); setAddOpen(false);
+      setItems([...items(), created]);
+      setAddForm(emptyRegForm()); setAddOpen(false);
     } catch {
       setError("Eroare la adăugare.");
     } finally { setSaving(false); }
@@ -1927,25 +1916,39 @@ function RegisterPanel() {
   }
 
   function doExportCSV() {
-    exportCSV("Registre", ["Tip", "Serie", "Număr curent"],
-      filtered().map(r => [REGISTER_TYPE_LABEL[r.type] ?? r.type, r.serie, String(r.numar)]));
+    exportCSV("Registre",
+      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz Serie", "Aviz Nr"],
+      items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
   function doExportPDF() {
-    exportPDF("Registre", ["Tip", "Serie", "Număr curent"],
-      filtered().map(r => [REGISTER_TYPE_LABEL[r.type] ?? r.type, r.serie, String(r.numar)]));
+    exportPDF("Registre",
+      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz Serie", "Aviz Nr"],
+      items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
 
-  function TypeForm(props: { type: string; setType: (v: string) => void }) {
+  function RegFormFields(props: { f: RegForm; setF: (v: RegForm) => void }) {
+    const f = () => props.f;
+    const s = (patch: Partial<RegForm>) => props.setF({ ...f(), ...patch });
     return (
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <For each={REGISTER_TYPES}>
-          {(t) => (
-            <button
-              class={`btn btn-sm ${props.type === t ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => props.setType(t)}
-            >{REGISTER_TYPE_LABEL[t]}</button>
-          )}
-        </For>
+      <div class="cfg-location-fields">
+        <input class="input" placeholder="Nume registru *" value={f().name} onInput={e => s({ name: e.currentTarget.value })} />
+        <div class="cfg-register-grid">
+          <span class="cfg-register-label">Deviz</span>
+          <input class="input" placeholder="Serie" value={f().deviz_serie} onInput={e => s({ deviz_serie: e.currentTarget.value })} />
+          <input class="input" type="number" min="0" placeholder="Număr" value={f().deviz_numar} onInput={e => s({ deviz_numar: parseInt(e.currentTarget.value) || 0 })} />
+
+          <span class="cfg-register-label">Factură</span>
+          <input class="input" placeholder="Serie" value={f().factura_serie} onInput={e => s({ factura_serie: e.currentTarget.value })} />
+          <input class="input" type="number" min="0" placeholder="Număr" value={f().factura_numar} onInput={e => s({ factura_numar: parseInt(e.currentTarget.value) || 0 })} />
+
+          <span class="cfg-register-label">Chitanță</span>
+          <input class="input" placeholder="Serie" value={f().chitanta_serie} onInput={e => s({ chitanta_serie: e.currentTarget.value })} />
+          <input class="input" type="number" min="0" placeholder="Număr" value={f().chitanta_numar} onInput={e => s({ chitanta_numar: parseInt(e.currentTarget.value) || 0 })} />
+
+          <span class="cfg-register-label">Aviz</span>
+          <input class="input" placeholder="Serie" value={f().aviz_serie} onInput={e => s({ aviz_serie: e.currentTarget.value })} />
+          <input class="input" type="number" min="0" placeholder="Număr" value={f().aviz_numar} onInput={e => s({ aviz_numar: parseInt(e.currentTarget.value) || 0 })} />
+        </div>
       </div>
     );
   }
@@ -1954,7 +1957,7 @@ function RegisterPanel() {
     <div class="cfg-panel">
       <Show when={deleteTarget()}>
         <DeleteModal
-          label={`${deleteTarget()!.serie} (${REGISTER_TYPE_LABEL[deleteTarget()!.type] ?? deleteTarget()!.type})`}
+          label={deleteTarget()!.name}
           saving={saving()}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
@@ -1969,54 +1972,37 @@ function RegisterPanel() {
         </button>
       </div>
 
-      {/* type filter */}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-        <button class={`btn btn-sm ${filterType() === "all" ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterType("all")}>Toate</button>
-        <For each={REGISTER_TYPES}>
-          {(t) => (
-            <button class={`btn btn-sm ${filterType() === t ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterType(t)}>
-              {REGISTER_TYPE_LABEL[t]}
-            </button>
-          )}
-        </For>
-      </div>
-
       <Show when={error()}><p class="cfg-error">{error()}</p></Show>
 
       <Show when={addOpen()}>
         <div class="cfg-location-row cfg-location-row--edit">
-          <div class="cfg-location-fields">
-            <TypeForm type={addType()} setType={setAddType} />
-            <input class="input" placeholder="Serie *" value={addSerie()} onInput={e => setAddSerie(e.currentTarget.value)} />
-            <div style="display:flex;align-items:center;gap:8px">
-              <label style="font-size:13px;opacity:0.7;white-space:nowrap">Număr curent</label>
-              <input class="input" style="width:120px" type="number" min="0" value={addNumar()} onInput={e => setAddNumar(parseInt(e.currentTarget.value) || 0)} />
-            </div>
-          </div>
+          <RegFormFields f={addForm()} setF={setAddForm} />
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !addSerie().trim()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addForm().name.trim()} onClick={saveAdd}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setError(null); }}>Anulează</button>
           </div>
         </div>
       </Show>
 
       <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
-      <Show when={!loading() && filtered().length === 0}>
-        <p class="cfg-hint">{filterType() !== "all" ? `Nu există registre de tip ${REGISTER_TYPE_LABEL[filterType() as string]}.` : "Nu există registre."}</p>
+      <Show when={!loading() && items().length === 0}>
+        <p class="cfg-hint">Nu există registre. Apasă "+ Adaugă" pentru a crea unul.</p>
       </Show>
 
       <div class="cfg-location-list">
-        <For each={filtered()}>
+        <For each={items()}>
           {(r) => (
             <Show when={editId() === r.id}
               fallback={
                 <div class="cfg-location-row">
                   <div class="cfg-location-info">
-                    <span class="cfg-location-name">
-                      {r.serie}
-                      <span class="client-tip-badge">{REGISTER_TYPE_LABEL[r.type] ?? r.type}</span>
+                    <span class="cfg-location-name">{r.name}</span>
+                    <span class="cfg-location-desc">
+                      Deviz: {r.deviz_serie || "—"} / {r.deviz_numar} &nbsp;·&nbsp;
+                      Factură: {r.factura_serie || "—"} / {r.factura_numar} &nbsp;·&nbsp;
+                      Chitanță: {r.chitanta_serie || "—"} / {r.chitanta_numar} &nbsp;·&nbsp;
+                      Aviz: {r.aviz_serie || "—"} / {r.aviz_numar}
                     </span>
-                    <span class="cfg-location-desc">Număr curent: {r.numar}</span>
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(r)}>Editează</button>
@@ -2026,16 +2012,9 @@ function RegisterPanel() {
               }
             >
               <div class="cfg-location-row cfg-location-row--edit">
-                <div class="cfg-location-fields">
-                  <TypeForm type={editType()} setType={setEditType} />
-                  <input class="input" placeholder="Serie *" value={editSerie()} onInput={e => setEditSerie(e.currentTarget.value)} />
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <label style="font-size:13px;opacity:0.7;white-space:nowrap">Număr curent</label>
-                    <input class="input" style="width:120px" type="number" min="0" value={editNumar()} onInput={e => setEditNumar(parseInt(e.currentTarget.value) || 0)} />
-                  </div>
-                </div>
+                <RegFormFields f={editForm()} setF={setEditForm} />
                 <div class="cfg-location-actions">
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editSerie().trim()} onClick={() => saveEdit(r.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim()} onClick={() => saveEdit(r.id)}>Salvează</button>
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
                 </div>
               </div>

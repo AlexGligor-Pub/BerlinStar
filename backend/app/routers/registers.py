@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_account_id
-from app.models.register import Register, REGISTER_TYPES
+from app.models.register import Register
 from app.schemas.register import RegisterCreate, RegisterUpdate, RegisterRead
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
@@ -18,7 +18,6 @@ router = APIRouter()
 async def list_registers(
     last_id: int | None = None,
     limit: int = 100,
-    type: str | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -26,12 +25,10 @@ async def list_registers(
     stmt = (
         select(Register)
         .where(Register.account_id == account_id, Register.is_deleted == False)
-        .order_by(Register.type, Register.id)
+        .order_by(Register.id)
     )
     if last_id is not None:
         stmt = stmt.where(Register.id > last_id)
-    if type is not None:
-        stmt = stmt.where(Register.type == type)
     stmt = stmt.limit(limit + 1)
 
     rows = (await db.execute(stmt)).scalars().all()
@@ -46,9 +43,7 @@ async def create_register(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    if body.type not in REGISTER_TYPES:
-        raise HTTPException(400, f"Tip invalid. Valorile acceptate: {', '.join(REGISTER_TYPES)}")
-    r = Register(type=body.type, serie=body.serie, numar=body.numar, account_id=account_id)
+    r = Register(**body.model_dump(), account_id=account_id)
     db.add(r)
     await db.commit()
     await db.refresh(r)
@@ -77,8 +72,6 @@ async def patch_register(
     r = await db.get(Register, register_id)
     if r is None or r.account_id != account_id or r.is_deleted:
         raise HTTPException(404, "Registrul nu a fost găsit.")
-    if body.type is not None and body.type not in REGISTER_TYPES:
-        raise HTTPException(400, f"Tip invalid. Valorile acceptate: {', '.join(REGISTER_TYPES)}")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(r, k, v)
     r.updated_at = datetime.now(timezone.utc)
