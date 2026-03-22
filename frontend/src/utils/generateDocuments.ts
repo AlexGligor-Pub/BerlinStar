@@ -177,7 +177,6 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
       ro(item.unit),
       item.price.toFixed(2),
       net.toFixed(2),
-      `${tvaPct}%`,
       tva.toFixed(2),
       total.toFixed(2),
     ];
@@ -185,7 +184,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
 
   autoTable(doc, {
     startY: y,
-    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "TVA%", "Val. TVA", "Total"]],
+    head: [["Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]],
     body: rows,
     styles: {
       fontSize: 7.5,
@@ -207,11 +206,10 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
       0: { cellWidth: "auto" },
       1: { halign: "center", cellWidth: 11 },
       2: { halign: "center", cellWidth: 11 },
-      3: { halign: "right", cellWidth: 20 },
-      4: { halign: "right", cellWidth: 20 },
-      5: { halign: "center", cellWidth: 14 },
-      6: { halign: "right", cellWidth: 20 },
-      7: { halign: "right", cellWidth: 22, fontStyle: "bold" },
+      3: { halign: "right", cellWidth: 22 },
+      4: { halign: "right", cellWidth: 22 },
+      5: { halign: "right", cellWidth: 22 },
+      6: { halign: "right", cellWidth: 24, fontStyle: "bold" },
     },
     margin: { left: ML, right: MR },
     tableWidth: CW,

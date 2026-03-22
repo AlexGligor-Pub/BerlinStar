@@ -1,7 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateReceiptPdf } from "../utils/generateReceiptPdf";
 import { generateDeviz, generateFactura, generateChitanta } from "../utils/generateDocuments";
 import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
@@ -440,9 +439,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="receipt-actions">
               <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
                 Sterge
-              </button>
-              <button class="btn btn-primary btn-sm" onClick={() => generateReceiptPdf(r)}>
-                Descarca PDF
               </button>
               <div class="doc-download-wrap">
                 <button
