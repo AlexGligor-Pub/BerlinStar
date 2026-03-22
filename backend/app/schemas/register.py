@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 class RegisterCreate(BaseModel):
     name: str
+    company_id: int | None = None
     deviz_serie: str = ""
     deviz_numar: int = 0
     factura_serie: str = ""
@@ -17,6 +18,7 @@ class RegisterCreate(BaseModel):
 
 class RegisterUpdate(BaseModel):
     name: str | None = None
+    company_id: int | None = None
     deviz_serie: str | None = None
     deviz_numar: int | None = None
     factura_serie: str | None = None
@@ -32,6 +34,7 @@ class RegisterRead(BaseModel):
 
     id: int
     account_id: int
+    company_id: int | None
     name: str
     deviz_serie: str
     deviz_numar: int

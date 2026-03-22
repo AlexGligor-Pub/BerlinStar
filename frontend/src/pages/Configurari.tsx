@@ -135,13 +135,15 @@ function LocatiiPanel() {
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
   const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; title: string; text: string }[]>([]);
-  const [allRegisters, setAllRegisters]   = createSignal<{ id: number; name: string }[]>([]);
+  const [allRegisters, setAllRegisters]   = createSignal<{ id: number; name: string; company_id: number | null }[]>([]);
   const [allCompanies, setAllCompanies]   = createSignal<{ id: number; name: string; cui: number }[]>([]);
   const [editLoading, setEditLoading]     = createSignal(false);
+  const [deptOpen, setDeptOpen]           = createSignal(false);
+  const [empOpen, setEmpOpen]             = createSignal(false);
   let cachedDepartments: Department[] | null = null;
   let cachedEmployees: Employee[] | null = null;
   let cachedDisclaimers: { id: number; title: string; text: string }[] | null = null;
-  let cachedRegisters: { id: number; name: string }[] | null = null;
+  let cachedRegisters: { id: number; name: string; company_id: number | null }[] | null = null;
   let cachedCompanies: { id: number; name: string; cui: number }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
@@ -188,7 +190,7 @@ function LocatiiPanel() {
       const res = await apiFetch("/api/registers?limit=200");
       if (!res.ok) return;
       const data = await res.json();
-      cachedRegisters = (data.items ?? []).map((r: any) => ({ id: r.id, name: r.name }));
+      cachedRegisters = (data.items ?? []).map((r: any) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null }));
       setAllRegisters(cachedRegisters!);
     } catch {}
   }
@@ -206,6 +208,8 @@ function LocatiiPanel() {
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
     setEditCompanyId(loc.company_id);
+    setDeptOpen(false);
+    setEmpOpen(false);
 
     if (cachedDepartments && cachedEmployees && cachedDisclaimers && cachedRegisters && cachedCompanies) {
       setAllDepartments(cachedDepartments);
@@ -237,7 +241,7 @@ function LocatiiPanel() {
       if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
       if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
       if (!cachedDisclaimers) { cachedDisclaimers = (jsons[idx++].items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })); }
-      if (!cachedRegisters)   { cachedRegisters   = (jsons[idx++].items ?? []).map((r: any) => ({ id: r.id, name: r.name })); }
+      if (!cachedRegisters)   { cachedRegisters   = (jsons[idx++].items ?? []).map((r: any) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null })); }
       if (!cachedCompanies)   { cachedCompanies   = (jsons[idx++].items ?? []).map((c: any) => ({ id: c.id, name: c.name, cui: c.cui })); }
 
       setAllDepartments(cachedDepartments!);
@@ -424,6 +428,47 @@ function LocatiiPanel() {
                 <Show when={!editLoading()}>
                   <div class="cfg-assoc-section">
                     <div class="cfg-assoc-header">
+                      <span class="cfg-assoc-label">Companie</span>
+                    </div>
+                    <select
+                      class="input"
+                      value={editCompanyId() ?? 0}
+                      onChange={e => {
+                        const v = parseInt(e.currentTarget.value);
+                        setEditCompanyId(v === 0 ? null : v);
+                        setEditRegisterId(null);
+                      }}
+                    >
+                      <option value={0}>— Fără companie —</option>
+                      <For each={allCompanies()}>
+                        {(c) => <option value={c.id}>{c.name} (CUI {c.cui})</option>}
+                      </For>
+                    </select>
+                  </div>
+
+                  <Show when={editCompanyId() !== null}>
+                    <div class="cfg-assoc-section">
+                      <div class="cfg-assoc-header">
+                        <span class="cfg-assoc-label">Registru</span>
+                      </div>
+                      <select
+                        class="input"
+                        value={editRegisterId() ?? 0}
+                        onChange={e => {
+                          const v = parseInt(e.currentTarget.value);
+                          setEditRegisterId(v === 0 ? null : v);
+                        }}
+                      >
+                        <option value={0}>— Fără registru —</option>
+                        <For each={allRegisters().filter(r => r.company_id === editCompanyId())}>
+                          {(r) => <option value={r.id}>{r.name}</option>}
+                        </For>
+                      </select>
+                    </div>
+                  </Show>
+
+                  <div class="cfg-assoc-section">
+                    <div class="cfg-assoc-header">
                       <span class="cfg-assoc-label">Disclaimer</span>
                     </div>
                     <select
@@ -440,91 +485,57 @@ function LocatiiPanel() {
                       </For>
                     </select>
                   </div>
-
-                  <div class="cfg-assoc-section">
-                    <div class="cfg-assoc-header">
-                      <span class="cfg-assoc-label">Registru</span>
-                    </div>
-                    <select
-                      class="input"
-                      value={editRegisterId() ?? 0}
-                      onChange={e => {
-                        const v = parseInt(e.currentTarget.value);
-                        setEditRegisterId(v === 0 ? null : v);
-                      }}
-                    >
-                      <option value={0}>— Fără registru —</option>
-                      <For each={allRegisters()}>
-                        {(r) => <option value={r.id}>{r.name}</option>}
-                      </For>
-                    </select>
-                  </div>
                 </Show>
 
                 <Show when={!editLoading() && allDepartments().length > 0}>
                   <div class="cfg-assoc-section">
-                    <div class="cfg-assoc-header">
-                      <span class="cfg-assoc-label">Departamente</span>
-                      <div class="cfg-assoc-btns">
+                    <div class="cfg-assoc-header cfg-assoc-header--toggle" onClick={() => setDeptOpen(o => !o)}>
+                      <span class="cfg-assoc-label">Departamente ({editDepartmentIds().size}/{allDepartments().length})</span>
+                      <span class="cfg-accordion-arrow">{deptOpen() ? "▲" : "▼"}</span>
+                    </div>
+                    <Show when={deptOpen()}>
+                      <div class="cfg-assoc-btns" style="margin-bottom:6px">
                         <button class="cfg-assoc-btn" onClick={() => setEditDepartmentIds(new Set(allDepartments().map(d => d.id)))}>Toate</button>
                         <button class="cfg-assoc-btn" onClick={() => setEditDepartmentIds(new Set<number>())}>Niciuna</button>
                       </div>
-                    </div>
-                    <div class="cfg-chip-grid">
-                      <For each={allDepartments()}>
-                        {(d) => (
-                          <button
-                            class="cfg-chip"
-                            classList={{ "cfg-chip--active": editDepartmentIds().has(d.id) }}
-                            onClick={() => setEditDepartmentIds(toggleNum(editDepartmentIds(), d.id))}
-                          >{d.name}</button>
-                        )}
-                      </For>
-                    </div>
+                      <div class="cfg-chip-grid">
+                        <For each={allDepartments()}>
+                          {(d) => (
+                            <button
+                              class="cfg-chip"
+                              classList={{ "cfg-chip--active": editDepartmentIds().has(d.id) }}
+                              onClick={() => setEditDepartmentIds(toggleNum(editDepartmentIds(), d.id))}
+                            >{d.name}</button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
                   </div>
                 </Show>
 
                 <Show when={!editLoading() && allEmployees().length > 0}>
                   <div class="cfg-assoc-section">
-                    <div class="cfg-assoc-header">
-                      <span class="cfg-assoc-label">Angajați</span>
-                      <div class="cfg-assoc-btns">
+                    <div class="cfg-assoc-header cfg-assoc-header--toggle" onClick={() => setEmpOpen(o => !o)}>
+                      <span class="cfg-assoc-label">Angajați ({editEmpIds().size}/{allEmployees().length})</span>
+                      <span class="cfg-accordion-arrow">{empOpen() ? "▲" : "▼"}</span>
+                    </div>
+                    <Show when={empOpen()}>
+                      <div class="cfg-assoc-btns" style="margin-bottom:6px">
                         <button class="cfg-assoc-btn" onClick={() => setEditEmpIds(new Set(allEmployees().map(e => e.id)))}>Toți</button>
                         <button class="cfg-assoc-btn" onClick={() => setEditEmpIds(new Set<number>())}>Niciunul</button>
                       </div>
-                    </div>
-                    <div class="cfg-chip-grid">
-                      <For each={allEmployees()}>
-                        {(e) => (
-                          <button
-                            class="cfg-chip"
-                            classList={{ "cfg-chip--active": editEmpIds().has(e.id) }}
-                            onClick={() => setEditEmpIds(toggleNum(editEmpIds(), e.id))}
-                          >{e.name}</button>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-
-                <Show when={!editLoading()}>
-                  <div class="cfg-assoc-section">
-                    <div class="cfg-assoc-header">
-                      <span class="cfg-assoc-label">Companie</span>
-                    </div>
-                    <select
-                      class="input"
-                      value={editCompanyId() ?? 0}
-                      onChange={e => {
-                        const v = parseInt(e.currentTarget.value);
-                        setEditCompanyId(v === 0 ? null : v);
-                      }}
-                    >
-                      <option value={0}>— Fără companie —</option>
-                      <For each={allCompanies()}>
-                        {(c) => <option value={c.id}>{c.name} (CUI {c.cui})</option>}
-                      </For>
-                    </select>
+                      <div class="cfg-chip-grid">
+                        <For each={allEmployees()}>
+                          {(e) => (
+                            <button
+                              class="cfg-chip"
+                              classList={{ "cfg-chip--active": editEmpIds().has(e.id) }}
+                              onClick={() => setEditEmpIds(toggleNum(editEmpIds(), e.id))}
+                            >{e.name}</button>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
                   </div>
                 </Show>
 
@@ -1831,7 +1842,7 @@ function CompaniiPanel() {
 // ─── Register panel ───────────────────────────────────────────────────────────
 
 interface RegisterItem {
-  id: number; name: string;
+  id: number; name: string; company_id: number | null;
   deviz_serie: string; deviz_numar: number;
   factura_serie: string; factura_numar: number;
   chitanta_serie: string; chitanta_numar: number;
@@ -1841,7 +1852,7 @@ interface RegisterItem {
 type RegForm = Omit<RegisterItem, "id">;
 
 const emptyRegForm = (): RegForm => ({
-  name: "",
+  name: "", company_id: null,
   deviz_serie: "", deviz_numar: 0,
   factura_serie: "", factura_numar: 0,
   chitanta_serie: "", chitanta_numar: 0,
@@ -1858,14 +1869,22 @@ function RegisterPanel() {
   const [deleteTarget, setDeleteTarget] = createSignal<RegisterItem | null>(null);
   const [saving, setSaving]   = createSignal(false);
   const [error, setError]     = createSignal<string | null>(null);
+  const [companies, setCompanies] = createSignal<{ id: number; name: string }[]>([]);
 
   async function load() {
     setLoading(true);
     try {
-      const res = await apiFetch("/api/registers?limit=200");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const [regRes, compRes] = await Promise.all([
+        apiFetch("/api/registers?limit=200"),
+        apiFetch("/api/companies?limit=200"),
+      ]);
+      if (!regRes.ok) throw new Error();
+      const data = await regRes.json();
       setItems(data.items ?? []);
+      if (compRes.ok) {
+        const cd = await compRes.json();
+        setCompanies((cd.items ?? []).map((c: any) => ({ id: c.id, name: c.name })));
+      }
     } catch {
       setError("Eroare la încărcare.");
     } finally { setLoading(false); }
@@ -1916,15 +1935,19 @@ function RegisterPanel() {
     } finally { setSaving(false); }
   }
 
+  function companyName(id: number | null) {
+    return id ? (companies().find(c => c.id === id)?.name ?? `#${id}`) : "—";
+  }
+
   function doExportCSV() {
     exportCSV("Registre",
-      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
-      items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
+      ["Companie", "Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
+      items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
   function doExportPDF() {
     exportPDF("Registre",
-      ["Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
-      items().map(r => [r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
+      ["Companie", "Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
+      items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
 
   function RegFormFields(props: { f: RegForm; setF: (v: RegForm) => void }) {
@@ -1932,6 +1955,16 @@ function RegisterPanel() {
     const s = (patch: Partial<RegForm>) => props.setF({ ...f(), ...patch });
     return (
       <div class="cfg-location-fields">
+        <select
+          class="input"
+          value={f().company_id ?? 0}
+          onChange={e => { const v = parseInt(e.currentTarget.value); s({ company_id: v === 0 ? null : v }); }}
+        >
+          <option value={0}>— Fără companie —</option>
+          <For each={companies()}>
+            {(c) => <option value={c.id}>{c.name}</option>}
+          </For>
+        </select>
         <input class="input" placeholder="Nume registru *" value={f().name} onInput={e => s({ name: e.currentTarget.value })} />
         <div class="cfg-register-grid">
           <span class="cfg-register-label">Deviz</span>
@@ -1998,6 +2031,9 @@ function RegisterPanel() {
                 <div class="cfg-location-row">
                   <div class="cfg-location-info">
                     <span class="cfg-location-name">{r.name}</span>
+                    <Show when={r.company_id !== null}>
+                      <span class="cfg-location-desc" style="opacity:0.7">{companyName(r.company_id)}</span>
+                    </Show>
                     <span class="cfg-location-desc">
                       Deviz: {r.deviz_serie || "—"} / {r.deviz_numar} &nbsp;·&nbsp;
                       Factură: {r.factura_serie || "—"} / {r.factura_numar} &nbsp;·&nbsp;

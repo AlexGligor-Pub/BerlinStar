@@ -18,6 +18,7 @@ router = APIRouter()
 async def list_registers(
     last_id: int | None = None,
     limit: int = 100,
+    company_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -29,6 +30,8 @@ async def list_registers(
     )
     if last_id is not None:
         stmt = stmt.where(Register.id > last_id)
+    if company_id is not None:
+        stmt = stmt.where(Register.company_id == company_id)
     stmt = stmt.limit(limit + 1)
 
     rows = (await db.execute(stmt)).scalars().all()

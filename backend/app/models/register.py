@@ -13,6 +13,7 @@ class Register(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False)
+    company_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
 
     deviz_serie: Mapped[str] = mapped_column(String(50), nullable=False, default="")
