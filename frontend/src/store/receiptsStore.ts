@@ -15,6 +15,12 @@ export interface Receipt {
   partialPay?: number;
   items: CartItem[];
   total: number;
+  devizSerie: string;
+  devizNr: number;
+  facturaSerie: string;
+  facturaNr: number;
+  chitantaSerie: string;
+  chitantaNr: number;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -42,6 +48,12 @@ function mapFromApi(r: any): Receipt {
       employeeTargetPct: i.employee_target_pct ?? null,
     })),
     total: parseFloat(r.total),
+    devizSerie: r.deviz_serie ?? "",
+    devizNr: r.deviz_nr ?? 0,
+    facturaSerie: r.factura_serie ?? "",
+    facturaNr: r.factura_nr ?? 0,
+    chitantaSerie: r.chitanta_serie ?? "",
+    chitantaNr: r.chitanta_nr ?? 0,
   };
 }
 

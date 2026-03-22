@@ -90,11 +90,14 @@ function drawHeader(doc: any, title: string, serie: string, nr: number, date: st
   doc.text(ro(title), ML, y);
 
   // Serie + Nr + Data — dreapta
-  const serieNr = `${serie ? serie + " " : ""}Nr. ${nr}`;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...C.gray);
-  doc.text(serieNr, PAGE_W - MR, y - 4, { align: "right" });
+  if (serie) {
+    doc.text(`Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}`, PAGE_W - MR, y - 4, { align: "right" });
+  } else {
+    doc.text(`Nr.: ${String(nr).padStart(2, "0")}`, PAGE_W - MR, y - 4, { align: "right" });
+  }
   doc.text(`Data: ${date}`, PAGE_W - MR, y + 1, { align: "right" });
 
   y += 4;

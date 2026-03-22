@@ -360,7 +360,18 @@ function ReceiptCard(props: { receipt: Receipt }) {
       {/* Header card — click pentru expand */}
       <div class="rcard-header" onClick={() => setExpanded((v) => !v)}>
         <div class="rcard-info">
-          <span class="rcard-titlu">{r.titlu}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <span class="rcard-titlu">{r.titlu}</span>
+            <Show when={r.devizNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>
+            </Show>
+            <Show when={r.facturaNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--factura">F {r.facturaSerie}{r.facturaNr}</span>
+            </Show>
+            <Show when={r.chitantaNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {r.chitantaSerie}{r.chitantaNr}</span>
+            </Show>
+          </div>
           <span class="rcard-meta">{dateStr} {timeStr}</span>
         </div>
         <div class="rcard-right">

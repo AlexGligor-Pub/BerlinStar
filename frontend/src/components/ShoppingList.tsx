@@ -113,6 +113,9 @@ export default function ShoppingList() {
         dateTehn: dateTehn().trim() || undefined,
         items: [...cart.items],
         total: cartTotal(),
+        devizSerie: "", devizNr: 0,
+        facturaSerie: "", facturaNr: 0,
+        chitantaSerie: "", chitantaNr: 0,
       });
       clearCart();
       selectEmployee(null);

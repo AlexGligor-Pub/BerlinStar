@@ -2487,6 +2487,20 @@ body {
   flex-wrap: wrap;
 }
 
+/* ─── Receipt Document Tags ─── */
+.rcard-doc-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.rcard-doc-tag--deviz    { background: #1e3a5f; color: #7eb8f7; }
+.rcard-doc-tag--factura  { background: #1a3d2b; color: #6dd49a; }
+.rcard-doc-tag--chitanta { background: #3d2a1a; color: #f0a96d; }
+
 /* ─── Document Download Dropdown ─── */
 .doc-download-wrap {
   position: relative;
