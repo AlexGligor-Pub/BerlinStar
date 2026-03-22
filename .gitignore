@@ -21,6 +21,8 @@ dist/
 
 # Env
 .env
+deploy/.env.dev
+deploy/.env.prod
 
 # OS
 .DS_Store

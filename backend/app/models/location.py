@@ -39,6 +39,7 @@ class Location(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     employees: Mapped[list[Employee]] = relationship(
         "Employee", secondary=employee_locations, back_populates="locations"

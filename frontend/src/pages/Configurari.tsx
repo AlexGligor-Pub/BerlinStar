@@ -2,48 +2,45 @@ import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMou
 import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 
-interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; }
-interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; }
-interface Department { id: number; name: string; description: string | null; }
+interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; image_path: string | null; }
+interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; logo_path: string | null; background_path: string | null; website: string | null; }
+interface Department { id: number; name: string; description: string | null; image_path: string | null; }
 interface Employee  { id: number; name: string; }
 interface EmployeeItem { id: number; name: string; description: string | null; target: string; image_path: string | null; }
 interface Category { id: number; name: string; department_id: number; }
-interface Item { id: number; name: string; description: string | null; price: string; unit: string; type: string; category_id: number; category_name: string | null; }
+interface Item { id: number; name: string; description: string | null; price: string; unit: string; type: string; category_id: number; category_name: string | null; image_path: string | null; }
 
 // ─── Image compression ────────────────────────────────────────────────────────
 
-function compressToJpeg(file: File, maxBytes = 100_000): Promise<File> {
+function compressToPng(file: File, maxBytes = 100_000): Promise<File> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
       URL.revokeObjectURL(url);
-      const MAX_DIM = 1200;
       let w = img.naturalWidth;
       let h = img.naturalHeight;
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h);
-        w = Math.round(w * ratio);
-        h = Math.round(h * ratio);
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0, w, h);
-      let quality = 0.85;
-      const tryNext = () => {
+      const outName = file.name.replace(/\.[^.]+$/, ".png");
+      const tryDim = (scale: number) => {
+        const cw = Math.max(1, Math.round(w * scale));
+        const ch = Math.max(1, Math.round(h * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = cw;
+        canvas.height = ch;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, cw, ch);
         canvas.toBlob((blob) => {
           if (!blob) { reject(new Error("Compresie esuata.")); return; }
-          if (blob.size <= maxBytes || quality <= 0.1) {
-            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+          if (blob.size <= maxBytes || scale <= 0.1) {
+            resolve(new File([blob], outName, { type: "image/png" }));
           } else {
-            quality = Math.max(0.1, +(quality - 0.1).toFixed(2));
-            tryNext();
+            tryDim(+(scale - 0.1).toFixed(2));
           }
-        }, "image/jpeg", quality);
+        }, "image/png");
       };
-      tryNext();
+      // Start at max 1200px on longest side
+      const initScale = Math.min(1, 1200 / Math.max(w, h, 1));
+      tryDim(initScale);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Imagine invalida.")); };
     img.src = url;
@@ -194,6 +191,32 @@ function LocatiiPanel() {
   const [deleteTarget, setDeleteTarget] = createSignal<Location | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [error, setError]   = createSignal<string | null>(null);
+  const [editImagePath, setEditImagePath] = createSignal<string | null>(null);
+  const [imageUploading, setImageUploading] = createSignal(false);
+  let locFileInputRef: HTMLInputElement | undefined;
+
+  async function handleLocImageFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    setImageUploading(true);
+    setError(null);
+    try {
+      const compressed = await compressToPng(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const headers: Record<string, string> = {};
+      if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
+      const res = await fetch(`${API_BASE}/api/locations/${id}/image`, { method: "POST", body: fd, headers });
+      if (!res.ok) throw new Error("Eroare la upload imagine.");
+      const updated = await res.json();
+      setEditImagePath(updated.image_path ?? null);
+      setLocations(locations().map(l => l.id === id ? { ...l, image_path: updated.image_path ?? null } : l));
+    } catch (ex: any) {
+      setError(ex?.message ?? "Eroare la upload.");
+    } finally {
+      setImageUploading(false);
+    }
+  }
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
@@ -246,6 +269,7 @@ function LocatiiPanel() {
     setEditRegisterId(loc.register_id);
     setAddMode(false);
     setError(null);
+    setEditImagePath(loc.image_path ?? null);
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
     setEditCompanyId(loc.company_id);
@@ -429,7 +453,12 @@ function LocatiiPanel() {
               fallback={
                 <div class="cfg-location-row">
                   <div class="cfg-location-info">
-                    <span class="cfg-location-name">{loc.name}</span>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <Show when={loc.image_path}>
+                        <img src={loc.image_path!} class="cfg-employee-avatar cfg-employee-avatar--sm" alt="avatar" />
+                      </Show>
+                      <span class="cfg-location-name">{loc.name}</span>
+                    </div>
                     <Show when={loc.description}>
                       <span class="cfg-location-desc">{loc.description}</span>
                     </Show>
@@ -579,6 +608,22 @@ function LocatiiPanel() {
                   </div>
                 </Show>
 
+                <div class="cfg-employee-image-row">
+                  <input
+                    ref={locFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    style="display:none"
+                    onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) handleLocImageFile(f); ev.currentTarget.value = ""; }}
+                  />
+                  <Show when={editImagePath()}>
+                    <img src={editImagePath()!} class="cfg-employee-avatar" alt="avatar" />
+                  </Show>
+                  <button class="btn btn-sm btn-ghost" disabled={imageUploading()} onClick={() => locFileInputRef?.click()}>
+                    {imageUploading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                  </button>
+                </div>
+
                 <div class="cfg-location-actions">
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(loc)}>Șterge</button>
                   <div style="flex:1" />
@@ -601,9 +646,12 @@ function DepartamentePanel() {
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch]   = createSignal("");
 
-  const [editId, setEditId]       = createSignal<number | null>(null);
-  const [editName, setEditName]   = createSignal("");
-  const [editDesc, setEditDesc]   = createSignal("");
+  const [editId, setEditId]               = createSignal<number | null>(null);
+  const [editName, setEditName]           = createSignal("");
+  const [editDesc, setEditDesc]           = createSignal("");
+  const [editImagePath, setEditImagePath] = createSignal<string | null>(null);
+  const [imageUploading, setImageUploading] = createSignal(false);
+  let deptFileInputRef: HTMLInputElement | undefined;
 
   const [addMode, setAddMode] = createSignal(false);
   const [newName, setNewName] = createSignal("");
@@ -638,8 +686,32 @@ function DepartamentePanel() {
     setEditId(d.id);
     setEditName(d.name);
     setEditDesc(d.description ?? "");
+    setEditImagePath(d.image_path ?? null);
     setAddMode(false);
     setError(null);
+  }
+
+  async function handleDeptImageFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    setImageUploading(true);
+    setError(null);
+    try {
+      const compressed = await compressToPng(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const headers: Record<string, string> = {};
+      if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
+      const res = await fetch(`${API_BASE}/api/departments/${id}/image`, { method: "POST", body: fd, headers });
+      if (!res.ok) throw new Error("Eroare la upload imagine.");
+      const updated = await res.json();
+      setEditImagePath(updated.image_path ?? null);
+      setItems(items().map(dep => dep.id === id ? { ...dep, image_path: updated.image_path ?? null } : dep));
+    } catch (ex: any) {
+      setError(ex?.message ?? "Eroare la upload.");
+    } finally {
+      setImageUploading(false);
+    }
   }
 
   async function saveEdit() {
@@ -756,6 +828,12 @@ function DepartamentePanel() {
               when={editId() === d.id}
               fallback={
                 <div class="cfg-location-row">
+                  <Show
+                    when={d.image_path}
+                    fallback={<div class="cfg-employee-avatar cfg-employee-avatar--sm cfg-employee-avatar--placeholder">{d.name.charAt(0).toUpperCase()}</div>}
+                  >
+                    <img src={d.image_path!} class="cfg-employee-avatar cfg-employee-avatar--sm" alt="avatar" />
+                  </Show>
                   <div class="cfg-location-info">
                     <span class="cfg-location-name">{d.name}</span>
                     <Show when={d.description}>
@@ -770,6 +848,20 @@ function DepartamentePanel() {
             >
               <div class="cfg-location-row cfg-location-row--edit">
                 <div class="cfg-location-fields">
+                  <div class="cfg-employee-image-row">
+                    <Show
+                      when={editImagePath()}
+                      fallback={<div class="cfg-employee-avatar cfg-employee-avatar--placeholder">{editName().trim().charAt(0).toUpperCase() || "?"}</div>}
+                    >
+                      <img src={editImagePath()!} class="cfg-employee-avatar" alt="avatar" />
+                    </Show>
+                    <input ref={deptFileInputRef} type="file" accept="image/*" style="display:none"
+                      onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) handleDeptImageFile(f); ev.currentTarget.value = ""; }}
+                    />
+                    <button class="btn btn-sm btn-ghost" disabled={imageUploading()} onClick={() => deptFileInputRef?.click()}>
+                      {imageUploading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                    </button>
+                  </div>
                   <input class="input" placeholder="Nume *" value={editName()} onInput={(e) => setEditName(e.currentTarget.value)} />
                   <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
                 </div>
@@ -855,7 +947,7 @@ function AngajatiPanel() {
     setImageUploading(true);
     setError(null);
     try {
-      const compressed = await compressToJpeg(file);
+      const compressed = await compressToPng(file);
       const fd = new FormData();
       fd.append("file", compressed);
       const headers: Record<string, string> = {};
@@ -1280,6 +1372,32 @@ function ProduseSiServiciiPanel() {
   const [itemAddMode, setItemAddMode] = createSignal(false);
   const [itemNewForm, setItemNewForm] = createSignal({ name: "", description: "", price: "", unit: "", type: "Produs", category_id: 0 });
   const [itemDeleteTarget, setItemDeleteTarget] = createSignal<Item | null>(null);
+  const [itemEditImagePath, setItemEditImagePath] = createSignal<string | null>(null);
+  const [itemImageUploading, setItemImageUploading] = createSignal(false);
+  let itemFileInputRef: HTMLInputElement | undefined;
+
+  async function handleItemImageFile(file: File) {
+    const id = itemEditId();
+    if (!id) return;
+    setItemImageUploading(true);
+    setError(null);
+    try {
+      const compressed = await compressToPng(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const headers: Record<string, string> = {};
+      if (auth.token) headers["Authorization"] = `Bearer ${auth.token}`;
+      const res = await fetch(`${API_BASE}/api/items/${id}/image`, { method: "POST", body: fd, headers });
+      if (!res.ok) throw new Error("Eroare la upload imagine.");
+      const updated = await res.json();
+      setItemEditImagePath(updated.image_path ?? null);
+      setItems(items().map(it => it.id === id ? { ...it, image_path: updated.image_path ?? null } : it));
+    } catch (ex: any) {
+      setError(ex?.message ?? "Eroare la upload.");
+    } finally {
+      setItemImageUploading(false);
+    }
+  }
 
   async function loadDepartments() {
     try {
@@ -1622,6 +1740,12 @@ function ProduseSiServiciiPanel() {
             {(it) => (
               <Show when={itemEditId() === it.id} fallback={
                 <div class="cfg-location-row">
+                  <Show
+                    when={it.image_path}
+                    fallback={<div class="cfg-employee-avatar cfg-employee-avatar--sm cfg-employee-avatar--placeholder">{it.name.charAt(0).toUpperCase()}</div>}
+                  >
+                    <img src={it.image_path!} class="cfg-employee-avatar cfg-employee-avatar--sm" alt="avatar" />
+                  </Show>
                   <div class="cfg-location-info">
                     <span class="cfg-location-name">
                       {it.name}
@@ -1637,6 +1761,7 @@ function ProduseSiServiciiPanel() {
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => {
                       setItemEditId(it.id);
+                      setItemEditImagePath(it.image_path ?? null);
                       setItemEditForm({ name: it.name, description: it.description ?? "", price: it.price, unit: it.unit, type: it.type, category_id: it.category_id });
                       setError(null);
                     }}>Editează</button>
@@ -1644,6 +1769,20 @@ function ProduseSiServiciiPanel() {
                 </div>
               }>
                 <div class="cfg-location-row cfg-location-row--edit">
+                  <div class="cfg-employee-image-row" style="margin-bottom:8px">
+                    <Show
+                      when={itemEditImagePath()}
+                      fallback={<div class="cfg-employee-avatar cfg-employee-avatar--placeholder">{itemEditForm().name.trim().charAt(0).toUpperCase() || "?"}</div>}
+                    >
+                      <img src={itemEditImagePath()!} class="cfg-employee-avatar" alt="avatar" />
+                    </Show>
+                    <input ref={itemFileInputRef} type="file" accept="image/*" style="display:none"
+                      onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) handleItemImageFile(f); ev.currentTarget.value = ""; }}
+                    />
+                    <button class="btn btn-sm btn-ghost" disabled={itemImageUploading()} onClick={() => itemFileInputRef?.click()}>
+                      {itemImageUploading() ? "..." : itemEditImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                    </button>
+                  </div>
                   <ItemForm f={itemEditForm()} setF={setItemEditForm} />
                   <div class="cfg-location-actions" style="margin-top:8px">
                     <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
@@ -1682,6 +1821,61 @@ function CompaniiPanel() {
   const [deleteTarget, setDeleteTarget] = createSignal<CompanyItem | null>(null);
   const [saving, setSaving] = createSignal(false);
   const [error, setError]   = createSignal<string | null>(null);
+
+  const [logoUploading, setLogoUploading] = createSignal(false);
+  const [bgUploading, setBgUploading] = createSignal(false);
+  let logoInputRef!: HTMLInputElement;
+  let bgInputRef!: HTMLInputElement;
+
+  async function handleLogoFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    setLogoUploading(true);
+    try {
+      const compressed = await compressToPng(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const token = auth.token;
+      const res = await fetch(`${API_BASE}/api/companies/${id}/logo`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setEditForm(f => ({ ...f, logo_path: data.logo_path }));
+      setItems(items => items.map(c => c.id === id ? { ...c, logo_path: data.logo_path } : c));
+    } catch {
+      setError("Eroare la încărcarea logo-ului.");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function handleBgFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    setBgUploading(true);
+    try {
+      const compressed = await compressToPng(file);
+      const fd = new FormData();
+      fd.append("file", compressed);
+      const token = auth.token;
+      const res = await fetch(`${API_BASE}/api/companies/${id}/background`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setEditForm(f => ({ ...f, background_path: data.background_path }));
+      setItems(items => items.map(c => c.id === id ? { ...c, background_path: data.background_path } : c));
+    } catch {
+      setError("Eroare la încărcarea imaginii de fundal.");
+    } finally {
+      setBgUploading(false);
+    }
+  }
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
@@ -1874,6 +2068,7 @@ function CompaniiPanel() {
             </Show>
             <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
             <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
+            <input class="input" placeholder="Site web (https://...)" value={f().website ?? ""} onInput={e => patchForm("website", e.currentTarget.value)} />
           </div>
           <div class="cfg-location-actions">
             <button class="btn btn-sm btn-primary" disabled={saving() || !f().name?.trim() || !f().cui} onClick={addItem}>Salvează</button>
@@ -1934,6 +2129,34 @@ function CompaniiPanel() {
                   </Show>
                   <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />
+                  <input class="input" placeholder="Site web (https://...)" value={ef().website ?? ""} onInput={e => patchEditForm("website", e.currentTarget.value)} />
+                </div>
+                {/* Logo & Background upload */}
+                <div class="cfg-image-upload-row">
+                  <input ref={logoInputRef!} type="file" accept="image/*" style="display:none"
+                    onChange={e => { const f = e.currentTarget.files?.[0]; if (f) handleLogoFile(f); e.currentTarget.value = ""; }} />
+                  <input ref={bgInputRef!} type="file" accept="image/*" style="display:none"
+                    onChange={e => { const f = e.currentTarget.files?.[0]; if (f) handleBgFile(f); e.currentTarget.value = ""; }} />
+                  <div class="cfg-image-upload-item">
+                    <Show when={ef().logo_path} fallback={
+                      <div class="cfg-img-placeholder" onClick={() => logoInputRef.click()}>Logo</div>
+                    }>
+                      <img src={ef().logo_path!} class="cfg-company-img-preview" alt="Logo" onClick={() => logoInputRef.click()} />
+                    </Show>
+                    <button class="btn btn-ghost btn-sm" disabled={logoUploading()} onClick={() => logoInputRef.click()}>
+                      {logoUploading() ? "Se încarcă..." : ef().logo_path ? "Schimbă logo" : "Adaugă logo"}
+                    </button>
+                  </div>
+                  <div class="cfg-image-upload-item">
+                    <Show when={ef().background_path} fallback={
+                      <div class="cfg-img-placeholder" onClick={() => bgInputRef.click()}>Fundal</div>
+                    }>
+                      <img src={ef().background_path!} class="cfg-company-img-preview cfg-company-img-preview--bg" alt="Fundal" onClick={() => bgInputRef.click()} />
+                    </Show>
+                    <button class="btn btn-ghost btn-sm" disabled={bgUploading()} onClick={() => bgInputRef.click()}>
+                      {bgUploading() ? "Se încarcă..." : ef().background_path ? "Schimbă fundal" : "Adaugă fundal"}
+                    </button>
+                  </div>
                 </div>
                 <div class="cfg-location-actions">
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(c)}>Șterge</button>

@@ -2,7 +2,7 @@ import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { saveReceipt } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
-import { selectedEmployeeName, selectEmployee } from "../store/employeesStore";
+import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -18,6 +18,8 @@ export default function ShoppingList() {
   const [editItem, setEditItem] = createSignal<CartItem | null>(null);
   const [editQty, setEditQty] = createSignal("1");
   const [editPrice, setEditPrice] = createSignal("0");
+
+  const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
@@ -134,14 +136,31 @@ export default function ShoppingList() {
     <div class="shopping-list">
       <div class="shopping-list-header">
         <div class="sl-header-left">
-          <Show when={selectedEmployeeName() !== null}>
-            <span class="sl-employee-badge">{selectedEmployeeName()}</span>
+          <Show when={selectedEmployee() !== null}>
+            {(() => {
+              const e = selectedEmployee()!;
+              return (
+                <span class="sl-employee-badge">
+                  <Show when={e.imagePath}>
+                    <img src={e.imagePath!} class="sl-employee-badge-avatar" alt={e.name} />
+                  </Show>
+                  <span class="sl-employee-badge-info">
+                    <span class="sl-employee-badge-name">{e.name}</span>
+                    <Show when={e.target > 0}>
+                      <span class="sl-employee-badge-pct">
+                        {Math.round(e.currentTargetAccumulation / e.target * 100)}%
+                      </span>
+                    </Show>
+                  </span>
+                </span>
+              );
+            })()}
           </Show>
         </div>
         <div class="sl-header-right">
-          <button class="btn btn-ghost btn-sm" onClick={openManual} title="Adauga produs manual">+ Manual</button>
+          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adauga produs manual">+ Manual</button>
           <Show when={cart.items.length > 0}>
-            <button class="btn btn-ghost btn-sm" onClick={clearCart}>Sterge tot</button>
+            <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={() => setShowClearConfirm(true)}>Sterge tot</button>
           </Show>
         </div>
       </div>
@@ -212,6 +231,23 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Clear confirm modal */}
+      <Show when={showClearConfirm()}>
+        <div class="sl-modal-overlay" onClick={() => setShowClearConfirm(false)}>
+          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Șterge tot</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>✕</button>
+            </div>
+            <p style="padding:16px 0;text-align:center;color:var(--text-muted)">Ești sigur că vrei să ștergi toate produsele din coș?</p>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>Anulează</button>
+              <button class="btn btn-danger btn-sm" onClick={() => { clearCart(); setShowClearConfirm(false); }}>Șterge tot</button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Edit item modal */}
       <Show when={editItem() !== null}>

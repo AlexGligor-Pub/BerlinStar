@@ -23,6 +23,7 @@ class LocationRead(BaseModel):
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool
+    image_path: str | None
 
 
 class LocationDetail(LocationRead):

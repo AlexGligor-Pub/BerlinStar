@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone, date
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
@@ -11,6 +11,7 @@ from app.models.company import Company
 from app.schemas.company import CompanyCreate, CompanyUpdate, CompanyRead
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
+from app.utils.storage import upload_image, delete_image_by_url
 
 router = APIRouter()
 
@@ -121,6 +122,58 @@ async def update_company(
         setattr(company, k, v)
     company.updated_at = datetime.now(timezone.utc)
     await db.commit()
+    await db.refresh(company)
+    return company
+
+
+@router.post("/{company_id}/logo", response_model=CompanyRead)
+async def upload_logo(
+    company_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    company = await db.get(Company, company_id)
+    if company is None or company.account_id != account_id or company.is_deleted:
+        raise HTTPException(404, "Compania nu a fost găsită.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fișierul trebuie să fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depăși 5MB.")
+    old_url = company.logo_path
+    url = upload_image(account_id, "companies/logos", data, file.content_type)
+    company.logo_path = url
+    company.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    if old_url:
+        delete_image_by_url(old_url)
+    await db.refresh(company)
+    return company
+
+
+@router.post("/{company_id}/background", response_model=CompanyRead)
+async def upload_background(
+    company_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    company = await db.get(Company, company_id)
+    if company is None or company.account_id != account_id or company.is_deleted:
+        raise HTTPException(404, "Compania nu a fost găsită.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fișierul trebuie să fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depăși 5MB.")
+    old_url = company.background_path
+    url = upload_image(account_id, "companies/backgrounds", data, file.content_type)
+    company.background_path = url
+    company.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    if old_url:
+        delete_image_by_url(old_url)
     await db.refresh(company)
     return company
 

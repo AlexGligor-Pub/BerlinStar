@@ -86,9 +86,16 @@ export default function POS() {
     }
   });
 
+  const locationDeptIds = createMemo(() =>
+    new Set(catalogDepartments().map((d) => d.id))
+  );
+
   const categories = createMemo(() => {
     const tid = selectedDepartmentId();
-    const base = tid === null ? products() : products().filter((p) => p.departmentId === tid);
+    const deptIds = locationDeptIds();
+    const base = products().filter((p) =>
+      tid !== null ? p.departmentId === tid : deptIds.has(p.departmentId!)
+    );
     const cats = new Set(base.map((p) => p.category));
     return ["Toate", ...Array.from(cats)];
   });
@@ -97,12 +104,53 @@ export default function POS() {
     const q = search().toLowerCase();
     const tf = typeFilter();
     const tid = selectedDepartmentId();
+    const deptIds = locationDeptIds();
     return products().filter((p) => {
       const matchCat = category() === "Toate" || p.category === category();
       const matchSearch = !q || p.name.toLowerCase().includes(q);
       const matchType = tf === "Produse/Servicii" || p.type === (tf === "Servicii" ? "Serviciu" : "Produs");
-      const matchTheme = tid === null || p.departmentId === tid;
+      const matchTheme = tid !== null ? p.departmentId === tid : deptIds.has(p.departmentId!);
       return matchCat && matchSearch && matchType && matchTheme;
+    });
+  });
+
+  const [activeEmpTab, setActiveEmpTab] = createSignal<string | null>(null);
+
+  const EMP_VIEW_KEY = "bs_emp_view_mode";
+  const savedView = localStorage.getItem(EMP_VIEW_KEY);
+  const [empViewMode, setEmpViewMode] = createSignal<"tabs" | "simplu" | "linie">(
+    (savedView === "tabs" || savedView === "simplu" || savedView === "linie") ? savedView : "tabs"
+  );
+  function setAndSaveEmpViewMode(mode: "tabs" | "simplu" | "linie") {
+    setEmpViewMode(mode);
+    localStorage.setItem(EMP_VIEW_KEY, mode);
+  }
+
+  type EmpGroup = { label: string; list: ReturnType<typeof employees> };
+  const employeeGroups = createMemo((): EmpGroup[] => {
+    const map = new Map<string, ReturnType<typeof employees>>();
+    const sorted = [...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"));
+    for (const e of sorted) {
+      const key = e.description?.trim() || "";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    }
+    const named: EmpGroup[] = [...map.entries()]
+      .filter(([k]) => k !== "")
+      .sort(([a], [b]) => a.localeCompare(b, "ro"))
+      .map(([label, list]) => ({ label, list }));
+    const noCategory = map.get("") ?? [];
+    if (noCategory.length > 0) named.push({ label: "", list: noCategory });
+    return named;
+  });
+
+  // Când se încarcă grupurile, setează tab-ul activ pe primul grup
+  createEffect(() => {
+    const groups = employeeGroups();
+    if (groups.length === 0) return;
+    setActiveEmpTab((prev) => {
+      if (prev !== null && groups.some(g => g.label === prev)) return prev;
+      return groups[0].label;
     });
   });
 
@@ -143,9 +191,6 @@ export default function POS() {
                   )}
                 </For>
               </div>
-              <button class="btn btn-sm btn-ghost" onClick={openDevizModal}>
-                Deviz existent
-              </button>
               <button
                 class="btn btn-sm pos-panel-slide-btn"
                 classList={{
@@ -155,6 +200,9 @@ export default function POS() {
                 onClick={() => setPanel(1)}
               >
                 {activeDepartmentName() ?? "Departament"} ▶
+              </button>
+              <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
+                Deviz existent
               </button>
             </div>
 
@@ -207,25 +255,104 @@ export default function POS() {
                 </For>
               </div>
 
-              <h2 class="pos-theme-title" style="margin-top:28px">Angajati</h2>
-              <div class="pos-employee-grid">
-                <For each={employees()}>
-                  {(e) => (
+              <Show when={employeeGroups().length > 0}>
+                <div class="pos-emp-section-header" style="margin-top:28px">
+                  <h2 class="pos-theme-title">Angajati</h2>
+                  <div class="pos-emp-view-toggle">
                     <button
-                      class="pos-employee-card"
-                      classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
-                      onClick={() => { selectEmployee(e.id); setPanel(0); }}
-                    >
-                      {e.name}
-                      {e.target > 0 && (
-                        <span class="pos-employee-pct">
-                          {Math.round(e.currentTargetAccumulation / e.target * 100)}%
-                        </span>
+                      class="pos-emp-view-btn"
+                      classList={{ "pos-emp-view-btn--active": empViewMode() === "tabs" }}
+                      onClick={() => setAndSaveEmpViewMode("tabs")}
+                    >Tabs</button>
+                    <button
+                      class="pos-emp-view-btn"
+                      classList={{ "pos-emp-view-btn--active": empViewMode() === "simplu" }}
+                      onClick={() => setAndSaveEmpViewMode("simplu")}
+                    >Simplu</button>
+                    <button
+                      class="pos-emp-view-btn"
+                      classList={{ "pos-emp-view-btn--active": empViewMode() === "linie" }}
+                      onClick={() => setAndSaveEmpViewMode("linie")}
+                    >Linie</button>
+                  </div>
+                </div>
+
+                {/* Tabs view */}
+                <Show when={empViewMode() === "tabs"}>
+                  <div class="pos-emp-tabs">
+                    <For each={employeeGroups()}>
+                      {(group) => (
+                        <button
+                          class="pos-emp-tab"
+                          classList={{ "pos-emp-tab--active": activeEmpTab() === group.label }}
+                          onClick={() => setActiveEmpTab(group.label)}
+                        >
+                          {group.label || "—"}
+                        </button>
                       )}
-                    </button>
-                  )}
-                </For>
-              </div>
+                    </For>
+                  </div>
+                  <div class="pos-employee-grid">
+                    <For each={employeeGroups().find(g => g.label === activeEmpTab())?.list ?? []}>
+                      {(e) => (
+                        <button
+                          class="pos-employee-card"
+                          classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
+                          onClick={() => { selectEmployee(e.id); setPanel(0); }}
+                        >
+                          {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
+                          <span class="pos-employee-card-name">{e.name}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+
+                {/* Simplu view */}
+                <Show when={empViewMode() === "simplu"}>
+                  <div class="pos-employee-grid">
+                    <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
+                      {(e) => (
+                        <button
+                          class="pos-employee-card"
+                          classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
+                          onClick={() => { selectEmployee(e.id); setPanel(0); }}
+                        >
+                          {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
+                          <span class="pos-employee-card-name">{e.name}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+
+                {/* Linie view */}
+                <Show when={empViewMode() === "linie"}>
+                  <div class="pos-emp-linie">
+                    <For each={employeeGroups()}>
+                      {(group) => (
+                        <>
+                          <div class="pos-emp-linie-header">
+                            {group.label || "Fără categorie"}
+                          </div>
+                          <For each={group.list}>
+                            {(e) => (
+                              <button
+                                class="pos-emp-linie-item"
+                                classList={{ "pos-emp-linie-item--active": selectedEmployeeId() === e.id }}
+                                onClick={() => { selectEmployee(e.id); setPanel(0); }}
+                              >
+                                {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
+                                <span class="pos-emp-linie-name">{e.name}</span>
+                              </button>
+                            )}
+                          </For>
+                        </>
+                      )}
+                    </For>
+                  </div>
+                </Show>
+              </Show>
 
             </div>
           </div>

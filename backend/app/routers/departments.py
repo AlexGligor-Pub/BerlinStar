@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,7 @@ from app.schemas.department import DepartmentCreate, DepartmentUpdate, Departmen
 from app.schemas.category import CategoryRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.storage import upload_image, delete_image_by_url
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -109,6 +110,31 @@ async def patch_department(
     department.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(department)
+    return department
+
+
+@router.post("/{department_id}/image", response_model=DepartmentRead)
+async def upload_department_image(
+    department_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    department = await db.get(Department, department_id)
+    if department is None or department.account_id != account_id or department.is_deleted:
+        raise HTTPException(404, "Departamentul nu a fost găsit.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    old_url = department.image_path
+    url = upload_image(account_id, "departments", data, file.content_type)
+    department.image_path = url
+    await db.commit()
+    await db.refresh(department)
+    if old_url:
+        delete_image_by_url(old_url)
     return department
 
 

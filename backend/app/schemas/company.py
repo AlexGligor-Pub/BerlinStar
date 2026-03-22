@@ -15,6 +15,7 @@ class CompanyCreate(BaseModel):
     registration_status: str | None = Field(None, max_length=200)
     description: str | None = None
     comments: str | None = None
+    website: str | None = Field(None, max_length=500)
 
 
 class CompanyUpdate(BaseModel):
@@ -29,6 +30,9 @@ class CompanyUpdate(BaseModel):
     registration_status: str | None = Field(None, max_length=200)
     description: str | None = None
     comments: str | None = None
+    website: str | None = Field(None, max_length=500)
+    logo_path: str | None = Field(None, max_length=500)
+    background_path: str | None = Field(None, max_length=500)
 
 
 class CompanyRead(BaseModel):
@@ -47,6 +51,9 @@ class CompanyRead(BaseModel):
     registration_status: str | None
     description: str | None
     comments: str | None
+    logo_path: str | None
+    background_path: str | None
+    website: str | None
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool

@@ -9,9 +9,10 @@ export interface Product {
   category: string;
   type: string;
   departmentId: number | null;
+  imagePath: string | null;
 }
 
-const CACHE_KEY = "bs_products_cache";
+const CACHE_KEY = "bs_products_cache_v2";
 
 function getCached(): Product[] | null {
   try {
@@ -39,6 +40,7 @@ export async function loadProducts() {
       category: item.category_name ?? "",
       type: item.type ?? "Produs",
       departmentId: item.department_id ?? null,
+      imagePath: item.image_path ?? null,
     }));
     setProducts(mapped);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));

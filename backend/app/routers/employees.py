@@ -11,7 +11,7 @@ from app.models.location import employee_locations
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
-from app.utils.storage import upload_employee_image
+from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -102,10 +102,13 @@ async def upload_image(
     data = await file.read()
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
-    url = upload_employee_image(data, file.content_type)
+    old_url = employee.image_path
+    url = storage_upload_image(account_id, "employees", data, file.content_type)
     employee.image_path = url
     await db.commit()
     await db.refresh(employee)
+    if old_url:
+        delete_image_by_url(old_url)
     return employee
 
 

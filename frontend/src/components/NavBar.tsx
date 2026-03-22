@@ -1,13 +1,29 @@
 import { useNavigate } from "@solidjs/router";
-import { auth, logout } from "../store/authStore";
+import { auth, logout, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
 import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
-import { Show, createSignal, onCleanup } from "solid-js";
+import { Show, createSignal, onCleanup, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
 
 export default function NavBar() {
   const navigate = useNavigate();
   const [open, setOpen] = createSignal(false);
+
+  const trialBanner = createMemo(() => {
+    if (!auth.isLocked || !auth.lockedAt) return null;
+    const ms = trialRemainingMs();
+    if (ms <= 0) return null;
+    const totalHours = Math.floor(ms / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    const lockedDate = new Date(auth.lockedAt);
+    const expiry = new Date(lockedDate.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    const expiryStr = expiry.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" });
+    if (days > 0) {
+      return `Acces trial activ pana pe ${expiryStr} — mai ai ${days} zile si ${hours} ore.`;
+    }
+    return `Acces trial activ pana pe ${expiryStr} — mai ai ${hours} ore.`;
+  });
 
   function handleLogout() {
     setOpen(false);
@@ -83,6 +99,10 @@ export default function NavBar() {
             </div>
           </Show>
         </div>
+
+        <Show when={trialBanner()}>
+          <span class="navbar-trial-badge">{trialBanner()}</span>
+        </Show>
       </nav>
     </>
   );

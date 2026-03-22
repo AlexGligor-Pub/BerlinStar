@@ -1,5 +1,5 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -12,6 +12,7 @@ from app.models.employee import Employee
 from app.schemas.location import LocationCreate, LocationRead, LocationDetail, IdsBody
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
+from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ def _to_detail(loc: Location) -> LocationDetail:
         created_at=loc.created_at,
         updated_at=loc.updated_at,
         is_deleted=loc.is_deleted,
+        image_path=loc.image_path,
         department_ids=[d.id for d in loc.departments],
         employee_ids=[e.id for e in loc.employees],
     )
@@ -121,6 +123,31 @@ async def update_location(
     location.company_id = body.company_id
     await db.commit()
     await db.refresh(location)
+    return location
+
+
+@router.post("/{location_id}/image", response_model=LocationRead)
+async def upload_location_image(
+    location_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    location = await db.get(Location, location_id)
+    if location is None or location.account_id != account_id or location.is_deleted:
+        raise HTTPException(404, "Locația nu a fost găsită.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    old_url = location.image_path
+    url = storage_upload_image(account_id, "locations", data, file.content_type)
+    location.image_path = url
+    await db.commit()
+    await db.refresh(location)
+    if old_url:
+        delete_image_by_url(old_url)
     return location
 
 

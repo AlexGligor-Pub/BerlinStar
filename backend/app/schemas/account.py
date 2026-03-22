@@ -19,6 +19,8 @@ class AccountUpdate(BaseModel):
     password: str | None = Field(None, max_length=255)
     email: str | None = Field(None, max_length=255)
     image_url: str | None = Field(None, max_length=500)
+    is_locked: bool | None = None
+    locked_at: datetime | None = None
 
 
 class AccountRead(BaseModel):
@@ -33,3 +35,5 @@ class AccountRead(BaseModel):
     username: str
     email: str | None
     image_url: str | None
+    is_locked: bool
+    locked_at: datetime | None

@@ -37,10 +37,10 @@ const pendingName = stored ? stored.name : generateDeviceName();
 
 export { device, deviceReady, pendingName };
 
-export async function registerDevice(locationId: number): Promise<void> {
+export async function registerDevice(locationId: number, name: string = pendingName): Promise<void> {
   const res = await apiFetch("/api/devices", {
     method: "POST",
-    body: JSON.stringify({ name: pendingName, location_id: locationId }),
+    body: JSON.stringify({ name, location_id: locationId }),
   });
   if (!res.ok) throw new Error("Eroare la inregistrarea dispozitivului.");
   const data = await res.json();

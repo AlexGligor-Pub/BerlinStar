@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from app.models.category import Category
 from app.schemas.item import ItemCreate, ItemUpdate, ItemRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.storage import upload_image, delete_image_by_url
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -133,6 +134,33 @@ async def patch_item(
     await db.commit()
     await db.refresh(item)
     return item
+
+
+@router.post("/{item_id}/image", response_model=ItemRead)
+async def upload_item_image(
+    item_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    item = await db.get(Item, item_id)
+    if item is None or item.account_id != account_id or item.is_deleted:
+        raise HTTPException(404, "Item-ul nu a fost gasit.")
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    old_url = item.image_path
+    url = upload_image(account_id, "items", data, file.content_type)
+    item.image_path = url
+    await db.commit()
+    if old_url:
+        delete_image_by_url(old_url)
+    result = await db.execute(
+        select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
+    )
+    return _with_category_name(result.scalar_one())
 
 
 @router.delete("/{item_id}", status_code=204)
