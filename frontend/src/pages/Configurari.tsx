@@ -2,6 +2,7 @@ import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMou
 import { apiFetch } from "../utils/api";
 
 interface Location { id: number; name: string; description: string | null; department_ids: number[]; employee_ids: number[]; }
+interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; registration_status: string | null; description: string | null; comments: string | null; }
 interface Department { id: number; name: string; description: string | null; }
 interface Employee  { id: number; name: string; }
 interface EmployeeItem { id: number; name: string; description: string | null; target: string; }
@@ -820,6 +821,156 @@ function AngajatiPanel() {
   );
 }
 
+// ─── Disclaimers panel ────────────────────────────────────────────────────────
+
+interface DisclaimerItem { id: number; text: string; }
+
+function DisclaimersPanel() {
+  const PAGE = 20;
+  const [items, setItems] = createSignal<DisclaimerItem[]>([]);
+  const [loading, setLoading] = createSignal(false);
+  const [hasMore, setHasMore] = createSignal(false);
+  const [nextCursor, setNextCursor] = createSignal<number | null>(null);
+
+  const [editId, setEditId] = createSignal<number | null>(null);
+  const [editText, setEditText] = createSignal("");
+  const [addOpen, setAddOpen] = createSignal(false);
+  const [addText, setAddText] = createSignal("");
+  const [deleteId, setDeleteId] = createSignal<number | null>(null);
+  const [saving, setSaving] = createSignal(false);
+
+  async function loadPage(cursor: number | null, append: boolean) {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: String(PAGE) });
+      if (cursor !== null) params.set("last_id", String(cursor));
+      const data = await apiFetch(`/api/disclaimers?${params}`);
+      const newItems: DisclaimerItem[] = (data.items ?? []).map((d: any) => ({ id: d.id, text: d.text }));
+      setItems(append ? [...items(), ...newItems] : newItems);
+      setHasMore(data.next_cursor !== null && data.next_cursor !== undefined);
+      setNextCursor(data.next_cursor ?? null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(() => loadPage(null, false));
+
+  function startEdit(d: DisclaimerItem) { setEditId(d.id); setEditText(d.text); }
+  function cancelEdit() { setEditId(null); setEditText(""); }
+
+  async function saveEdit(id: number) {
+    setSaving(true);
+    try {
+      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ text: editText() }) });
+      setItems(items().map(d => d.id === id ? { ...d, text: editText() } : d));
+      cancelEdit();
+    } finally { setSaving(false); }
+  }
+
+  async function saveAdd() {
+    if (!addText().trim()) return;
+    setSaving(true);
+    try {
+      const created = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ text: addText() }) });
+      setItems([...items(), { id: created.id, text: created.text }]);
+      setAddText(""); setAddOpen(false);
+    } finally { setSaving(false); }
+  }
+
+  async function confirmDelete() {
+    const id = deleteId();
+    if (id === null) return;
+    setSaving(true);
+    try {
+      await apiFetch(`/api/disclaimers/${id}`, { method: "DELETE" });
+      setItems(items().filter(d => d.id !== id));
+      setDeleteId(null);
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div class="cfg-panel">
+      <div class="cfg-panel-header">
+        <span class="cfg-panel-title">Disclaimers</span>
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); }}>
+          + Adaugă disclaimer
+        </button>
+      </div>
+
+      <Show when={addOpen()}>
+        <div class="cfg-form">
+          <textarea
+            class="cfg-input"
+            rows={4}
+            placeholder="Textul disclaimerului..."
+            value={addText()}
+            onInput={e => setAddText(e.currentTarget.value)}
+          />
+          <div class="cfg-form-actions">
+            <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setAddText(""); }}>Anulează</button>
+          </div>
+        </div>
+      </Show>
+
+      <div class="cfg-location-list">
+        <For each={items()}>
+          {(d) => (
+            <div class="cfg-location-row">
+              <Show when={editId() === d.id}
+                fallback={
+                  <>
+                    <span class="cfg-location-name" style="white-space:pre-wrap">{d.text}</span>
+                    <div class="cfg-location-actions">
+                      <button class="btn btn-sm btn-ghost" onClick={() => startEdit(d)}>Editează</button>
+                      <button class="btn btn-sm btn-danger" onClick={() => setDeleteId(d.id)}>Șterge</button>
+                    </div>
+                  </>
+                }
+              >
+                <div class="cfg-form" style="flex:1">
+                  <textarea
+                    class="cfg-input"
+                    rows={4}
+                    value={editText()}
+                    onInput={e => setEditText(e.currentTarget.value)}
+                  />
+                  <div class="cfg-form-actions">
+                    <button class="btn btn-sm btn-primary" disabled={saving()} onClick={() => saveEdit(d.id)}>Salvează</button>
+                    <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  </div>
+                </div>
+              </Show>
+            </div>
+          )}
+        </For>
+      </div>
+
+      <Show when={loading()}><p class="cfg-loading">Se încarcă...</p></Show>
+
+      <Show when={hasMore() && !loading()}>
+        <button class="btn btn-sm btn-ghost cfg-load-more" onClick={() => loadPage(nextCursor(), true)}>
+          Încarcă mai mult
+        </button>
+      </Show>
+
+      <Show when={deleteId() !== null}>
+        <div class="modal-backdrop">
+          <div class="modal">
+            <p class="modal-title">Șterge disclaimer?</p>
+            <p class="modal-body">Această acțiune nu poate fi anulată.</p>
+            <div class="modal-actions">
+              <button class="btn btn-sm btn-danger" disabled={saving()} onClick={confirmDelete}>Șterge</button>
+              <button class="btn btn-sm btn-ghost" onClick={() => setDeleteId(null)}>Anulează</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 // ─── Produse și Servicii panel ────────────────────────────────────────────────
 
 function ProduseSiServiciiPanel() {
@@ -1194,6 +1345,278 @@ function ProduseSiServiciiPanel() {
   );
 }
 
+// ─── Companii panel ───────────────────────────────────────────────────────────
+
+function CompaniiPanel() {
+  const [items, setItems]     = createSignal<CompanyItem[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [search, setSearch]   = createSignal("");
+
+  // Add form state
+  const [addMode, setAddMode] = createSignal(false);
+  const [cuiInput, setCuiInput]   = createSignal("");
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [anafError, setAnafError]     = createSignal<string | null>(null);
+  const [form, setForm] = createSignal<Partial<CompanyItem>>({});
+
+  // Edit state
+  const [editId, setEditId] = createSignal<number | null>(null);
+  const [editForm, setEditForm] = createSignal<Partial<CompanyItem>>({});
+
+  const [deleteTarget, setDeleteTarget] = createSignal<CompanyItem | null>(null);
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError]   = createSignal<string | null>(null);
+
+  const filtered = createMemo(() => {
+    const q = search().toLowerCase();
+    return q ? items().filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      String(c.cui).includes(q) ||
+      (c.nr_reg_com ?? "").toLowerCase().includes(q)
+    ) : items();
+  });
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await apiFetch("/api/companies?limit=200");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setItems(data.items ?? []);
+    } catch {
+      setError("Eroare la încărcare.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(load);
+
+  async function searchAnaf() {
+    const cui = parseInt(cuiInput().replace(/\D/g, ""));
+    if (!cui) return;
+    setAnafLoading(true);
+    setAnafError(null);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm(data);
+    } catch {
+      setAnafError("Eroare la interogarea ANAF. Verificați conexiunea.");
+    } finally {
+      setAnafLoading(false);
+    }
+  }
+
+  function patchForm(key: keyof CompanyItem, val: string | boolean | null) {
+    setForm(f => ({ ...f, [key]: val }));
+  }
+  function patchEditForm(key: keyof CompanyItem, val: string | boolean | null) {
+    setEditForm(f => ({ ...f, [key]: val }));
+  }
+
+  async function addItem() {
+    const f = form();
+    if (!f.name?.trim() || !f.cui) return;
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch("/api/companies", {
+        method: "POST",
+        body: JSON.stringify({ ...f, name: f.name!.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setAddMode(false); setForm({}); setCuiInput(""); setAnafError(null);
+      await load();
+    } catch {
+      setError("Eroare la adăugare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function startEdit(c: CompanyItem) {
+    setEditId(c.id);
+    setEditForm({ ...c });
+    setAddMode(false); setError(null);
+  }
+
+  async function saveEdit() {
+    const f = editForm();
+    if (!f.name?.trim()) return;
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch(`/api/companies/${editId()}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...f, name: f.name!.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setEditId(null);
+      await load();
+    } catch {
+      setError("Eroare la salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function confirmDelete() {
+    const c = deleteTarget();
+    if (!c) return;
+    setSaving(true); setError(null); setDeleteTarget(null);
+    try {
+      await apiFetch(`/api/companies/${c.id}`, { method: "DELETE" });
+      await load();
+    } catch {
+      setError("Eroare la ștergere.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function doExportCSV() {
+    exportCSV("Companii",
+      ["CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "Telefon", "Cod poștal", "Plătitor TVA", "Descriere", "Comentarii"],
+      filtered().map(c => [
+        String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
+        c.phone ?? "", c.postal_code ?? "",
+        c.is_vat_payer === true ? "Da" : c.is_vat_payer === false ? "Nu" : "",
+        c.description ?? "", c.comments ?? "",
+      ]));
+  }
+  function doExportPDF() {
+    exportPDF("Companii",
+      ["CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "TVA"],
+      filtered().map(c => [
+        String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
+        c.is_vat_payer === true ? "Da" : c.is_vat_payer === false ? "Nu" : "",
+      ]));
+  }
+
+  const f = () => form();
+  const ef = () => editForm();
+
+  return (
+    <div class="cfg-panel">
+      <Show when={deleteTarget()}>
+        <DeleteModal
+          label={deleteTarget()!.name}
+          saving={saving()}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      </Show>
+
+      <div class="cfg-panel-header">
+        <h2 class="cfg-panel-title">Companii</h2>
+        <input class="input cfg-search" placeholder="Caută CUI / denumire..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
+        <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddMode(true); setEditId(null); setForm({}); setCuiInput(""); setAnafError(null); }}>
+          + Adaugă
+        </button>
+      </div>
+
+      <Show when={error()}><p class="cfg-error">{error()}</p></Show>
+
+      {/* ── Add form ── */}
+      <Show when={addMode()}>
+        <div class="cfg-location-row cfg-location-row--edit">
+          <div class="cfg-anaf-row">
+            <input
+              class="input"
+              placeholder="CUI (fără RO) *"
+              value={cuiInput()}
+              onInput={e => setCuiInput(e.currentTarget.value)}
+              onKeyDown={e => e.key === "Enter" && searchAnaf()}
+            />
+            <button class="btn btn-sm btn-ghost" disabled={anafLoading() || !cuiInput().trim()} onClick={searchAnaf}>
+              {anafLoading() ? "Se caută..." : "Caută în ANAF"}
+            </button>
+          </div>
+          <Show when={anafError()}>
+            <p class="cfg-hint cfg-hint--warn">{anafError()}</p>
+          </Show>
+          <div class="cfg-location-fields cfg-company-fields">
+            <input class="input" placeholder="Denumire *" value={f().name ?? ""} onInput={e => patchForm("name", e.currentTarget.value)} />
+            <input class="input" placeholder="Adresă" value={f().address ?? ""} onInput={e => patchForm("address", e.currentTarget.value)} />
+            <input class="input" placeholder="Nr. Reg. Comerțului" value={f().nr_reg_com ?? ""} onInput={e => patchForm("nr_reg_com", e.currentTarget.value)} />
+            <input class="input" placeholder="Telefon" value={f().phone ?? ""} onInput={e => patchForm("phone", e.currentTarget.value)} />
+            <input class="input" placeholder="Cod poștal" value={f().postal_code ?? ""} onInput={e => patchForm("postal_code", e.currentTarget.value)} />
+            <input class="input" placeholder="Status înregistrare" value={f().registration_status ?? ""} onInput={e => patchForm("registration_status", e.currentTarget.value)} />
+            <label class="cfg-checkbox-row">
+              <input type="checkbox" checked={f().is_vat_payer ?? false} onChange={e => patchForm("is_vat_payer", e.currentTarget.checked)} />
+              Plătitor TVA
+            </label>
+            <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
+            <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
+          </div>
+          <div class="cfg-location-actions">
+            <button class="btn btn-sm btn-primary" disabled={saving() || !f().name?.trim() || !f().cui} onClick={addItem}>Salvează</button>
+            <button class="btn btn-sm btn-ghost" onClick={() => setAddMode(false)}>Anulează</button>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!loading() && filtered().length === 0}>
+        <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există companii. Apasă \"+ Adaugă\" pentru a crea una."}</p>
+      </Show>
+
+      <div class="cfg-location-list">
+        <For each={filtered()}>
+          {(c) => (
+            <Show
+              when={editId() === c.id}
+              fallback={
+                <div class="cfg-location-row">
+                  <div class="cfg-location-info">
+                    <span class="cfg-location-name">{c.name}</span>
+                    <span class="cfg-location-desc">
+                      CUI: {c.cui}
+                      {c.nr_reg_com ? ` · ${c.nr_reg_com}` : ""}
+                      {c.is_vat_payer ? " · Plătitor TVA" : ""}
+                    </span>
+                    <Show when={c.address}>
+                      <span class="cfg-location-desc">{c.address}</span>
+                    </Show>
+                  </div>
+                  <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
+                    <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(c)}>Șterge</button>
+                  </div>
+                </div>
+              }
+            >
+              <div class="cfg-location-row cfg-location-row--edit">
+                <div class="cfg-location-fields cfg-company-fields">
+                  <input class="input" placeholder="CUI *" value={ef().cui ?? ""} onInput={e => patchEditForm("cui", e.currentTarget.value)} />
+                  <input class="input" placeholder="Denumire *" value={ef().name ?? ""} onInput={e => patchEditForm("name", e.currentTarget.value)} />
+                  <input class="input" placeholder="Adresă" value={ef().address ?? ""} onInput={e => patchEditForm("address", e.currentTarget.value)} />
+                  <input class="input" placeholder="Nr. Reg. Comerțului" value={ef().nr_reg_com ?? ""} onInput={e => patchEditForm("nr_reg_com", e.currentTarget.value)} />
+                  <input class="input" placeholder="Telefon" value={ef().phone ?? ""} onInput={e => patchEditForm("phone", e.currentTarget.value)} />
+                  <input class="input" placeholder="Cod poștal" value={ef().postal_code ?? ""} onInput={e => patchEditForm("postal_code", e.currentTarget.value)} />
+                  <input class="input" placeholder="Status înregistrare" value={ef().registration_status ?? ""} onInput={e => patchEditForm("registration_status", e.currentTarget.value)} />
+                  <label class="cfg-checkbox-row">
+                    <input type="checkbox" checked={ef().is_vat_payer ?? false} onChange={e => patchEditForm("is_vat_payer", e.currentTarget.checked)} />
+                    Plătitor TVA
+                  </label>
+                  <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
+                  <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />
+                </div>
+                <div class="cfg-location-actions">
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !ef().name?.trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-ghost" onClick={() => setEditId(null)}>Anulează</button>
+                </div>
+              </div>
+            </Show>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 // ─── Topics ──────────────────────────────────────────────────────────────────
 
 const TOPICS = [
@@ -1201,6 +1624,8 @@ const TOPICS = [
   { id: "departamente",   label: "Departamente",         panel: DepartamentePanel },
   { id: "angajati",       label: "Angajați",             panel: AngajatiPanel },
   { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
+  { id: "companii",       label: "Companii",             panel: CompaniiPanel },
+  { id: "disclaimers",    label: "Disclaimers",           panel: DisclaimersPanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -1238,6 +1663,18 @@ function WelcomePanel() {
             Gestionează categoriile, produsele și serviciile din catalog. Filtrează după departament, categorie sau tip.
           </span>
         </div>
+        <div class="cfg-welcome-item">
+          <span class="cfg-welcome-item-title">Companii</span>
+          <span class="cfg-welcome-item-desc">
+            Gestionează companiile partenere sau furnizori. Caută automat datele firmei după CUI prin serviciul ANAF.
+          </span>
+        </div>
+        <div class="cfg-welcome-item">
+          <span class="cfg-welcome-item-title">Disclaimers</span>
+          <span class="cfg-welcome-item-desc">
+            Gestionează textele de disclaimer afișate pe bonuri sau documente. Adaugă, modifică sau șterge disclaimer-uri.
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -1266,6 +1703,8 @@ export default function Configurari() {
           <Match when={active() === "departamente"}><DepartamentePanel /></Match>
           <Match when={active() === "angajati"}><AngajatiPanel /></Match>
           <Match when={active() === "produse"}><ProduseSiServiciiPanel /></Match>
+          <Match when={active() === "companii"}><CompaniiPanel /></Match>
+          <Match when={active() === "disclaimers"}><DisclaimersPanel /></Match>
         </Switch>
       </main>
     </div>

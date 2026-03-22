@@ -8,5 +8,7 @@ from .employee import Employee
 from .location import Location, employee_locations
 from .device import Device
 from .client import Client
+from .company import Company
+from .disclaimer import Disclaimer
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer"]
