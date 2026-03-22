@@ -2,8 +2,11 @@ import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-j
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateReceiptPdf } from "../utils/generateReceiptPdf";
+import { generateDeviz, generateFactura, generateChitanta } from "../utils/generateDocuments";
+import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
 import { apiFetch } from "../utils/api";
+import { device } from "../store/deviceStore";
 
 interface ClientItem {
   id: number;
@@ -306,7 +309,36 @@ function ReceiptCard(props: { receipt: Receipt }) {
     props.receipt.partialPay?.toFixed(2) ?? "100.00"
   );
   const [saving, setSaving] = createSignal(false);
+  const [docMenuOpen, setDocMenuOpen] = createSignal(false);
+  const [docLoading, setDocLoading] = createSignal<string | null>(null);
   const r = props.receipt;
+
+
+  async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
+    setDocMenuOpen(false);
+    const locationId = device()?.locationId;
+    if (!locationId) { alert("Dispozitivul nu are o locație configurată."); return; }
+    setDocLoading(docType);
+    try {
+      const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
+        method: "POST",
+        body: JSON.stringify({ doc_type: docType, location_id: locationId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j.detail ?? "Eroare la generarea documentului.");
+        return;
+      }
+      const ctx: DocContext = await res.json();
+      if (docType === "deviz") await generateDeviz(r, ctx);
+      else if (docType === "factura") await generateFactura(r, ctx);
+      else await generateChitanta(r, ctx);
+    } catch (e: any) {
+      alert(e?.message ?? "Eroare necunoscută.");
+    } finally {
+      setDocLoading(null);
+    }
+  }
 
   const isPartial = () => metodaDraft() === "Platit Partial";
   const metodaChanged = () =>
@@ -401,6 +433,22 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <button class="btn btn-primary btn-sm" onClick={() => generateReceiptPdf(r)}>
                 Descarca PDF
               </button>
+              <div class="doc-download-wrap">
+                <button
+                  class="btn btn-ghost btn-sm doc-download-btn"
+                  onClick={() => setDocMenuOpen(v => !v)}
+                  disabled={docLoading() !== null}
+                >
+                  {docLoading() ? `Se generează ${docLoading()}...` : "Documente ▾"}
+                </button>
+                <Show when={docMenuOpen()}>
+                  <div class="doc-dropdown" onClick={e => e.stopPropagation()}>
+                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("deviz")}>Deviz</button>
+                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("factura")}>Factură</button>
+                    <button class="doc-dropdown-item" onClick={() => handleDocDownload("chitanta")}>Chitanță</button>
+                  </div>
+                </Show>
+              </div>
             </div>
 
           </div>

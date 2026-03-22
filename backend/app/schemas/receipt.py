@@ -70,6 +70,18 @@ class ReceiptClientPatch(BaseModel):
     client_id: int | None
 
 
+class AssignNumberRequest(BaseModel):
+    doc_type: str  # "deviz" | "factura" | "chitanta"
+    location_id: int
+
+
+class AssignNumberResponse(BaseModel):
+    serie: str
+    nr: int
+    company: dict | None = None
+    disclaimer: dict | None = None
+
+
 class ReceiptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

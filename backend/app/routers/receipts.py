@@ -11,8 +11,12 @@ from app.broadcaster import broadcaster
 from app.database import get_db
 from app.dependencies import get_account_id, get_account_id_from_query
 from app.models.receipt import Receipt, ReceiptItem
-from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch
+from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
 from app.models.client import Client
+from app.models.location import Location
+from app.models.register import Register
+from app.models.company import Company
+from app.models.disclaimer import Disclaimer
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
@@ -225,6 +229,83 @@ async def patch_receipt_client(
     )
     receipt = result.scalar_one()
     return _serialize(receipt)
+
+
+@router.post("/{receipt_id}/assign-number", response_model=AssignNumberResponse)
+async def assign_number(
+    receipt_id: int,
+    body: AssignNumberRequest,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    from datetime import datetime, timezone
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
+        raise HTTPException(404, "Bonul nu a fost găsit.")
+
+    doc_type = body.doc_type
+    if doc_type not in ("deviz", "factura", "chitanta"):
+        raise HTTPException(400, "doc_type invalid.")
+
+    # Load location
+    location = (await db.execute(
+        select(Location).where(Location.id == body.location_id, Location.account_id == account_id)
+    )).scalar_one_or_none()
+    if location is None:
+        raise HTTPException(404, "Locația nu a fost găsită.")
+
+    # Load register
+    register = None
+    if location.register_id:
+        register = await db.get(Register, location.register_id)
+
+    # Determine current nr on receipt
+    serie_field = f"{doc_type}_serie"
+    nr_field = f"{doc_type}_nr"
+    current_nr = getattr(receipt, nr_field, 0)
+
+    if current_nr == 0:
+        # Assign new number from register
+        if register is None:
+            raise HTTPException(400, "Locația nu are un registru configurat.")
+        reg_serie = getattr(register, f"{doc_type}_serie")
+        reg_numar_field = f"{doc_type}_numar"
+        reg_numar = getattr(register, reg_numar_field)
+        new_nr = reg_numar + 1
+        setattr(register, reg_numar_field, new_nr)
+        setattr(receipt, serie_field, reg_serie)
+        setattr(receipt, nr_field, new_nr)
+        receipt.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        serie = reg_serie
+        nr = new_nr
+    else:
+        serie = getattr(receipt, serie_field)
+        nr = current_nr
+
+    # Load company
+    company_data = None
+    company_id = location.company_id
+    if company_id:
+        company = await db.get(Company, company_id)
+        if company:
+            company_data = {
+                "id": company.id,
+                "name": company.name,
+                "cui": company.cui,
+                "address": company.address,
+                "nr_reg_com": company.nr_reg_com,
+                "phone": company.phone,
+            }
+
+    # Load disclaimer
+    disclaimer_data = None
+    if location.disclaimer_id:
+        disclaimer = await db.get(Disclaimer, location.disclaimer_id)
+        if disclaimer:
+            disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
+
+    return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
 
 
 @router.delete("/{receipt_id}", status_code=204)

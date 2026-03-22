@@ -2486,3 +2486,39 @@ body {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* ─── Document Download Dropdown ─── */
+.doc-download-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.doc-download-btn {
+  white-space: nowrap;
+}
+.doc-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  background: var(--bg-card, #1c1c1e);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  min-width: 130px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.35);
+  z-index: 100;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.doc-dropdown-item {
+  background: none;
+  border: none;
+  color: var(--text, #e5e5e7);
+  padding: 9px 14px;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.doc-dropdown-item:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.07));
+}
