@@ -109,7 +109,6 @@ function drawMeta(doc: any, r: Receipt, y: number): number {
   const col2X = PAGE_W - MR - 50;
 
   doc.text(`Data: ${date}  ${time}`, ML, y);
-  doc.text(`Casier: ${r.casier}`, ML, y + 6);
 
   // Status plata (dreapta, colorat)
   const metoda = r.metodaPlata ?? "Neplatit";

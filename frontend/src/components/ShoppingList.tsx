@@ -97,7 +97,6 @@ export default function ShoppingList() {
     try {
       await saveReceipt({
         date: new Date().toISOString(),
-        casier: auth.user ?? "—",
         titlu: titlu().trim(),
         descriere: descriere().trim() || undefined,
         dateTehn: dateTehn().trim() || undefined,

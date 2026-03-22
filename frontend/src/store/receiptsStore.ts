@@ -6,7 +6,6 @@ import type { CartItem } from "./cartStore";
 export interface Receipt {
   id: string;
   date: string;
-  casier: string;
   titlu: string;
   descriere?: string;
   dateTehn?: string;
@@ -22,7 +21,6 @@ function mapFromApi(r: any): Receipt {
   return {
     id: String(r.id),
     date: r.created_at,
-    casier: r.casier,
     titlu: r.titlu,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
@@ -68,7 +66,6 @@ export async function loadReceipts() {
 
 export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt> {
   const body = {
-    casier: receipt.casier,
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,

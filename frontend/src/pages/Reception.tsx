@@ -38,7 +38,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       <div class="rcard-header" onClick={() => setExpanded((v) => !v)}>
         <div class="rcard-info">
           <span class="rcard-titlu">{r.titlu}</span>
-          <span class="rcard-meta">{dateStr} {timeStr} &middot; {r.casier}</span>
+          <span class="rcard-meta">{dateStr} {timeStr}</span>
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">

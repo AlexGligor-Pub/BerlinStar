@@ -69,7 +69,6 @@ async def create_receipt(
 ):
     receipt = Receipt(
         account_id=account_id,
-        casier=body.casier,
         titlu=body.titlu,
         descriere=body.descriere,
         date_tehn=body.date_tehn,

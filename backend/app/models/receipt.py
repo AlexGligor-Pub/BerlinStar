@@ -23,7 +23,6 @@ class Receipt(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False)
-    casier: Mapped[str] = mapped_column(String(200), nullable=False)
     titlu: Mapped[str] = mapped_column(String(200), nullable=False)
     descriere: Mapped[str | None] = mapped_column(Text, nullable=True)
     date_tehn: Mapped[str | None] = mapped_column(Text, nullable=True)

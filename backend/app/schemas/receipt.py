@@ -14,7 +14,6 @@ class ReceiptItemCreate(BaseModel):
 
 
 class ReceiptCreate(BaseModel):
-    casier: str = Field(..., max_length=200)
     titlu: str = Field(..., max_length=200)
     descriere: str | None = None
     date_tehn: str | None = None
@@ -64,7 +63,6 @@ class ReceiptRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     account_id: int
-    casier: str
     titlu: str
     descriere: str | None
     date_tehn: str | None
