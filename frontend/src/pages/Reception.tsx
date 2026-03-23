@@ -652,16 +652,12 @@ export default function Reception() {
   }
 
   function applyDateFilter() {
-    const ds = draftStart();
-    const de = draftEnd();
-    setDateStart(ds);
-    setDateEnd(de);
+    setDateStart(draftStart());
+    setDateEnd(draftEnd());
     setShowDateModal(false);
-    loadReceipts(ds, de);
   }
 
   onMount(() => {
-    loadReceipts(todayYMD, todayYMD);
     connectSSE();
   });
 
@@ -694,18 +690,10 @@ export default function Reception() {
   const hasFilter = () => selected().size > 0;
 
   const [pageSize, setPageSize] = createSignal(10);
-  const [currentPage, setCurrentPage] = createSignal(1);
 
   createEffect(() => {
-    filtered(); // track filtered changes
-    pageSize();
-    setCurrentPage(1);
-  });
-
-  const totalPages = createMemo(() => Math.max(1, Math.ceil(filtered().length / pageSize())));
-  const paginated = createMemo(() => {
-    const start = (currentPage() - 1) * pageSize();
-    return filtered().slice(start, start + pageSize());
+    const ps = pageSize();
+    loadReceipts(dateStart(), dateEnd(), ps);
   });
 
   return (
@@ -786,31 +774,10 @@ export default function Reception() {
         }
       >
         <div class="rcard-list">
-          <For each={paginated()}>
+          <For each={filtered()}>
             {(r) => <ReceiptCard receipt={r} />}
           </For>
         </div>
-        <Show when={totalPages() > 1}>
-          <div class="reception-pagination">
-            <button
-              class="btn btn-sm btn-ghost"
-              disabled={currentPage() === 1}
-              onClick={() => setCurrentPage((p) => p - 1)}
-            >
-              ‹
-            </button>
-            <span class="reception-pagination-info">
-              {currentPage()} / {totalPages()}
-            </span>
-            <button
-              class="btn btn-sm btn-ghost"
-              disabled={currentPage() === totalPages()}
-              onClick={() => setCurrentPage((p) => p + 1)}
-            >
-              ›
-            </button>
-          </div>
-        </Show>
       </Show>
 
       <Show when={showDateModal()}>
