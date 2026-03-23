@@ -1,5 +1,6 @@
 import { createEffect } from "solid-js";
 import { createStore } from "solid-js/store";
+import { setAdminVisible } from "./adminStore";
 
 interface AuthState {
   user: string | null;
@@ -35,6 +36,7 @@ export function login(user: string, token: string, isLocked = false, lockedAt: s
 }
 
 export function logout() {
+  setAdminVisible(false);
   setAuth({ user: null, token: null, isLocked: false, lockedAt: null });
 }
 
