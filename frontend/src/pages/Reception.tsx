@@ -723,9 +723,10 @@ export default function Reception() {
           </button>
         </h1>
         <div class="reception-header-right">
-          <div style="position:relative">
+          <div style="display:flex;align-items:center;gap:4px">
             <input
               class="input reception-search"
+              style="width:120px"
               type="search"
               placeholder="Cauta dupa titlu..."
               value={search()}
@@ -734,10 +735,10 @@ export default function Reception() {
             <Show when={search()}>
               <button
                 class="btn btn-sm btn-ghost"
-                style="position:absolute;top:calc(100% + 2px);left:0;font-size:11px;padding:1px 8px;z-index:10;background:var(--card-bg);border:1px solid var(--border);border-radius:4px;white-space:nowrap"
+                style="font-size:11px;white-space:nowrap;flex-shrink:0"
                 onClick={() => setServerSearch(search())}
               >
-                Server {serverSearch() === search() ? "✓" : ""}
+                Server{serverSearch() === search() ? " ✓" : ""}
               </button>
             </Show>
           </div>
