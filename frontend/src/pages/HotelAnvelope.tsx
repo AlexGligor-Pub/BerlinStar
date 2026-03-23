@@ -54,15 +54,17 @@ function ClientSearch(props: {
   const [results, setResults] = createSignal<ClientItem[]>([]);
   const [searching, setSearching] = createSignal(false);
   const [open, setOpen] = createSignal(false);
+  const [searched, setSearched] = createSignal(false);
 
   async function search(val: string) {
-    if (!val.trim()) { setResults([]); setOpen(false); return; }
+    if (!val.trim()) { setResults([]); setOpen(false); setSearched(false); return; }
     setSearching(true);
     try {
       const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`);
       if (!res.ok) return;
       const data = await res.json();
       setResults(data.items ?? []);
+      setSearched(true);
       setOpen(true);
     } finally { setSearching(false); }
   }
@@ -72,6 +74,7 @@ function ClientSearch(props: {
     setQ(c.nume);
     setOpen(false);
     setResults([]);
+    setSearched(false);
   }
 
   function clear() {
@@ -111,6 +114,12 @@ function ClientSearch(props: {
           </For>
         </div>
       </Show>
+      <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
+        <div style="position:absolute;left:0;right:0;z-index:200;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px">
+          <span style="color:var(--text-muted)">Niciun client găsit. </span>
+          <a href="/clienti" target="_blank" style="color:var(--primary);text-decoration:underline">Adaugă client nou →</a>
+        </div>
+      </Show>
       <Show when={searching()}>
         <span style="position:absolute;right:40px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:12px">...</span>
       </Show>
@@ -133,17 +142,18 @@ function ClientInfoBlock(props: { client: ClientItem | null }) {
   );
 }
 
-// ─── Sub-component: AnvelopaForm (formular adăugare anvelopă nouă) ────────────
+// ─── Sub-component: AnvelopaForm (formular adăugare/editare anvelopă) ────────
 
 function AnvelopaForm(props: {
   clientId: number;
+  initialData?: Anvelopa;  // pre-populare pentru edit/copy
   onSaved: (a: Anvelopa) => void;
   onCancel: () => void;
 }) {
-  const [marcaId, setMarcaId] = createSignal<number | "">("");
-  const [dimensiuneId, setDimensiuneId] = createSignal<number | "">("");
-  const [tip, setTip] = createSignal<TipAnvelopa>("vara");
-  const [adancime, setAdancime] = createSignal("");
+  const [marcaId, setMarcaId] = createSignal<number | "">(props.initialData?.marcaId ?? "");
+  const [dimensiuneId, setDimensiuneId] = createSignal<number | "">(props.initialData?.dimensiuneId ?? "");
+  const [tip, setTip] = createSignal<TipAnvelopa>(props.initialData?.tip ?? "vara");
+  const [adancime, setAdancime] = createSignal(props.initialData?.adancime != null ? String(props.initialData.adancime) : "");
   const [err, setErr] = createSignal("");
   // inline adaugare marca/dimensiune noua
   const [newMarca, setNewMarca] = createSignal("");
@@ -243,8 +253,6 @@ function CazareCard(props: {
   companyData: CompanyData | null;
   onCheckout: (c: Cazare) => void;
   onEdit: (c: Cazare) => void;
-  onDeleted: (id: number) => void;
-  onDeleteRequest: (id: number, name: string) => void;
 }) {
   const c = () => props.cazare;
   const [pdfLoading, setPdfLoading] = createSignal<"checkin" | "checkout" | null>(null);
@@ -275,7 +283,7 @@ function CazareCard(props: {
 
       {/* Info row */}
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:3px;font-size:11px;color:var(--text-muted)">
-        <span><strong>Check-in:</strong> {fmtDate(c().dataCheckin)}</span>
+        <span><strong>Cazare:</strong> {fmtDate(c().dataCheckin)}</span>
         <Show when={c().dataCheckout}><span><strong>Check-out:</strong> {fmtDate(c().dataCheckout)}</span></Show>
         <Show when={c().locCazareNume}><span><strong>Loc:</strong> {c().locCazareNume}</span></Show>
         <Show when={c().employeeName}><span><strong>Angajat:</strong> {c().employeeName}</span></Show>
@@ -315,9 +323,6 @@ function CazareCard(props: {
             {pdfLoading() === "checkout" ? "..." : "PDF Ieșire"}
           </button>
         </Show>
-        <button class="btn btn-danger btn-sm" onClick={() => props.onDeleteRequest(c().id, c().clientNume ?? "—")}>
-          Șterge
-        </button>
       </div>
     </div>
   );
@@ -336,6 +341,7 @@ export default function HotelAnvelope() {
   const [clientAnvelope, setClientAnvelope] = createSignal<Anvelopa[]>([]);
   const [selectedAnvIds, setSelectedAnvIds] = createSignal<Set<number>>(new Set());
   const [showAnvForm, setShowAnvForm] = createSignal(false);
+  const [anvEditId, setAnvEditId] = createSignal<number | null>(null); // ID-ul anvelopei editate (null = adăugare)
   const [newLocId, setNewLocId] = createSignal<number | "">("");
   const [newEmpId, setNewEmpId] = createSignal<number | "">("");
   const [newCheckin, setNewCheckin] = createSignal(todayStr());
@@ -359,7 +365,12 @@ export default function HotelAnvelope() {
   const [editEmpId, setEditEmpId] = createSignal<number | "">("");
   const [editCheckin, setEditCheckin] = createSignal("");
   const [editComments, setEditComments] = createSignal("");
+  const [editAnvelope, setEditAnvelope] = createSignal<Anvelopa[]>([]);
+  const [editSelectedIds, setEditSelectedIds] = createSignal<Set<number>>(new Set());
+  const [showEditAnvForm, setShowEditAnvForm] = createSignal(false);
+  const [editAnvEditId, setEditAnvEditId] = createSignal<number | null>(null);
   const [editSaving, setEditSaving] = createSignal(false);
+  const [editErr, setEditErr] = createSignal("");
 
   // ── Filtre ─────────────────────────────────────────────────────────────────
   const [searchName, setSearchName] = createSignal("");
@@ -369,11 +380,31 @@ export default function HotelAnvelope() {
   // ── Admin section ──────────────────────────────────────────────────────────
   const [adminTab, setAdminTab] = createSignal<"locuri" | "marci" | "dimensiuni">("locuri");
 
-  // admin forms
+  // admin forms - adăugare
   const [newLocNume, setNewLocNume] = createSignal("");
   const [newLocDesc, setNewLocDesc] = createSignal("");
   const [newMarcaNume, setNewMarcaNume] = createSignal("");
   const [newDimValoare, setNewDimValoare] = createSignal("");
+
+  // admin edit modals
+  const [editAdminTarget, setEditAdminTarget] = createSignal<
+    | { type: "loc"; id: number; nume: string; description: string }
+    | { type: "marca"; id: number; nume: string }
+    | { type: "dim"; id: number; valoare: string }
+    | null
+  >(null);
+  const [editAdminVal1, setEditAdminVal1] = createSignal("");
+  const [editAdminVal2, setEditAdminVal2] = createSignal("");
+  const [editAdminSaving, setEditAdminSaving] = createSignal(false);
+
+  // admin delete modal
+  const [adminDeleteTarget, setAdminDeleteTarget] = createSignal<
+    | { type: "loc"; id: number; label: string }
+    | { type: "marca"; id: number; label: string }
+    | { type: "dim"; id: number; label: string }
+    | null
+  >(null);
+  const [adminDeleting, setAdminDeleting] = createSignal(false);
 
   let sentinelRef: HTMLDivElement | undefined;
 
@@ -479,10 +510,10 @@ export default function HotelAnvelope() {
     setShowNewModal(true);
   }
 
-  async function handleClientSelect(c: ClientItem | null) {
+  function handleClientSelect(c: ClientItem | null) {
     setNewClient(c);
-    if (c) await loadClientAnvelope(c.id);
-    else { setClientAnvelope([]); setSelectedAnvIds(new Set<number>()); }
+    setClientAnvelope([]);
+    setSelectedAnvIds(new Set<number>());
   }
 
   async function saveCazare() {
@@ -543,19 +574,55 @@ export default function HotelAnvelope() {
     setCheckoutComments(c.comments ?? "");
   }
 
-  function openEdit(c: Cazare) {
+  async function openEdit(c: Cazare) {
     setEditCazare(c);
     setEditLocId(c.locCazareId ?? "");
     setEditEmpId(c.employeeId ?? "");
     setEditCheckin(c.dataCheckin);
     setEditComments(c.comments ?? "");
+    setShowEditAnvForm(false);
+    setEditErr("");
+    // preîncarcă anvelopele clientului și pre-selectează cele din cazare
+    const currentIds = new Set(c.items.map((i) => i.anvelopaId).filter((id): id is number => id != null));
+    if (c.clientId) {
+      const anvs = await loadAnvelope(c.clientId);
+      setEditAnvelope(anvs);
+      setEditSelectedIds(new Set(anvs.map((a) => a.id).filter((id) => currentIds.has(id))));
+    } else {
+      setEditAnvelope([]);
+      setEditSelectedIds(new Set<number>());
+    }
   }
 
   async function doEdit() {
     const c = editCazare();
     if (!c) return;
+    setEditErr("");
+    if (editSelectedIds().size === 0) { setEditErr("Selectați cel puțin o anvelopă."); return; }
     setEditSaving(true);
     try {
+      // creează draft-uri (ID negativ) dacă există
+      const draftIds = Array.from(editSelectedIds()).filter((id) => id < 0);
+      const tempToReal = new Map<number, number>();
+      for (const tempId of draftIds) {
+        const draft = editAnvelope().find((a) => a.id === tempId);
+        if (!draft) continue;
+        const res = await apiFetch("/api/anvelope", {
+          method: "POST",
+          body: JSON.stringify({
+            client_id: draft.clientId,
+            marca_id: draft.marcaId,
+            dimensiune_id: draft.dimensiuneId,
+            tip: draft.tip,
+            adancime: draft.adancime,
+          }),
+        });
+        if (!res.ok) { setEditErr("Eroare la salvare anvelopă."); return; }
+        const d = await res.json();
+        tempToReal.set(tempId, d.id);
+      }
+      const finalIds = Array.from(editSelectedIds()).map((id) => tempToReal.get(id) ?? id);
+
       const res = await apiFetch(`/api/cazare-anvelope/${c.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -563,9 +630,10 @@ export default function HotelAnvelope() {
           loc_cazare_id: editLocId() !== "" ? editLocId() : null,
           data_checkin: editCheckin() || null,
           comments: editComments().trim() || null,
+          anvelopa_ids: finalIds,
         }),
       });
-      if (!res.ok) return;
+      if (!res.ok) { setEditErr("Eroare la salvare."); return; }
       setEditCazare(null);
       await fetchCazari();
     } finally { setEditSaving(false); }
@@ -634,10 +702,6 @@ export default function HotelAnvelope() {
     } finally { setCheckoutSaving(false); }
   }
 
-  function removeCazare(_id: number) {
-    fetchCazari();
-  }
-
   async function doDelete() {
     const t = deleteTarget();
     if (!t) return;
@@ -665,11 +729,6 @@ export default function HotelAnvelope() {
     setNewLocNume(""); setNewLocDesc("");
   }
 
-  async function deleteLoc(id: number) {
-    await apiFetch(`/api/loc-cazare/${id}`, { method: "DELETE" });
-    invalidateLocuriCache();
-    await loadLocuriCazare(true);
-  }
 
   async function addMarca() {
     const n = newMarcaNume().trim();
@@ -680,11 +739,6 @@ export default function HotelAnvelope() {
     setNewMarcaNume("");
   }
 
-  async function deleteMarca(id: number) {
-    await apiFetch(`/api/marci-anvelope/${id}`, { method: "DELETE" });
-    invalidateMarciCache();
-    await loadMarci(true);
-  }
 
   async function addDim() {
     const v = newDimValoare().trim();
@@ -695,10 +749,68 @@ export default function HotelAnvelope() {
     setNewDimValoare("");
   }
 
-  async function deleteDim(id: number) {
-    await apiFetch(`/api/dimensiuni-anvelope/${id}`, { method: "DELETE" });
-    invalidateDimensiuniCache();
-    await loadDimensiuni(true);
+
+  // ── Admin Edit / Delete helpers ───────────────────────────────────────────
+
+  function openAdminEdit(t: typeof editAdminTarget extends () => infer T ? T : never) {
+    setEditAdminTarget(t as any);
+    if (!t) return;
+    if (t.type === "loc") { setEditAdminVal1(t.nume); setEditAdminVal2(t.description); }
+    else if (t.type === "marca") { setEditAdminVal1(t.nume); setEditAdminVal2(""); }
+    else if (t.type === "dim") { setEditAdminVal1(t.valoare); setEditAdminVal2(""); }
+  }
+
+  async function saveAdminEdit() {
+    const t = editAdminTarget();
+    if (!t) return;
+    setEditAdminSaving(true);
+    try {
+      if (t.type === "loc") {
+        await apiFetch(`/api/loc-cazare/${t.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ nume: editAdminVal1().trim(), description: editAdminVal2().trim() || null }),
+        });
+        invalidateLocuriCache();
+        await loadLocuriCazare(true);
+      } else if (t.type === "marca") {
+        await apiFetch(`/api/marci-anvelope/${t.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ nume: editAdminVal1().trim() }),
+        });
+        invalidateMarciCache();
+        await loadMarci(true);
+      } else if (t.type === "dim") {
+        await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ valoare: editAdminVal1().trim() }),
+        });
+        invalidateDimensiuniCache();
+        await loadDimensiuni(true);
+      }
+      setEditAdminTarget(null);
+    } finally { setEditAdminSaving(false); }
+  }
+
+  async function doAdminDelete() {
+    const t = adminDeleteTarget();
+    if (!t) return;
+    setAdminDeleting(true);
+    try {
+      if (t.type === "loc") {
+        await apiFetch(`/api/loc-cazare/${t.id}`, { method: "DELETE" });
+        invalidateLocuriCache();
+        await loadLocuriCazare(true);
+      } else if (t.type === "marca") {
+        await apiFetch(`/api/marci-anvelope/${t.id}`, { method: "DELETE" });
+        invalidateMarciCache();
+        await loadMarci(true);
+      } else if (t.type === "dim") {
+        await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, { method: "DELETE" });
+        invalidateDimensiuniCache();
+        await loadDimensiuni(true);
+      }
+      setAdminDeleteTarget(null);
+    } finally { setAdminDeleting(false); }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -769,7 +881,9 @@ export default function HotelAnvelope() {
                     {(loc) => (
                       <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
-                        <button class="btn btn-danger btn-sm" style="padding:1px 6px;font-size:11px;margin-left:4px" onClick={() => deleteLoc(loc.id)}>✕</button>
+                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
+                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
+                        </div>
                       </div>
                     )}
                   </For>
@@ -787,7 +901,9 @@ export default function HotelAnvelope() {
                     {(m) => (
                       <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{m.nume}</span>
-                        <button class="btn btn-danger btn-sm" style="padding:1px 6px;font-size:11px;margin-left:4px" onClick={() => deleteMarca(m.id)}>✕</button>
+                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
+                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "marca", id: m.id, nume: m.nume })}>Edit</button>
+                        </div>
                       </div>
                     )}
                   </For>
@@ -805,7 +921,9 @@ export default function HotelAnvelope() {
                     {(d) => (
                       <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
-                        <button class="btn btn-danger btn-sm" style="padding:1px 6px;font-size:11px;margin-left:4px" onClick={() => deleteDim(d.id)}>✕</button>
+                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
+                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
+                        </div>
                       </div>
                     )}
                   </For>
@@ -845,8 +963,6 @@ export default function HotelAnvelope() {
                   companyData={companyData()}
                   onCheckout={openCheckout}
                   onEdit={openEdit}
-                  onDeleted={removeCazare}
-                  onDeleteRequest={(id, name) => setDeleteTarget({ id, name })}
                 />
               )}
             </For>
@@ -864,9 +980,7 @@ export default function HotelAnvelope() {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Modal: Confirmare Ștergere
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* Modal: Confirmare Stergere */}
       <Show when={deleteTarget()}>
         {(t) => (
           <div class="sl-modal-overlay" onClick={() => setDeleteTarget(null)}>
@@ -889,9 +1003,206 @@ export default function HotelAnvelope() {
         )}
       </Show>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Modal: Cazare Nouă
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* Modal: Editare Cazare */}
+      <Show when={editCazare()}>
+        {(c) => (
+          <div class="sl-modal-overlay" onClick={() => setEditCazare(null)}>
+            <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto" onClick={(e) => e.stopPropagation()}>
+              <div class="sl-modal-header">
+                <span class="sl-modal-title">Editare Cazare — {c().clientNume ?? "—"}</span>
+                <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>✕</button>
+              </div>
+
+              <div class="sl-modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+
+                {/* ─ Client (read-only) ─ */}
+                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px">
+                    <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
+                    <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
+                    <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
+                  </div>
+                </div>
+
+                {/* ─ Anvelope ─ */}
+                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
+                  <div style="display:flex;flex-direction:column;gap:4px">
+                    <For each={editAnvelope()}>
+                      {(a) => (
+                        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
+                          <input
+                            type="checkbox"
+                            checked={editSelectedIds().has(a.id)}
+                            onChange={() => setEditSelectedIds((prev) => {
+                              const next = new Set(prev);
+                              next.has(a.id) ? next.delete(a.id) : next.add(a.id);
+                              return next;
+                            })}
+                            style="flex-shrink:0"
+                          />
+                          <span style="flex:1;min-width:0">
+                            <strong>{a.marcaNume ?? "—"}</strong>
+                            <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                            {" · "}{TIP_LABELS[a.tip]}
+                            <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                            <Show when={a.id < 0}>
+                              <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
+                            </Show>
+                          </span>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                            title="Editează"
+                            onClick={() => { setEditAnvEditId(a.id); setShowEditAnvForm(true); }}
+                          >Edit</button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                            title="Copiază"
+                            onClick={() => {
+                              const tempId = -Date.now();
+                              const copy = { ...a, id: tempId };
+                              setEditAnvelope((prev) => [...prev, copy]);
+                              setEditSelectedIds((prev) => new Set([...prev, tempId]));
+                            }}
+                          >Copy</button>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                  <Show when={!showEditAnvForm()}>
+                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setEditAnvEditId(null); setShowEditAnvForm(true); }}>+ Anvelopă nouă</button>
+                  </Show>
+                  <Show when={showEditAnvForm()}>
+                    <AnvelopaForm
+                      clientId={c().clientId ?? 0}
+                      initialData={editAnvEditId() !== null ? editAnvelope().find((a) => a.id === editAnvEditId()) : undefined}
+                      onSaved={(a) => {
+                        if (editAnvEditId() !== null) {
+                          const oldId = editAnvEditId()!;
+                          setEditAnvelope((prev) => prev.map((x) => x.id === oldId ? a : x));
+                          setEditSelectedIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(a.id); return s; });
+                        } else {
+                          setEditAnvelope((prev) => [...prev, a]);
+                          setEditSelectedIds((prev) => new Set([...prev, a.id]));
+                        }
+                        setShowEditAnvForm(false);
+                        setEditAnvEditId(null);
+                      }}
+                      onCancel={() => { setShowEditAnvForm(false); setEditAnvEditId(null); }}
+                    />
+                  </Show>
+                </div>
+
+                {/* ─ Date Cazare ─ */}
+                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
+                  <div style="display:grid;gap:8px">
+                    <select class="input" value={editLocId()} onChange={(e) => setEditLocId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
+                      <option value="">— Loc de cazare —</option>
+                      <For each={locuriCazare()}>{(l) => <option value={l.id}>{l.nume}</option>}</For>
+                    </select>
+                    <select class="input" value={editEmpId()} onChange={(e) => setEditEmpId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
+                      <option value="">— Angajat —</option>
+                      <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
+                    </select>
+                    <div>
+                      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
+                      <input class="input" type="date" value={editCheckin()} onInput={(e) => setEditCheckin(e.currentTarget.value)} />
+                    </div>
+                    <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={editComments()} onInput={(e) => setEditComments(e.currentTarget.value)} />
+                  </div>
+                </div>
+
+                <Show when={editErr()}>
+                  <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
+                </Show>
+              </div>
+
+              <div class="sl-modal-footer" style="justify-content:space-between">
+                <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>Anulează</button>
+                  <button class="btn btn-primary btn-sm" onClick={doEdit} disabled={editSaving()}>
+                    {editSaving() ? "Se salvează..." : "Salvează"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Modal: Admin Edit */}
+      <Show when={editAdminTarget()}>
+        {(t) => (
+          <div class="sl-modal-overlay" onClick={() => setEditAdminTarget(null)}>
+            <div class="sl-modal" style="max-width:420px;width:100%" onClick={(e) => e.stopPropagation()}>
+              <div class="sl-modal-header">
+                <span class="sl-modal-title">
+                  {t().type === "loc" ? "Editare loc cazare" : t().type === "marca" ? "Editare marcă" : "Editare dimensiune"}
+                </span>
+                <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>✕</button>
+              </div>
+              <div style="padding:16px 24px;display:flex;flex-direction:column;gap:8px">
+                <input
+                  class="input"
+                  placeholder={t().type === "dim" ? "Valoare (ex: 205/55 R16)" : "Nume *"}
+                  value={editAdminVal1()}
+                  onInput={(e) => setEditAdminVal1(e.currentTarget.value)}
+                />
+                <Show when={t().type === "loc"}>
+                  <input
+                    class="input"
+                    placeholder="Descriere"
+                    value={editAdminVal2()}
+                    onInput={(e) => setEditAdminVal2(e.currentTarget.value)}
+                  />
+                </Show>
+              </div>
+              <div class="sl-modal-footer" style="justify-content:space-between">
+                <button
+                  class="btn btn-danger btn-sm"
+                  onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}
+                >Șterge</button>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>Anulează</button>
+                    <button class="btn btn-primary btn-sm" onClick={saveAdminEdit} disabled={editAdminSaving() || !editAdminVal1().trim()}>
+                      {editAdminSaving() ? "..." : "Salvează"}
+                    </button>
+                  </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Modal: Admin Delete */}
+      <Show when={adminDeleteTarget()}>
+        {(t) => (
+          <div class="sl-modal-overlay" onClick={() => setAdminDeleteTarget(null)}>
+            <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+              <div class="sl-modal-header">
+                <span class="sl-modal-title">Confirmare ștergere</span>
+                <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>✕</button>
+              </div>
+              <div style="padding:16px 24px;font-size:14px">
+                Ștergi <strong>{t().label}</strong>? Acțiunea este ireversibilă.
+              </div>
+              <div class="sl-modal-footer">
+                <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>Anulează</button>
+                <button class="btn btn-danger btn-sm" onClick={doAdminDelete} disabled={adminDeleting()}>
+                  {adminDeleting() ? "..." : "Șterge definitiv"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Modal: Cazare Noua */}
       <Show when={showNewModal()}>
         <div class="sl-modal-overlay" onClick={() => setShowNewModal(false)}>
           <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto" onClick={(e) => e.stopPropagation()}>
@@ -922,13 +1233,14 @@ export default function HotelAnvelope() {
                   <div style="display:flex;flex-direction:column;gap:4px">
                     <For each={clientAnvelope()}>
                       {(a) => (
-                        <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;background:var(--bg)">
+                        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
                           <input
                             type="checkbox"
                             checked={selectedAnvIds().has(a.id)}
                             onChange={() => toggleAnv(a.id)}
+                            style="flex-shrink:0"
                           />
-                          <span>
+                          <span style="flex:1;min-width:0">
                             <strong>{a.marcaNume ?? "—"}</strong>
                             <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
                             {" · "}{TIP_LABELS[a.tip]}
@@ -937,22 +1249,48 @@ export default function HotelAnvelope() {
                               <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
                             </Show>
                           </span>
-                        </label>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                            title="Editează"
+                            onClick={() => { setAnvEditId(a.id); setShowAnvForm(true); }}
+                          >Edit</button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                            title="Copiază"
+                            onClick={() => {
+                              const tempId = -Date.now();
+                              const copy = { ...a, id: tempId };
+                              setClientAnvelope((prev) => [...prev, copy]);
+                              setSelectedAnvIds((prev) => new Set([...prev, tempId]));
+                            }}
+                          >Copy</button>
+                        </div>
                       )}
                     </For>
                   </div>
                   <Show when={!showAnvForm()}>
-                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => setShowAnvForm(true)}>+ Anvelopă nouă</button>
+                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
                   </Show>
                   <Show when={showAnvForm()}>
                     <AnvelopaForm
                       clientId={newClient()!.id}
+                      initialData={anvEditId() !== null ? clientAnvelope().find((a) => a.id === anvEditId()) : undefined}
                       onSaved={(a) => {
-                        setClientAnvelope((prev) => [...prev, a]);
-                        setSelectedAnvIds((prev) => new Set([...prev, a.id]));
+                        if (anvEditId() !== null) {
+                          // înlocuiește item-ul editat
+                          const oldId = anvEditId()!;
+                          setClientAnvelope((prev) => prev.map((x) => x.id === oldId ? a : x));
+                          setSelectedAnvIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(a.id); return s; });
+                        } else {
+                          setClientAnvelope((prev) => [...prev, a]);
+                          setSelectedAnvIds((prev) => new Set([...prev, a.id]));
+                        }
                         setShowAnvForm(false);
+                        setAnvEditId(null);
                       }}
-                      onCancel={() => setShowAnvForm(false)}
+                      onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
                     />
                   </Show>
                 </Show>
@@ -971,7 +1309,7 @@ export default function HotelAnvelope() {
                     <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
                   </select>
                   <div>
-                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data check-in</label>
+                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
                     <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
                   </div>
                   <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
@@ -993,9 +1331,7 @@ export default function HotelAnvelope() {
         </div>
       </Show>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Modal: Checkout
-      ══════════════════════════════════════════════════════════════════════ */}
+      {/* Modal: Checkout */}
       <Show when={checkoutCazare()}>
         {(c) => (
           <div class="sl-modal-overlay" onClick={() => setCheckoutCazare(null)}>
@@ -1057,7 +1393,7 @@ export default function HotelAnvelope() {
                   <div style="display:grid;gap:8px;font-size:13px">
                     <Show when={c().locCazareNume}><div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div></Show>
                     <Show when={c().employeeName}><div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div></Show>
-                    <div><span style="color:var(--text-muted)">Check-in:</span> {fmtDate(c().dataCheckin)}</div>
+                    <div><span style="color:var(--text-muted)">Cazare:</span> {fmtDate(c().dataCheckin)}</div>
                     <div>
                       <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data check-out</label>
                       <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
@@ -1086,49 +1422,6 @@ export default function HotelAnvelope() {
         )}
       </Show>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          Modal: Editare Cazare
-      ══════════════════════════════════════════════════════════════════════ */}
-      <Show when={editCazare()}>
-        <div class="sl-modal-overlay" onClick={() => setEditCazare(null)}>
-          <div class="sl-modal" style="max-width:460px;width:100%" onClick={(e) => e.stopPropagation()}>
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Editare Cazare — {editCazare()!.clientNume ?? "—"}</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>✕</button>
-            </div>
-            <div class="sl-modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:12px">
-              <div>
-                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Loc de cazare</label>
-                <select class="input" value={editLocId()} onChange={(e) => setEditLocId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                  <option value="">— fără loc —</option>
-                  <For each={locuriCazare()}>{(l) => <option value={l.id}>{l.nume}</option>}</For>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Angajat</label>
-                <select class="input" value={editEmpId()} onChange={(e) => setEditEmpId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                  <option value="">— fără angajat —</option>
-                  <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data check-in</label>
-                <input class="input" type="date" value={editCheckin()} onInput={(e) => setEditCheckin(e.currentTarget.value)} />
-              </div>
-              <div>
-                <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Comentarii</label>
-                <textarea class="input" rows={2} style="resize:vertical" value={editComments()} onInput={(e) => setEditComments(e.currentTarget.value)} />
-              </div>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>Anulează</button>
-              <button class="btn btn-primary btn-sm" onClick={doEdit} disabled={editSaving()}>
-                {editSaving() ? "Se salvează..." : "Salvează"}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }
