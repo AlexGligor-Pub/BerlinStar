@@ -761,3 +761,260 @@ function numarInLitere(n: number): string {
   if (n > 0) result += sub1000(n);
   return result.trim();
 }
+
+// ─── Hotel Anvelope ───────────────────────────────────────────────────────────
+
+export interface CompanyData {
+  name: string;
+  cui: string | number;
+  address?: string | null;
+  nr_reg_com?: string | null;
+  phone?: string | null;
+  tva_percentage?: number | null;
+  logo_path?: string | null;
+  background_path?: string | null;
+  website?: string | null;
+}
+
+interface CazareForPdf {
+  id: number;
+  dataCheckin: string;
+  dataCheckout?: string | null;
+  clientNume: string | null;
+  clientCui: string | null;
+  clientTelefon: string | null;
+  clientAdresa: string | null;
+  clientReprezentant: string | null;
+  employeeName: string | null;
+  locCazareNume: string | null;
+  comments: string | null;
+  items: Array<{
+    anvelopa: {
+      marcaNume: string | null;
+      dimensiuneValoare: string | null;
+      tip: string;
+      adancime: number | null;
+    } | null;
+  }>;
+}
+
+const TIP_PDF_LABELS: Record<string, string> = {
+  iarna: "Iarna",
+  vara: "Vara",
+  ms: "M+S",
+  altele: "Altele",
+};
+
+function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number): number {
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.gray);
+  doc.text("BENEFICIAR", x, y);
+  y += 3.5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.black);
+  const nameLines: string[] = doc.splitTextToSize(ro(cazare.clientNume ?? "-"), bw);
+  doc.text(nameLines, x, y);
+  y += nameLines.length * 4.2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  if (cazare.clientCui)          { doc.text(`CUI: ${cazare.clientCui}`, x, y); y += 3.5; }
+  if (cazare.clientReprezentant) { doc.text(`Repr.: ${ro(cazare.clientReprezentant)}`, x, y); y += 3.5; }
+  if (cazare.clientAdresa) {
+    const al: string[] = doc.splitTextToSize(ro(cazare.clientAdresa), bw);
+    doc.text(al, x, y);
+    y += al.length * 3.5;
+  }
+  if (cazare.clientTelefon) { doc.text(`Tel: ${cazare.clientTelefon}`, x, y); y += 3.5; }
+  return y;
+}
+
+function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: number): number {
+  const rows = cazare.items
+    .filter((item) => item.anvelopa != null)
+    .map((item, idx) => {
+      const a = item.anvelopa!;
+      return [
+        String(idx + 1),
+        ro(a.marcaNume ?? "—"),
+        ro(a.dimensiuneValoare ?? "—"),
+        TIP_PDF_LABELS[a.tip] ?? a.tip,
+        a.adancime != null ? `${a.adancime} mm` : "—",
+      ];
+    });
+
+  if (rows.length === 0) return y;
+
+  autoTable(doc, {
+    startY: y,
+    head: [["#", "Marca", "Dimensiune", "Tip", "Adancime"]],
+    body: rows,
+    styles: {
+      fontSize: 7.5,
+      cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
+      textColor: [...C.black],
+      lineColor: [...C.lightGray],
+      lineWidth: 0.1,
+    },
+    headStyles: {
+      fillColor: [...C.veryLight],
+      textColor: [...C.black],
+      fontSize: 7,
+      fontStyle: "bold",
+      lineColor: [...C.lightGray],
+      lineWidth: 0.2,
+    },
+    columnStyles: {
+      0: { halign: "center", cellWidth: 8, textColor: [...C.gray] },
+      1: { cellWidth: "auto" },
+      2: { cellWidth: 35 },
+      3: { halign: "center", cellWidth: 18 },
+      4: { halign: "center", cellWidth: 22 },
+    },
+    margin: { left: ML, right: MR },
+    tableWidth: CW,
+  });
+
+  return (doc as any).lastAutoTable.finalY + 3;
+}
+
+/** Bon Intrare — Hotel Anvelope */
+export async function generateCazareCheckin(cazare: CazareForPdf, company: CompanyData | null): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  await drawBackground(doc, company?.background_path);
+  await drawLogo(doc, company?.logo_path, MT);
+
+  let y = drawHeader(doc, "Hotel Anvelope - Bon Intrare", "", cazare.id, fmtDate(cazare.dataCheckin));
+  y += 2;
+  hline(doc, y);
+  y += 6;
+
+  const bw = (CW - 8) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + 8;
+
+  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
+  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw);
+  y = Math.max(yComp, yClient) + 4;
+
+  hline(doc, y);
+  y += 6;
+
+  // Detalii cazare
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.gray);
+  doc.text("DETALII CAZARE", ML, y);
+  y += 4;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.black);
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${ro(cazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${ro(cazare.employeeName)}`, ML, y); y += 4.5; }
+  if (cazare.comments) {
+    const cl: string[] = doc.splitTextToSize(`Observatii: ${ro(cazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+  y += 2;
+
+  // Tabel anvelope
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.gray);
+  doc.text("ANVELOPE DEPOZITATE", ML, y);
+  y += 4;
+
+  y = drawAnvelopeTable(doc, autoTable, cazare, y);
+  y += 4;
+
+  y = drawSignatures(doc, "Semnatura Prestator", "Semnatura Client", y);
+  await drawFooterWithBranding(doc, company?.website);
+
+  const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
+  doc.save(docFilename("bon_intrare", clientSlug));
+}
+
+/** Bon Iesire — Hotel Anvelope */
+export async function generateCazareCheckout(cazare: CazareForPdf, company: CompanyData | null): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  await drawBackground(doc, company?.background_path);
+  await drawLogo(doc, company?.logo_path, MT);
+
+  const checkoutDate = cazare.dataCheckout ?? new Date().toISOString().slice(0, 10);
+  let y = drawHeader(doc, "Hotel Anvelope - Bon Iesire", "", cazare.id, fmtDate(checkoutDate));
+  y += 2;
+  hline(doc, y);
+  y += 6;
+
+  const bw = (CW - 8) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + 8;
+
+  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
+  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw);
+  y = Math.max(yComp, yClient) + 4;
+
+  hline(doc, y);
+  y += 6;
+
+  // Detalii cazare
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.gray);
+  doc.text("DETALII CAZARE", ML, y);
+  y += 4;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.black);
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${ro(cazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${ro(cazare.employeeName)}`, ML, y); y += 4.5; }
+
+  doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, ML, y); y += 4.5;
+  doc.text(`Data iesire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
+
+  const zile = Math.round(
+    (new Date(checkoutDate).getTime() - new Date(cazare.dataCheckin).getTime()) / 86_400_000
+  );
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.black);
+  doc.text(`Durata depozitare: ${zile} zile`, ML, y);
+  y += 5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  if (cazare.comments) {
+    const cl: string[] = doc.splitTextToSize(`Observatii: ${ro(cazare.comments)}`, CW);
+    doc.setTextColor(...C.black);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+  y += 2;
+
+  // Tabel anvelope
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.gray);
+  doc.text("ANVELOPE RIDICATE", ML, y);
+  y += 4;
+
+  y = drawAnvelopeTable(doc, autoTable, cazare, y);
+  y += 4;
+
+  y = drawSignatures(doc, "Semnatura Prestator", "Semnatura Client", y);
+  await drawFooterWithBranding(doc, company?.website);
+
+  const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
+  doc.save(docFilename("bon_iesire", clientSlug));
+}

@@ -14,7 +14,7 @@ from app.database import engine
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, anvelope, loc_cazare, cazare_anvelope, admin
 
 
 @asynccontextmanager
@@ -52,7 +52,13 @@ app.include_router(locations.router,  prefix="/api/locations",  tags=["locations
 app.include_router(clienti.router,    prefix="/api/clienti",    tags=["clienti"])
 app.include_router(companies.router,   prefix="/api/companies",   tags=["companies"])
 app.include_router(disclaimers.router, prefix="/api/disclaimers", tags=["disclaimers"])
-app.include_router(registers.router,  prefix="/api/registers",  tags=["registers"])
+app.include_router(registers.router,       prefix="/api/registers",           tags=["registers"])
+app.include_router(marci_anvelope.router,  prefix="/api/marci-anvelope",      tags=["marci-anvelope"])
+app.include_router(dimensiuni_anvelope.router, prefix="/api/dimensiuni-anvelope", tags=["dimensiuni-anvelope"])
+app.include_router(anvelope.router,        prefix="/api/anvelope",            tags=["anvelope"])
+app.include_router(loc_cazare.router,      prefix="/api/loc-cazare",          tags=["loc-cazare"])
+app.include_router(cazare_anvelope.router, prefix="/api/cazare-anvelope",     tags=["cazare-anvelope"])
+app.include_router(admin.router,           prefix="/api/admin",               tags=["admin"])
 
 
 @app.get("/health")

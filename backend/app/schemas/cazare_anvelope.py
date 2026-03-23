@@ -23,6 +23,7 @@ class CazareUpdateBody(BaseModel):
     loc_cazare_id: int | None = None
     data_checkin: date | None = None
     comments: str | None = None
+    anvelopa_ids: list[int] | None = None  # dacă prezent, înlocuiește toate itemele
 
 
 class CazareItemRead(BaseModel):

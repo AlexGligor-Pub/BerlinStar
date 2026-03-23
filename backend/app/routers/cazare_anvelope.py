@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, delete as sql_delete
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -198,6 +198,18 @@ async def update_cazare(
         cazare.data_checkin = body.data_checkin
     cazare.comments = body.comments
     cazare.updated_at = datetime.now(timezone.utc)
+
+    if body.anvelopa_ids is not None:
+        # șterge itemele existente și adaugă cele noi (bulk delete evită lazy-load pe back-ref)
+        await db.execute(sql_delete(CazareAnvelopaItem).where(CazareAnvelopaItem.cazare_id == cazare_id))
+        await db.flush()
+        for anv_id in body.anvelopa_ids:
+            db.add(CazareAnvelopaItem(
+                account_id=account_id,
+                cazare_id=cazare_id,
+                anvelopa_id=anv_id,
+            ))
+
     await db.commit()
     result = await db.execute(_load_stmt(account_id).where(CazareAnvelope.id == cazare_id))
     cazare = result.scalar_one()

@@ -10,7 +10,9 @@ import POS from "./pages/POS";
 import Reception from "./pages/Reception";
 import Configurari from "./pages/Configurari";
 import Clienti from "./pages/Clienti";
+import HotelAnvelope from "./pages/HotelAnvelope";
 import NoAccess from "./pages/NoAccess";
+import Admin from "./pages/Admin";
 
 function Protected(props: { component: () => any }) {
   const navigate = useNavigate();
@@ -47,6 +49,8 @@ export default function App() {
         </Show>
       )} />
       <Route path="/clienti" component={() => <Protected component={Clienti} />} />
+      <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
+      <Route path="/admin" component={Admin} />
     </Router>
   );
 }
