@@ -1445,7 +1445,7 @@ function ProduseSiServiciiPanel() {
   function switchTab(tab: "categorii" | "produse") {
     setActiveTab(tab);
     if (tab === "categorii") loadCategories();
-    // produse tab: user must press Caută
+    if (tab === "produse") loadItems();
   }
 
   onMount(() => { loadDepartments(); loadCategories(); });
