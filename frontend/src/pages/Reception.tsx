@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup, untrack } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
@@ -698,19 +698,9 @@ export default function Reception() {
     loadReceipts(dateStart(), dateEnd(), ps, ss);
   });
 
-  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  // Când search se golește, resetăm și server search-ul
   createEffect(() => {
-    const q = search();
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => {
-      const fCount = untrack(filtered).length;
-      const ps = untrack(pageSize);
-      if (!q) {
-        setServerSearch("");
-      } else if (fCount < ps) {
-        setServerSearch(q);
-      }
-    }, 400);
+    if (!search()) setServerSearch("");
   });
 
   let sentinelRef: HTMLDivElement | undefined;
@@ -733,13 +723,24 @@ export default function Reception() {
           </button>
         </h1>
         <div class="reception-header-right">
-          <input
-            class="input reception-search"
-            type="search"
-            placeholder="Cauta dupa titlu..."
-            value={search()}
-            onInput={(e) => setSearch(e.currentTarget.value)}
-          />
+          <div style="position:relative">
+            <input
+              class="input reception-search"
+              type="search"
+              placeholder="Cauta dupa titlu..."
+              value={search()}
+              onInput={(e) => setSearch(e.currentTarget.value)}
+            />
+            <Show when={search()}>
+              <button
+                class="btn btn-sm btn-ghost"
+                style="position:absolute;top:calc(100% + 2px);left:0;font-size:11px;padding:1px 8px;z-index:10;background:var(--card-bg);border:1px solid var(--border);border-radius:4px;white-space:nowrap"
+                onClick={() => setServerSearch(search())}
+              >
+                Server {serverSearch() === search() ? "✓" : ""}
+              </button>
+            </Show>
+          </div>
           <div class="filter-dropdown">
             <button
               class="btn btn-sm btn-ghost filter-dropdown-btn"
