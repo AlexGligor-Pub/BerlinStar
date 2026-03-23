@@ -9,6 +9,11 @@ export interface Receipt {
   titlu: string;
   clientId: number | null;
   clientNume: string | null;
+  clientCui: string | null;
+  clientAdresa: string | null;
+  clientTelefon: string | null;
+  clientTip: string | null;
+  clientReprezentant: string | null;
   descriere?: string;
   dateTehn?: string;
   metodaPlata?: string;
@@ -32,6 +37,11 @@ function mapFromApi(r: any): Receipt {
     titlu: r.titlu,
     clientId: r.client_id ?? null,
     clientNume: r.client_nume ?? null,
+    clientCui: r.client_cui ?? null,
+    clientAdresa: r.client_adresa ?? null,
+    clientTelefon: r.client_telefon ?? null,
+    clientTip: r.client_tip ?? null,
+    clientReprezentant: r.client_reprezentant ?? null,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
     metodaPlata: r.pay_method !== "Neplatit" ? r.pay_method : undefined,

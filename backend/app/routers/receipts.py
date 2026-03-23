@@ -62,7 +62,13 @@ def _serialize(receipt: Receipt) -> dict:
     data["receipt_items"] = [
         ReceiptItemRead.from_orm_item(it).model_dump() for it in receipt.receipt_items
     ]
-    data["client_nume"] = receipt.client.nume if receipt.client else None
+    c = receipt.client
+    data["client_nume"]         = c.nume          if c else None
+    data["client_cui"]          = c.cui           if c else None
+    data["client_adresa"]       = c.adresa        if c else None
+    data["client_telefon"]      = c.telefon       if c else None
+    data["client_tip"]          = c.tip           if c else None
+    data["client_reprezentant"] = c.reprezentant  if c else None
     return data
 
 

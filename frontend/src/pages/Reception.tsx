@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, onMount, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
@@ -625,6 +625,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 }
 
 const FILTER_OPTIONS = ["Neplatit", ...METODE];
+const PAGE_SIZES = [10, 20, 30, 50, 100, 200, 300, 500, 1000];
 
 export default function Reception() {
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
@@ -692,6 +693,21 @@ export default function Reception() {
 
   const hasFilter = () => selected().size > 0;
 
+  const [pageSize, setPageSize] = createSignal(10);
+  const [currentPage, setCurrentPage] = createSignal(1);
+
+  createEffect(() => {
+    filtered(); // track filtered changes
+    pageSize();
+    setCurrentPage(1);
+  });
+
+  const totalPages = createMemo(() => Math.max(1, Math.ceil(filtered().length / pageSize())));
+  const paginated = createMemo(() => {
+    const start = (currentPage() - 1) * pageSize();
+    return filtered().slice(start, start + pageSize());
+  });
+
   return (
     <div class="page-content">
       <div class="page-header">
@@ -745,6 +761,15 @@ export default function Reception() {
             </Show>
           </div>
           <span class="reception-count">{filtered().length} / {receipts().length} bonuri</span>
+          <select
+            class="reception-page-size-select"
+            value={pageSize()}
+            onChange={(e) => setPageSize(Number(e.currentTarget.value))}
+          >
+            <For each={PAGE_SIZES}>
+              {(s) => <option value={s}>{s}</option>}
+            </For>
+          </select>
           <span class="reception-pos-count" title="POS-uri active">· {posCount()} POS</span>
         </div>
       </div>
@@ -761,10 +786,31 @@ export default function Reception() {
         }
       >
         <div class="rcard-list">
-          <For each={filtered()}>
+          <For each={paginated()}>
             {(r) => <ReceiptCard receipt={r} />}
           </For>
         </div>
+        <Show when={totalPages() > 1}>
+          <div class="reception-pagination">
+            <button
+              class="btn btn-sm btn-ghost"
+              disabled={currentPage() === 1}
+              onClick={() => setCurrentPage((p) => p - 1)}
+            >
+              ‹
+            </button>
+            <span class="reception-pagination-info">
+              {currentPage()} / {totalPages()}
+            </span>
+            <button
+              class="btn btn-sm btn-ghost"
+              disabled={currentPage() === totalPages()}
+              onClick={() => setCurrentPage((p) => p + 1)}
+            >
+              ›
+            </button>
+          </div>
+        </Show>
       </Show>
 
       <Show when={showDateModal()}>

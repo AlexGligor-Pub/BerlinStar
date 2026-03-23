@@ -161,7 +161,7 @@ function drawCompanyBlock(
 
 /** Bloc client */
 function drawClientBlock(
-  doc: any, label: string, clientNume: string | null,
+  doc: any, label: string, r: Receipt,
   x: number, y: number, bw: number
 ): number {
   doc.setFont("helvetica", "bold");
@@ -173,9 +173,21 @@ function drawClientBlock(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...C.black);
-  const lines: string[] = doc.splitTextToSize(ro(clientNume ?? "-"), bw);
+  const lines: string[] = doc.splitTextToSize(ro(r.clientNume ?? "-"), bw);
   doc.text(lines, x, y);
   y += lines.length * 4.2;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  if (r.clientCui)          { doc.text(`CUI: ${r.clientCui}`, x, y); y += 3.5; }
+  if (r.clientReprezentant) { doc.text(`Repr.: ${ro(r.clientReprezentant)}`, x, y); y += 3.5; }
+  if (r.clientAdresa) {
+    const al: string[] = doc.splitTextToSize(ro(r.clientAdresa), bw);
+    doc.text(al, x, y);
+    y += al.length * 3.5;
+  }
+  if (r.clientTelefon) { doc.text(`Tel: ${r.clientTelefon}`, x, y); y += 3.5; }
   return y;
 }
 
@@ -389,8 +401,8 @@ async function drawLogo(doc: any, url: string | null | undefined, y: number): Pr
   try {
     const dataUrl = await loadImageAsDataUrl(url);
     if (!dataUrl) return;
-    const logoH = 12;
-    const logoW = 30;
+    const logoH = 20;
+    const logoW = 20;
     const x = PAGE_W - MR - logoW;
     doc.addImage(dataUrl, "PNG", x, y, logoW, logoH, undefined, "FAST");
   } catch { /* ignore */ }
@@ -462,7 +474,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   const bw = CW / 2 - 5;
   const col2X = ML + bw + 10;
   const y1 = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, bw);
-  const y2 = drawClientBlock(doc, "Beneficiar", r.clientNume, col2X, y, bw);
+  const y2 = drawClientBlock(doc, "Beneficiar", r, col2X, y, bw);
   y = Math.max(y1, y2) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
@@ -503,6 +515,22 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     y += dtl.length * 4 + 3;
   }
 
+  if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...C.black);
+    doc.text(`Platit partial / Avans: ${lei(r.partialPay)}`, ML, y);
+    const tvaPct2 = ctx.company?.tva_percentage ?? 0;
+    const totalFinal2 = r.total + r.total * (tvaPct2 / 100);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.gray);
+    doc.text(`Rest de plata: ${lei(totalFinal2 - r.partialPay)}`, ML, y + 5);
+    y += 12;
+  }
+
   y = drawDisclaimer(doc, ctx.disclaimer, y);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   await drawFooterWithBranding(doc, ctx.company?.website);
@@ -535,7 +563,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   const bw = CW / 2 - 5;
   const col2X = ML + bw + 10;
   const y1 = drawCompanyBlock(doc, "Furnizor", ctx.company, ML, y, bw);
-  const y2 = drawClientBlock(doc, "Cumparator", r.clientNume, col2X, y, bw);
+  const y2 = drawClientBlock(doc, "Cumparator", r, col2X, y, bw);
   y = Math.max(y1, y2) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
@@ -585,7 +613,16 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   doc.setFontSize(11);
   doc.setTextColor(...C.black);
   doc.text(ro(r.clientNume ?? "-"), ML + 40, y);
-  y += 9;
+  if (r.clientTip === "juridic" && r.clientCui) {
+    y += 5.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gray);
+    doc.text(`CUI: ${r.clientCui}`, ML + 40, y);
+    y += 5.5;
+  } else {
+    y += 9;
+  }
 
   hline(doc, y, C.veryLight, 0.2);
   y += 4;

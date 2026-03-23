@@ -2063,8 +2063,11 @@ function CompaniiPanel() {
               Plătitor TVA
             </label>
             <Show when={f().is_vat_payer}>
-              <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
-                value={f().tva_percentage ?? 21} onInput={e => patchForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+              <div class="cfg-input-suffix-wrap">
+                <input class="input" type="number" placeholder="Cotă TVA" min="0" max="100" step="1"
+                  value={f().tva_percentage ?? 21} onInput={e => patchForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                <span class="cfg-input-suffix">%</span>
+              </div>
             </Show>
             <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
             <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
@@ -2124,8 +2127,11 @@ function CompaniiPanel() {
                     Plătitor TVA
                   </label>
                   <Show when={ef().is_vat_payer}>
-                    <input class="input" type="number" placeholder="Cotă TVA (%)" min="0" max="100" step="1"
-                      value={ef().tva_percentage ?? 21} onInput={e => patchEditForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                    <div class="cfg-input-suffix-wrap">
+                      <input class="input" type="number" placeholder="Cotă TVA" min="0" max="100" step="1"
+                        value={ef().tva_percentage ?? 21} onInput={e => patchEditForm("tva_percentage", e.currentTarget.value ? parseFloat(e.currentTarget.value) : null)} />
+                      <span class="cfg-input-suffix">%</span>
+                    </div>
                   </Show>
                   <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />

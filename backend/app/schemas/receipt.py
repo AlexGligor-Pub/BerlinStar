@@ -96,6 +96,11 @@ class ReceiptRead(BaseModel):
     partial_pay: Decimal | None
     client_id: int | None
     client_nume: str | None = None
+    client_cui: str | None = None
+    client_adresa: str | None = None
+    client_telefon: str | None = None
+    client_tip: str | None = None
+    client_reprezentant: str | None = None
     deviz_serie: str
     deviz_nr: int
     factura_serie: str

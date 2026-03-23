@@ -1057,6 +1057,18 @@ body {
   text-align: left;
 }
 
+.sl-qty-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 92px; /* aliniaza cu inputul (80px label + 12px gap) */
+}
+.sl-qty-preset-btn {
+  font-size: 0.78rem;
+  padding: 3px 8px;
+  min-width: 40px;
+}
+
 .sl-edit-item-total {
   font-size: 0.95rem;
   font-weight: 600;
@@ -1390,6 +1402,31 @@ body {
 .reception-count {
   font-size: 0.85rem;
   color: var(--text-muted);
+}
+
+.reception-page-size-select {
+  font-size: 0.82rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.reception-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+}
+
+.reception-pagination-info {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  min-width: 60px;
+  text-align: center;
 }
 
 .reception-pos-count {
@@ -2592,6 +2629,20 @@ body {
   color: var(--text);
   resize: vertical;
   min-height: 60px;
+}
+
+.cfg-input-suffix-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cfg-input-suffix-wrap .input {
+  flex: 1;
+}
+.cfg-input-suffix {
+  font-size: 0.9rem;
+  color: var(--text-muted, #888);
+  white-space: nowrap;
 }
 
 .cfg-checkbox-row {

@@ -111,6 +111,7 @@ export default function ShoppingList() {
         titlu: titlu().trim(),
         clientId: null,
         clientNume: null,
+        clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null,
         descriere: descriere().trim() || undefined,
         dateTehn: dateTehn().trim() || undefined,
         items: [...cart.items],
@@ -270,6 +271,11 @@ export default function ShoppingList() {
                   autofocus
                 />
               </div>
+              <div class="sl-qty-presets">
+                {[10, 50, 100, 200, 300, 500, 1000].map(v => (
+                  <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setEditQty(String(v))}>{v}</button>
+                ))}
+              </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Pret (lei)</label>
                 <input
@@ -380,6 +386,11 @@ export default function ShoppingList() {
                   value={manualQty()}
                   onInput={(e) => setManualQty(e.currentTarget.value)}
                 />
+              </div>
+              <div class="sl-qty-presets">
+                {[10, 50, 100, 200, 300, 500, 1000].map(v => (
+                  <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setManualQty(String(v))}>{v}</button>
+                ))}
               </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Pret (lei)</label>
