@@ -4,6 +4,7 @@ import { apiFetch } from "../utils/api";
 export interface CatalogDepartment {
   id: number;
   name: string;
+  image_path: string | null;
 }
 
 const DEPT_CACHE_KEY = "bs_departments_cache";
@@ -25,7 +26,7 @@ export async function loadCatalogDepartments(locationId?: number | null) {
     const res = await apiFetch(`/api/departments?limit=100${qs}`);
     if (!res.ok) return;
     const data = await res.json();
-    const items = data.items.map((d: any) => ({ id: d.id, name: d.name }));
+    const items = data.items.map((d: any) => ({ id: d.id, name: d.name, image_path: d.image_path ?? null }));
     setCatalogDepartments(items);
     localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items }));
   } catch {}

@@ -1,5 +1,6 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { adminVisible } from "../store/adminStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import {
   cazari, marci, dimensiuni, locuriCazare, cazariHasMore, cazariLoadingMore,
@@ -449,9 +450,9 @@ export default function HotelAnvelope() {
 
   async function fetchCazari() {
     if (view() === "active") {
-      await loadCazari({ activa: true, limit: 30 });
+      await loadCazari({ activa: true, limit: 200 });
     } else {
-      await loadCazari({ activa: false, limit: 30 });
+      await loadCazari({ activa: false, limit: 200 });
     }
   }
 
@@ -480,13 +481,6 @@ export default function HotelAnvelope() {
       return true;
     });
   });
-
-  async function loadClientAnvelope(clientId: number) {
-    const anvs = await loadAnvelope(clientId);
-    setClientAnvelope(anvs);
-    // selectăm toate implicit
-    setSelectedAnvIds(new Set(anvs.map((a) => a.id)));
-  }
 
   function toggleAnv(id: number) {
     setSelectedAnvIds((prev) => {
@@ -697,7 +691,6 @@ export default function HotelAnvelope() {
           reprezentant: c.clientReprezentant,
         });
         setShowNewModal(true);
-        await loadClientAnvelope(c.clientId);
       }
     } finally { setCheckoutSaving(false); }
   }
@@ -1122,7 +1115,9 @@ export default function HotelAnvelope() {
               </div>
 
               <div class="sl-modal-footer" style="justify-content:space-between">
-                <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
+                <Show when={adminVisible()}>
+                  <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
+                </Show>
                 <div style="display:flex;gap:8px">
                   <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>Anulează</button>
                   <button class="btn btn-primary btn-sm" onClick={doEdit} disabled={editSaving()}>
@@ -1163,10 +1158,12 @@ export default function HotelAnvelope() {
                 </Show>
               </div>
               <div class="sl-modal-footer" style="justify-content:space-between">
-                <button
-                  class="btn btn-danger btn-sm"
-                  onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}
-                >Șterge</button>
+                <Show when={adminVisible()}>
+                  <button
+                    class="btn btn-danger btn-sm"
+                    onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}
+                  >Șterge</button>
+                </Show>
                   <div style="display:flex;gap:8px">
                     <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>Anulează</button>
                     <button class="btn btn-primary btn-sm" onClick={saveAdminEdit} disabled={editAdminSaving() || !editAdminVal1().trim()}>

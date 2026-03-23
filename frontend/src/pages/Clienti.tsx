@@ -1,5 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { adminVisible } from "../store/adminStore";
 
 interface Client {
   id: number;
@@ -242,13 +243,15 @@ export default function Clienti() {
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
-                    <button class="btn btn-sm btn-danger" onClick={() => setDeleteTarget(c)}>Șterge</button>
                   </div>
                 </>
               }>
                 <ClientForm f={form()} setF={setForm} />
                 <div class="cfg-location-actions" style="margin-top:8px">
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
+                  <Show when={adminVisible()}>
+                    <button class="btn btn-sm btn-danger" onClick={() => setDeleteTarget(c)}>Șterge</button>
+                  </Show>
                   <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveEdit}>
                     {saving() ? "Se salvează..." : "Salvează"}
                   </button>

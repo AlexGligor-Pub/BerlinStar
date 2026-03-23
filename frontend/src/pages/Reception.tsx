@@ -625,7 +625,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
 }
 
 const FILTER_OPTIONS = ["Neplatit", ...METODE];
-const PAGE_SIZES = [10, 20, 30, 50, 100, 200, 300, 500, 1000];
 
 export default function Reception() {
   const [selected, setSelected] = createSignal<Set<string>>(new Set());
@@ -689,13 +688,11 @@ export default function Reception() {
 
   const hasFilter = () => selected().size > 0;
 
-  const [pageSize, setPageSize] = createSignal(10);
   const [serverSearch, setServerSearch] = createSignal("");
 
   createEffect(() => {
-    const ps = pageSize();
     const ss = serverSearch();
-    loadReceipts(dateStart(), dateEnd(), ps, ss);
+    loadReceipts(dateStart(), dateEnd(), 200, ss);
   });
 
   // Când search se golește, resetăm și server search-ul
@@ -726,7 +723,7 @@ export default function Reception() {
           <div style="display:flex;align-items:center;gap:4px">
             <input
               class="input reception-search"
-              style="width:120px"
+              style="width:200px"
               type="search"
               placeholder="Cauta dupa titlu..."
               value={search()}
@@ -777,16 +774,7 @@ export default function Reception() {
               </div>
             </Show>
           </div>
-          <span class="reception-count">{filtered().length} / {receipts().length} bonuri</span>
-          <select
-            class="reception-page-size-select"
-            value={pageSize()}
-            onChange={(e) => setPageSize(Number(e.currentTarget.value))}
-          >
-            <For each={PAGE_SIZES}>
-              {(s) => <option value={s}>{s}</option>}
-            </For>
-          </select>
+          <span class="reception-count">{filtered().length} bonuri</span>
           <span class="reception-pos-count" title="POS-uri active">· {posCount()} POS</span>
         </div>
       </div>

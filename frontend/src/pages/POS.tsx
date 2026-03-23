@@ -45,7 +45,7 @@ export default function POS() {
   function openDevizModal() {
     setDevizSearch("");
     setVisibleCount(PAGE_SIZE);
-    loadReceipts();
+    loadReceipts(undefined, undefined, 200);
     setShowDevizModal(true);
   }
 
@@ -221,13 +221,6 @@ export default function POS() {
         <div class="pos-panel pos-panel--theme">
           <div class="pos-panel-inner">
             <div class="pos-theme-header">
-              <button
-                class="btn btn-sm btn-ghost"
-                disabled={selectedEmployeeId() === null}
-                onClick={() => setPanel(0)}
-              >
-                ◀ POS
-              </button>
             </div>
             <div class="pos-theme-center">
 
@@ -248,7 +241,9 @@ export default function POS() {
                       classList={{ "pos-theme-card--active": selectedDepartmentId() === t.id }}
                       onClick={() => selectCatalogDepartment(t.id)}
                     >
-                      <div class={`pos-theme-preview pos-theme-preview--c${(i() % 6) + 1}`} />
+                      <Show when={t.image_path} fallback={<div class={`pos-theme-preview pos-theme-preview--c${(i() % 6) + 1}`} />}>
+                        <img src={t.image_path!} class="pos-theme-preview" style="object-fit:cover" />
+                      </Show>
                       <span class="pos-theme-label">{t.name}</span>
                     </button>
                   )}

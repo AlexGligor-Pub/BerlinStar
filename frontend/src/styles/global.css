@@ -973,6 +973,7 @@ body {
   border-radius: 10px;
   width: min(560px, 95vw);
   max-height: 80vh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -986,6 +987,7 @@ body {
   flex-direction: column;
   gap: 4px;
   min-height: 0;
+  max-height: calc(10 * 48px);
 }
 
 .deviz-modal-row {
@@ -2027,10 +2029,11 @@ body {
 
 .logo-nav-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: auto auto;
+  row-gap: 8px;
+  column-gap: 8px;
   padding: 12px;
-  justify-items: center;
+  justify-content: center;
 }
 
 .logo-nav-tile {
@@ -2050,7 +2053,7 @@ body {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
   -webkit-tap-highlight-color: transparent;
-  padding: 0;
+  padding: 8px;
 }
 
 .logo-nav-tile:hover {
