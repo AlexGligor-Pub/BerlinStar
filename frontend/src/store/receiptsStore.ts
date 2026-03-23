@@ -81,11 +81,17 @@ const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
 let _lastDateFrom: string | null = null;
 let _lastDateTo: string | null = null;
 let _lastLimit: number = 10;
+let _nextCursor: number | null = null;
+
+const [hasMore, setHasMore] = createSignal(false);
+const [loadingMore, setLoadingMore] = createSignal(false);
+export { hasMore, loadingMore };
 
 export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number) {
   if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
   if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
   if (limit !== undefined) _lastLimit = limit;
+  _nextCursor = null;
   try {
     let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
@@ -94,10 +100,35 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
     if (!res.ok) return;
     const data = await res.json();
     const mapped: Receipt[] = data.items.map(mapFromApi);
+    _nextCursor = data.next_cursor ?? null;
+    setHasMore(_nextCursor !== null);
     setReceipts(mapped);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
   } catch {
     // ramane cache-ul existent
+  }
+}
+
+export async function loadMoreReceipts() {
+  if (!_nextCursor || loadingMore()) return;
+  setLoadingMore(true);
+  try {
+    let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30&last_id=${_nextCursor}`;
+    if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
+    if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
+    const res = await apiFetch(qs);
+    if (!res.ok) return;
+    const data = await res.json();
+    const mapped: Receipt[] = data.items.map(mapFromApi);
+    _nextCursor = data.next_cursor ?? null;
+    setHasMore(_nextCursor !== null);
+    const updated = [...receipts(), ...mapped];
+    setReceipts(updated);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+  } catch {
+    // ignore
+  } finally {
+    setLoadingMore(false);
   }
 }
 

@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta } from "../utils/generateDocuments";
 import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
@@ -696,6 +696,16 @@ export default function Reception() {
     loadReceipts(dateStart(), dateEnd(), ps);
   });
 
+  let sentinelRef: HTMLDivElement | undefined;
+  onMount(() => {
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadMoreReceipts(); },
+      { threshold: 0.1 }
+    );
+    if (sentinelRef) observer.observe(sentinelRef);
+    onCleanup(() => observer.disconnect());
+  });
+
   return (
     <div class="page-content">
       <div class="page-header">
@@ -777,6 +787,14 @@ export default function Reception() {
           <For each={filtered()}>
             {(r) => <ReceiptCard receipt={r} />}
           </For>
+        </div>
+        <div ref={sentinelRef} class="reception-sentinel">
+          <Show when={loadingMore()}>
+            <span class="text-muted" style="font-size:.85rem">Se incarca...</span>
+          </Show>
+          <Show when={!hasMore() && !loadingMore() && receipts().length > 0}>
+            <span class="text-muted" style="font-size:.85rem">Nu mai sunt bonuri.</span>
+          </Show>
         </div>
       </Show>
 

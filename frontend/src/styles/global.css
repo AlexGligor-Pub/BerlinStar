@@ -1414,6 +1414,13 @@ body {
   cursor: pointer;
 }
 
+.reception-sentinel {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 8px;
+  min-height: 40px;
+}
+
 .reception-pagination {
   display: flex;
   align-items: center;
