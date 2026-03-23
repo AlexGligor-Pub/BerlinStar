@@ -40,7 +40,7 @@ async def list_items(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    limit = min(limit, 100)
+    limit = min(limit, 300)
     stmt = (
         select(Item)
         .options(selectinload(Item.category))

@@ -1431,7 +1431,7 @@ function ProduseSiServiciiPanel() {
       const cq = itemFilterCatId() != null ? `&category_id=${itemFilterCatId()}` : "";
       const tq = itemFilterType() !== "all" ? `&type=${itemFilterType()}` : "";
       const dq = filterDeptId() != null ? `&department_id=${filterDeptId()}` : "";
-      const res = await apiFetch(`/api/items?limit=200${cq}${tq}${dq}`);
+      const res = await apiFetch(`/api/items?limit=300${cq}${tq}${dq}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setItems(data.items ?? []);

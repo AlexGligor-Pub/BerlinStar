@@ -27,7 +27,7 @@ const [isOffline, setIsOffline] = createSignal(false);
 
 export async function loadProducts() {
   try {
-    const res = await apiFetch("/api/items?limit=100", {
+    const res = await apiFetch("/api/items?limit=300", {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error("API error");
