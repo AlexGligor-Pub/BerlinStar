@@ -81,21 +81,24 @@ const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
 let _lastDateFrom: string | null = null;
 let _lastDateTo: string | null = null;
 let _lastLimit: number = 10;
+let _lastSearch: string = "";
 let _nextCursor: number | null = null;
 
 const [hasMore, setHasMore] = createSignal(false);
 const [loadingMore, setLoadingMore] = createSignal(false);
 export { hasMore, loadingMore };
 
-export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number) {
+export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string) {
   if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
   if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
   if (limit !== undefined) _lastLimit = limit;
+  if (q !== undefined) _lastSearch = q;
   _nextCursor = null;
   try {
     let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
+    if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = await res.json();
@@ -116,6 +119,7 @@ export async function loadMoreReceipts() {
     let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30&last_id=${_nextCursor}`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
+    if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = await res.json();

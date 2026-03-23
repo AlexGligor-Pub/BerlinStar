@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup, untrack } from "solid-js";
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
@@ -690,10 +690,27 @@ export default function Reception() {
   const hasFilter = () => selected().size > 0;
 
   const [pageSize, setPageSize] = createSignal(10);
+  const [serverSearch, setServerSearch] = createSignal("");
 
   createEffect(() => {
     const ps = pageSize();
-    loadReceipts(dateStart(), dateEnd(), ps);
+    const ss = serverSearch();
+    loadReceipts(dateStart(), dateEnd(), ps, ss);
+  });
+
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    const q = search();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const fCount = untrack(filtered).length;
+      const ps = untrack(pageSize);
+      if (!q) {
+        setServerSearch("");
+      } else if (fCount < ps) {
+        setServerSearch(q);
+      }
+    }, 400);
   });
 
   let sentinelRef: HTMLDivElement | undefined;
