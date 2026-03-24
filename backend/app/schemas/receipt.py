@@ -66,6 +66,14 @@ class ReceiptPatch(BaseModel):
     partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
+class ReceiptContentPatch(BaseModel):
+    titlu: str = Field(..., max_length=200)
+    descriere: str | None = None
+    date_tehn: str | None = None
+    items: list[ReceiptItemCreate]
+    total: Decimal = Field(..., ge=0, decimal_places=2)
+
+
 class ReceiptClientPatch(BaseModel):
     client_id: int | None
 

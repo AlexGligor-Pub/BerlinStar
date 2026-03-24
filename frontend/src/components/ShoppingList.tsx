@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
-import { saveReceipt } from "../store/receiptsStore";
+import { saveReceipt, updateReceiptContent } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 
@@ -20,6 +20,8 @@ export default function ShoppingList() {
   const [editPrice, setEditPrice] = createSignal("0");
 
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
+
+  const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
 
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
@@ -65,6 +67,7 @@ export default function ShoppingList() {
   onMount(() => {
     const r = consumeResume();
     if (r) {
+      setLoadedReceiptId(r.id ?? null);
       setTitlu(r.titlu);
       setDescriere(r.descriere);
       setDateTehn(r.dateTehn);
@@ -76,6 +79,7 @@ export default function ShoppingList() {
     const d = pendingLoad();
     if (!d) return;
     clearPendingLoad();
+    setLoadedReceiptId(d.id ?? null);
     setTitlu(d.titlu);
     setDescriere(d.descriere);
     setDateTehn(d.dateTehn);
@@ -105,26 +109,33 @@ export default function ShoppingList() {
   async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
+    const receiptId = loadedReceiptId();
+    const receiptData = {
+      date: new Date().toISOString(),
+      titlu: titlu().trim(),
+      clientId: null,
+      clientNume: null,
+      clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null,
+      descriere: descriere().trim() || undefined,
+      dateTehn: dateTehn().trim() || undefined,
+      items: [...cart.items],
+      total: cartTotal(),
+      devizSerie: "", devizNr: 0,
+      facturaSerie: "", facturaNr: 0,
+      chitantaSerie: "", chitantaNr: 0,
+    };
     try {
-      await saveReceipt({
-        date: new Date().toISOString(),
-        titlu: titlu().trim(),
-        clientId: null,
-        clientNume: null,
-        clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null,
-        descriere: descriere().trim() || undefined,
-        dateTehn: dateTehn().trim() || undefined,
-        items: [...cart.items],
-        total: cartTotal(),
-        devizSerie: "", devizNr: 0,
-        facturaSerie: "", facturaNr: 0,
-        chitantaSerie: "", chitantaNr: 0,
-      });
+      if (receiptId !== null) {
+        await updateReceiptContent(receiptId, receiptData);
+      } else {
+        await saveReceipt(receiptData);
+      }
       clearCart();
       selectEmployee(null);
       setTitlu("");
       setDescriere("");
       setDateTehn("");
+      setLoadedReceiptId(null);
       setShowSuccess(true);
       clearTimeout(successTimer);
       successTimer = setTimeout(() => setShowSuccess(false), 1000);

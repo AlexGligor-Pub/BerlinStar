@@ -4,7 +4,7 @@ import { adminVisible } from "../store/adminStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import {
   cazari, marci, dimensiuni, locuriCazare, cazariHasMore, cazariLoadingMore,
-  loadCazari, loadMoreCazari, loadAnvelope, loadMarci, loadDimensiuni, loadLocuriCazare,
+  loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
@@ -100,7 +100,7 @@ function ClientSearch(props: {
         </Show>
       </div>
       <Show when={open() && results().length > 0}>
-        <div class="client-search-dropdown" style="position:absolute;left:0;right:0;z-index:200;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15)">
+        <div class="client-search-dropdown" style="position:absolute;left:0;right:0;z-index:200;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15)">
           <For each={results()}>
             {(c) => (
               <button
@@ -116,7 +116,7 @@ function ClientSearch(props: {
         </div>
       </Show>
       <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
-        <div style="position:absolute;left:0;right:0;z-index:200;background:var(--card-bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px">
+        <div style="position:absolute;left:0;right:0;z-index:200;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px">
           <span style="color:var(--text-muted)">Niciun client găsit. </span>
           <a href="/clienti" target="_blank" style="color:var(--primary);text-decoration:underline">Adaugă client nou →</a>
         </div>
@@ -143,6 +143,64 @@ function ClientInfoBlock(props: { client: ClientItem | null }) {
   );
 }
 
+// ─── Sub-component: SearchableSelect ─────────────────────────────────────────
+
+function SearchableSelect<T extends { id: number }>(props: {
+  items: T[];
+  value: number | "";
+  onSelect: (id: number | "") => void;
+  getLabel: (item: T) => string;
+  placeholder: string;
+}) {
+  const [query, setQuery] = createSignal("");
+  const [open, setOpen] = createSignal(false);
+
+  const selected = () => props.items.find((i) => i.id === props.value) ?? null;
+
+  const filtered = createMemo(() => {
+    const q = query().toLowerCase().trim();
+    if (!q) return props.items;
+    return props.items.filter((i) => props.getLabel(i).toLowerCase().includes(q));
+  });
+
+  return (
+    <div style="position:relative;flex:1">
+      <input
+        class="input"
+        style="width:100%"
+        placeholder={props.placeholder}
+        value={open() ? query() : (selected() ? props.getLabel(selected()!) : "")}
+        onFocus={() => { setOpen(true); setQuery(""); }}
+        onInput={(e) => setQuery(e.currentTarget.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      <Show when={open()}>
+        <div style="position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.2)">
+          <div
+            style="padding:5px 10px;font-size:12px;color:var(--text-muted);cursor:pointer"
+            onMouseDown={(e) => { e.preventDefault(); props.onSelect(""); setOpen(false); }}
+          >
+            — {props.placeholder} —
+          </div>
+          <For each={filtered()}>
+            {(item) => (
+              <div
+                style={`padding:6px 10px;font-size:13px;cursor:pointer;${props.value === item.id ? "font-weight:600;background:var(--primary-bg,rgba(99,102,241,.1))" : ""}`}
+                onMouseDown={(e) => { e.preventDefault(); props.onSelect(item.id); setOpen(false); setQuery(""); }}
+              >
+                {props.getLabel(item)}
+              </div>
+            )}
+          </For>
+          <Show when={filtered().length === 0}>
+            <div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">Niciun rezultat</div>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
 // ─── Sub-component: AnvelopaForm (formular adăugare/editare anvelopă) ────────
 
 function AnvelopaForm(props: {
@@ -159,6 +217,11 @@ function AnvelopaForm(props: {
   // inline adaugare marca/dimensiune noua
   const [newMarca, setNewMarca] = createSignal("");
   const [newDim, setNewDim] = createSignal("");
+
+  onMount(() => {
+    loadMarci();
+    loadDimensiuni();
+  });
 
   async function addMarca() {
     const n = newMarca().trim();
@@ -211,19 +274,13 @@ function AnvelopaForm(props: {
       <div style="display:grid;gap:6px">
         {/* Marcă */}
         <div style="display:flex;gap:6px;align-items:center">
-          <select class="input" style="flex:1" value={marcaId()} onChange={(e) => setMarcaId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-            <option value="">— Marcă —</option>
-            <For each={marci()}>{(m) => <option value={m.id}>{m.nume}</option>}</For>
-          </select>
+          <SearchableSelect items={marci()} value={marcaId()} onSelect={setMarcaId} getLabel={(m) => m.nume} placeholder="Marcă" />
           <input class="input" style="flex:1" placeholder="Marcă nouă..." value={newMarca()} onInput={(e) => setNewMarca(e.currentTarget.value)} />
           <button class="btn btn-ghost btn-sm" onClick={addMarca} disabled={!newMarca().trim()}>+</button>
         </div>
         {/* Dimensiune */}
         <div style="display:flex;gap:6px;align-items:center">
-          <select class="input" style="flex:1" value={dimensiuneId()} onChange={(e) => setDimensiuneId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-            <option value="">— Dimensiune —</option>
-            <For each={dimensiuni()}>{(d) => <option value={d.id}>{d.valoare}</option>}</For>
-          </select>
+          <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" />
           <input class="input" style="flex:1" placeholder="Dimensiune nouă..." value={newDim()} onInput={(e) => setNewDim(e.currentTarget.value)} />
           <button class="btn btn-ghost btn-sm" onClick={addDim} disabled={!newDim().trim()}>+</button>
         </div>
@@ -414,8 +471,6 @@ export default function HotelAnvelope() {
     try {
       await Promise.all([
         fetchCazari(),
-        loadMarci(),
-        loadDimensiuni(),
         loadLocuriCazare(),
         loadEmployees(),
         fetchCompany(),
@@ -460,6 +515,13 @@ export default function HotelAnvelope() {
     const v = view();
     void v;
     fetchCazari();
+  });
+
+  createEffect(() => {
+    if (adminVisible()) {
+      loadMarci();
+      loadDimensiuni();
+    }
   });
 
   const filtered = createMemo(() => {
@@ -576,16 +638,12 @@ export default function HotelAnvelope() {
     setEditComments(c.comments ?? "");
     setShowEditAnvForm(false);
     setEditErr("");
-    // preîncarcă anvelopele clientului și pre-selectează cele din cazare
-    const currentIds = new Set(c.items.map((i) => i.anvelopaId).filter((id): id is number => id != null));
-    if (c.clientId) {
-      const anvs = await loadAnvelope(c.clientId);
-      setEditAnvelope(anvs);
-      setEditSelectedIds(new Set(anvs.map((a) => a.id).filter((id) => currentIds.has(id))));
-    } else {
-      setEditAnvelope([]);
-      setEditSelectedIds(new Set<number>());
-    }
+    // încarcă doar anvelopele din această cazare
+    const anvs: Anvelopa[] = c.items
+      .filter((i) => i.anvelopa != null)
+      .map((i) => i.anvelopa!);
+    setEditAnvelope(anvs);
+    setEditSelectedIds(new Set(anvs.map((a) => a.id)));
   }
 
   async function doEdit() {
@@ -627,7 +685,7 @@ export default function HotelAnvelope() {
           anvelopa_ids: finalIds,
         }),
       });
-      if (!res.ok) { setEditErr("Eroare la salvare."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(err.detail ?? "Eroare la salvare."); return; }
       setEditCazare(null);
       await fetchCazari();
     } finally { setEditSaving(false); }
@@ -1093,14 +1151,8 @@ export default function HotelAnvelope() {
                 <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                   <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                   <div style="display:grid;gap:8px">
-                    <select class="input" value={editLocId()} onChange={(e) => setEditLocId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                      <option value="">— Loc de cazare —</option>
-                      <For each={locuriCazare()}>{(l) => <option value={l.id}>{l.nume}</option>}</For>
-                    </select>
-                    <select class="input" value={editEmpId()} onChange={(e) => setEditEmpId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                      <option value="">— Angajat —</option>
-                      <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
-                    </select>
+                    <SearchableSelect items={locuriCazare()} value={editLocId()} onSelect={setEditLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" />
+                    <SearchableSelect items={employees()} value={editEmpId()} onSelect={setEditEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
                     <div>
                       <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
                       <input class="input" type="date" value={editCheckin()} onInput={(e) => setEditCheckin(e.currentTarget.value)} />
@@ -1297,14 +1349,8 @@ export default function HotelAnvelope() {
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                 <div style="display:grid;gap:8px">
-                  <select class="input" value={newLocId()} onChange={(e) => setNewLocId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                    <option value="">— Loc de cazare —</option>
-                    <For each={locuriCazare()}>{(l) => <option value={l.id}>{l.nume}</option>}</For>
-                  </select>
-                  <select class="input" value={newEmpId()} onChange={(e) => setNewEmpId(e.currentTarget.value !== "" ? parseInt(e.currentTarget.value) : "")}>
-                    <option value="">— Angajat —</option>
-                    <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
-                  </select>
+                  <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" />
+                  <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
                   <div>
                     <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
                     <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />

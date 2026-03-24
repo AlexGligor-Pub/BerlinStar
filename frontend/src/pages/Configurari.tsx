@@ -1913,6 +1913,7 @@ function CompaniiPanel() {
       if (!res.ok) throw new Error();
       const data = await res.json();
       setForm(data);
+      if (data.is_vat_payer && !data.tva_percentage) patchForm("tva_percentage", 21);
     } catch {
       setAnafError("Eroare la interogarea ANAF. Verificați conexiunea.");
     } finally {

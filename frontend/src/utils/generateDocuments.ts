@@ -522,7 +522,6 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     doc.setFontSize(9);
     doc.setTextColor(...C.black);
     doc.text(`Platit partial / Avans: ${lei(r.partialPay)}`, ML, y);
-    const tvaPct2 = ctx.company?.tva_percentage ?? 0;
     const totalFinal2 = r.total;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);

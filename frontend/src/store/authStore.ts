@@ -38,6 +38,7 @@ export function login(user: string, token: string, isLocked = false, lockedAt: s
 export function logout() {
   setAdminVisible(false);
   setAuth({ user: null, token: null, isLocked: false, lockedAt: null });
+  localStorage.clear();
 }
 
 export const TRIAL_DAYS = 7;

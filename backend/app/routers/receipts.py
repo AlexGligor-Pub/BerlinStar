@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, extract, update, or_, and_
+from sqlalchemy import select, func, extract, update, delete, or_, and_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,7 +14,7 @@ from app.database import get_db
 from app.dependencies import get_account_id, get_account_id_from_query
 from app.models.employee import Employee
 from app.models.receipt import Receipt, ReceiptItem, PayMethod
-from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
+from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptContentPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
 from app.models.client import Client
 from app.models.location import Location
 from app.models.register import Register
@@ -271,6 +271,64 @@ async def patch_receipt(
     result = (await db.execute(
         select(Receipt)
         .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
+        .where(Receipt.id == receipt_id)
+    )).scalar_one()
+
+    await broadcaster.notify(account_id)
+    return _serialize(result)
+
+
+@router.patch("/{receipt_id}/content", response_model=ReceiptRead)
+async def patch_receipt_content(
+    receipt_id: int,
+    body: ReceiptContentPatch,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id:
+        raise HTTPException(404, "Bonul nu a fost gasit.")
+
+    old_emp_ids = {
+        eid for eid in
+        (await db.execute(select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id))).scalars().all()
+        if eid
+    }
+
+    receipt.titlu = body.titlu
+    receipt.descriere = body.descriere
+    receipt.date_tehn = body.date_tehn
+    receipt.total = body.total
+    receipt.updated_at = datetime.now(timezone.utc)
+
+    await db.execute(delete(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id))
+    await db.flush()
+
+    new_emp_ids: set[int] = set()
+    for item in body.items:
+        db.add(ReceiptItem(
+            account_id=account_id,
+            receipt_id=receipt_id,
+            name=item.name,
+            price=item.price,
+            qty=item.qty,
+            unit=item.unit,
+            employee_id=item.employee_id,
+        ))
+        if item.employee_id:
+            new_emp_ids.add(item.employee_id)
+
+    await db.commit()
+    await _refresh_accumulations(db, account_id, old_emp_ids | new_emp_ids)
+    await db.commit()
+
+    db.expire_all()
+    result = (await db.execute(
+        select(Receipt)
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+        )
         .where(Receipt.id == receipt_id)
     )).scalar_one()
 

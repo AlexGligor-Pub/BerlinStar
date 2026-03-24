@@ -168,6 +168,37 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
   return created;
 }
 
+export async function updateReceiptContent(id: string, receipt: Omit<Receipt, "id">): Promise<Receipt> {
+  const body = {
+    titlu: receipt.titlu,
+    descriere: receipt.descriere ?? null,
+    date_tehn: receipt.dateTehn ?? null,
+    items: receipt.items.map((i) => ({
+      name: i.name,
+      price: i.price.toFixed(2),
+      qty: i.qty,
+      unit: i.unit,
+      employee_id: i.employeeId ?? null,
+    })),
+    total: receipt.total.toFixed(2),
+  };
+
+  const res = await apiFetch(`/api/receipts/${id}/content`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  const updated = mapFromApi(await res.json());
+  setReceipts(receipts().map((r) => r.id === String(id) ? updated : r));
+  localStorage.setItem(CACHE_KEY, JSON.stringify(receipts()));
+  return updated;
+}
+
 export async function updateMetodaPlata(id: string, metodaPlata: string | null, partialPay?: number) {
   const pay_method = metodaPlata ?? "Neplatit";
   const res = await apiFetch(`/api/receipts/${id}`, {

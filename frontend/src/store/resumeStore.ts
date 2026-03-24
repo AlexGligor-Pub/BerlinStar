@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import type { CartItem } from "./cartStore";
 
 interface ResumeData {
+  id?: string;
   titlu: string;
   descriere: string;
   dateTehn: string;

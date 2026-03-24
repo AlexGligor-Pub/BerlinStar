@@ -51,6 +51,7 @@ export default function POS() {
 
   function selectDeviz(r: Receipt) {
     triggerLoad({
+      id: r.id,
       titlu: r.titlu,
       descriere: r.descriere ?? "",
       dateTehn: r.dateTehn ?? "",
@@ -108,7 +109,7 @@ export default function POS() {
     return products().filter((p) => {
       const matchCat = category() === "Toate" || p.category === category();
       const matchSearch = !q || p.name.toLowerCase().includes(q);
-      const matchType = tf === "Produse/Servicii" || p.type === (tf === "Servicii" ? "Serviciu" : "Produs");
+      const matchType = tf === "Produse/Servicii" || p.type === (tf === "Servicii" ? "Service" : "Produs");
       const matchTheme = tid !== null ? p.departmentId === tid : deptIds.has(p.departmentId!);
       return matchCat && matchSearch && matchType && matchTheme;
     });
