@@ -1,10 +1,244 @@
 import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
-import { saveReceipt, updateReceiptContent } from "../store/receiptsStore";
+import { saveReceipt, updateReceiptContent, updateReceiptClient } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
+import { apiFetch } from "../utils/api";
 
 type ModalType = "descriere" | "dateTehn" | null;
+
+interface ClientItem {
+  id: number;
+  nume: string;
+  cui: string | null;
+  tip: string;
+}
+
+function emptyClientForm() {
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", comments: "" };
+}
+
+// ─── PosClientSearch ──────────────────────────────────────────────────────────
+
+function PosClientSearch(props: {
+  value: ClientItem | null;
+  onSelect: (c: ClientItem | null) => void;
+  onAddNew: () => void;
+}) {
+  const [q, setQ] = createSignal("");
+  const [results, setResults] = createSignal<ClientItem[]>([]);
+  const [searching, setSearching] = createSignal(false);
+  const [open, setOpen] = createSignal(false);
+  const [searched, setSearched] = createSignal(false);
+
+  createEffect(() => {
+    if (props.value) {
+      setQ(props.value.nume);
+      setSearched(false);
+      setResults([]);
+      setOpen(false);
+    } else {
+      setQ("");
+    }
+  });
+
+  async function search(val: string) {
+    if (!val.trim()) { setResults([]); setOpen(false); setSearched(false); return; }
+    setSearching(true);
+    try {
+      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setResults(data.items ?? []);
+      setSearched(true);
+      setOpen(true);
+    } finally { setSearching(false); }
+  }
+
+  function pick(c: ClientItem) {
+    props.onSelect(c);
+    setQ(c.nume);
+    setOpen(false);
+    setResults([]);
+    setSearched(false);
+  }
+
+  function clear() {
+    props.onSelect(null);
+    setQ("");
+    setResults([]);
+    setOpen(false);
+    setSearched(false);
+  }
+
+  return (
+    <div style="position:relative;margin-top:4px">
+      <div style="display:flex;gap:6px">
+        <input
+          class="input"
+          style="flex:1;font-size:13px"
+          placeholder="Caută client după nume sau CUI..."
+          value={q()}
+          onInput={(e) => { setQ(e.currentTarget.value); if (!props.value) search(e.currentTarget.value); }}
+          onFocus={() => { if (props.value) return; if (results().length) setOpen(true); }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onClick={() => { if (props.value) { clear(); } }}
+        />
+        <Show when={props.value}>
+          <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={clear} title="Șterge client">✕</button>
+        </Show>
+        <Show when={searching()}>
+          <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:11px;pointer-events:none">...</span>
+        </Show>
+      </div>
+      <Show when={props.value}>
+        <div style="font-size:11px;color:var(--text-muted);padding:2px 2px 0">
+          {props.value!.tip === "juridic" ? "Juridică" : "Fizică"}
+          <Show when={props.value!.cui}> · CUI: {props.value!.cui}</Show>
+        </div>
+      </Show>
+      <Show when={open() && results().length > 0}>
+        <div style="position:absolute;left:0;right:0;z-index:300;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,0.15)">
+          <For each={results()}>
+            {(c) => (
+              <button
+                style="display:block;width:100%;text-align:left;padding:8px 12px;background:none;border:none;cursor:pointer;font-size:13px"
+                onMouseDown={(e) => { e.preventDefault(); pick(c); }}
+              >
+                <span style="font-weight:600">{c.nume}</span>
+                <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
+                <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{c.tip === "juridic" ? "Juridică" : "Fizică"}</span>
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+      <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
+        <div style="position:absolute;left:0;right:0;z-index:300;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px;display:flex;align-items:center;gap:8px">
+          <span style="color:var(--text-muted)">Niciun client găsit.</span>
+          <button class="btn btn-sm btn-primary" onMouseDown={(e) => { e.preventDefault(); props.onAddNew(); setOpen(false); }}>+ Adaugă client</button>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+// ─── AddClientModal ───────────────────────────────────────────────────────────
+
+function AddClientModal(props: {
+  onSaved: (c: ClientItem) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = createSignal(emptyClientForm());
+  const [saving, setSaving] = createSignal(false);
+  const [error, setError] = createSignal<string | null>(null);
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [anafError, setAnafError] = createSignal<string | null>(null);
+
+  const pf = (field: string, value: any) => setForm((f) => ({ ...f, [field]: value }));
+
+  async function searchAnaf() {
+    const cui = parseInt(form().cui.replace(/\D/g, ""));
+    if (!cui) return;
+    setAnafLoading(true);
+    setAnafError(null);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm((f) => ({
+        ...f,
+        nume: data.name ?? f.nume,
+        adresa: data.address ?? f.adresa,
+        reprezentant: data.representative ?? f.reprezentant,
+      }));
+    } catch {
+      setAnafError("Eroare la interogarea ANAF.");
+    } finally {
+      setAnafLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    const f = form();
+    if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch("/api/clienti", {
+        method: "POST",
+        body: JSON.stringify({
+          tip: f.tip, nume: f.nume.trim(),
+          description: f.description.trim() || null,
+          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          telefon: f.telefon.trim() || null, email: f.email.trim() || null,
+          adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
+        }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
+      const created: ClientItem = await res.json();
+      props.onSaved(created);
+    } catch {
+      setError("Eroare la salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="sl-modal-overlay" onClick={props.onClose}>
+      <div class="sl-modal" style="max-width:420px;width:100%" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-header">
+          <span class="sl-modal-title">Adaugă client</span>
+          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
+        </div>
+        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+          <div style="display:flex;gap:8px">
+            <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
+            <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
+          </div>
+          <Show when={form().tip === "juridic"}>
+            <div style="display:flex;gap:6px">
+              <input
+                class="input"
+                style="flex:1"
+                placeholder="CUI"
+                value={form().cui}
+                onInput={(e) => pf("cui", e.currentTarget.value)}
+                onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
+              />
+              <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
+                {anafLoading() ? "..." : "ANAF"}
+              </button>
+            </div>
+            <Show when={anafError()}>
+              <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
+            </Show>
+          </Show>
+          <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
+          <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
+          <Show when={form().tip === "juridic"}>
+            <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
+          </Show>
+          <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
+          <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
+          <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
+          <Show when={error()}>
+            <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
+          </Show>
+        </div>
+        <div class="sl-modal-footer">
+          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+          <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
+            {saving() ? "Se salvează..." : "Salvează"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ShoppingList ─────────────────────────────────────────────────────────────
 
 export default function ShoppingList() {
   const [titlu, setTitlu] = createSignal("");
@@ -22,6 +256,8 @@ export default function ShoppingList() {
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
+  const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
+  const [showAddClientModal, setShowAddClientModal] = createSignal(false);
 
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
@@ -64,6 +300,14 @@ export default function ShoppingList() {
     setEditItem(null);
   }
 
+  function loadResumeClient(r: { clientId?: number | null; clientNume?: string | null; clientCui?: string | null; clientTip?: string | null }) {
+    if (r.clientId) {
+      setSelectedClient({ id: r.clientId, nume: r.clientNume ?? "", cui: r.clientCui ?? null, tip: r.clientTip ?? "fizic" });
+    } else {
+      setSelectedClient(null);
+    }
+  }
+
   onMount(() => {
     const r = consumeResume();
     if (r) {
@@ -72,6 +316,7 @@ export default function ShoppingList() {
       setDescriere(r.descriere);
       setDateTehn(r.dateTehn);
       replaceCart(r.items);
+      loadResumeClient(r);
     }
   });
 
@@ -84,6 +329,7 @@ export default function ShoppingList() {
     setDescriere(d.descriere);
     setDateTehn(d.dateTehn);
     replaceCart(d.items);
+    loadResumeClient(d);
   });
 
   let warnTimer: ReturnType<typeof setTimeout>;
@@ -125,10 +371,15 @@ export default function ShoppingList() {
       chitantaSerie: "", chitantaNr: 0,
     };
     try {
+      let saved;
       if (receiptId !== null) {
-        await updateReceiptContent(receiptId, receiptData);
+        saved = await updateReceiptContent(receiptId, receiptData);
       } else {
-        await saveReceipt(receiptData);
+        saved = await saveReceipt(receiptData);
+      }
+      const client = selectedClient();
+      if (client !== null) {
+        await updateReceiptClient(saved.id, client.id);
       }
       clearCart();
       selectEmployee(null);
@@ -136,6 +387,7 @@ export default function ShoppingList() {
       setDescriere("");
       setDateTehn("");
       setLoadedReceiptId(null);
+      setSelectedClient(null);
       setShowSuccess(true);
       clearTimeout(successTimer);
       successTimer = setTimeout(() => setShowSuccess(false), 1000);
@@ -204,6 +456,14 @@ export default function ShoppingList() {
         </button>
       </div>
 
+      <div style="padding:0 8px 4px">
+        <PosClientSearch
+          value={selectedClient()}
+          onSelect={setSelectedClient}
+          onAddNew={() => setShowAddClientModal(true)}
+        />
+      </div>
+
       <div class="shopping-list-body">
         <Show
           when={cart.items.length > 0}
@@ -243,6 +503,14 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Add client modal */}
+      <Show when={showAddClientModal()}>
+        <AddClientModal
+          onSaved={(c) => { setSelectedClient(c); setShowAddClientModal(false); }}
+          onClose={() => setShowAddClientModal(false)}
+        />
+      </Show>
 
       {/* Clear confirm modal */}
       <Show when={showClearConfirm()}>

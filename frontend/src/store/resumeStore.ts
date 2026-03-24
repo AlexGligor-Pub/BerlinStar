@@ -7,6 +7,10 @@ interface ResumeData {
   descriere: string;
   dateTehn: string;
   items: CartItem[];
+  clientId?: number | null;
+  clientNume?: string | null;
+  clientCui?: string | null;
+  clientTip?: string | null;
 }
 
 const [resumeData, setResumeData] = createSignal<ResumeData | null>(null);

@@ -56,6 +56,10 @@ export default function POS() {
       descriere: r.descriere ?? "",
       dateTehn: r.dateTehn ?? "",
       items: r.items,
+      clientId: r.clientId,
+      clientNume: r.clientNume,
+      clientCui: r.clientCui,
+      clientTip: r.clientTip,
     });
     setShowDevizModal(false);
   }
