@@ -194,9 +194,9 @@ function drawClientBlock(
 /** Tabel articole cu TVA per linie */
 function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number): number {
   const rows = r.items.map((item, idx) => {
-    const net = item.price * item.qty;
-    const tva = net * (tvaPct / 100);
-    const total = net + tva;
+    const total = item.price * item.qty;
+    const net = total / (1 + tvaPct / 100);
+    const tva = total - net;
     return [
       String(idx + 1),
       ro(item.name),
@@ -254,9 +254,9 @@ function drawTotals(
   const labelX = rightX - 60;
 
   const pct = tvaPct ?? 0;
-  const net = r.total;
-  const tvaAmt = net * (pct / 100);
-  const totalFinal = net + tvaAmt;
+  const totalFinal = r.total;
+  const net = totalFinal / (1 + pct / 100);
+  const tvaAmt = totalFinal - net;
 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
@@ -523,7 +523,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     doc.setTextColor(...C.black);
     doc.text(`Platit partial / Avans: ${lei(r.partialPay)}`, ML, y);
     const tvaPct2 = ctx.company?.tva_percentage ?? 0;
-    const totalFinal2 = r.total + r.total * (tvaPct2 / 100);
+    const totalFinal2 = r.total;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(...C.gray);
@@ -593,9 +593,9 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const tvaPct = ctx.company?.tva_percentage ?? 0;
-  const totalNet = r.total;
-  const tvaAmt = totalNet * (tvaPct / 100);
-  const totalFinal = totalNet + tvaAmt;
+  const totalFinal = r.total;
+  const totalNet = totalFinal / (1 + tvaPct / 100);
+  const tvaAmt = totalFinal - totalNet;
   const date = fmtDate(r.date);
 
   await drawBackground(doc, ctx.company?.background_path);
