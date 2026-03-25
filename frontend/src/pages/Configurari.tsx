@@ -141,8 +141,8 @@ function ExportMenu(props: { onCSV: () => void; onPDF: () => void }) {
 
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
-    <div class="cfg-confirm-overlay" onClick={props.onCancel}>
-      <div class="cfg-confirm-modal" onClick={(e) => e.stopPropagation()}>
+    <div class="cfg-confirm-overlay">
+      <div class="cfg-confirm-modal">
         <p class="cfg-confirm-text">
           Stergi <strong>{props.label}</strong>?
         </p>

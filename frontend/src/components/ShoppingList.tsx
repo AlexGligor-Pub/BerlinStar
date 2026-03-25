@@ -186,8 +186,8 @@ function AddClientModal(props: {
   }
 
   return (
-    <div class="sl-modal-overlay" onClick={props.onClose}>
-      <div class="sl-modal" style="max-width:420px;width:100%" onClick={(e) => e.stopPropagation()}>
+    <div class="sl-modal-overlay">
+      <div class="sl-modal" style="max-width:420px;width:100%">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Adaugă client</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
@@ -514,8 +514,8 @@ export default function ShoppingList() {
 
       {/* Clear confirm modal */}
       <Show when={showClearConfirm()}>
-        <div class="sl-modal-overlay" onClick={() => setShowClearConfirm(false)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Șterge tot</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>✕</button>
@@ -531,8 +531,8 @@ export default function ShoppingList() {
 
       {/* Edit item modal */}
       <Show when={editItem() !== null}>
-        <div class="sl-modal-overlay" onClick={() => setEditItem(null)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">{editItem()!.name}</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>✕</button>
@@ -582,8 +582,8 @@ export default function ShoppingList() {
 
       {/* Error modal */}
       <Show when={errorMsg() !== null}>
-        <div class="sl-modal-overlay" onClick={() => setErrorMsg(null)}>
-          <div class="sl-error-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-error-modal">
             <div class="sl-error-modal-header">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
               <span>Eroare la salvare</span>
@@ -613,8 +613,8 @@ export default function ShoppingList() {
 
       {/* Manual item modal */}
       <Show when={showManual()}>
-        <div class="sl-modal-overlay" onClick={() => setShowManual(false)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Adauga produs manual</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>✕</button>
@@ -703,8 +703,8 @@ export default function ShoppingList() {
 
       {/* Modal */}
       <Show when={modal() !== null}>
-        <div class="sl-modal-overlay" onClick={() => setModal(null)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">
                 {modal() === "descriere" ? "Descriere" : "Date tehnice"}

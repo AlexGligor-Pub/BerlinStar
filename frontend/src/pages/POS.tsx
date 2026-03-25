@@ -361,8 +361,8 @@ export default function POS() {
       </div>
 
       <Show when={showDevizModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowDevizModal(false)}>
-          <div class="deviz-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="deviz-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Devize neplatite</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDevizModal(false)}>✕</button>

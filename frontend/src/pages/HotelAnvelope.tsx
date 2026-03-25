@@ -1034,8 +1034,8 @@ export default function HotelAnvelope() {
       {/* Modal: Confirmare Stergere */}
       <Show when={deleteTarget()}>
         {(t) => (
-          <div class="sl-modal-overlay" onClick={() => setDeleteTarget(null)}>
-            <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="sl-modal">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Șterge cazare</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>✕</button>
@@ -1057,8 +1057,8 @@ export default function HotelAnvelope() {
       {/* Modal: Editare Cazare */}
       <Show when={editCazare()}>
         {(c) => (
-          <div class="sl-modal-overlay" onClick={() => setEditCazare(null)}>
-            <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Editare Cazare — {c().clientNume ?? "—"}</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>✕</button>
@@ -1185,8 +1185,8 @@ export default function HotelAnvelope() {
       {/* Modal: Admin Edit */}
       <Show when={editAdminTarget()}>
         {(t) => (
-          <div class="sl-modal-overlay" onClick={() => setEditAdminTarget(null)}>
-            <div class="sl-modal" style="max-width:420px;width:100%" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="sl-modal" style="max-width:420px;width:100%">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">
                   {t().type === "loc" ? "Editare loc cazare" : t().type === "marca" ? "Editare marcă" : "Editare dimensiune"}
@@ -1231,8 +1231,8 @@ export default function HotelAnvelope() {
       {/* Modal: Admin Delete */}
       <Show when={adminDeleteTarget()}>
         {(t) => (
-          <div class="sl-modal-overlay" onClick={() => setAdminDeleteTarget(null)}>
-            <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="sl-modal">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Confirmare ștergere</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>✕</button>
@@ -1253,8 +1253,8 @@ export default function HotelAnvelope() {
 
       {/* Modal: Cazare Noua */}
       <Show when={showNewModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowNewModal(false)}>
-          <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Cazare Nouă</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>✕</button>
@@ -1377,8 +1377,8 @@ export default function HotelAnvelope() {
       {/* Modal: Checkout */}
       <Show when={checkoutCazare()}>
         {(c) => (
-          <div class="sl-modal-overlay" onClick={() => setCheckoutCazare(null)}>
-            <div class="sl-modal" style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="sl-modal" style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Scoatere Anvelope</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setCheckoutCazare(null)}>✕</button>

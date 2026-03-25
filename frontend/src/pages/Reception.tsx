@@ -363,8 +363,8 @@ function ClientSection(props: { receipt: Receipt }) {
 
       {/* Modal adăugare client */}
       <Show when={showModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowModal(false)}>
-          <div class="sl-modal" style="max-width:420px;width:100%" onClick={e => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:420px;width:100%">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Client nou</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}>✕</button>
@@ -604,8 +604,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
       {/* Modal confirmare stergere */}
       <Show when={confirmDelete()}>
-        <div class="sl-modal-overlay" onClick={() => setConfirmDelete(false)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Sterge bon</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>✕</button>
@@ -806,8 +806,8 @@ export default function Reception() {
       </Show>
 
       <Show when={showDateModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowDateModal(false)}>
-          <div class="date-modal" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="date-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Filtru dupa data</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>✕</button>

@@ -17,8 +17,8 @@ interface Client {
 
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
-    <div class="cfg-confirm-overlay" onClick={props.onCancel}>
-      <div class="cfg-confirm-modal" onClick={(e) => e.stopPropagation()}>
+    <div class="cfg-confirm-overlay">
+      <div class="cfg-confirm-modal">
         <p class="cfg-confirm-text">Stergi <strong>{props.label}</strong>?</p>
         <div class="cfg-confirm-actions">
           <button class="btn btn-sm btn-ghost" onClick={props.onCancel}>Anulează</button>

@@ -211,6 +211,7 @@ async def update_cazare(
             ))
 
     await db.commit()
+    db.expire_all()
     result = await db.execute(_load_stmt(account_id).where(CazareAnvelope.id == cazare_id))
     cazare = result.scalar_one()
     return _serialize(cazare)

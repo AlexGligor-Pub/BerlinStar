@@ -406,8 +406,8 @@ export default function Admin() {
 
         {/* ── Modal: Create ──────────────────────────────────────────────── */}
         <Show when={addOpen()}>
-          <div class="sl-modal-overlay" onClick={() => setAddOpen(false)}>
-            <div class="admin-modal" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal-overlay">
+            <div class="admin-modal">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Cont nou</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>✕</button>
@@ -474,8 +474,8 @@ export default function Admin() {
         {/* ── Modal: Edit ───────────────────────────────────────────────── */}
         <Show when={editAccount()}>
           {(a) => (
-            <div class="sl-modal-overlay" onClick={() => setEditAccount(null)}>
-              <div class="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-overlay">
+              <div class="admin-modal">
                 <div class="sl-modal-header">
                   <span class="sl-modal-title">Editează #{a().id} — {a().name}</span>
                   <button class="btn btn-ghost btn-sm" onClick={() => setEditAccount(null)}>✕</button>
@@ -543,8 +543,8 @@ export default function Admin() {
         {/* ── Modal: Delete ─────────────────────────────────────────────── */}
         <Show when={deleteTarget()}>
           {(a) => (
-            <div class="sl-modal-overlay" onClick={() => setDeleteTarget(null)}>
-              <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-overlay">
+              <div class="sl-modal">
                 <div class="sl-modal-header">
                   <span class="sl-modal-title">Șterge cont</span>
                   <button class="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>✕</button>
