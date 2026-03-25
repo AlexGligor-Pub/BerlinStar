@@ -7,6 +7,32 @@ import { apiFetch } from "../utils/api";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
+// ─── Cart meta persistence ────────────────────────────────────────────────────
+
+const META_KEY = "bs_cart_meta";
+
+interface CartMeta {
+  titlu: string;
+  descriere: string;
+  dateTehn: string;
+  client: ClientItem | null;
+}
+
+function saveCartMeta(m: CartMeta) {
+  localStorage.setItem(META_KEY, JSON.stringify(m));
+}
+
+function loadCartMeta(): CartMeta | null {
+  try {
+    const s = localStorage.getItem(META_KEY);
+    return s ? JSON.parse(s) : null;
+  } catch { return null; }
+}
+
+function clearCartMeta() {
+  localStorage.removeItem(META_KEY);
+}
+
 interface ClientItem {
   id: number;
   nume: string;
@@ -258,6 +284,17 @@ export default function ShoppingList() {
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
+  const [showResumeModal, setShowResumeModal] = createSignal(false);
+
+  // Guard: don't save meta before onMount decides what to load
+  let metaSaveEnabled = false;
+
+  // Save titlu/descriere/dateTehn/client to localStorage whenever they change (after mount)
+  createEffect(() => {
+    const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient();
+    if (!metaSaveEnabled) return;
+    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c });
+  });
 
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
@@ -317,8 +354,37 @@ export default function ShoppingList() {
       setDateTehn(r.dateTehn);
       replaceCart(r.items);
       loadResumeClient(r);
+      metaSaveEnabled = true;
+    } else if (cart.items.length > 0) {
+      // Există o listă salvată — arată modalul de alegere
+      setShowResumeModal(true);
+      metaSaveEnabled = true;
+    } else {
+      metaSaveEnabled = true;
     }
   });
+
+  function handleContinuaLista() {
+    const meta = loadCartMeta();
+    if (meta) {
+      setTitlu(meta.titlu ?? "");
+      setDescriere(meta.descriere ?? "");
+      setDateTehn(meta.dateTehn ?? "");
+      setSelectedClient(meta.client ?? null);
+    }
+    setShowResumeModal(false);
+  }
+
+  function handleListaNoua() {
+    clearCart();
+    clearCartMeta();
+    setTitlu("");
+    setDescriere("");
+    setDateTehn("");
+    setSelectedClient(null);
+    setLoadedReceiptId(null);
+    setShowResumeModal(false);
+  }
 
   createEffect(() => {
     const d = pendingLoad();
@@ -382,6 +448,7 @@ export default function ShoppingList() {
         await updateReceiptClient(saved.id, client.id);
       }
       clearCart();
+      clearCartMeta();
       selectEmployee(null);
       setTitlu("");
       setDescriere("");
@@ -503,6 +570,24 @@ export default function ShoppingList() {
           Finalizeaza
         </button>
       </div>
+
+      {/* Resume modal */}
+      <Show when={showResumeModal()}>
+        <div class="sl-modal-overlay" style="z-index:400">
+          <div class="sl-modal" style="max-width:360px;width:100%;text-align:center">
+            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
+              <span class="sl-modal-title">Listă în lucru</span>
+            </div>
+            <p style="padding:12px 16px 4px;color:var(--text-muted);font-size:13px">
+              Există o listă deja începută. Ce vrei să faci?
+            </p>
+            <div class="sl-modal-footer" style="justify-content:center;gap:12px;padding-top:8px">
+              <button class="btn btn-ghost btn-sm" onClick={handleListaNoua}>Listă nouă</button>
+              <button class="btn btn-primary btn-sm" onClick={handleContinuaLista}>Continuă lista</button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Add client modal */}
       <Show when={showAddClientModal()}>
