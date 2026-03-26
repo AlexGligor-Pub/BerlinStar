@@ -448,6 +448,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
         <div class="rcard-info">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="rcard-titlu">{r.titlu}</span>
+            <Show when={r.clientNume}>
+              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
+            </Show>
             <Show when={r.devizNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>
             </Show>
@@ -681,7 +684,7 @@ export default function Reception() {
     const q = search().toLowerCase().trim();
     return receipts().filter((r) => {
       const matchMetoda = sel.size === 0 || sel.has(r.metodaPlata ?? "Neplatit");
-      const matchSearch = !q || r.titlu.toLowerCase().includes(q);
+      const matchSearch = !q || r.titlu.toLowerCase().includes(q) || (r.clientNume ?? "").toLowerCase().includes(q);
       return matchMetoda && matchSearch;
     });
   });
@@ -735,7 +738,7 @@ export default function Reception() {
                 style="font-size:11px;white-space:nowrap;flex-shrink:0"
                 onClick={() => setServerSearch(search())}
               >
-                Server{serverSearch() === search() ? " ✓" : ""}
+                Caută pe server{serverSearch() === search() ? " ✓" : ""}
               </button>
             </Show>
           </div>
