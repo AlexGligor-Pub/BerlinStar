@@ -108,7 +108,7 @@ function drawHeader(doc: any, title: string, serie: string, nr: number, date: st
   // Serie + Nr + Data — stanga, sub titlu
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   y += 6;
   if (serie) {
     doc.text(`Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}`, ML, y);
@@ -129,14 +129,14 @@ function drawCompanyBlock(
 ): number {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text(ro(label).toUpperCase(), x, y);
   y += 3.5;
 
   if (!company) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...C.lightGray);
+    doc.setTextColor(...C.black);
     doc.text("-", x, y);
     return y + 4;
   }
@@ -150,7 +150,7 @@ function drawCompanyBlock(
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   if (company.cui) { doc.text(`CUI: ${company.cui}`, x, y); y += 3.5; }
   if (company.nr_reg_com) { doc.text(`Reg.Com.: ${ro(company.nr_reg_com)}`, x, y); y += 3.5; }
   if (company.address) {
@@ -172,7 +172,7 @@ function drawClientBlock(
 ): number {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text(ro(label).toUpperCase(), x, y);
   y += 3.5;
 
@@ -185,7 +185,7 @@ function drawClientBlock(
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   if (r.clientCui)          { doc.text(`CUI: ${r.clientCui}`, x, y); y += 3.5; }
   if (r.clientReprezentant) { doc.text(`Repr.: ${ro(r.clientReprezentant)}`, x, y); y += 3.5; }
   if (r.clientAdresa) {
@@ -223,7 +223,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
       fontSize: 7.5,
       cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
       textColor: [...C.black],
-      lineColor: [...C.lightGray],
+      lineColor: [...C.black],
       lineWidth: 0.1,
     },
     headStyles: {
@@ -231,12 +231,12 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
       textColor: [...C.black],
       fontSize: 7,
       fontStyle: "bold",
-      lineColor: [...C.lightGray],
+      lineColor: [...C.black],
       lineWidth: 0.2,
     },
     alternateRowStyles: {},
     columnStyles: {
-      0: { halign: "center", cellWidth: 8, textColor: [...C.gray] },
+      0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
       1: { cellWidth: "auto" },
       2: { halign: "center", cellWidth: 11 },
       3: { halign: "center", cellWidth: 11 },
@@ -269,7 +269,7 @@ function drawTotals(
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
 
   // Subtotal fara TVA
   doc.text("Subtotal (fara TVA):", labelX, y);
@@ -295,7 +295,7 @@ function drawTotals(
   if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     const restVal = totalFinal - r.partialPay;
     doc.text(`Avans: ${lei(r.partialPay)}`, labelX, y);
     doc.text(`Rest: ${lei(restVal)}`, rightX, y, { align: "right" });
@@ -338,14 +338,14 @@ function drawSignatures(doc: any, leftLabel: string, rightLabel: string, y: numb
   const colW = CW / 2 - 8;
   const col2X = ML + colW + 16;
 
-  doc.setDrawColor(...C.lightGray);
+  doc.setDrawColor(...C.black);
   doc.setLineWidth(0.3);
   doc.line(ML, y, ML + colW, y);
   doc.line(col2X, y, col2X + colW, y);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text(ro(leftLabel), ML, y + 4);
   doc.text(ro(rightLabel), col2X, y + 4);
 
@@ -437,13 +437,13 @@ async function drawFooterWithBranding(doc: any, website: string | null | undefin
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.5);
-    doc.setTextColor(...C.lightGray);
+    doc.setTextColor(...C.black);
     doc.text(`Generat: ${now}`, ML, h - 5.5);
     doc.text(`Pagina ${i} / ${n}`, PAGE_W - MR, h - 5.5, { align: "right" });
 
     if (website) {
       doc.setFontSize(6.5);
-      doc.setTextColor(...C.gray);
+      doc.setTextColor(...C.black);
       doc.text(website, PAGE_W / 2, h - 5.5, { align: "center" });
     }
 
@@ -494,7 +494,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     y += 3;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text("DESCRIERE", ML, y);
     y += 3.5;
     doc.setFont("helvetica", "normal");
@@ -510,7 +510,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     y += 3;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text("DATE TEHNICE", ML, y);
     y += 3.5;
     doc.setFont("helvetica", "normal");
@@ -531,7 +531,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     const totalFinal2 = r.total;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text(`Rest de plata: ${lei(totalFinal2 - r.partialPay)}`, ML, y + 5);
     y += 12;
   }
@@ -580,7 +580,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text(`Modalitate plata: ${ro(r.metodaPlata)}`, ML, y);
     y += 5;
   }
@@ -612,7 +612,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   // Am primit de la
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("Am primit de la", ML, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
@@ -622,7 +622,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
     y += 5.5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text(`CUI: ${r.clientCui}`, ML + 40, y);
     y += 5.5;
   } else {
@@ -635,7 +635,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   // Suma
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("Suma de", ML, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
@@ -646,7 +646,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   // TVA breakdown
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text(`(din care: net ${lei(totalNet)}, TVA ${tvaPct}% = ${lei(tvaAmt)})`, ML + 26, y);
   y += 4;
 
@@ -654,7 +654,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   const inLitere = sumInLitere(totalFinal);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text(`(${ro(inLitere)})`, ML, y);
   y += 9;
 
@@ -664,7 +664,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   // Reprezentand
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("Reprezentand", ML, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
@@ -676,7 +676,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text(`Modalitate: ${ro(r.metodaPlata)}`, ML, y);
     y += 6;
   }
@@ -687,7 +687,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
       : `Factura nr. ${r.facturaNr}`;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     doc.text("Achita conform", ML, y);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(...C.black);
@@ -701,13 +701,13 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   const colW = CW / 2 - 6;
   const col2X = ML + colW + 12;
 
-  doc.setDrawColor(...C.lightGray);
+  doc.setDrawColor(...C.black);
   doc.setLineWidth(0.3);
   doc.line(ML, y, ML + colW, y);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("Casier / Operator", ML, y + 4);
 
   if (ctx.company) {
@@ -717,7 +717,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
     doc.text(ro(ctx.company.name), col2X, y - 6);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
-    doc.setTextColor(...C.gray);
+    doc.setTextColor(...C.black);
     let cy = y - 2;
     if (ctx.company.cui) { doc.text(`CUI: ${ctx.company.cui}`, col2X, cy); cy += 3.5; }
     if (ctx.company.address) {
@@ -816,7 +816,7 @@ const TIP_PDF_LABELS: Record<string, string> = {
 function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number): number {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("BENEFICIAR", x, y);
   y += 3.5;
 
@@ -829,7 +829,7 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   if (cazare.clientCui)          { doc.text(`CUI: ${cazare.clientCui}`, x, y); y += 3.5; }
   if (cazare.clientReprezentant) { doc.text(`Repr.: ${ro(cazare.clientReprezentant)}`, x, y); y += 3.5; }
   if (cazare.clientAdresa) {
@@ -865,7 +865,7 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
       fontSize: 7.5,
       cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
       textColor: [...C.black],
-      lineColor: [...C.lightGray],
+      lineColor: [...C.black],
       lineWidth: 0.1,
     },
     headStyles: {
@@ -873,11 +873,11 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
       textColor: [...C.black],
       fontSize: 7,
       fontStyle: "bold",
-      lineColor: [...C.lightGray],
+      lineColor: [...C.black],
       lineWidth: 0.2,
     },
     columnStyles: {
-      0: { halign: "center", cellWidth: 8, textColor: [...C.gray] },
+      0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
       1: { cellWidth: "auto" },
       2: { cellWidth: 35 },
       3: { halign: "center", cellWidth: 18 },
@@ -917,7 +917,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   // Detalii cazare
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("DETALII CAZARE", ML, y);
   y += 4;
 
@@ -936,7 +936,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   // Tabel anvelope
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("ANVELOPE DEPOZITATE", ML, y);
   y += 4;
 
@@ -978,7 +978,7 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   // Detalii cazare
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("DETALII CAZARE", ML, y);
   y += 4;
 
@@ -1013,7 +1013,7 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   // Tabel anvelope
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(...C.gray);
+  doc.setTextColor(...C.black);
   doc.text("ANVELOPE RIDICATE", ML, y);
   y += 4;
 

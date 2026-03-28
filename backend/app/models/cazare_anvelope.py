@@ -26,6 +26,11 @@ class CazareAnvelope(Base):
     data_checkin: Mapped[date] = mapped_column(Date, nullable=False)
     data_checkout: Mapped[date | None] = mapped_column(Date, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dep_anvelope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    dep_capace: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dep_roti_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dep_antifurturi: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dep_prezoane: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

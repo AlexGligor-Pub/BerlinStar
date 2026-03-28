@@ -49,6 +49,11 @@ def _serialize(c: CazareAnvelope) -> dict:
         "data_checkin": c.data_checkin,
         "data_checkout": c.data_checkout,
         "comments": c.comments,
+        "dep_anvelope": c.dep_anvelope,
+        "dep_capace": c.dep_capace,
+        "dep_roti_complete": c.dep_roti_complete,
+        "dep_antifurturi": c.dep_antifurturi,
+        "dep_prezoane": c.dep_prezoane,
         "created_at": c.created_at,
         "updated_at": c.updated_at,
         "is_deleted": c.is_deleted,
@@ -148,6 +153,11 @@ async def create_cazare(
         loc_cazare_id=body.loc_cazare_id,
         data_checkin=body.data_checkin,
         comments=body.comments,
+        dep_anvelope=body.dep_anvelope,
+        dep_capace=body.dep_capace,
+        dep_roti_complete=body.dep_roti_complete,
+        dep_antifurturi=body.dep_antifurturi,
+        dep_prezoane=body.dep_prezoane,
     )
     db.add(cazare)
     await db.flush()
@@ -197,6 +207,16 @@ async def update_cazare(
     if body.data_checkin is not None:
         cazare.data_checkin = body.data_checkin
     cazare.comments = body.comments
+    if body.dep_anvelope is not None:
+        cazare.dep_anvelope = body.dep_anvelope
+    if body.dep_capace is not None:
+        cazare.dep_capace = body.dep_capace
+    if body.dep_roti_complete is not None:
+        cazare.dep_roti_complete = body.dep_roti_complete
+    if body.dep_antifurturi is not None:
+        cazare.dep_antifurturi = body.dep_antifurturi
+    if body.dep_prezoane is not None:
+        cazare.dep_prezoane = body.dep_prezoane
     cazare.updated_at = datetime.now(timezone.utc)
 
     if body.anvelopa_ids is not None:

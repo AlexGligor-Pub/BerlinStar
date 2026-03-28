@@ -55,6 +55,11 @@ export interface Cazare {
   clientReprezentant: string | null;
   employeeName: string | null;
   locCazareNume: string | null;
+  depAnvelope: boolean;
+  depCapace: boolean;
+  depRotiComplete: boolean;
+  depAntifurturi: boolean;
+  depPrezoane: boolean;
   items: CazareItem[];
 }
 
@@ -91,6 +96,11 @@ function mapCazare(c: any): Cazare {
     clientReprezentant: c.client_reprezentant ?? null,
     employeeName: c.employee_name ?? null,
     locCazareNume: c.loc_cazare_nume ?? null,
+    depAnvelope: c.dep_anvelope ?? true,
+    depCapace: c.dep_capace ?? false,
+    depRotiComplete: c.dep_roti_complete ?? false,
+    depAntifurturi: c.dep_antifurturi ?? false,
+    depPrezoane: c.dep_prezoane ?? false,
     items: (c.items ?? []).map((item: any) => ({
       id: item.id,
       anvelopaId: item.anvelopa_id ?? null,

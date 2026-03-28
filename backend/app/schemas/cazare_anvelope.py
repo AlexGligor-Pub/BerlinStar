@@ -11,6 +11,11 @@ class CazareCreate(BaseModel):
     data_checkin: date
     comments: str | None = None
     anvelopa_ids: list[int] = []
+    dep_anvelope: bool = True
+    dep_capace: bool = False
+    dep_roti_complete: bool = False
+    dep_antifurturi: bool = False
+    dep_prezoane: bool = False
 
 
 class CazareCheckoutBody(BaseModel):
@@ -24,6 +29,11 @@ class CazareUpdateBody(BaseModel):
     data_checkin: date | None = None
     comments: str | None = None
     anvelopa_ids: list[int] | None = None  # dacă prezent, înlocuiește toate itemele
+    dep_anvelope: bool | None = None
+    dep_capace: bool | None = None
+    dep_roti_complete: bool | None = None
+    dep_antifurturi: bool | None = None
+    dep_prezoane: bool | None = None
 
 
 class CazareItemRead(BaseModel):
@@ -54,4 +64,9 @@ class CazareRead(BaseModel):
     client_reprezentant: str | None = None
     employee_name: str | None = None
     loc_cazare_nume: str | None = None
+    dep_anvelope: bool = True
+    dep_capace: bool = False
+    dep_roti_complete: bool = False
+    dep_antifurturi: bool = False
+    dep_prezoane: bool = False
     items: list[CazareItemRead] = []

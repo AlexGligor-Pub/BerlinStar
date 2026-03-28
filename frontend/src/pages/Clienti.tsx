@@ -38,6 +38,7 @@ export default function Clienti() {
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch] = createSignal("");
 
+  const [viewId, setViewId] = createSignal<number | null>(null);
   const [editId, setEditId] = createSignal<number | null>(null);
   const [form, setForm] = createSignal(emptyForm());
 
@@ -67,6 +68,7 @@ export default function Clienti() {
 
   function startEdit(c: Client) {
     setEditId(c.id);
+    setViewId(null);
     setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? "", reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", comments: c.comments ?? "" });
     setAddMode(false);
     setError(null);
@@ -100,7 +102,10 @@ export default function Clienti() {
     }
   }
 
-  function startAdd() { setNewForm(emptyForm()); setAddMode(true); setEditId(null); setError(null); }
+  function startView(c: Client) { setViewId(c.id); setEditId(null); setAddMode(false); setError(null); }
+  function closeView() { setViewId(null); }
+
+  function startAdd() { setNewForm(emptyForm()); setAddMode(true); setEditId(null); setViewId(null); setError(null); }
   function cancelAdd() { setAddMode(false); setError(null); }
 
   async function saveAdd() {
@@ -214,38 +219,8 @@ export default function Clienti() {
       <div class="cfg-location-list">
         <For each={clienti()}>
           {(c) => (
-            <div class="cfg-location-row" classList={{ "cfg-location-row--edit": editId() === c.id }}>
-              <Show when={editId() === c.id} fallback={
-                <>
-                  <div class="cfg-location-info">
-                    <span class="cfg-location-name">
-                      {c.nume}
-                      <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
-                        {c.tip === "juridic" ? "Juridică" : "Fizică"}
-                      </span>
-                    </span>
-                    <Show when={c.description}>
-                      <span class="cfg-location-desc">{c.description}</span>
-                    </Show>
-                    <Show when={c.tip === "juridic" && (c.cui || c.reprezentant)}>
-                      <span class="cfg-location-desc">
-                        {[c.cui && `CUI: ${c.cui}`, c.reprezentant && `Rep: ${c.reprezentant}`].filter(Boolean).join(" · ")}
-                      </span>
-                    </Show>
-                    <Show when={c.telefon || c.email}>
-                      <span class="cfg-location-desc">
-                        {[c.telefon, c.email].filter(Boolean).join(" · ")}
-                      </span>
-                    </Show>
-                    <Show when={c.comments}>
-                      <span class="cfg-location-desc" style="font-style:italic">{c.comments}</span>
-                    </Show>
-                  </div>
-                  <div class="cfg-location-actions">
-                    <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
-                  </div>
-                </>
-              }>
+            <div class="cfg-location-row" classList={{ "cfg-location-row--edit": editId() === c.id || viewId() === c.id }}>
+              <Show when={editId() === c.id}>
                 <ClientForm f={form()} setF={setForm} />
                 <div class="cfg-location-actions" style="margin-top:8px">
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
@@ -255,6 +230,70 @@ export default function Clienti() {
                   <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveEdit}>
                     {saving() ? "Se salvează..." : "Salvează"}
                   </button>
+                </div>
+              </Show>
+              <Show when={viewId() === c.id}>
+                <div class="cfg-location-info">
+                  <span class="cfg-location-name">
+                    {c.nume}
+                    <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
+                      {c.tip === "juridic" ? "Juridică" : "Fizică"}
+                    </span>
+                  </span>
+                  <Show when={c.description}>
+                    <span class="cfg-location-desc"><strong>Descriere:</strong> {c.description}</span>
+                  </Show>
+                  <Show when={c.tip === "juridic" && c.cui}>
+                    <span class="cfg-location-desc"><strong>CUI:</strong> {c.cui}</span>
+                  </Show>
+                  <Show when={c.tip === "juridic" && c.reprezentant}>
+                    <span class="cfg-location-desc"><strong>Reprezentant:</strong> {c.reprezentant}</span>
+                  </Show>
+                  <Show when={c.telefon}>
+                    <span class="cfg-location-desc"><strong>Telefon:</strong> {c.telefon}</span>
+                  </Show>
+                  <Show when={c.email}>
+                    <span class="cfg-location-desc"><strong>Email:</strong> {c.email}</span>
+                  </Show>
+                  <Show when={c.adresa}>
+                    <span class="cfg-location-desc"><strong>Adresă:</strong> {c.adresa}</span>
+                  </Show>
+                  <Show when={c.comments}>
+                    <span class="cfg-location-desc" style="font-style:italic"><strong>Comentarii:</strong> {c.comments}</span>
+                  </Show>
+                </div>
+                <div class="cfg-location-actions" style="margin-top:8px">
+                  <button class="btn btn-sm btn-ghost" onClick={closeView}>Închide</button>
+                  <button class="btn btn-sm btn-primary" onClick={() => startEdit(c)}>Editează</button>
+                </div>
+              </Show>
+              <Show when={editId() !== c.id && viewId() !== c.id}>
+                <div class="cfg-location-info" style="cursor:pointer;flex:1" onClick={() => startView(c)}>
+                  <span class="cfg-location-name">
+                    {c.nume}
+                    <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
+                      {c.tip === "juridic" ? "Juridică" : "Fizică"}
+                    </span>
+                  </span>
+                  <Show when={c.description}>
+                    <span class="cfg-location-desc">{c.description}</span>
+                  </Show>
+                  <Show when={c.tip === "juridic" && (c.cui || c.reprezentant)}>
+                    <span class="cfg-location-desc">
+                      {[c.cui && `CUI: ${c.cui}`, c.reprezentant && `Rep: ${c.reprezentant}`].filter(Boolean).join(" · ")}
+                    </span>
+                  </Show>
+                  <Show when={c.telefon || c.email}>
+                    <span class="cfg-location-desc">
+                      {[c.telefon, c.email].filter(Boolean).join(" · ")}
+                    </span>
+                  </Show>
+                  <Show when={c.comments}>
+                    <span class="cfg-location-desc" style="font-style:italic">{c.comments}</span>
+                  </Show>
+                </div>
+                <div class="cfg-location-actions">
+                  <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
                 </div>
               </Show>
             </div>

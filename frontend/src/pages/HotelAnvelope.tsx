@@ -404,6 +404,11 @@ export default function HotelAnvelope() {
   const [newEmpId, setNewEmpId] = createSignal<number | "">("");
   const [newCheckin, setNewCheckin] = createSignal(todayStr());
   const [newComments, setNewComments] = createSignal("");
+  const [newDepAnvelope, setNewDepAnvelope] = createSignal(true);
+  const [newDepCapace, setNewDepCapace] = createSignal(false);
+  const [newDepRotiComplete, setNewDepRotiComplete] = createSignal(false);
+  const [newDepAntifurturi, setNewDepAntifurturi] = createSignal(false);
+  const [newDepPrezoane, setNewDepPrezoane] = createSignal(false);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
 
@@ -427,6 +432,11 @@ export default function HotelAnvelope() {
   const [editSelectedIds, setEditSelectedIds] = createSignal<Set<number>>(new Set());
   const [showEditAnvForm, setShowEditAnvForm] = createSignal(false);
   const [editAnvEditId, setEditAnvEditId] = createSignal<number | null>(null);
+  const [editDepAnvelope, setEditDepAnvelope] = createSignal(true);
+  const [editDepCapace, setEditDepCapace] = createSignal(false);
+  const [editDepRotiComplete, setEditDepRotiComplete] = createSignal(false);
+  const [editDepAntifurturi, setEditDepAntifurturi] = createSignal(false);
+  const [editDepPrezoane, setEditDepPrezoane] = createSignal(false);
   const [editSaving, setEditSaving] = createSignal(false);
   const [editErr, setEditErr] = createSignal("");
 
@@ -562,6 +572,11 @@ export default function HotelAnvelope() {
     setNewEmpId("");
     setNewCheckin(todayStr());
     setNewComments("");
+    setNewDepAnvelope(true);
+    setNewDepCapace(false);
+    setNewDepRotiComplete(false);
+    setNewDepAntifurturi(false);
+    setNewDepPrezoane(false);
     setSaveErr("");
     setShowNewModal(true);
   }
@@ -612,6 +627,11 @@ export default function HotelAnvelope() {
         data_checkin: newCheckin(),
         comments: newComments().trim() || null,
         anvelopa_ids: finalIds,
+        dep_anvelope: newDepAnvelope(),
+        dep_capace: newDepCapace(),
+        dep_roti_complete: newDepRotiComplete(),
+        dep_antifurturi: newDepAntifurturi(),
+        dep_prezoane: newDepPrezoane(),
       };
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -636,6 +656,11 @@ export default function HotelAnvelope() {
     setEditEmpId(c.employeeId ?? "");
     setEditCheckin(c.dataCheckin);
     setEditComments(c.comments ?? "");
+    setEditDepAnvelope(c.depAnvelope);
+    setEditDepCapace(c.depCapace);
+    setEditDepRotiComplete(c.depRotiComplete);
+    setEditDepAntifurturi(c.depAntifurturi);
+    setEditDepPrezoane(c.depPrezoane);
     setShowEditAnvForm(false);
     setEditErr("");
     // încarcă doar anvelopele din această cazare
@@ -683,6 +708,11 @@ export default function HotelAnvelope() {
           data_checkin: editCheckin() || null,
           comments: editComments().trim() || null,
           anvelopa_ids: finalIds,
+          dep_anvelope: editDepAnvelope(),
+          dep_capace: editDepCapace(),
+          dep_roti_complete: editDepRotiComplete(),
+          dep_antifurturi: editDepAntifurturi(),
+          dep_prezoane: editDepPrezoane(),
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(err.detail ?? "Eroare la salvare."); return; }
@@ -717,6 +747,11 @@ export default function HotelAnvelope() {
         clientReprezentant: d.client_reprezentant ?? null,
         employeeName: d.employee_name ?? null,
         locCazareNume: d.loc_cazare_nume ?? null,
+        depAnvelope: d.dep_anvelope ?? true,
+        depCapace: d.dep_capace ?? false,
+        depRotiComplete: d.dep_roti_complete ?? false,
+        depAntifurturi: d.dep_antifurturi ?? false,
+        depPrezoane: d.dep_prezoane ?? false,
         items: (d.items ?? []).map((item: any) => ({
           id: item.id,
           anvelopaId: item.anvelopa_id ?? null,
@@ -1126,6 +1161,18 @@ export default function HotelAnvelope() {
                   <Show when={!showEditAnvForm()}>
                     <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setEditAnvEditId(null); setShowEditAnvForm(true); }}>+ Anvelopă nouă</button>
                   </Show>
+                  <Show when={editAnvelope().length > 0}>
+                    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <button class={`btn btn-sm ${editDepAnvelope() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepAnvelope(v => !v)}>Anvelope</button>
+                        <button class={`btn btn-sm ${editDepCapace() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepCapace(v => !v)}>Capace</button>
+                        <button class={`btn btn-sm ${editDepRotiComplete() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepRotiComplete(v => !v)}>Roti complete</button>
+                        <button class={`btn btn-sm ${editDepAntifurturi() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepAntifurturi(v => !v)}>Antifurturi</button>
+                        <button class={`btn btn-sm ${editDepPrezoane() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepPrezoane(v => !v)}>Prezoane</button>
+                      </div>
+                    </div>
+                  </Show>
                   <Show when={showEditAnvForm()}>
                     <AnvelopaForm
                       clientId={c().clientId ?? 0}
@@ -1321,6 +1368,18 @@ export default function HotelAnvelope() {
                   </div>
                   <Show when={!showAnvForm()}>
                     <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
+                  </Show>
+                  <Show when={clientAnvelope().length > 0}>
+                    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <button class={`btn btn-sm ${newDepAnvelope() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepAnvelope(v => !v)}>Anvelope</button>
+                        <button class={`btn btn-sm ${newDepCapace() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepCapace(v => !v)}>Capace</button>
+                        <button class={`btn btn-sm ${newDepRotiComplete() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepRotiComplete(v => !v)}>Roti complete</button>
+                        <button class={`btn btn-sm ${newDepAntifurturi() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepAntifurturi(v => !v)}>Antifurturi</button>
+                        <button class={`btn btn-sm ${newDepPrezoane() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepPrezoane(v => !v)}>Prezoane</button>
+                      </div>
+                    </div>
                   </Show>
                   <Show when={showAnvForm()}>
                     <AnvelopaForm
