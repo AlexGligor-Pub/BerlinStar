@@ -22,6 +22,8 @@ export interface DocContext {
     logo_path?: string | null;
     background_path?: string | null;
     website?: string | null;
+    bank_name?: string | null;
+    iban?: string | null;
   } | null;
   disclaimer: { title: string; text: string } | null;
 }
@@ -156,6 +158,8 @@ function drawCompanyBlock(
     y += al.length * 3.5;
   }
   if (company.phone) { doc.text(`Tel: ${ro(company.phone)}`, x, y); y += 3.5; }
+  if (company.bank_name) { doc.text(`Banca: ${ro(company.bank_name)}`, x, y); y += 3.5; }
+  if (company.iban) { doc.text(`IBAN: ${company.iban}`, x, y); y += 3.5; }
   return y;
 }
 
@@ -773,6 +777,8 @@ export interface CompanyData {
   logo_path?: string | null;
   background_path?: string | null;
   website?: string | null;
+  bank_name?: string | null;
+  iban?: string | null;
 }
 
 interface CazareForPdf {

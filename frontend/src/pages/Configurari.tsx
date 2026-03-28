@@ -3,7 +3,7 @@ import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 
 interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; image_path: string | null; }
-interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; logo_path: string | null; background_path: string | null; website: string | null; }
+interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; logo_path: string | null; background_path: string | null; website: string | null; bank_name: string | null; iban: string | null; }
 interface Department { id: number; name: string; description: string | null; image_path: string | null; }
 interface Employee  { id: number; name: string; }
 interface EmployeeItem { id: number; name: string; description: string | null; target: string; image_path: string | null; }
@@ -1988,12 +1988,12 @@ function CompaniiPanel() {
 
   function doExportCSV() {
     exportCSV("Companii",
-      ["#", "CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "Telefon", "Cod poștal", "Plătitor TVA", "Descriere", "Comentarii"],
+      ["#", "CUI", "Denumire", "Nr. Reg. Com.", "Adresă", "Telefon", "Cod poștal", "Plătitor TVA", "Descriere", "Comentarii", "Nume Bancă", "IBAN"],
       filtered().map((c, i) => [
         String(i + 1), String(c.cui), c.name, c.nr_reg_com ?? "", c.address ?? "",
         c.phone ?? "", c.postal_code ?? "",
         c.is_vat_payer === true ? "Da" : c.is_vat_payer === false ? "Nu" : "",
-        c.description ?? "", c.comments ?? "",
+        c.description ?? "", c.comments ?? "", c.bank_name ?? "", c.iban ?? "",
       ]));
   }
   function doExportPDF() {
@@ -2073,6 +2073,8 @@ function CompaniiPanel() {
             <textarea class="input cfg-textarea" placeholder="Descriere" value={f().description ?? ""} onInput={e => patchForm("description", e.currentTarget.value)} />
             <textarea class="input cfg-textarea" placeholder="Comentarii" value={f().comments ?? ""} onInput={e => patchForm("comments", e.currentTarget.value)} />
             <input class="input" placeholder="Site web (https://...)" value={f().website ?? ""} onInput={e => patchForm("website", e.currentTarget.value)} />
+            <input class="input" placeholder="Nume Bancă" value={f().bank_name ?? ""} onInput={e => patchForm("bank_name", e.currentTarget.value)} />
+            <input class="input" placeholder="IBAN" value={f().iban ?? ""} onInput={e => patchForm("iban", e.currentTarget.value)} />
           </div>
           <div class="cfg-location-actions">
             <button class="btn btn-sm btn-primary" disabled={saving() || !f().name?.trim() || !f().cui} onClick={addItem}>Salvează</button>
@@ -2137,6 +2139,8 @@ function CompaniiPanel() {
                   <textarea class="input cfg-textarea" placeholder="Descriere" value={ef().description ?? ""} onInput={e => patchEditForm("description", e.currentTarget.value)} />
                   <textarea class="input cfg-textarea" placeholder="Comentarii" value={ef().comments ?? ""} onInput={e => patchEditForm("comments", e.currentTarget.value)} />
                   <input class="input" placeholder="Site web (https://...)" value={ef().website ?? ""} onInput={e => patchEditForm("website", e.currentTarget.value)} />
+                  <input class="input" placeholder="Nume Bancă" value={ef().bank_name ?? ""} onInput={e => patchEditForm("bank_name", e.currentTarget.value)} />
+                  <input class="input" placeholder="IBAN" value={ef().iban ?? ""} onInput={e => patchEditForm("iban", e.currentTarget.value)} />
                 </div>
                 {/* Logo & Background upload */}
                 <div class="cfg-image-upload-row">
