@@ -31,6 +31,7 @@ class Company(Base):
     website: Mapped[str | None] = mapped_column(String(500), nullable=True)
     bank_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     iban: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    capital_social: Mapped[float | None] = mapped_column(sa.Float, nullable=True, default=200.0)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

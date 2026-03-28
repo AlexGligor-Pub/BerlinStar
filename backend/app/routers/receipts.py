@@ -429,6 +429,9 @@ async def assign_number(
                 "logo_path": company.logo_path,
                 "background_path": company.background_path,
                 "website": company.website,
+                "bank_name": company.bank_name,
+                "iban": company.iban,
+                "capital_social": company.capital_social,
             }
 
     # Load disclaimer

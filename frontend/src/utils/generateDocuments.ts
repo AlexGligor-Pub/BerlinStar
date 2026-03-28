@@ -24,6 +24,7 @@ export interface DocContext {
     website?: string | null;
     bank_name?: string | null;
     iban?: string | null;
+    capital_social?: number | null;
   } | null;
   disclaimer: { title: string; text: string } | null;
 }
@@ -160,6 +161,7 @@ function drawCompanyBlock(
   if (company.phone) { doc.text(`Tel: ${ro(company.phone)}`, x, y); y += 3.5; }
   if (company.bank_name) { doc.text(`Banca: ${ro(company.bank_name)}`, x, y); y += 3.5; }
   if (company.iban) { doc.text(`IBAN: ${company.iban}`, x, y); y += 3.5; }
+  if (company.capital_social != null) { doc.text(`Capital social: ${company.capital_social.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lei`, x, y); y += 3.5; }
   return y;
 }
 
@@ -314,14 +316,14 @@ function drawDisclaimer(doc: any, disclaimer: DocContext["disclaimer"], y: numbe
   if (disclaimer.title) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
-    doc.setTextColor(...C.lightGray);
+    doc.setTextColor(...C.black);
     doc.text(ro(disclaimer.title).toUpperCase(), ML, y);
     y += 3;
   }
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6);
-  doc.setTextColor(...C.lightGray);
+  doc.setTextColor(...C.black);
   const lines: string[] = doc.splitTextToSize(ro(disclaimer.text), CW);
   doc.text(lines, ML, y);
   y += lines.length * 2.8 + 3;
@@ -779,6 +781,7 @@ export interface CompanyData {
   website?: string | null;
   bank_name?: string | null;
   iban?: string | null;
+  capital_social?: number | null;
 }
 
 interface CazareForPdf {

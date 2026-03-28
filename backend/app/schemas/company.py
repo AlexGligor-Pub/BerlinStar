@@ -18,6 +18,7 @@ class CompanyCreate(BaseModel):
     website: str | None = Field(None, max_length=500)
     bank_name: str | None = Field(None, max_length=200)
     iban: str | None = Field(None, max_length=50)
+    capital_social: float | None = 200.0
 
 
 class CompanyUpdate(BaseModel):
@@ -37,6 +38,7 @@ class CompanyUpdate(BaseModel):
     background_path: str | None = Field(None, max_length=500)
     bank_name: str | None = Field(None, max_length=200)
     iban: str | None = Field(None, max_length=50)
+    capital_social: float | None = None
 
 
 class CompanyRead(BaseModel):
@@ -60,6 +62,7 @@ class CompanyRead(BaseModel):
     website: str | None
     bank_name: str | None
     iban: str | None
+    capital_social: float | None
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool
