@@ -49,6 +49,32 @@ export default function Clienti() {
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [anafError, setAnafError] = createSignal<string | null>(null);
+
+  async function searchAnaf(cui: string, setF: (f: ReturnType<typeof emptyForm>) => void, f: ReturnType<typeof emptyForm>) {
+    const cuiNum = parseInt(cui.replace(/\D/g, ""));
+    if (!cuiNum) return;
+    setAnafLoading(true);
+    setAnafError(null);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cuiNum}`);
+      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setF({
+        ...f,
+        nume: data.name ?? f.nume,
+        adresa: data.address ?? f.adresa,
+        reprezentant: data.representative ?? f.reprezentant,
+      });
+    } catch {
+      setAnafError("Eroare la interogarea ANAF.");
+    } finally {
+      setAnafLoading(false);
+    }
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -162,10 +188,31 @@ export default function Clienti() {
             onClick={() => props.setF({ ...props.f, tip: "juridic" })}
           >Persoană juridică</button>
         </div>
+        <Show when={props.f.tip === "juridic"}>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;gap:6px">
+              <input
+                class="input"
+                style="flex:1"
+                placeholder="CUI"
+                value={props.f.cui}
+                onInput={(e) => { props.setF({ ...props.f, cui: e.currentTarget.value }); setAnafError(null); }}
+                onKeyDown={(e) => e.key === "Enter" && searchAnaf(props.f.cui, props.setF, props.f)}
+              />
+              <button
+                class="btn btn-sm btn-ghost"
+                onClick={() => searchAnaf(props.f.cui, props.setF, props.f)}
+                disabled={anafLoading() || !props.f.cui.trim()}
+              >{anafLoading() ? "..." : "ANAF"}</button>
+            </div>
+            <Show when={anafError()}>
+              <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
+            </Show>
+          </div>
+        </Show>
         <input class="input" placeholder="Nume *" value={props.f.nume} onInput={(e) => props.setF({ ...props.f, nume: e.currentTarget.value })} />
         <input class="input" placeholder="Descriere" value={props.f.description} onInput={(e) => props.setF({ ...props.f, description: e.currentTarget.value })} />
         <Show when={props.f.tip === "juridic"}>
-          <input class="input" placeholder="CUI" value={props.f.cui} onInput={(e) => props.setF({ ...props.f, cui: e.currentTarget.value })} />
           <input class="input" placeholder="Reprezentant" value={props.f.reprezentant} onInput={(e) => props.setF({ ...props.f, reprezentant: e.currentTarget.value })} />
         </Show>
         <input class="input" placeholder="Telefon" value={props.f.telefon} onInput={(e) => props.setF({ ...props.f, telefon: e.currentTarget.value })} />

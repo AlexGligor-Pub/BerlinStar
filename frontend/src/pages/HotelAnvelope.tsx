@@ -1093,23 +1093,27 @@ export default function HotelAnvelope() {
       <Show when={editCazare()}>
         {(c) => (
           <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
+            <div class="sl-modal" style="max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">Editare Cazare — {c().clientNume ?? "—"}</span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>✕</button>
               </div>
 
-              <div class="sl-modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+              <div class="sl-modal-body" style="padding:20px 24px">
+                <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start">
 
-                {/* ─ Client (read-only) ─ */}
+                {/* ─ Coloana stânga: Client ─ */}
                 <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                   <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px">
+                  <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
                     <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
                     <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
                     <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
                   </div>
                 </div>
+
+                {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
+                <div style="display:flex;flex-direction:column;gap:16px">
 
                 {/* ─ Anvelope ─ */}
                 <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
@@ -1211,6 +1215,9 @@ export default function HotelAnvelope() {
                 <Show when={editErr()}>
                   <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
                 </Show>
+
+                </div>{/* end coloana dreapta */}
+                </div>{/* end grid */}
               </div>
 
               <div class="sl-modal-footer" style="justify-content:space-between">
@@ -1301,20 +1308,24 @@ export default function HotelAnvelope() {
       {/* Modal: Cazare Noua */}
       <Show when={showNewModal()}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
+          <div class="sl-modal" style="max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Cazare Nouă</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>✕</button>
             </div>
 
-            <div class="sl-modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:16px">
+            <div class="sl-modal-body" style="padding:20px 24px">
+              <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start">
 
-              {/* ─ Zona 1: Client ─ */}
+              {/* ─ Coloana stânga: Client ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
                 <ClientSearch value={newClient()} onSelect={handleClientSelect} />
                 <ClientInfoBlock client={newClient()} />
               </div>
+
+              {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
+              <div style="display:flex;flex-direction:column;gap:16px">
 
               {/* ─ Zona 2: Anvelope ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
@@ -1421,6 +1432,9 @@ export default function HotelAnvelope() {
               <Show when={saveErr()}>
                 <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
               </Show>
+
+              </div>{/* end coloana dreapta */}
+              </div>{/* end grid */}
             </div>
 
             <div class="sl-modal-footer">
