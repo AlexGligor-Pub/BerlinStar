@@ -11,6 +11,7 @@ interface ResumeData {
   clientNume?: string | null;
   clientCui?: string | null;
   clientTip?: string | null;
+  programareId?: number | null;
 }
 
 const [resumeData, setResumeData] = createSignal<ResumeData | null>(null);

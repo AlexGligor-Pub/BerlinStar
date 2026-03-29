@@ -14,7 +14,7 @@ from app.database import engine
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, anvelope, loc_cazare, cazare_anvelope, admin
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, anvelope, loc_cazare, cazare_anvelope, admin, programare
 
 
 @asynccontextmanager
@@ -59,6 +59,7 @@ app.include_router(anvelope.router,        prefix="/api/anvelope",            ta
 app.include_router(loc_cazare.router,      prefix="/api/loc-cazare",          tags=["loc-cazare"])
 app.include_router(cazare_anvelope.router, prefix="/api/cazare-anvelope",     tags=["cazare-anvelope"])
 app.include_router(admin.router,           prefix="/api/admin",               tags=["admin"])
+app.include_router(programare.router,      prefix="/api/programari",           tags=["programari"])
 
 
 @app.get("/health")

@@ -290,6 +290,7 @@ export default function ShoppingList() {
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
+  const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
   const [showResumeModal, setShowResumeModal] = createSignal(false);
@@ -399,6 +400,7 @@ export default function ShoppingList() {
     if (!d) return;
     clearPendingLoad();
     setLoadedReceiptId(d.id ?? null);
+    setLoadedProgramareId(d.programareId ?? null);
     setTitlu(d.titlu);
     setDescriere(d.descriere);
     setDateTehn(d.dateTehn);
@@ -443,6 +445,7 @@ export default function ShoppingList() {
       devizSerie: "", devizNr: 0,
       facturaSerie: "", facturaNr: 0,
       chitantaSerie: "", chitantaNr: 0,
+      programareId: loadedProgramareId(),
     };
     try {
       let saved;
@@ -462,6 +465,7 @@ export default function ShoppingList() {
       setDescriere("");
       setDateTehn("");
       setLoadedReceiptId(null);
+      setLoadedProgramareId(null);
       setSelectedClient(null);
       setShowSuccess(true);
       clearTimeout(successTimer);

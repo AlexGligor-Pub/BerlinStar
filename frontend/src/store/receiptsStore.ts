@@ -27,6 +27,7 @@ export interface Receipt {
   facturaNr: number;
   chitantaSerie: string;
   chitantaNr: number;
+  programareId: number | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -66,6 +67,7 @@ function mapFromApi(r: any): Receipt {
     facturaNr: r.factura_nr ?? 0,
     chitantaSerie: r.chitanta_serie ?? "",
     chitantaNr: r.chitanta_nr ?? 0,
+    programareId: r.programare_id ?? null,
   };
 }
 
@@ -144,6 +146,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
     pay_method: receipt.metodaPlata ?? "Neplatit",
+    programare_id: receipt.programareId ?? null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),

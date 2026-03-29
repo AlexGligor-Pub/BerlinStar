@@ -44,6 +44,9 @@ class Receipt(Base):
     factura_nr: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     chitanta_serie: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     chitanta_nr: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    programare_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("programari.id", ondelete="SET NULL"), nullable=True
+    )
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"

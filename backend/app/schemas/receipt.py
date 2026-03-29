@@ -22,6 +22,7 @@ class ReceiptCreate(BaseModel):
     pay_method: PayMethod = PayMethod.NEPLATIT
     partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
     client_id: int | None = None
+    programare_id: int | None = None
     deviz_serie: str = ""
     deviz_nr: int = 0
     factura_serie: str = ""
@@ -116,6 +117,7 @@ class ReceiptRead(BaseModel):
     factura_nr: int
     chitanta_serie: str
     chitanta_nr: int
+    programare_id: int | None = None
     is_deleted: bool
     deleted_at: datetime | None
     receipt_items: list[ReceiptItemRead]

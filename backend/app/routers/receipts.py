@@ -138,6 +138,7 @@ async def create_receipt(
         account_id=account_id,
         titlu=body.titlu,
         client_id=body.client_id,
+        programare_id=body.programare_id,
         descriere=body.descriere,
         date_tehn=body.date_tehn,
         total=body.total,

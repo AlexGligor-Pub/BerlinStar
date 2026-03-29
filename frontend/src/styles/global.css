@@ -3166,3 +3166,204 @@ body {
 .doc-dropdown-item:hover {
   background: var(--bg-hover, rgba(255,255,255,0.07));
 }
+
+/* ─── Programari calendar ──────────────────────────────────────────────────── */
+
+.prgm-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+.prgm-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--bg-card, #fff);
+}
+
+.prgm-search {
+  width: 200px;
+  font-size: 13px;
+}
+
+.prgm-week-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.prgm-week-label {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 155px;
+  text-align: center;
+}
+
+.prgm-dept-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  flex: 1;
+}
+
+.prgm-chip {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+}
+.prgm-chip:hover { background: var(--bg-hover); }
+.prgm-chip-active {
+  background: var(--primary, #3b82f6);
+  color: #fff;
+  border-color: transparent;
+}
+
+.prgm-cal-wrap {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.prgm-cal-grid {
+  display: grid;
+  grid-template-columns: 52px repeat(7, minmax(110px, 1fr));
+  min-width: 822px;
+}
+
+.prgm-time-col {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background: var(--bg-page, #fff);
+  border-right: 1px solid var(--border);
+}
+
+.prgm-col-header {
+  height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--bg-card, #fff);
+  gap: 1px;
+}
+
+.prgm-time-col .prgm-col-header {
+  background: var(--bg-page, #fff);
+}
+
+.prgm-col-dow {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.prgm-col-date {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.prgm-col-today .prgm-col-date,
+.prgm-col-today .prgm-col-dow {
+  color: var(--primary, #3b82f6);
+}
+
+.prgm-day-col {
+  border-left: 1px solid var(--border);
+}
+
+.prgm-day-body {
+  position: relative;
+  overflow: visible;
+}
+
+.prgm-slot-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--border);
+  cursor: pointer;
+  box-sizing: border-box;
+}
+.prgm-slot-line-hour {
+  border-top-style: solid;
+  border-top-color: var(--border);
+}
+.prgm-slot-line:hover {
+  background: var(--bg-hover, rgba(59,130,246,0.04));
+}
+
+.prgm-appt-dragging {
+  box-shadow: 0 8px 24px rgba(0,0,0,.28) !important;
+  cursor: grabbing !important;
+}
+
+.prgm-resize-handle {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+  background: rgba(0,0,0,.15);
+  border-radius: 0 0 4px 4px;
+}
+
+.prgm-form-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+
+.prgm-loading {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+  z-index: 50;
+}
+
+.prgm-toast-error {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger, #ef4444);
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 8px;
+  z-index: 200;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,.2);
+}
+
+@media (max-width: 640px) {
+  .prgm-search { width: 140px; }
+  .prgm-week-label { min-width: 120px; font-size: 12px; }
+  .prgm-col-date { font-size: 16px; }
+}
