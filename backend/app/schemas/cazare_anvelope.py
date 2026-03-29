@@ -16,6 +16,8 @@ class CazareCreate(BaseModel):
     dep_roti_complete: bool = False
     dep_antifurturi: bool = False
     dep_prezoane: bool = False
+    referinta_cazare_id: int | None = None
+    montate_pe_masina: bool = False
 
 
 class CazareCheckoutBody(BaseModel):
@@ -34,6 +36,8 @@ class CazareUpdateBody(BaseModel):
     dep_roti_complete: bool | None = None
     dep_antifurturi: bool | None = None
     dep_prezoane: bool | None = None
+    referinta_cazare_id: int | None = None
+    montate_pe_masina: bool | None = None
 
 
 class CazareItemRead(BaseModel):
@@ -69,4 +73,8 @@ class CazareRead(BaseModel):
     dep_roti_complete: bool = False
     dep_antifurturi: bool = False
     dep_prezoane: bool = False
+    referinta_cazare_id: int | None = None
+    montate_pe_masina: bool = False
+    referinta_cazare_data_checkin: str | None = None
+    referinta_cazare_items: list[CazareItemRead] = []
     items: list[CazareItemRead] = []

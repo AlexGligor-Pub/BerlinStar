@@ -47,18 +47,76 @@ const MT = 14;
 const PAGE_H = 297;
 
 // ─── Encoding helper ──────────────────────────────────────────────────────────
-// jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1
+// jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1.
+// Folosim NotoSans-Regular.ttf de pe jsDelivr (cu cache localStorage) pentru suport complet.
 
 function ro(s: string | null | undefined): string {
   if (!s) return "";
+  // fallback pentru Helvetica: inlocuieste diacriticele care nu sunt in Latin-1
   return s
-    .replace(/[ăÅ£]/g, (c) => c === c.toLowerCase() ? "a" : "A")
-    .replace(/Ă/g, "A")
-    .replace(/ă/g, "a")
-    .replace(/â/g, "a").replace(/Â/g, "A")
-    .replace(/î/g, "i").replace(/Î/g, "I")
+    .replace(/ă/g, "a").replace(/Ă/g, "A")
     .replace(/[șşȘŞ]/g, (c) => /[A-Z]/.test(c) ? "S" : "s")
     .replace(/[țţȚŢ]/g, (c) => /[A-Z]/.test(c) ? "T" : "t");
+}
+
+// ─── Romanian font loader ─────────────────────────────────────────────────────
+
+const _FONT_CACHE_KEY = "bs_ro_font_b64_v2";
+const _FONT_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 zile
+
+let _roFontB64: string | null | false = false; // false = neincercat, null = esec
+
+function _bufToB64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  const chunks: string[] = [];
+  for (let i = 0; i < bytes.length; i += 8192) {
+    chunks.push(String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length))));
+  }
+  return btoa(chunks.join(""));
+}
+
+async function loadRoFontBase64(): Promise<string | null> {
+  if (_roFontB64 !== false) return _roFontB64;
+
+  // 1. Incearca cache localStorage
+  try {
+    const cached = localStorage.getItem(_FONT_CACHE_KEY);
+    if (cached) {
+      const { ts, b64 } = JSON.parse(cached);
+      if (Date.now() - ts < _FONT_CACHE_TTL && typeof b64 === "string" && b64.length > 5_000) {
+        _roFontB64 = b64;
+        return b64;
+      }
+    }
+  } catch {}
+
+  // 2. Font local (subset NotoSans cu diacritice romanesti, generat din Google Fonts)
+  try {
+    const resp = await fetch("/fonts/NotoSans-Ro.ttf");
+    if (resp.ok) {
+      const buf = await resp.arrayBuffer();
+      if (buf.byteLength > 5_000) {
+        const b64 = _bufToB64(buf);
+        _roFontB64 = b64;
+        try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), b64 })); } catch {}
+        return b64;
+      }
+    }
+  } catch {}
+
+  _roFontB64 = null;
+  return null;
+}
+
+function registerRoFont(doc: any, base64: string): void {
+  doc.addFileToVFS("NotoSans-Ro.ttf", base64);
+  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
+  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+}
+
+// t() — text helper: lasa textul neschimbat daca avem font roman, altfel ro()
+function makeT(hasFont: boolean) {
+  return (s: string | null | undefined): string => hasFont ? (s ?? "") : ro(s);
 }
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
@@ -96,17 +154,17 @@ function hline(doc: any, y: number, color = C.lightGray, w = 0.2): void {
 }
 
 /** Header document: titlu + serie/nr + data (stanga), logo (dreapta via drawLogo) */
-function drawHeader(doc: any, title: string, serie: string, nr: number, date: string): number {
+function drawHeader(doc: any, title: string, serie: string, nr: number, date: string, font = "helvetica"): number {
   let y = MT;
 
   // Titlu document
-  doc.setFont("helvetica", "bold");
+  doc.setFont(font, "bold");
   doc.setFontSize(16);
   doc.setTextColor(...C.black);
-  doc.text(ro(title), ML, y);
+  doc.text(title, ML, y);
 
   // Serie + Nr + Data — stanga, sub titlu
-  doc.setFont("helvetica", "normal");
+  doc.setFont(font, "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...C.black);
   y += 6;
@@ -343,11 +401,10 @@ function drawSignatures(doc: any, leftLabel: string, rightLabel: string, y: numb
   doc.line(ML, y, ML + colW, y);
   doc.line(col2X, y, col2X + colW, y);
 
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.black);
-  doc.text(ro(leftLabel), ML, y + 4);
-  doc.text(ro(rightLabel), col2X, y + 4);
+  doc.text(leftLabel, ML, y + 4);
+  doc.text(rightLabel, col2X, y + 4);
 
   return y + 12;
 }
@@ -796,6 +853,22 @@ interface CazareForPdf {
   employeeName: string | null;
   locCazareNume: string | null;
   comments: string | null;
+  depAnvelope?: boolean;
+  depCapace?: boolean;
+  depRotiComplete?: boolean;
+  depAntifurturi?: boolean;
+  depPrezoane?: boolean;
+  referintaCazareId?: number | null;
+  montatePeMasina?: boolean;
+  referintaCazareDataCheckin?: string | null;
+  referintaCazareItems?: Array<{
+    anvelopa: {
+      marcaNume: string | null;
+      dimensiuneValoare: string | null;
+      tip: string;
+      adancime: number | null;
+    } | null;
+  }>;
   items: Array<{
     anvelopa: {
       marcaNume: string | null;
@@ -813,27 +886,24 @@ const TIP_PDF_LABELS: Record<string, string> = {
   altele: "Altele",
 };
 
-function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number): number {
-  doc.setFont("helvetica", "bold");
+function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string): number {
   doc.setFontSize(7);
   doc.setTextColor(...C.black);
   doc.text("BENEFICIAR", x, y);
   y += 3.5;
 
-  doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...C.black);
-  const nameLines: string[] = doc.splitTextToSize(ro(cazare.clientNume ?? "-"), bw);
+  const nameLines: string[] = doc.splitTextToSize(t(cazare.clientNume ?? "-"), bw);
   doc.text(nameLines, x, y);
   y += nameLines.length * 4.2;
 
-  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.black);
   if (cazare.clientCui)          { doc.text(`CUI: ${cazare.clientCui}`, x, y); y += 3.5; }
-  if (cazare.clientReprezentant) { doc.text(`Repr.: ${ro(cazare.clientReprezentant)}`, x, y); y += 3.5; }
+  if (cazare.clientReprezentant) { doc.text(`Repr.: ${t(cazare.clientReprezentant)}`, x, y); y += 3.5; }
   if (cazare.clientAdresa) {
-    const al: string[] = doc.splitTextToSize(ro(cazare.clientAdresa), bw);
+    const al: string[] = doc.splitTextToSize(t(cazare.clientAdresa), bw);
     doc.text(al, x, y);
     y += al.length * 3.5;
   }
@@ -841,15 +911,15 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
   return y;
 }
 
-function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: number): number {
+function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: number, t: (s: string | null | undefined) => string, font = "helvetica"): number {
   const rows = cazare.items
     .filter((item) => item.anvelopa != null)
     .map((item, idx) => {
       const a = item.anvelopa!;
       return [
         String(idx + 1),
-        ro(a.marcaNume ?? "—"),
-        ro(a.dimensiuneValoare ?? "—"),
+        t(a.marcaNume ?? "—"),
+        t(a.dimensiuneValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
       ];
@@ -859,25 +929,14 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "Marca", "Dimensiune", "Tip", "Adancime"]],
+    head: [["#", "Marcă", "Dimensiune", "Tip", "Adâncime"]],
     body: rows,
-    styles: {
-      fontSize: 7.5,
-      cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
-      textColor: [...C.black],
-      lineColor: [...C.black],
-      lineWidth: 0.1,
-    },
-    headStyles: {
-      fillColor: [...C.veryLight],
-      textColor: [...C.black],
-      fontSize: 7,
-      fontStyle: "bold",
-      lineColor: [...C.black],
-      lineWidth: 0.2,
-    },
+    theme: "grid",
+    styles: { font, fontSize: 7.5, cellPadding: 2 },
+    headStyles: { fillColor: [...C.black], textColor: [...C.white], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+    bodyStyles: { fontSize: 7.5, cellPadding: 2 },
     columnStyles: {
-      0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
+      0: { halign: "center", cellWidth: 8 },
       1: { cellWidth: "auto" },
       2: { cellWidth: 35 },
       3: { halign: "center", cellWidth: 18 },
@@ -895,10 +954,21 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal"); // activează fontul pentru drawHeader și funcțiile helper
+
+  const setF = (style: "normal" | "bold", size: number) => {
+    doc.setFont(FONT, style);
+    doc.setFontSize(size);
+  };
+
   await drawBackground(doc, company?.background_path);
   await drawLogo(doc, company?.logo_path, MT);
 
-  let y = drawHeader(doc, "Hotel Anvelope - Bon Intrare", "", cazare.id, fmtDate(cazare.dataCheckin));
+  let y = drawHeader(doc, "Hotel Anvelope - Bon Intrare", "", cazare.id, fmtDate(cazare.dataCheckin), FONT);
   y += 2;
   hline(doc, y);
   y += 6;
@@ -908,42 +978,94 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   const rightX = ML + bw + 8;
 
   const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
-  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw);
+  setF("normal", 9);
+  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw, t);
   y = Math.max(yComp, yClient) + 4;
 
   hline(doc, y);
   y += 6;
 
   // Detalii cazare
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  setF("bold", 8);
   doc.setTextColor(...C.black);
   doc.text("DETALII CAZARE", ML, y);
   y += 4;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${ro(cazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (cazare.employeeName)  { doc.text(`Angajat: ${ro(cazare.employeeName)}`, ML, y); y += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
   if (cazare.comments) {
-    const cl: string[] = doc.splitTextToSize(`Observatii: ${ro(cazare.comments)}`, CW);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
     doc.text(cl, ML, y);
     y += cl.length * 4 + 1;
   }
+
+  // Articole depozitate (dep_ fields)
+  const depItemsIn: string[] = [];
+  if (cazare.depAnvelope)     depItemsIn.push("Anvelope");
+  if (cazare.depCapace)       depItemsIn.push("Capace");
+  if (cazare.depRotiComplete) depItemsIn.push("Roți complete");
+  if (cazare.depAntifurturi)  depItemsIn.push("Antifurturi");
+  if (cazare.depPrezoane)     depItemsIn.push("Prezoane");
+  if (depItemsIn.length > 0) {
+    setF("bold", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
+    y += 5;
+  }
+
   y += 2;
 
   // Tabel anvelope
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  setF("bold", 8);
   doc.setTextColor(...C.black);
   doc.text("ANVELOPE DEPOZITATE", ML, y);
   y += 4;
 
-  y = drawAnvelopeTable(doc, autoTable, cazare, y);
+  y = drawAnvelopeTable(doc, autoTable, cazare, y, t, FONT);
   y += 4;
 
-  y = drawSignatures(doc, "Semnatura Prestator", "Semnatura Client", y);
+  if (cazare.montatePeMasina && cazare.referintaCazareId) {
+    setF("bold", 8.5);
+    doc.setTextColor(220, 38, 38);
+    const refDate = cazare.referintaCazareDataCheckin ? ` (intrare: ${fmtDate(cazare.referintaCazareDataCheckin)})` : "";
+    const refLine: string[] = doc.splitTextToSize(`Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost montate pe mașina clientului.`, CW);
+    doc.text(refLine, ML, y);
+    y += refLine.length * 4.5 + 2;
+    doc.setTextColor(...C.black);
+    setF("normal", 8.5);
+    // Tabel anvelope montate
+    const oldItems = (cazare.referintaCazareItems ?? []).filter((i) => i.anvelopa != null);
+    if (oldItems.length > 0) {
+      const oldRows = oldItems.map((item, idx) => {
+        const a = item.anvelopa!;
+        return [
+          String(idx + 1),
+          t(a.marcaNume ?? "—"),
+          t(a.dimensiuneValoare ?? "—"),
+          TIP_PDF_LABELS[a.tip] ?? a.tip,
+          a.adancime != null ? `${a.adancime} mm` : "—",
+        ];
+      });
+      autoTable(doc, {
+        startY: y,
+        head: [["#", "Marcă", "Dimensiune", "Tip", "Adâncime"]],
+        body: oldRows,
+        theme: "grid",
+        styles: { font: FONT },
+        headStyles: { fillColor: [220, 38, 38], textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+        bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 18 }, 4: { halign: "center", cellWidth: 22 } },
+        margin: { left: ML, right: MR },
+        tableWidth: CW,
+      });
+      y = (doc as any).lastAutoTable.finalY + 3;
+    }
+    y += 2;
+  }
+
+  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
   await drawFooterWithBranding(doc, company?.website);
 
   const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
@@ -955,11 +1077,22 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal"); // activează fontul pentru drawHeader și funcțiile helper
+
+  const setF = (style: "normal" | "bold", size: number) => {
+    doc.setFont(FONT, style);
+    doc.setFontSize(size);
+  };
+
   await drawBackground(doc, company?.background_path);
   await drawLogo(doc, company?.logo_path, MT);
 
   const checkoutDate = cazare.dataCheckout ?? new Date().toISOString().slice(0, 10);
-  let y = drawHeader(doc, "Hotel Anvelope - Bon Iesire", "", cazare.id, fmtDate(checkoutDate));
+  let y = drawHeader(doc, "Hotel Anvelope - Bon Ieșire", "", cazare.id, fmtDate(checkoutDate), FONT);
   y += 2;
   hline(doc, y);
   y += 6;
@@ -969,58 +1102,68 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   const rightX = ML + bw + 8;
 
   const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
-  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw);
+  setF("normal", 9);
+  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw, t);
   y = Math.max(yComp, yClient) + 4;
 
   hline(doc, y);
   y += 6;
 
   // Detalii cazare
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  setF("bold", 8);
   doc.setTextColor(...C.black);
   doc.text("DETALII CAZARE", ML, y);
   y += 4;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${ro(cazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (cazare.employeeName)  { doc.text(`Angajat: ${ro(cazare.employeeName)}`, ML, y); y += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
 
   doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, ML, y); y += 4.5;
-  doc.text(`Data iesire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
 
   const zile = Math.round(
     (new Date(checkoutDate).getTime() - new Date(cazare.dataCheckin).getTime()) / 86_400_000
   );
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
+  setF("bold", 9);
   doc.setTextColor(...C.black);
-  doc.text(`Durata depozitare: ${zile} zile`, ML, y);
+  doc.text(`Durată depozitare: ${zile} zile`, ML, y);
   y += 5;
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  setF("normal", 8.5);
   if (cazare.comments) {
-    const cl: string[] = doc.splitTextToSize(`Observatii: ${ro(cazare.comments)}`, CW);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
     doc.setTextColor(...C.black);
     doc.text(cl, ML, y);
     y += cl.length * 4 + 1;
   }
+
+  // Articole ridicate (dep_ fields)
+  const depItemsOut: string[] = [];
+  if (cazare.depAnvelope)     depItemsOut.push("Anvelope");
+  if (cazare.depCapace)       depItemsOut.push("Capace");
+  if (cazare.depRotiComplete) depItemsOut.push("Roți complete");
+  if (cazare.depAntifurturi)  depItemsOut.push("Antifurturi");
+  if (cazare.depPrezoane)     depItemsOut.push("Prezoane");
+  if (depItemsOut.length > 0) {
+    setF("bold", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
+    y += 5;
+  }
   y += 2;
 
   // Tabel anvelope
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  setF("bold", 8);
   doc.setTextColor(...C.black);
   doc.text("ANVELOPE RIDICATE", ML, y);
   y += 4;
 
-  y = drawAnvelopeTable(doc, autoTable, cazare, y);
+  y = drawAnvelopeTable(doc, autoTable, cazare, y, t, FONT);
   y += 4;
 
-  y = drawSignatures(doc, "Semnatura Prestator", "Semnatura Client", y);
+  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
   await drawFooterWithBranding(doc, company?.website);
 
   const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);

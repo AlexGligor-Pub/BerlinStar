@@ -54,6 +54,13 @@ def _serialize(c: CazareAnvelope) -> dict:
         "dep_roti_complete": c.dep_roti_complete,
         "dep_antifurturi": c.dep_antifurturi,
         "dep_prezoane": c.dep_prezoane,
+        "referinta_cazare_id": c.referinta_cazare_id,
+        "montate_pe_masina": c.montate_pe_masina,
+        "referinta_cazare_data_checkin": str(c.referinta_cazare.data_checkin) if c.referinta_cazare else None,
+        "referinta_cazare_items": [
+            {"id": item.id, "anvelopa_id": item.anvelopa_id, "anvelopa": _serialize_anvelopa(item.anvelopa)}
+            for item in (c.referinta_cazare.items if c.referinta_cazare else [])
+        ],
         "created_at": c.created_at,
         "updated_at": c.updated_at,
         "is_deleted": c.is_deleted,
@@ -82,6 +89,8 @@ def _load_stmt(account_id: int):
             selectinload(CazareAnvelope.client),
             selectinload(CazareAnvelope.employee),
             selectinload(CazareAnvelope.loc_cazare),
+            selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.marca),
+            selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.dimensiune),
             selectinload(CazareAnvelope.items).selectinload(
                 CazareAnvelopaItem.anvelopa
             ).selectinload(Anvelopa.marca),
@@ -158,6 +167,8 @@ async def create_cazare(
         dep_roti_complete=body.dep_roti_complete,
         dep_antifurturi=body.dep_antifurturi,
         dep_prezoane=body.dep_prezoane,
+        referinta_cazare_id=body.referinta_cazare_id,
+        montate_pe_masina=body.montate_pe_masina,
     )
     db.add(cazare)
     await db.flush()
@@ -217,6 +228,9 @@ async def update_cazare(
         cazare.dep_antifurturi = body.dep_antifurturi
     if body.dep_prezoane is not None:
         cazare.dep_prezoane = body.dep_prezoane
+    cazare.referinta_cazare_id = body.referinta_cazare_id
+    if body.montate_pe_masina is not None:
+        cazare.montate_pe_masina = body.montate_pe_masina
     cazare.updated_at = datetime.now(timezone.utc)
 
     if body.anvelopa_ids is not None:

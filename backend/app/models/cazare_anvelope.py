@@ -31,6 +31,10 @@ class CazareAnvelope(Base):
     dep_roti_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dep_antifurturi: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dep_prezoane: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    referinta_cazare_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("cazari_anvelope.id", ondelete="SET NULL"), nullable=True
+    )
+    montate_pe_masina: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -44,6 +48,12 @@ class CazareAnvelope(Base):
     client: Mapped["Client | None"] = relationship("Client")  # type: ignore[name-defined]
     employee: Mapped["Employee | None"] = relationship("Employee")  # type: ignore[name-defined]
     loc_cazare: Mapped["LocCazare | None"] = relationship("LocCazare")  # type: ignore[name-defined]
+    referinta_cazare: Mapped["CazareAnvelope | None"] = relationship(
+        "CazareAnvelope",
+        primaryjoin="foreign(CazareAnvelope.referinta_cazare_id) == remote(CazareAnvelope.id)",
+        uselist=False,
+        lazy="select",
+    )
 
 
 class CazareAnvelopaItem(Base):

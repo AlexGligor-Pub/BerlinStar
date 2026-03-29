@@ -409,6 +409,9 @@ export default function HotelAnvelope() {
   const [newDepRotiComplete, setNewDepRotiComplete] = createSignal(false);
   const [newDepAntifurturi, setNewDepAntifurturi] = createSignal(false);
   const [newDepPrezoane, setNewDepPrezoane] = createSignal(false);
+  const [newReferintaCazareId, setNewReferintaCazareId] = createSignal<number | null>(null);
+  const [newMontatePeMasina, setNewMontatePeMasina] = createSignal(false);
+  const [clientCazariVechi, setClientCazariVechi] = createSignal<Array<{ id: number; dataCheckin: string }>>([]);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
 
@@ -437,6 +440,9 @@ export default function HotelAnvelope() {
   const [editDepRotiComplete, setEditDepRotiComplete] = createSignal(false);
   const [editDepAntifurturi, setEditDepAntifurturi] = createSignal(false);
   const [editDepPrezoane, setEditDepPrezoane] = createSignal(false);
+  const [editReferintaCazareId, setEditReferintaCazareId] = createSignal<number | null>(null);
+  const [editMontatePeMasina, setEditMontatePeMasina] = createSignal(false);
+  const [editClientCazariVechi, setEditClientCazariVechi] = createSignal<Array<{ id: number; dataCheckin: string }>>([]);
   const [editSaving, setEditSaving] = createSignal(false);
   const [editErr, setEditErr] = createSignal("");
 
@@ -577,14 +583,30 @@ export default function HotelAnvelope() {
     setNewDepRotiComplete(false);
     setNewDepAntifurturi(false);
     setNewDepPrezoane(false);
+    setNewReferintaCazareId(null);
+    setNewMontatePeMasina(false);
+    setClientCazariVechi([]);
     setSaveErr("");
     setShowNewModal(true);
   }
 
-  function handleClientSelect(c: ClientItem | null) {
+  async function handleClientSelect(c: ClientItem | null) {
     setNewClient(c);
     setClientAnvelope([]);
     setSelectedAnvIds(new Set<number>());
+    setNewReferintaCazareId(null);
+    setNewMontatePeMasina(false);
+    if (c) {
+      try {
+        const res = await apiFetch(`/api/cazare-anvelope?client_id=${c.id}&limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          setClientCazariVechi(data.items.map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
+        }
+      } catch {}
+    } else {
+      setClientCazariVechi([]);
+    }
   }
 
   async function saveCazare() {
@@ -632,6 +654,8 @@ export default function HotelAnvelope() {
         dep_roti_complete: newDepRotiComplete(),
         dep_antifurturi: newDepAntifurturi(),
         dep_prezoane: newDepPrezoane(),
+        referinta_cazare_id: newReferintaCazareId(),
+        montate_pe_masina: newMontatePeMasina(),
       };
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -661,8 +685,21 @@ export default function HotelAnvelope() {
     setEditDepRotiComplete(c.depRotiComplete);
     setEditDepAntifurturi(c.depAntifurturi);
     setEditDepPrezoane(c.depPrezoane);
+    setEditReferintaCazareId(c.referintaCazareId);
+    setEditMontatePeMasina(c.montatePeMasina);
     setShowEditAnvForm(false);
     setEditErr("");
+    if (c.clientId) {
+      try {
+        const res = await apiFetch(`/api/cazare-anvelope?client_id=${c.clientId}&limit=20`);
+        if (res.ok) {
+          const data = await res.json();
+          setEditClientCazariVechi(data.items.filter((caz: any) => caz.id !== c.id).map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
+        }
+      } catch {}
+    } else {
+      setEditClientCazariVechi([]);
+    }
     // încarcă doar anvelopele din această cazare
     const anvs: Anvelopa[] = c.items
       .filter((i) => i.anvelopa != null)
@@ -713,6 +750,8 @@ export default function HotelAnvelope() {
           dep_roti_complete: editDepRotiComplete(),
           dep_antifurturi: editDepAntifurturi(),
           dep_prezoane: editDepPrezoane(),
+          referinta_cazare_id: editReferintaCazareId(),
+          montate_pe_masina: editMontatePeMasina(),
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(err.detail ?? "Eroare la salvare."); return; }
@@ -752,6 +791,18 @@ export default function HotelAnvelope() {
         depRotiComplete: d.dep_roti_complete ?? false,
         depAntifurturi: d.dep_antifurturi ?? false,
         depPrezoane: d.dep_prezoane ?? false,
+        referintaCazareId: d.referinta_cazare_id ?? null,
+        montatePeMasina: d.montate_pe_masina ?? false,
+        referintaCazareDataCheckin: d.referinta_cazare_data_checkin ?? null,
+        referintaCazareItems: (d.referinta_cazare_items ?? []).map((item: any) => ({
+          id: item.id, anvelopaId: item.anvelopa_id ?? null,
+          anvelopa: item.anvelopa ? {
+            id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
+            marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
+            tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
+            marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
+          } : null,
+        })),
         items: (d.items ?? []).map((item: any) => ({
           id: item.id,
           anvelopaId: item.anvelopa_id ?? null,
@@ -770,11 +821,26 @@ export default function HotelAnvelope() {
         setClientAnvelope([]);
         setSelectedAnvIds(new Set<number>());
         setShowAnvForm(false);
-        setNewLocId("");
+        setNewLocId(c.locCazareId ?? "");
         setNewEmpId("");
         setNewCheckin(todayStr());
         setNewComments("");
+        setNewDepAnvelope(true);
+        setNewDepCapace(false);
+        setNewDepRotiComplete(false);
+        setNewDepAntifurturi(false);
+        setNewDepPrezoane(false);
+        setNewReferintaCazareId(c.id);
+        setNewMontatePeMasina(true);
         setSaveErr("");
+        // încarcă cazarile clientului pentru referință (include și cea curentă)
+        try {
+          const res = await apiFetch(`/api/cazare-anvelope?client_id=${c.clientId}&limit=20`);
+          if (res.ok) {
+            const data = await res.json();
+            setClientCazariVechi(data.items.map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
+          }
+        } catch { setClientCazariVechi([]); }
         setNewClient({
           id: c.clientId,
           nume: c.clientNume ?? "",
@@ -1110,6 +1176,23 @@ export default function HotelAnvelope() {
                     <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
                     <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
                   </div>
+                  <Show when={editReferintaCazareId() !== null}>
+                    <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
+                      <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
+                        <span style="flex:1">Cazare #{editReferintaCazareId()} — {editClientCazariVechi().find((c) => c.id === editReferintaCazareId())?.dataCheckin ?? ""}</span>
+                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setEditReferintaCazareId(null); setEditMontatePeMasina(false); }}>✕</button>
+                      </div>
+                      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
+                        <input
+                          type="checkbox"
+                          checked={editMontatePeMasina()}
+                          onChange={(e) => setEditMontatePeMasina(e.currentTarget.checked)}
+                        />
+                        Anvelopele din cazarea veche au fost montate pe mașină
+                      </label>
+                    </div>
+                  </Show>
                 </div>
 
                 {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
@@ -1322,6 +1405,23 @@ export default function HotelAnvelope() {
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
                 <ClientSearch value={newClient()} onSelect={handleClientSelect} />
                 <ClientInfoBlock client={newClient()} />
+                <Show when={newReferintaCazareId() !== null}>
+                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
+                      <span style="flex:1">Cazare #{newReferintaCazareId()} — {clientCazariVechi().find((c) => c.id === newReferintaCazareId())?.dataCheckin ?? ""}</span>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setNewReferintaCazareId(null); setNewMontatePeMasina(false); }}>✕</button>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
+                      <input
+                        type="checkbox"
+                        checked={newMontatePeMasina()}
+                        onChange={(e) => setNewMontatePeMasina(e.currentTarget.checked)}
+                      />
+                      Anvelopele din cazarea veche au fost montate pe mașină
+                    </label>
+                  </div>
+                </Show>
               </div>
 
               {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}

@@ -60,6 +60,10 @@ export interface Cazare {
   depRotiComplete: boolean;
   depAntifurturi: boolean;
   depPrezoane: boolean;
+  referintaCazareId: number | null;
+  montatePeMasina: boolean;
+  referintaCazareDataCheckin: string | null;
+  referintaCazareItems: CazareItem[];
   items: CazareItem[];
 }
 
@@ -101,6 +105,14 @@ function mapCazare(c: any): Cazare {
     depRotiComplete: c.dep_roti_complete ?? false,
     depAntifurturi: c.dep_antifurturi ?? false,
     depPrezoane: c.dep_prezoane ?? false,
+    referintaCazareId: c.referinta_cazare_id ?? null,
+    montatePeMasina: c.montate_pe_masina ?? false,
+    referintaCazareDataCheckin: c.referinta_cazare_data_checkin ?? null,
+    referintaCazareItems: (c.referinta_cazare_items ?? []).map((item: any) => ({
+      id: item.id,
+      anvelopaId: item.anvelopa_id ?? null,
+      anvelopa: item.anvelopa ? mapAnvelopa(item.anvelopa) : null,
+    })),
     items: (c.items ?? []).map((item: any) => ({
       id: item.id,
       anvelopaId: item.anvelopa_id ?? null,
