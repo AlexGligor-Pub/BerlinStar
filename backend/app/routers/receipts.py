@@ -68,7 +68,8 @@ def _serialize(receipt: Receipt) -> dict:
     data["client_adresa"]       = c.adresa        if c else None
     data["client_telefon"]      = c.telefon       if c else None
     data["client_tip"]          = c.tip           if c else None
-    data["client_reprezentant"] = c.reprezentant  if c else None
+    data["client_reprezentant"]  = c.reprezentant  if c else None
+    data["client_numar_masina"]  = c.numar_masina  if c else None
     return data
 
 

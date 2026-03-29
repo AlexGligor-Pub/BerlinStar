@@ -109,6 +109,7 @@ class ReceiptRead(BaseModel):
     client_telefon: str | None = None
     client_tip: str | None = None
     client_reprezentant: str | None = None
+    client_numar_masina: str | None = None
     deviz_serie: str
     deviz_nr: int
     factura_serie: str

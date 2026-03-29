@@ -265,7 +265,10 @@ function ClientSection(props: { receipt: Receipt }) {
 
       <Show when={r().clientId !== null && !editing()}>
         <div class="rclient-assigned">
-          <div class="rclient-name">{r().clientNume}</div>
+          <div class="rclient-name">
+            {r().clientNume}
+            <Show when={r().clientNumarMasina}><span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:8px">{r().clientNumarMasina}</span></Show>
+          </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
             <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={remove}>✕ Elimină</button>
@@ -453,6 +456,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <span class="rcard-titlu">{r.titlu}</span>
             <Show when={r.clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
+            </Show>
+            <Show when={r.clientNumarMasina}>
+              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNumarMasina}</span>
             </Show>
             <Show when={r.devizNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>

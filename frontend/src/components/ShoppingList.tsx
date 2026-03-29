@@ -435,7 +435,7 @@ export default function ShoppingList() {
       titlu: titlu().trim(),
       clientId: null,
       clientNume: null,
-      clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null,
+      clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null, clientNumarMasina: null,
       descriere: descriere().trim() || undefined,
       dateTehn: dateTehn().trim() || undefined,
       items: [...cart.items],

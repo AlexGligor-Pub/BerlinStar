@@ -14,6 +14,7 @@ export interface Receipt {
   clientTelefon: string | null;
   clientTip: string | null;
   clientReprezentant: string | null;
+  clientNumarMasina: string | null;
   descriere?: string;
   dateTehn?: string;
   metodaPlata?: string;
@@ -42,6 +43,7 @@ function mapFromApi(r: any): Receipt {
     clientTelefon: r.client_telefon ?? null,
     clientTip: r.client_tip ?? null,
     clientReprezentant: r.client_reprezentant ?? null,
+    clientNumarMasina: r.client_numar_masina ?? null,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
     metodaPlata: r.pay_method !== "Neplatit" ? r.pay_method : undefined,
