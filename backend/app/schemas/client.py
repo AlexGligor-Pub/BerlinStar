@@ -12,6 +12,7 @@ class ClientCreate(BaseModel):
     telefon: str | None = Field(default=None, max_length=50)
     email: str | None = Field(default=None, max_length=255)
     adresa: str | None = None
+    numar_masina: str | None = Field(default=None, max_length=50)
     comments: str | None = None
 
 
@@ -27,6 +28,7 @@ class ClientRead(BaseModel):
     telefon: str | None
     email: str | None
     adresa: str | None
+    numar_masina: str | None
     comments: str | None
     created_at: datetime
     updated_at: datetime | None

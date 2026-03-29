@@ -12,6 +12,7 @@ interface Client {
   telefon: string | null;
   email: string | null;
   adresa: string | null;
+  numar_masina: string | null;
   comments: string | null;
 }
 
@@ -30,7 +31,7 @@ function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: ()
 }
 
 function emptyForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", comments: "" };
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
 export default function Clienti() {
@@ -95,7 +96,7 @@ export default function Clienti() {
   function startEdit(c: Client) {
     setEditId(c.id);
     setViewId(null);
-    setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? "", reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", comments: c.comments ?? "" });
+    setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? "", reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", numar_masina: c.numar_masina ?? "", comments: c.comments ?? "" });
     setAddMode(false);
     setError(null);
   }
@@ -114,7 +115,8 @@ export default function Clienti() {
           description: f.description.trim() || null,
           cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-          adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
+          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+          comments: f.comments.trim() || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -146,7 +148,8 @@ export default function Clienti() {
           description: f.description.trim() || null,
           cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-          adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
+          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+          comments: f.comments.trim() || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -188,6 +191,9 @@ export default function Clienti() {
             onClick={() => props.setF({ ...props.f, tip: "juridic" })}
           >Persoană juridică</button>
         </div>
+        <Show when={props.f.tip === "fizic"}>
+          <input class="input" placeholder="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
+        </Show>
         <Show when={props.f.tip === "juridic"}>
           <div style="display:flex;flex-direction:column;gap:4px">
             <div style="display:flex;gap:6px">
@@ -209,6 +215,7 @@ export default function Clienti() {
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
           </div>
+          <input class="input" placeholder="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
         </Show>
         <input class="input" placeholder="Nume *" value={props.f.nume} onInput={(e) => props.setF({ ...props.f, nume: e.currentTarget.value })} />
         <input class="input" placeholder="Descriere" value={props.f.description} onInput={(e) => props.setF({ ...props.f, description: e.currentTarget.value })} />
@@ -231,7 +238,7 @@ export default function Clienti() {
           <input
             class="input reception-search"
             type="search"
-            placeholder="Caută după nume..."
+            placeholder="Caută după nume sau nr. mașină..."
             value={search()}
             onInput={(e) => { setSearch(e.currentTarget.value); load(); }}
           />
@@ -305,6 +312,9 @@ export default function Clienti() {
                   <Show when={c.adresa}>
                     <span class="cfg-location-desc"><strong>Adresă:</strong> {c.adresa}</span>
                   </Show>
+                  <Show when={c.numar_masina}>
+                    <span class="cfg-location-desc"><strong>Nr. mașină:</strong> {c.numar_masina}</span>
+                  </Show>
                   <Show when={c.comments}>
                     <span class="cfg-location-desc" style="font-style:italic"><strong>Comentarii:</strong> {c.comments}</span>
                   </Show>
@@ -330,9 +340,9 @@ export default function Clienti() {
                       {[c.cui && `CUI: ${c.cui}`, c.reprezentant && `Rep: ${c.reprezentant}`].filter(Boolean).join(" · ")}
                     </span>
                   </Show>
-                  <Show when={c.telefon || c.email}>
+                  <Show when={c.numar_masina || c.telefon || c.email}>
                     <span class="cfg-location-desc">
-                      {[c.telefon, c.email].filter(Boolean).join(" · ")}
+                      {[c.numar_masina, c.telefon, c.email].filter(Boolean).join(" · ")}
                     </span>
                   </Show>
                   <Show when={c.comments}>

@@ -107,6 +107,7 @@ interface ClientItem {
   adresa: string | null;
   description: string | null;
   comments: string | null;
+  numar_masina: string | null;
 }
 
 function emptyClientForm() {
@@ -301,6 +302,7 @@ function ClientSection(props: { receipt: Receipt }) {
                   {(c) => (
                     <button class="rclient-result-item" onClick={() => assign(c)}>
                       <span class="rclient-result-name">{c.nume}</span>
+                      <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                       <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                     </button>
                   )}
@@ -328,7 +330,7 @@ function ClientSection(props: { receipt: Receipt }) {
 
           {/* Nume */}
           <div class="rclient-search-row">
-            <input class="input" style="font-size:0.82rem" placeholder="Nume..." value={searchNume()}
+            <input class="input" style="font-size:0.82rem" placeholder="Nume sau nr. mașină..." value={searchNume()}
               onInput={e => { setSearchNume(e.currentTarget.value); setResultsNume([]); setSearchedNume(false); }}
               onKeyDown={e => e.key === "Enter" && searchByNume()}
             />
@@ -342,6 +344,7 @@ function ClientSection(props: { receipt: Receipt }) {
                 {(c) => (
                   <button class="rclient-result-item" onClick={() => assign(c)}>
                     <span class="rclient-result-name">{c.nume}</span>
+                    <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                     <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                   </button>
                 )}

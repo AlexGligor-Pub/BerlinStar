@@ -29,7 +29,9 @@ async def list_clienti(
     if last_id is not None:
         stmt = stmt.where(Client.id > last_id)
     if q:
-        stmt = stmt.where(Client.nume.ilike(f"%{q}%"))
+        stmt = stmt.where(
+            (Client.nume.ilike(f"%{q}%")) | (Client.numar_masina.ilike(f"%{q}%"))
+        )
     if tip:
         stmt = stmt.where(Client.tip == tip)
     if cui:

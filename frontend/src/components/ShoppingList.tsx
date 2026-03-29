@@ -38,10 +38,11 @@ interface ClientItem {
   nume: string;
   cui: string | null;
   tip: string;
+  numar_masina: string | null;
 }
 
 function emptyClientForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", comments: "" };
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
 // ─── PosClientSearch ──────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ function PosClientSearch(props: {
         <input
           class="input"
           style="flex:1;font-size:13px"
-          placeholder="Caută client după nume sau CUI..."
+          placeholder="Caută client după nume, CUI sau nr. mașină..."
           value={q()}
           onInput={(e) => { setQ(e.currentTarget.value); if (!props.value) search(e.currentTarget.value); }}
           onFocus={() => { if (props.value) return; if (results().length) setOpen(true); }}
@@ -132,6 +133,7 @@ function PosClientSearch(props: {
                 onMouseDown={(e) => { e.preventDefault(); pick(c); }}
               >
                 <span style="font-weight:600">{c.nume}</span>
+                <Show when={c.numar_masina}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">{c.numar_masina}</span></Show>
                 <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
                 <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{c.tip === "juridic" ? "Juridică" : "Fizică"}</span>
               </button>
@@ -198,7 +200,8 @@ function AddClientModal(props: {
           description: f.description.trim() || null,
           cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-          adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
+          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+          comments: f.comments.trim() || null,
         }),
       });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
@@ -223,6 +226,9 @@ function AddClientModal(props: {
             <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
             <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
           </div>
+          <Show when={form().tip === "fizic"}>
+            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
+          </Show>
           <Show when={form().tip === "juridic"}>
             <div style="display:flex;gap:6px">
               <input
@@ -240,6 +246,7 @@ function AddClientModal(props: {
             <Show when={anafError()}>
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
+            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
           </Show>
           <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
           <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -339,7 +346,7 @@ export default function ShoppingList() {
 
   function loadResumeClient(r: { clientId?: number | null; clientNume?: string | null; clientCui?: string | null; clientTip?: string | null }) {
     if (r.clientId) {
-      setSelectedClient({ id: r.clientId, nume: r.clientNume ?? "", cui: r.clientCui ?? null, tip: r.clientTip ?? "fizic" });
+      setSelectedClient({ id: r.clientId, nume: r.clientNume ?? "", cui: r.clientCui ?? null, tip: r.clientTip ?? "fizic", numar_masina: null });
     } else {
       setSelectedClient(null);
     }

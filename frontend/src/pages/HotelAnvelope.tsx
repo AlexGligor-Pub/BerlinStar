@@ -43,6 +43,7 @@ interface ClientItem {
   telefon: string | null;
   adresa: string | null;
   reprezentant: string | null;
+  numar_masina: string | null;
 }
 
 // ─── Sub-component: ClientSearch ─────────────────────────────────────────────
@@ -90,7 +91,7 @@ function ClientSearch(props: {
       <div style="display:flex;gap:6px">
         <input
           class="input"
-          placeholder="Caută client după nume..."
+          placeholder="Caută client după nume sau nr. mașină..."
           value={q()}
           onInput={(e) => { setQ(e.currentTarget.value); search(e.currentTarget.value); }}
           onFocus={() => { if (results().length) setOpen(true); }}
@@ -109,6 +110,7 @@ function ClientSearch(props: {
                 onMouseDown={() => pick(c)}
               >
                 <span style="font-weight:600">{c.nume}</span>
+                <Show when={c.numar_masina}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">{c.numar_masina}</span></Show>
                 <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
               </button>
             )}
@@ -138,6 +140,7 @@ function ClientInfoBlock(props: { client: ClientItem | null }) {
         <Show when={props.client!.cui}><div><span style="color:var(--text-muted)">CUI:</span> {props.client!.cui}</div></Show>
         <Show when={props.client!.telefon}><div><span style="color:var(--text-muted)">Tel:</span> {props.client!.telefon}</div></Show>
         <Show when={props.client!.adresa}><div><span style="color:var(--text-muted)">Adresă:</span> {props.client!.adresa}</div></Show>
+        <Show when={props.client!.numar_masina}><div><span style="color:var(--text-muted)">Nr. mașină:</span> {props.client!.numar_masina}</div></Show>
       </div>
     </Show>
   );
@@ -848,6 +851,7 @@ export default function HotelAnvelope() {
           telefon: c.clientTelefon,
           adresa: c.clientAdresa,
           reprezentant: c.clientReprezentant,
+          numar_masina: null,
         });
         setShowNewModal(true);
       }
