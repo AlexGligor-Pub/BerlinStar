@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -11,6 +12,10 @@ from app.schemas.programare import ProgramareCreate, ProgramarePatch, Programare
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
+
+
+def _with_relations():
+    return [selectinload(Programare.client), selectinload(Programare.department)]
 
 
 def _serialize(p: Programare) -> ProgramareRead:
@@ -32,6 +37,15 @@ def _serialize(p: Programare) -> ProgramareRead:
         is_deleted=p.is_deleted,
         deleted_at=p.deleted_at,
     )
+
+
+async def _load(db: AsyncSession, programare_id: int) -> Programare | None:
+    stmt = (
+        select(Programare)
+        .where(Programare.id == programare_id)
+        .options(*_with_relations())
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
 
 
 async def _check_overlap(
@@ -68,7 +82,11 @@ async def list_programari(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> list[ProgramareRead]:
-    stmt = select(Programare).where(Programare.account_id == account_id)
+    stmt = (
+        select(Programare)
+        .where(Programare.account_id == account_id)
+        .options(*_with_relations())
+    )
     if not include_deleted:
         stmt = stmt.where(Programare.is_deleted == False)
     if location_id is not None:
@@ -83,7 +101,7 @@ async def list_programari(
         stmt = stmt.where(Programare.status == status)
     stmt = stmt.order_by(Programare.start_time)
 
-    rows = (await db.execute(stmt)).scalars().all()
+    rows = list((await db.execute(stmt)).scalars().all())
 
     if q:
         q_lower = q.lower()
@@ -108,11 +126,12 @@ async def create_programare(
 
     p = Programare(**body.model_dump(), account_id=account_id)
     db.add(p)
-    await db.flush()
-    await db.refresh(p, ["client", "department"])
     await db.commit()
     await db.refresh(p)
-    return _serialize(p)
+    loaded = await _load(db, p.id)
+    if loaded is None:
+        raise HTTPException(500, "Eroare la creare programare.")
+    return _serialize(loaded)
 
 
 @router.get("/{programare_id}")
@@ -121,7 +140,7 @@ async def get_programare(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> ProgramareRead:
-    p = await db.get(Programare, programare_id)
+    p = await _load(db, programare_id)
     if p is None or p.account_id != account_id or p.is_deleted:
         raise HTTPException(404, "Programarea nu a fost gasita.")
     return _serialize(p)
@@ -142,20 +161,18 @@ async def update_programare(
     for k, v in data.items():
         setattr(p, k, v)
 
-    new_start = p.start_time
-    new_end   = p.end_time
-    if new_end <= new_start:
+    if p.end_time <= p.start_time:
         raise HTTPException(400, "end_time trebuie sa fie dupa start_time.")
 
     if "start_time" in data or "end_time" in data:
-        await _check_overlap(db, account_id, p.location_id, new_start, new_end, exclude_id=programare_id)
+        await _check_overlap(db, account_id, p.location_id, p.start_time, p.end_time, exclude_id=programare_id)
 
     p.updated_at = datetime.now(timezone.utc)
-    await db.flush()
-    await db.refresh(p, ["client", "department"])
     await db.commit()
-    await db.refresh(p)
-    return _serialize(p)
+    loaded = await _load(db, p.id)
+    if loaded is None:
+        raise HTTPException(500, "Eroare la actualizare programare.")
+    return _serialize(loaded)
 
 
 @router.delete("/{programare_id}", status_code=204)

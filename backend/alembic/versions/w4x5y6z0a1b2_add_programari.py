@@ -18,11 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    programare_status = sa.Enum(
-        "Programat", "In lucru", "Executat", "Anulat",
-        name="programare_status",
-    )
-    programare_status.create(op.get_bind(), checkfirst=True)
+    op.execute("CREATE TYPE programare_status AS ENUM ('Programat', 'In lucru', 'Executat', 'Anulat')")
 
     op.create_table(
         "programari",
@@ -35,7 +31,7 @@ def upgrade() -> None:
         sa.Column("department_id", sa.Integer(), sa.ForeignKey("departments.id", ondelete="SET NULL"), nullable=True),
         sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
         sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("status", programare_status, nullable=False, server_default="Programat"),
+        sa.Column("status", sa.Enum("Programat", "In lucru", "Executat", "Anulat", name="programare_status", create_type=False), nullable=False, server_default="Programat"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default="false"),
@@ -60,4 +56,4 @@ def downgrade() -> None:
     op.drop_index("ix_programari_location_id", table_name="programari")
     op.drop_index("ix_programari_account_id_start_time", table_name="programari")
     op.drop_table("programari")
-    sa.Enum(name="programare_status").drop(op.get_bind(), checkfirst=True)
+    op.execute("DROP TYPE IF EXISTS programare_status")
