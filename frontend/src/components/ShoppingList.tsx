@@ -121,6 +121,7 @@ function PosClientSearch(props: {
       <Show when={props.value}>
         <div style="font-size:11px;color:var(--text-muted);padding:2px 2px 0">
           {props.value!.tip === "juridic" ? "Juridică" : "Fizică"}
+          <Show when={props.value!.numar_masina}> · {props.value!.numar_masina}</Show>
           <Show when={props.value!.cui}> · CUI: {props.value!.cui}</Show>
         </div>
       </Show>
