@@ -30,7 +30,7 @@ class Programare(Base):
     start_time:   Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     end_time:     Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status:       Mapped[ProgramareStatus] = mapped_column(
-        SAEnum(ProgramareStatus, name="programare_status"),
+        SAEnum(ProgramareStatus, name="programare_status", create_type=False),
         nullable=False,
         default=ProgramareStatus.PROGRAMAT,
     )

@@ -180,8 +180,7 @@ export default function Programari() {
   });
 
   onMount(async () => {
-    const locId = locationId();
-    if (locId != null) await loadCatalogDepartments(locId);
+    await loadCatalogDepartments(); // load all departments, not filtered by location
     await reloadAppts();
   });
 
@@ -391,11 +390,19 @@ export default function Programari() {
   const [clientOpen,      setClientOpen]      = createSignal(false);
   const [clientSearching, setClientSearching] = createSignal(false);
 
+  const [showClientCreate,    setShowClientCreate]    = createSignal(false);
+  const [clientCreateTip,     setClientCreateTip]     = createSignal<"fizic" | "juridic">("fizic");
+  const [clientCreateNume,    setClientCreateNume]    = createSignal("");
+  const [clientCreateTelefon, setClientCreateTelefon] = createSignal("");
+  const [clientCreateMasina,  setClientCreateMasina]  = createSignal("");
+  const [clientCreateSaving,  setClientCreateSaving]  = createSignal(false);
+
   function initForm(day: Date, startMin: number, endMin: number) {
     setFormDay(day); setFormStartMin(startMin); setFormEndMin(endMin);
     setFormTitlu(""); setFormNotite("");
     setFormDeptId(selectedDept()); setFormStatus("Programat");
     setFormClient(null); setClientQ(""); setClientRes([]); setClientOpen(false);
+    setShowClientCreate(false); setClientCreateNume(""); setClientCreateTelefon(""); setClientCreateMasina(""); setClientCreateTip("fizic");
     setFormError(null);
   }
 
@@ -407,16 +414,44 @@ export default function Programari() {
       if (!res.ok) return;
       const data = await res.json();
       setClientRes((data.items ?? []).map((c: any) => ({ id: c.id, nume: c.nume, numar_masina: c.numar_masina ?? null })));
-      setClientOpen(true);
+      setClientOpen(true); // deschide mereu — chiar si gol, sa arate optiunea de creare
     } finally { setClientSearching(false); }
   }
 
   function pickClient(c: ClientItem) {
     setFormClient(c); setClientQ(c.nume); setClientOpen(false); setClientRes([]);
+    setShowClientCreate(false);
   }
 
   function clearClient() {
     setFormClient(null); setClientQ(""); setClientRes([]); setClientOpen(false);
+    setShowClientCreate(false);
+  }
+
+  async function handleClientCreate() {
+    if (!clientCreateNume().trim()) return;
+    setClientCreateSaving(true);
+    try {
+      const res = await apiFetch("/api/clienti", {
+        method: "POST",
+        body: JSON.stringify({
+          tip: clientCreateTip(),
+          nume: clientCreateNume().trim(),
+          telefon: clientCreateTelefon().trim() || null,
+          numar_masina: clientCreateMasina().trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Eroare la creare client.");
+      const data = await res.json();
+      pickClient({ id: data.id, nume: data.nume, numar_masina: data.numar_masina ?? null });
+      setShowClientCreate(false);
+      setClientCreateNume(""); setClientCreateTelefon(""); setClientCreateMasina("");
+      setClientCreateTip("fizic");
+    } catch (err: any) {
+      setFormError(err?.message ?? "Eroare la creare client.");
+    } finally {
+      setClientCreateSaving(false);
+    }
   }
 
   async function handleFormSave() {
@@ -572,7 +607,7 @@ export default function Programari() {
       {/* ── Detail modal ────────────────────────────────────────────────── */}
       <Show when={selectedAppt()}>
         {(appt) => (
-          <div class="sl-modal-overlay" onClick={() => setSelectedAppt(null)}>
+          <div class="sl-modal-overlay">
             <div class="sl-modal" style="max-width:440px;width:100%" onClick={(e) => e.stopPropagation()}>
               <div class="sl-modal-header">
                 <span class="sl-modal-title">{appt().titlu}</span>
@@ -628,13 +663,13 @@ export default function Programari() {
 
       {/* ── Create / Edit modal ─────────────────────────────────────────── */}
       <Show when={showFormModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowFormModal(false)}>
-          <div class="sl-modal" style="max-width:480px;width:100%" onClick={(e) => e.stopPropagation()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:640px;width:100%" onClick={(e) => e.stopPropagation()}>
             <div class="sl-modal-header">
               <span class="sl-modal-title">{formAppt() ? "Editează programare" : "Programare nouă"}</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowFormModal(false)}>✕</button>
             </div>
-            <div class="sl-modal-body" style="padding:14px 18px;display:grid;gap:10px;overflow-y:auto;max-height:72vh">
+            <div class="sl-modal-body" style="padding:14px 18px;display:grid;gap:10px;overflow-y:auto;max-height:85vh">
 
               {/* Titlu */}
               <input
@@ -662,20 +697,28 @@ export default function Programari() {
                     style="flex:1;font-size:13px"
                     placeholder="Caută client după nume sau nr. mașină..."
                     value={clientQ()}
-                    onInput={(e) => { setClientQ(e.currentTarget.value); if (!formClient()) void searchClients(e.currentTarget.value); }}
-                    onFocus={() => { if (clientRes().length) setClientOpen(true); }}
-                    onBlur={() => setTimeout(() => setClientOpen(false), 150)}
-                    onClick={() => { if (formClient()) clearClient(); }}
+                    disabled={!!formClient()}
+                    onInput={(e) => { setClientQ(e.currentTarget.value); void searchClients(e.currentTarget.value); }}
+                    onFocus={() => { if (clientRes().length || clientQ().trim()) setClientOpen(true); }}
+                    onBlur={() => setTimeout(() => setClientOpen(false), 200)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void searchClients(clientQ()); } }}
                   />
-                  <Show when={clientSearching()}>
-                    <span style="font-size:11px;color:var(--text-muted)">...</span>
+                  <Show when={!formClient()}>
+                    <button
+                      class="btn btn-ghost btn-sm"
+                      style="white-space:nowrap;flex-shrink:0"
+                      disabled={clientSearching()}
+                      onClick={() => void searchClients(clientQ())}
+                    >
+                      {clientSearching() ? "..." : "Caută"}
+                    </button>
                   </Show>
                   <Show when={formClient()}>
-                    <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={clearClient}>✕</button>
+                    <button class="btn btn-ghost btn-sm" style="padding:0 8px;flex-shrink:0" onClick={clearClient}>✕</button>
                   </Show>
                 </div>
-                <Show when={clientOpen() && clientRes().length > 0}>
-                  <div style="position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card,#fff);border:1px solid var(--border);border-radius:6px;z-index:30;max-height:160px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)">
+                <Show when={clientOpen()}>
+                  <div style="position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card,#fff);border:1px solid var(--border);border-radius:6px;z-index:30;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)">
                     <For each={clientRes()}>{(c) =>
                       <div
                         style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center"
@@ -687,9 +730,45 @@ export default function Programari() {
                         </Show>
                       </div>
                     }</For>
+                    <Show when={clientQ().trim()}>
+                      <div
+                        style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--primary,#3b82f6);border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"
+                        onMouseDown={() => {
+                          setClientOpen(false);
+                          setShowClientCreate(true);
+                          setClientCreateNume(clientQ());
+                        }}
+                      >
+                        <span style="font-weight:700">+</span> Creează client nou: <em style="margin-left:2px">"{clientQ()}"</em>
+                      </div>
+                    </Show>
                   </div>
                 </Show>
               </div>
+
+              {/* Quick client create */}
+              <Show when={showClientCreate()}>
+                <div style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:grid;gap:8px;background:var(--bg-hover,#f9fafb)">
+                  <div style="font-size:12px;font-weight:600;color:var(--text-muted)">Client nou</div>
+                  <div style="display:grid;grid-template-columns:90px 1fr;gap:6px">
+                    <select class="input" style="font-size:12px" value={clientCreateTip()} onChange={(e) => setClientCreateTip(e.currentTarget.value as "fizic" | "juridic")}>
+                      <option value="fizic">Fizic</option>
+                      <option value="juridic">Juridic</option>
+                    </select>
+                    <input class="input" style="font-size:13px" placeholder="Nume *" value={clientCreateNume()} onInput={(e) => setClientCreateNume(e.currentTarget.value)} />
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                    <input class="input" style="font-size:13px" placeholder="Telefon" value={clientCreateTelefon()} onInput={(e) => setClientCreateTelefon(e.currentTarget.value)} />
+                    <input class="input" style="font-size:13px" placeholder="Nr. mașină" value={clientCreateMasina()} onInput={(e) => setClientCreateMasina(e.currentTarget.value)} />
+                  </div>
+                  <div style="display:flex;gap:6px;justify-content:flex-end">
+                    <button class="btn btn-ghost btn-sm" onClick={() => setShowClientCreate(false)}>Anulează</button>
+                    <button class="btn btn-primary btn-sm" disabled={clientCreateSaving() || !clientCreateNume().trim()} onClick={handleClientCreate}>
+                      {clientCreateSaving() ? "Se salvează..." : "Salvează client"}
+                    </button>
+                  </div>
+                </div>
+              </Show>
 
               {/* Date + time grid */}
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
