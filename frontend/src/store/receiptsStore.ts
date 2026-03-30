@@ -28,6 +28,7 @@ export interface Receipt {
   chitantaSerie: string;
   chitantaNr: number;
   programareId: number | null;
+  locationId: number | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -68,6 +69,7 @@ function mapFromApi(r: any): Receipt {
     chitantaSerie: r.chitanta_serie ?? "",
     chitantaNr: r.chitanta_nr ?? 0,
     programareId: r.programare_id ?? null,
+    locationId: r.location_id ?? null,
   };
 }
 
@@ -86,23 +88,26 @@ let _lastDateFrom: string | null = null;
 let _lastDateTo: string | null = null;
 let _lastLimit: number = 10;
 let _lastSearch: string = "";
+let _lastLocationId: number | null = null;
 let _nextCursor: number | null = null;
 
 const [hasMore, setHasMore] = createSignal(false);
 const [loadingMore, setLoadingMore] = createSignal(false);
 export { hasMore, loadingMore };
 
-export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string) {
+export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string, locationId?: number | null) {
   if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
   if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
   if (limit !== undefined) _lastLimit = limit;
   if (q !== undefined) _lastSearch = q;
+  if (locationId !== undefined) _lastLocationId = locationId ?? null;
   _nextCursor = null;
   try {
     let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
+    if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = await res.json();
@@ -124,6 +129,7 @@ export async function loadMoreReceipts() {
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
+    if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = await res.json();
@@ -147,6 +153,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
     date_tehn: receipt.dateTehn ?? null,
     pay_method: receipt.metodaPlata ?? "Neplatit",
     programare_id: receipt.programareId ?? null,
+    location_id: receipt.locationId ?? null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),

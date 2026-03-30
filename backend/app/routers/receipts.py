@@ -84,6 +84,7 @@ async def list_receipts(
     date_from: date | None = None,
     date_to: date | None = None,
     unpaid_days: int | None = None,
+    location_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -118,6 +119,8 @@ async def list_receipts(
         date_conditions.append(and_(Receipt.created_at >= past, Receipt.pay_method == PayMethod.NEPLATIT))
     if date_conditions:
         stmt = stmt.where(or_(*date_conditions))
+    if location_id is not None:
+        stmt = stmt.where(or_(Receipt.location_id == location_id, Receipt.location_id.is_(None)))
     stmt = apply_filters(stmt, Receipt, filters)
     stmt = apply_sort(stmt, Receipt, sort)
     stmt = stmt.limit(limit + 1)
@@ -139,6 +142,7 @@ async def create_receipt(
         titlu=body.titlu,
         client_id=body.client_id,
         programare_id=body.programare_id,
+        location_id=body.location_id,
         descriere=body.descriere,
         date_tehn=body.date_tehn,
         total=body.total,

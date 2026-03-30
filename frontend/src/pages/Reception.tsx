@@ -704,7 +704,7 @@ export default function Reception() {
 
   createEffect(() => {
     const ss = serverSearch();
-    loadReceipts(dateStart(), dateEnd(), 200, ss);
+    loadReceipts(dateStart(), dateEnd(), 200, ss, device()?.locationId ?? null);
   });
 
   // Când search se golește, resetăm și server search-ul

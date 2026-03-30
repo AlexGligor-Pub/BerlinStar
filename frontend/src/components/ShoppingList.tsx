@@ -4,6 +4,7 @@ import { saveReceipt, updateReceiptContent, updateReceiptClient } from "../store
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
+import { device } from "../store/deviceStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -446,6 +447,7 @@ export default function ShoppingList() {
       facturaSerie: "", facturaNr: 0,
       chitantaSerie: "", chitantaNr: 0,
       programareId: loadedProgramareId(),
+      locationId: device()?.locationId ?? null,
     };
     try {
       let saved;
