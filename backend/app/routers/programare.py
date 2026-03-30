@@ -73,8 +73,8 @@ async def _check_overlap(
 @router.get("")
 async def list_programari(
     location_id: int | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     q: str | None = None,
     department_id: int | None = None,
     status: str | None = None,
