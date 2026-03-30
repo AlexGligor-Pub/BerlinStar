@@ -18,42 +18,50 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE programare_status AS ENUM ('Programat', 'In lucru', 'Executat', 'Anulat')")
+    # CREATE TYPE — idempotent (ignora daca exista deja)
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE programare_status AS ENUM ('Programat', 'In lucru', 'Executat', 'Anulat');
+        EXCEPTION WHEN duplicate_object THEN NULL;
+        END $$
+    """)
 
-    op.create_table(
-        "programari",
-        sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
-        sa.Column("account_id", sa.Integer(), sa.ForeignKey("accounts.id"), nullable=False),
-        sa.Column("titlu", sa.String(200), nullable=False),
-        sa.Column("notite", sa.Text(), nullable=True),
-        sa.Column("client_id", sa.Integer(), sa.ForeignKey("clienti.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("location_id", sa.Integer(), sa.ForeignKey("locations.id"), nullable=False),
-        sa.Column("department_id", sa.Integer(), sa.ForeignKey("departments.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("start_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("end_time", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("status", sa.Enum("Programat", "In lucru", "Executat", "Anulat", name="programare_status", create_type=False), nullable=False, server_default="Programat"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("is_deleted", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_programari_account_id_start_time", "programari", ["account_id", "start_time"])
-    op.create_index("ix_programari_location_id", "programari", ["location_id"])
+    # CREATE TABLE — idempotent
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS programari (
+            id            SERIAL PRIMARY KEY,
+            account_id    INTEGER NOT NULL REFERENCES accounts(id),
+            titlu         VARCHAR(200) NOT NULL,
+            notite        TEXT,
+            client_id     INTEGER REFERENCES clienti(id) ON DELETE SET NULL,
+            location_id   INTEGER NOT NULL REFERENCES locations(id),
+            department_id INTEGER REFERENCES departments(id) ON DELETE SET NULL,
+            start_time    TIMESTAMPTZ NOT NULL,
+            end_time      TIMESTAMPTZ NOT NULL,
+            status        programare_status NOT NULL DEFAULT 'Programat',
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at    TIMESTAMPTZ,
+            is_deleted    BOOLEAN NOT NULL DEFAULT false,
+            deleted_at    TIMESTAMPTZ
+        )
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS ix_programari_account_id_start_time ON programari (account_id, start_time)
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS ix_programari_location_id ON programari (location_id)
+    """)
 
-    op.add_column(
-        "receipts",
-        sa.Column(
-            "programare_id",
-            sa.Integer(),
-            sa.ForeignKey("programari.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-    )
+    # ADD COLUMN pe receipts — idempotent
+    op.execute("""
+        ALTER TABLE receipts
+        ADD COLUMN IF NOT EXISTS programare_id INTEGER REFERENCES programari(id) ON DELETE SET NULL
+    """)
 
 
 def downgrade() -> None:
-    op.drop_column("receipts", "programare_id")
-    op.drop_index("ix_programari_location_id", table_name="programari")
-    op.drop_index("ix_programari_account_id_start_time", table_name="programari")
-    op.drop_table("programari")
+    op.execute("ALTER TABLE receipts DROP COLUMN IF EXISTS programare_id")
+    op.execute("DROP INDEX IF EXISTS ix_programari_location_id")
+    op.execute("DROP INDEX IF EXISTS ix_programari_account_id_start_time")
+    op.execute("DROP TABLE IF EXISTS programari")
     op.execute("DROP TYPE IF EXISTS programare_status")
