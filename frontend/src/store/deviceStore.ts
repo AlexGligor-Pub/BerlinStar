@@ -49,3 +49,17 @@ export async function registerDevice(locationId: number, name: string = pendingN
   setDevice(info);
   setDeviceReady(true);
 }
+
+export async function updateDevice(locationId: number | null): Promise<void> {
+  const d = device();
+  if (!d) throw new Error("Dispozitivul nu este înregistrat.");
+  const res = await apiFetch(`/api/devices/${d.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name: d.name, location_id: locationId }),
+  });
+  if (!res.ok) throw new Error("Eroare la actualizarea dispozitivului.");
+  const data = await res.json();
+  const info: DeviceInfo = { id: data.id, name: data.name, locationId: data.location_id };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(info));
+  setDevice(info);
+}
