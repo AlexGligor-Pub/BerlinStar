@@ -13,9 +13,14 @@ import { apiFetch } from "../utils/api";
 // ─── Calendar constants ──────────────────────────────────────────────────────
 
 const PX_PER_HOUR = 72;
-const CAL_START   = 8 * 60;  // 480 min
-const CAL_END     = 18 * 60; // 1080 min
-const TOTAL_H     = (CAL_END - CAL_START) / 60 * PX_PER_HOUR; // 720px
+const CAL_START   = 7 * 60;   // 420 min
+const CAL_END     = 19 * 60;  // 1140 min
+const TOTAL_H     = (CAL_END - CAL_START) / 60 * PX_PER_HOUR; // 864px
+const WORK_START  = 8 * 60;   // ore normale de lucru
+const WORK_END    = 17 * 60;
+const OFF_TOP_H   = (WORK_START - CAL_START) / 60 * PX_PER_HOUR; // 72px  (7–8)
+const OFF_BOT_TOP = (WORK_END   - CAL_START) / 60 * PX_PER_HOUR; // 720px
+const OFF_BOT_H   = (CAL_END   - WORK_END)   / 60 * PX_PER_HOUR; // 144px (17–19)
 
 function minToTop(min: number)  { return (min - CAL_START) / 60 * PX_PER_HOUR; }
 
@@ -26,7 +31,8 @@ const STATUS_COLORS: Record<ProgramareStatus, string> = {
   "Anulat":    "#6b7280",
 };
 
-const DAY_NAMES = ["Lun", "Mar", "Mie", "Joi", "Vin", "Sâm", "Dum"];
+const DAY_NAMES      = ["Lun", "Mar", "Mie", "Joi", "Vin", "Sâm", "Dum"];
+const MINI_DAY_NAMES = ["L",   "M",   "M",   "J",   "V",   "S",   "D"];
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
@@ -158,6 +164,7 @@ export default function Programari() {
   const [formAppt,      setFormAppt]      = createSignal<Programare | null>(null);
   const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
   const [actionError,   setActionError]   = createSignal<string | null>(null);
+  const [miniMonth,     setMiniMonth]     = createSignal({ year: new Date().getFullYear(), month: new Date().getMonth() });
 
   // Drag state — plain object for perf, dragTick triggers re-renders
   let drag: {
@@ -179,6 +186,42 @@ export default function Programari() {
     return `${days[0].toLocaleDateString("ro-RO", opts)} – ${days[6].toLocaleDateString("ro-RO", { ...opts, year: "numeric" })}`;
   });
 
+  const miniCalDays = createMemo(() => {
+    const { year, month } = miniMonth();
+    const firstDow    = new Date(year, month, 1).getDay();
+    const startOffset = firstDow === 0 ? 6 : firstDow - 1;
+    const start       = new Date(year, month, 1 - startOffset);
+    return Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  });
+
+  const miniMonthLabel = createMemo(() => {
+    const { year, month } = miniMonth();
+    return new Date(year, month, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" });
+  });
+
+  function isInSelectedWeek(d: Date): boolean {
+    return weekDays().some((wd) => isSameDay(wd, d));
+  }
+
+  function selectWeekContaining(d: Date) {
+    const targetMon = getMonday(d);
+    const todayMon  = getMonday(new Date());
+    const diffWeeks = Math.round((targetMon.getTime() - todayMon.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    setWeekOffset(diffWeeks);
+  }
+
+  function prevMiniMonth() {
+    setMiniMonth(({ year, month }) => month === 0 ? { year: year - 1, month: 11 } : { year, month: month - 1 });
+  }
+
+  function nextMiniMonth() {
+    setMiniMonth(({ year, month }) => month === 11 ? { year: year + 1, month: 0 } : { year, month: month + 1 });
+  }
+
   onMount(async () => {
     await loadCatalogDepartments(); // load all departments, not filtered by location
     await reloadAppts();
@@ -194,6 +237,10 @@ export default function Programari() {
   }
 
   createEffect(() => { weekOffset(); void reloadAppts(); });
+  createEffect(() => {
+    const d = weekDays()[3]; // joi — luna reprezentativa a saptamanii
+    setMiniMonth({ year: d.getFullYear(), month: d.getMonth() });
+  });
 
   const filteredProgramari = createMemo(() => {
     let list = programari();
@@ -489,6 +536,33 @@ export default function Programari() {
 
   return (
     <div class="prgm-page">
+      {/* ── Left sidebar — mini calendar ────────────────────────────────── */}
+      <div class="prgm-sidebar">
+        <div class="prgm-mini-cal">
+          <div class="prgm-mini-cal-header">
+            <button class="btn btn-ghost btn-sm" style="padding:0 6px" onClick={prevMiniMonth}>‹</button>
+            <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
+            <button class="btn btn-ghost btn-sm" style="padding:0 6px" onClick={nextMiniMonth}>›</button>
+          </div>
+          <div class="prgm-mini-cal-grid">
+            <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
+            <For each={miniCalDays()}>{(day) =>
+              <div
+                class={[
+                  "prgm-mini-day",
+                  isInSelectedWeek(day) ? "prgm-mini-day-sel" : "",
+                  isSameDay(day, new Date()) ? "prgm-mini-day-today" : "",
+                  day.getMonth() !== miniMonth().month ? "prgm-mini-day-other" : "",
+                ].filter(Boolean).join(" ")}
+                onClick={() => selectWeekContaining(day)}
+              >{day.getDate()}</div>
+            }</For>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main content ────────────────────────────────────────────────── */}
+      <div class="prgm-main">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div class="prgm-header">
         <button class="btn btn-primary btn-sm" onClick={openCreateModal}>
@@ -552,6 +626,9 @@ export default function Programari() {
                   <span class="prgm-col-date">{day.getDate()}</span>
                 </div>
                 <div class="prgm-day-body" style={`height:${TOTAL_H}px`}>
+                  {/* Off-peak zones (7–8 și 17–19) */}
+                  <div class="prgm-off-peak" style={`top:0;height:${OFF_TOP_H}px`} />
+                  <div class="prgm-off-peak" style={`top:${OFF_BOT_TOP}px;height:${OFF_BOT_H}px`} />
                   {/* Slot background lines */}
                   <For each={TIME_LABELS}>{(t) =>
                     <div
@@ -591,6 +668,7 @@ export default function Programari() {
           }}</For>
         </div>
       </div>
+      </div>{/* end prgm-main */}
 
       <Show when={loading()}>
         <div class="prgm-loading">Se încarcă...</div>
