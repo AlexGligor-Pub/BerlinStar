@@ -3182,7 +3182,20 @@ body {
   border-right: 1px solid var(--border);
   background: var(--bg-card, #fff);
   overflow-y: auto;
-  padding: 12px 8px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prgm-sidebar-today {
+  width: 100%;
+  font-size: 12px;
+}
+
+.prgm-sidebar-new {
+  width: 100%;
+  font-size: 12px;
 }
 
 .prgm-main {
@@ -3263,6 +3276,27 @@ body {
   pointer-events: none;
   z-index: 0;
   background: rgba(0, 0, 0, 0.038);
+}
+
+/* Linie ora curenta */
+.prgm-now-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #ef4444;
+  z-index: 4;
+  pointer-events: none;
+}
+.prgm-now-line::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
 }
 
 .prgm-header {

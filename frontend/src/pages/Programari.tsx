@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { device } from "../store/deviceStore";
 import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
@@ -30,6 +30,13 @@ const STATUS_COLORS: Record<ProgramareStatus, string> = {
   "Executat":  "#22c55e",
   "Anulat":    "#6b7280",
 };
+
+// Culori dept — saturate pt. programari, pale pt. chips
+const DEPT_COLORS = [
+  "#3b82f6", "#22c55e", "#f59e0b", "#ec4899",
+  "#8b5cf6", "#10b981", "#ef4444", "#0ea5e9",
+  "#f97316", "#a855f7",
+];
 
 const DAY_NAMES      = ["Lun", "Mar", "Mie", "Joi", "Vin", "Sâm", "Dum"];
 const MINI_DAY_NAMES = ["L",   "M",   "M",   "J",   "V",   "S",   "D"];
@@ -165,6 +172,7 @@ export default function Programari() {
   const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
   const [actionError,   setActionError]   = createSignal<string | null>(null);
   const [miniMonth,     setMiniMonth]     = createSignal({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const [nowMin,        setNowMin]        = createSignal(new Date().getHours() * 60 + new Date().getMinutes());
 
   // Drag state — plain object for perf, dragTick triggers re-renders
   let drag: {
@@ -184,6 +192,14 @@ export default function Programari() {
     const days = weekDays();
     const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
     return `${days[0].toLocaleDateString("ro-RO", opts)} – ${days[6].toLocaleDateString("ro-RO", { ...opts, year: "numeric" })}`;
+  });
+
+  const deptColorMap = createMemo(() => {
+    const map = new Map<number, string>();
+    catalogDepartments().forEach((dept, i) => {
+      map.set(dept.id, DEPT_COLORS[i % DEPT_COLORS.length]);
+    });
+    return map;
   });
 
   const miniCalDays = createMemo(() => {
@@ -225,6 +241,8 @@ export default function Programari() {
   onMount(async () => {
     await loadCatalogDepartments(); // load all departments, not filtered by location
     await reloadAppts();
+    const timer = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 30_000);
+    onCleanup(() => clearInterval(timer));
   });
 
   async function reloadAppts() {
@@ -267,7 +285,9 @@ export default function Programari() {
     const top      = minToTop(startMin);
     const colW     = 100 / appt.colCount;
     const left     = colW * appt.colIdx;
-    const color    = STATUS_COLORS[appt.status] ?? "#3b82f6";
+    const color    = (appt.departmentId != null ? deptColorMap().get(appt.departmentId) : null)
+                     ?? STATUS_COLORS[appt.status]
+                     ?? "#3b82f6";
 
     let height    = Math.max(28, (endMin - startMin) / 60 * PX_PER_HOUR);
     let transform = "";
@@ -538,6 +558,7 @@ export default function Programari() {
     <div class="prgm-page">
       {/* ── Left sidebar — mini calendar ────────────────────────────────── */}
       <div class="prgm-sidebar">
+        <button class="btn btn-ghost btn-sm prgm-sidebar-today" onClick={() => setWeekOffset(0)}>Azi</button>
         <div class="prgm-mini-cal">
           <div class="prgm-mini-cal-header">
             <button class="btn btn-ghost btn-sm" style="padding:0 6px" onClick={prevMiniMonth}>‹</button>
@@ -559,38 +580,37 @@ export default function Programari() {
             }</For>
           </div>
         </div>
+        <button class="btn btn-primary btn-sm prgm-sidebar-new" onClick={openCreateModal}>+ Programare nouă</button>
       </div>
 
       {/* ── Main content ────────────────────────────────────────────────── */}
       <div class="prgm-main">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div class="prgm-header">
-        <button class="btn btn-primary btn-sm" onClick={openCreateModal}>
-          + Programare nouă
-        </button>
         <input
           class="input prgm-search"
           placeholder="Caută titlu sau client..."
           value={q()}
           onInput={(e) => setQ(e.currentTarget.value)}
         />
-        <div class="prgm-week-nav">
-          <button class="btn btn-ghost btn-sm" onClick={() => setWeekOffset((v) => v - 1)}>‹</button>
-          <span class="prgm-week-label">{weekLabel()}</span>
-          <button class="btn btn-ghost btn-sm" onClick={() => setWeekOffset((v) => v + 1)}>›</button>
-          <button class="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>Azi</button>
-        </div>
+        <span class="prgm-week-label">{weekLabel()}</span>
         <div class="prgm-dept-chips">
           <button
             class={`prgm-chip${selectedDept() === null ? " prgm-chip-active" : ""}`}
             onClick={() => setSelectedDept(null)}
           >Toate</button>
-          <For each={catalogDepartments()}>{(dept) =>
-            <button
-              class={`prgm-chip${selectedDept() === dept.id ? " prgm-chip-active" : ""}`}
-              onClick={() => setSelectedDept(selectedDept() === dept.id ? null : dept.id)}
-            >{dept.name}</button>
-          }</For>
+          <For each={catalogDepartments()}>{(dept) => {
+            const color = () => deptColorMap().get(dept.id) ?? "#6b7280";
+            return (
+              <button
+                class="prgm-chip"
+                style={selectedDept() === dept.id
+                  ? `background:${color()};color:#fff;border-color:${color()}`
+                  : `background:${color()}22;color:${color()};border-color:${color()}66`}
+                onClick={() => setSelectedDept(selectedDept() === dept.id ? null : dept.id)}
+              >{dept.name}</button>
+            );
+          }}</For>
         </div>
       </div>
 
@@ -629,6 +649,10 @@ export default function Programari() {
                   {/* Off-peak zones (7–8 și 17–19) */}
                   <div class="prgm-off-peak" style={`top:0;height:${OFF_TOP_H}px`} />
                   <div class="prgm-off-peak" style={`top:${OFF_BOT_TOP}px;height:${OFF_BOT_H}px`} />
+                  {/* Linie ora curenta */}
+                  <Show when={isToday && nowMin() >= CAL_START && nowMin() <= CAL_END}>
+                    <div class="prgm-now-line" style={`top:${minToTop(nowMin())}px`} />
+                  </Show>
                   {/* Slot background lines */}
                   <For each={TIME_LABELS}>{(t) =>
                     <div
