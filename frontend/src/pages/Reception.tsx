@@ -611,7 +611,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
             <Show when={!!r.vehicol}>
               <div class="rcard-extra-card">
-                <div class="rcard-extra-title">Vehicol</div>
+                <div class="rcard-extra-title">Vehicul</div>
                 <div style="font-size:13px;display:grid;gap:3px">
                   <strong>{r.vehicol!.numarMasina}</strong>
                   <Show when={r.vehicol!.marca || r.vehicol!.model}>

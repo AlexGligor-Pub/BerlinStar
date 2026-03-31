@@ -554,7 +554,7 @@ export default function ShoppingList() {
             setVehicolDraft({ ...draft });
             setShowVehicolModal(true);
           }}
-          title="Vehicol"
+          title="Vehicul"
         >
           Masina
         </button>
@@ -836,7 +836,7 @@ export default function ShoppingList() {
         <div class="sl-modal-overlay">
           <div class="sl-modal" style="max-width:420px;width:100%">
             <div class="sl-modal-header">
-              <span class="sl-modal-title">Vehicol</span>
+              <span class="sl-modal-title">Vehicul</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>✕</button>
             </div>
             <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">

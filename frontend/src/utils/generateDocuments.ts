@@ -553,7 +553,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
-    doc.text("VEHICOL", ML, y);
+    doc.text("VEHICUL", ML, y);
     y += 3.5;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
