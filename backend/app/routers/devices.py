@@ -8,6 +8,7 @@ from app.dependencies import get_account_id
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceRead
 from app.schemas.common import Page
+from app.utils.paginate import paginate
 
 router = APIRouter()
 
@@ -31,10 +32,7 @@ async def list_devices(
         stmt = stmt.where(Device.location_id == location_id)
     stmt = stmt.order_by(Device.id).limit(limit + 1)
 
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=DeviceRead, status_code=201)

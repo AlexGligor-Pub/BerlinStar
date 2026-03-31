@@ -11,8 +11,9 @@ from app.models.department import Department
 from app.models.employee import Employee
 from app.schemas.location import LocationCreate, LocationRead, LocationDetail, IdsBody
 from app.schemas.common import Page
+from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
-from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url
+from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url, validate_image
 
 router = APIRouter()
 
@@ -70,10 +71,7 @@ async def list_locations(
         stmt = stmt.where(Location.name.ilike(f"%{q}%"))
     stmt = stmt.order_by(Location.id).limit(limit + 1)
 
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=[_to_detail(loc) for loc in page], next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit, transform=_to_detail)
 
 
 @router.post("", response_model=LocationRead, status_code=201)
@@ -136,11 +134,7 @@ async def upload_location_image(
     location = await db.get(Location, location_id)
     if location is None or location.account_id != account_id or location.is_deleted:
         raise HTTPException(404, "Locația nu a fost găsită.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
-    data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    data = await validate_image(file)
     old_url = location.image_path
     url = storage_upload_image(account_id, "locations", data, file.content_type)
     location.image_path = url

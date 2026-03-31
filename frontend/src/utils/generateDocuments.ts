@@ -537,7 +537,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   const bw = CW / 2 - 5;
   const col2X = ML + bw + 10;
   const y1 = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, bw);
-  const y2 = drawClientBlock(doc, "Beneficiar", r, col2X, y, bw);
+  const y2 = drawClientBlock(doc, "Client", r, col2X, y, bw);
   y = Math.max(y1, y2) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
@@ -568,7 +568,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
-    doc.text("DATE TEHNICE", ML, y);
+    doc.text("OBSERVATII", ML, y);
     y += 3.5;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
@@ -889,7 +889,7 @@ const TIP_PDF_LABELS: Record<string, string> = {
 function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string): number {
   doc.setFontSize(7);
   doc.setTextColor(...C.black);
-  doc.text("BENEFICIAR", x, y);
+  doc.text("NUME CLIENT", x, y);
   y += 3.5;
 
   doc.setFontSize(9);

@@ -290,7 +290,7 @@ export async function generateReceiptPdf(r: Receipt): Promise<void> {
   }
 
   if (r.dateTehn?.trim()) {
-    y = drawTextBlock(doc, "Date tehnice", r.dateTehn.trim(), y);
+    y = drawTextBlock(doc, "Observații", r.dateTehn.trim(), y);
   }
 
   drawFooter(doc, (doc as any).internal.getNumberOfPages());

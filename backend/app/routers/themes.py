@@ -12,6 +12,7 @@ from app.schemas.theme import ThemeCreate, ThemeUpdate, ThemeRead
 from app.schemas.category import CategoryRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -44,11 +45,7 @@ async def list_themes(
     stmt = apply_filters(stmt, Theme, filters)
     stmt = apply_sort(stmt, Theme, sort)
     stmt = stmt.limit(limit + 1)
-
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=ThemeRead, status_code=201)
@@ -150,8 +147,4 @@ async def list_theme_categories(
     stmt = apply_filters(stmt, Category, filters)
     stmt = apply_sort(stmt, Category, sort)
     stmt = stmt.limit(limit + 1)
-
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)

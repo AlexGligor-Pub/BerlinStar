@@ -514,7 +514,7 @@ export default function ShoppingList() {
         <input
           class="input-titlu"
           type="text"
-          placeholder="Titlu *"
+          placeholder="Nr. masina ex: B 100 TST"
           maxlength={200}
           value={titlu()}
           onInput={(e) => setTitlu(e.currentTarget.value)}
@@ -531,9 +531,9 @@ export default function ShoppingList() {
           class="btn btn-ghost btn-sm sl-extra-btn"
           classList={{ "sl-extra-btn--active": dateTehn().trim() !== "" }}
           onClick={() => openModal("dateTehn")}
-          title="Date tehnice"
+          title="Observatii"
         >
-          Tehn.
+          Obs.
         </button>
       </div>
 
@@ -766,7 +766,7 @@ export default function ShoppingList() {
                 />
               </div>
               <div class="sl-qty-presets">
-                {[10, 50, 100, 200, 300, 500, 1000].map(v => (
+                {[2,3,4,5,6,7,8,10, 50, 100].map(v => (
                   <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setManualQty(String(v))}>{v}</button>
                 ))}
               </div>
@@ -806,13 +806,13 @@ export default function ShoppingList() {
           <div class="sl-modal">
             <div class="sl-modal-header">
               <span class="sl-modal-title">
-                {modal() === "descriere" ? "Descriere" : "Date tehnice"}
+                {modal() === "descriere" ? "Descriere" : "Observații"}
               </span>
               <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>✕</button>
             </div>
             <textarea
               class="sl-modal-textarea"
-              placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Date tehnice..."}
+              placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Observații ..."}
               maxlength={200}
               value={modalDraft()}
               onInput={(e) => setModalDraft(e.currentTarget.value)}

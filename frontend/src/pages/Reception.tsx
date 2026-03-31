@@ -604,7 +604,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
             <Show when={!!r.dateTehn}>
               <div class="rcard-extra-card">
-                <div class="rcard-extra-title">Date tehnice</div>
+                <div class="rcard-extra-title">Observații</div>
                 <div class="rcard-extra-text">{r.dateTehn}</div>
               </div>
             </Show>

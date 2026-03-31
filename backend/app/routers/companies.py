@@ -10,8 +10,9 @@ from app.dependencies import get_account_id
 from app.models.company import Company
 from app.schemas.company import CompanyCreate, CompanyUpdate, CompanyRead
 from app.schemas.common import Page
+from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
-from app.utils.storage import upload_image, delete_image_by_url
+from app.utils.storage import upload_image, delete_image_by_url, validate_image
 
 router = APIRouter()
 
@@ -40,10 +41,7 @@ async def list_companies(
         )
     stmt = stmt.order_by(Company.id).limit(limit + 1)
 
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=CompanyRead, status_code=201)
@@ -136,11 +134,7 @@ async def upload_logo(
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
         raise HTTPException(404, "Compania nu a fost găsită.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fișierul trebuie să fie o imagine.")
-    data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depăși 5MB.")
+    data = await validate_image(file)
     old_url = company.logo_path
     url = upload_image(account_id, "companies/logos", data, file.content_type)
     company.logo_path = url
@@ -162,11 +156,7 @@ async def upload_background(
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
         raise HTTPException(404, "Compania nu a fost găsită.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fișierul trebuie să fie o imagine.")
-    data = await file.read()
-    if len(data) > 1 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea de fundal nu poate depăși 1MB.")
+    data = await validate_image(file, max_mb=1)
     old_url = company.background_path
     url = upload_image(account_id, "companies/backgrounds", data, file.content_type)
     company.background_path = url

@@ -7,7 +7,7 @@ from app.models.receipt import PayMethod
 
 class ReceiptItemCreate(BaseModel):
     name: str = Field(..., max_length=200)
-    price: Decimal = Field(..., ge=0, decimal_places=2)
+    price: Decimal = Field(..., decimal_places=2)
     qty: int = Field(..., ge=1)
     unit: str = Field(..., max_length=50)
     employee_id: int | None = None
@@ -18,7 +18,7 @@ class ReceiptCreate(BaseModel):
     descriere: str | None = None
     date_tehn: str | None = None
     items: list[ReceiptItemCreate]
-    total: Decimal = Field(..., ge=0, decimal_places=2)
+    total: Decimal = Field(..., decimal_places=2)
     pay_method: PayMethod = PayMethod.NEPLATIT
     partial_pay: Decimal | None = Field(None, ge=0, decimal_places=2)
     client_id: int | None = None
@@ -73,7 +73,7 @@ class ReceiptContentPatch(BaseModel):
     descriere: str | None = None
     date_tehn: str | None = None
     items: list[ReceiptItemCreate]
-    total: Decimal = Field(..., ge=0, decimal_places=2)
+    total: Decimal = Field(..., decimal_places=2)
 
 
 class ReceiptClientPatch(BaseModel):

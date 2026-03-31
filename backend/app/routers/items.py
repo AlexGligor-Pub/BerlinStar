@@ -12,7 +12,8 @@ from app.models.category import Category
 from app.schemas.item import ItemCreate, ItemUpdate, ItemRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
-from app.utils.storage import upload_image, delete_image_by_url
+from app.utils.paginate import paginate
+from app.utils.storage import upload_image, delete_image_by_url, validate_image
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -65,14 +66,7 @@ async def list_items(
     stmt = apply_filters(stmt, Item, filters)
     stmt = apply_sort(stmt, Item, sort)
     stmt = stmt.limit(limit + 1)
-
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(
-        items=[_with_category_name(i) for i in page],
-        next_cursor=page[-1].id if has_more else None,
-    )
+    return await paginate(db, stmt, limit, transform=_with_category_name)
 
 
 @router.post("", response_model=ItemRead, status_code=201)
@@ -146,11 +140,7 @@ async def upload_item_image(
     item = await db.get(Item, item_id)
     if item is None or item.account_id != account_id or item.is_deleted:
         raise HTTPException(404, "Item-ul nu a fost gasit.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
-    data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    data = await validate_image(file)
     old_url = item.image_path
     url = upload_image(account_id, "items", data, file.content_type)
     item.image_path = url

@@ -9,6 +9,7 @@ from app.dependencies import get_account_id
 from app.models.loc_cazare import LocCazare
 from app.schemas.loc_cazare import LocCazareCreate, LocCazareRead
 from app.schemas.common import Page
+from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
@@ -28,10 +29,7 @@ async def list_locuri(
     if last_id is not None:
         stmt = stmt.where(LocCazare.id > last_id)
     stmt = stmt.order_by(LocCazare.nume, LocCazare.id).limit(limit + 1)
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=LocCazareRead, status_code=201)

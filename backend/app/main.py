@@ -62,7 +62,7 @@ app.include_router(admin.router,           prefix="/api/admin",               ta
 app.include_router(programare.router,      prefix="/api/programari",           tags=["programari"])
 
 
-@app.get("/health")
+@app.get("/api/health")
 async def health():
     from sqlalchemy import text
     from app.database import AsyncSessionLocal

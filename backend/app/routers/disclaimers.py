@@ -9,6 +9,7 @@ from app.dependencies import get_account_id
 from app.models.disclaimer import Disclaimer
 from app.schemas.disclaimer import DisclaimerCreate, DisclaimerUpdate, DisclaimerRead
 from app.schemas.common import Page
+from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
@@ -31,10 +32,7 @@ async def list_disclaimers(
         stmt = stmt.where(Disclaimer.id > last_id)
     stmt = stmt.limit(limit + 1)
 
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=DisclaimerRead, status_code=201)

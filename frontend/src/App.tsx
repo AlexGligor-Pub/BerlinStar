@@ -14,6 +14,7 @@ import HotelAnvelope from "./pages/HotelAnvelope";
 import Programari from "./pages/Programari";
 import NoAccess from "./pages/NoAccess";
 import Admin from "./pages/Admin";
+import HealthCheck from "./pages/HealthCheck";
 
 function Protected(props: { component: () => any }) {
   const navigate = useNavigate();
@@ -40,6 +41,7 @@ function Protected(props: { component: () => any }) {
 export default function App() {
   return (
     <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+      <Route path="/health" component={HealthCheck} />
       <Route path="/login" component={Login} />
       <Route path="/no-access" component={NoAccess} />
       <Route path="/" component={() => <Protected component={POS} />} />
