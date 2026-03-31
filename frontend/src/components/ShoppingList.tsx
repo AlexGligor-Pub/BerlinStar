@@ -458,36 +458,49 @@ export default function ShoppingList() {
       programareId: loadedProgramareId(),
       locationId: device()?.locationId ?? null,
     };
+    let saved;
     try {
-      let saved;
       if (receiptId !== null) {
         saved = await updateReceiptContent(receiptId, receiptData);
       } else {
         saved = await saveReceipt(receiptData);
       }
-      const client = selectedClient();
-      if (client !== null) {
-        await updateReceiptClient(saved.id, client.id);
-      }
-      const veh = vehicol();
-      if (veh !== null) {
-        await saveReceiptVehicol(saved.id, veh);
-      }
-      clearCart();
-      clearCartMeta();
-      selectEmployee(null);
-      setTitlu("");
-      setDescriere("");
-      setDateTehn("");
-      setVehicol(null);
-      setLoadedReceiptId(null);
-      setLoadedProgramareId(null);
-      setSelectedClient(null);
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "Eroare necunoscuta.");
+      return;
+    }
+
+    const warns: string[] = [];
+
+    const client = selectedClient();
+    if (client !== null) {
+      try { await updateReceiptClient(saved.id, client.id); }
+      catch { warns.push("clientul nu a putut fi asociat"); }
+    }
+
+    const veh = vehicol();
+    if (veh !== null) {
+      try { await saveReceiptVehicol(saved.id, veh); }
+      catch { warns.push("vehicolul nu a putut fi asociat"); }
+    }
+
+    clearCart();
+    clearCartMeta();
+    selectEmployee(null);
+    setTitlu("");
+    setDescriere("");
+    setDateTehn("");
+    setVehicol(null);
+    setLoadedReceiptId(null);
+    setLoadedProgramareId(null);
+    setSelectedClient(null);
+
+    if (warns.length > 0) {
+      setErrorMsg(`Bon salvat, dar ${warns.join(" și ")}. Poți edita din Recepție.`);
+    } else {
       setShowSuccess(true);
       clearTimeout(successTimer);
       successTimer = setTimeout(() => setShowSuccess(false), 1000);
-    } catch (e: any) {
-      setErrorMsg(e?.message ?? "Eroare necunoscuta.");
     }
   }
 

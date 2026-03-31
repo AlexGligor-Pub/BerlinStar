@@ -462,7 +462,7 @@ async def upsert_vehicol(
     account_id: int = Depends(get_account_id),
 ):
     receipt = await db.get(Receipt, receipt_id)
-    if receipt is None or receipt.account_id != account_id:
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
 
     existing = (await db.execute(

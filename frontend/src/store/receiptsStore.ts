@@ -262,7 +262,11 @@ export async function updateReceiptClient(id: string, clientId: number | null): 
     method: "PATCH",
     body: JSON.stringify({ client_id: clientId }),
   });
-  if (!res.ok) return;
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
   setReceipts(next);
@@ -281,7 +285,11 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
       observatii: vehicol.observatii ?? null,
     }),
   });
-  if (!res.ok) return;
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
   const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
