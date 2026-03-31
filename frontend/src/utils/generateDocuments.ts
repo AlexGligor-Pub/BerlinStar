@@ -546,6 +546,43 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   y = drawItemsTable(doc, autoTable, r, y, tvaPct);
   y = drawTotals(doc, r, y, tvaPct);
 
+  const veh = r.vehicol;
+  if (veh) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text("VEHICOL", ML, y);
+    y += 3.5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...C.black);
+    doc.text(ro(veh.numarMasina), ML, y);
+    y += 4.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    if (veh.marca || veh.model) {
+      doc.text([ro(veh.marca), ro(veh.model)].filter(Boolean).join(" "), ML, y);
+      y += 3.5;
+    }
+    if (veh.numarKilometrii != null) {
+      doc.text(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`, ML, y);
+      y += 3.5;
+    }
+    if (veh.vin) {
+      doc.text(`VIN: ${veh.vin}`, ML, y);
+      y += 3.5;
+    }
+    if (veh.observatii?.trim()) {
+      const ol: string[] = doc.splitTextToSize(ro(veh.observatii.trim()), CW);
+      doc.text(ol, ML, y);
+      y += ol.length * 4 + 3;
+    } else {
+      y += 2;
+    }
+  }
+
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
     y += 3;

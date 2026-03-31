@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
-import { saveReceipt, updateReceiptContent, updateReceiptClient } from "../store/receiptsStore";
+import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
@@ -17,6 +17,7 @@ interface CartMeta {
   descriere: string;
   dateTehn: string;
   client: ClientItem | null;
+  vehicol: VehicolData | null;
 }
 
 function saveCartMeta(m: CartMeta) {
@@ -290,6 +291,10 @@ export default function ShoppingList() {
 
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
+  const [vehicol, setVehicol] = createSignal<VehicolData | null>(null);
+  const [showVehicolModal, setShowVehicolModal] = createSignal(false);
+  const [vehicolDraft, setVehicolDraft] = createSignal<VehicolData>({ numarMasina: "" });
+
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
@@ -299,11 +304,11 @@ export default function ShoppingList() {
   // Guard: don't save meta before onMount decides what to load
   let metaSaveEnabled = false;
 
-  // Save titlu/descriere/dateTehn/client to localStorage whenever they change (after mount)
+  // Save titlu/descriere/dateTehn/client/vehicol to localStorage whenever they change (after mount)
   createEffect(() => {
-    const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient();
+    const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient(), v = vehicol();
     if (!metaSaveEnabled) return;
-    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c });
+    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v });
   });
 
   const [showManual, setShowManual] = createSignal(false);
@@ -364,6 +369,7 @@ export default function ShoppingList() {
       setDateTehn(r.dateTehn);
       replaceCart(r.items);
       loadResumeClient(r);
+      setVehicol(r.vehicol ?? null);
       metaSaveEnabled = true;
     } else if (cart.items.length > 0) {
       // Există o listă salvată — arată modalul de alegere
@@ -381,6 +387,7 @@ export default function ShoppingList() {
       setDescriere(meta.descriere ?? "");
       setDateTehn(meta.dateTehn ?? "");
       setSelectedClient(meta.client ?? null);
+      setVehicol(meta.vehicol ?? null);
     }
     setShowResumeModal(false);
   }
@@ -392,6 +399,7 @@ export default function ShoppingList() {
     setDescriere("");
     setDateTehn("");
     setSelectedClient(null);
+    setVehicol(null);
     setLoadedReceiptId(null);
     setShowResumeModal(false);
   }
@@ -407,6 +415,7 @@ export default function ShoppingList() {
     setDateTehn(d.dateTehn);
     replaceCart(d.items);
     loadResumeClient(d);
+    setVehicol(d.vehicol ?? null);
   });
 
   let warnTimer: ReturnType<typeof setTimeout>;
@@ -460,12 +469,17 @@ export default function ShoppingList() {
       if (client !== null) {
         await updateReceiptClient(saved.id, client.id);
       }
+      const veh = vehicol();
+      if (veh !== null) {
+        await saveReceiptVehicol(saved.id, veh);
+      }
       clearCart();
       clearCartMeta();
       selectEmployee(null);
       setTitlu("");
       setDescriere("");
       setDateTehn("");
+      setVehicol(null);
       setLoadedReceiptId(null);
       setLoadedProgramareId(null);
       setSelectedClient(null);
@@ -521,11 +535,15 @@ export default function ShoppingList() {
         />
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
-          classList={{ "sl-extra-btn--active": descriere().trim() !== "" }}
-          onClick={() => openModal("descriere")}
-          title="Descriere"
+          classList={{ "sl-extra-btn--active": vehicol() !== null }}
+          onClick={() => {
+            const draft = vehicol() ?? { numarMasina: titlu().trim() };
+            setVehicolDraft({ ...draft });
+            setShowVehicolModal(true);
+          }}
+          title="Vehicol"
         >
-          Desc.
+          Masina
         </button>
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
@@ -794,6 +812,74 @@ export default function ShoppingList() {
                 onClick={confirmManual}
               >
                 Adauga
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Vehicol modal */}
+      <Show when={showVehicolModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:420px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Vehicol</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>✕</button>
+            </div>
+            <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+              <input
+                class="input"
+                placeholder="Număr mașină *"
+                value={vehicolDraft().numarMasina}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarMasina: e.currentTarget.value.toUpperCase() }))}
+              />
+              <input
+                class="input"
+                placeholder="Marcă"
+                value={vehicolDraft().marca ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, marca: e.currentTarget.value || null }))}
+              />
+              <input
+                class="input"
+                placeholder="Model"
+                value={vehicolDraft().model ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, model: e.currentTarget.value || null }))}
+              />
+              <input
+                class="input"
+                type="number"
+                min="0"
+                placeholder="Număr kilometri"
+                value={vehicolDraft().numarKilometrii ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarKilometrii: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
+              />
+              <input
+                class="input"
+                placeholder="VIN"
+                maxlength={17}
+                value={vehicolDraft().vin ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, vin: e.currentTarget.value.toUpperCase() || null }))}
+              />
+              <textarea
+                class="sl-modal-textarea"
+                placeholder="Observații..."
+                rows={4}
+                value={vehicolDraft().observatii ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, observatii: e.currentTarget.value || null }))}
+              />
+            </div>
+            <div class="sl-modal-footer">
+              <Show when={vehicol() !== null}>
+                <button class="btn btn-ghost btn-sm" onClick={() => { setVehicol(null); setShowVehicolModal(false); }}>Șterge</button>
+              </Show>
+              <div style="flex:1" />
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={vehicolDraft().numarMasina.trim() === ""}
+                onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
+              >
+                Salvează
               </button>
             </div>
           </div>

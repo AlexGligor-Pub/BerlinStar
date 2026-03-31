@@ -20,6 +20,8 @@ from app.models.location import Location
 from app.models.register import Register
 from app.models.company import Company
 from app.models.disclaimer import Disclaimer
+from app.models.vehicol import Vehicol
+from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
@@ -70,6 +72,8 @@ def _serialize(receipt: Receipt) -> dict:
     data["client_tip"]          = c.tip           if c else None
     data["client_reprezentant"]  = c.reprezentant  if c else None
     data["client_numar_masina"]  = c.numar_masina  if c else None
+    v = receipt.vehicol
+    data["vehicol"] = VehicolRead.model_validate(v).model_dump() if v and not v.is_deleted else None
     return data
 
 
@@ -448,6 +452,42 @@ async def assign_number(
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
     return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
+
+
+@router.put("/{receipt_id}/vehicol", response_model=VehicolRead)
+async def upsert_vehicol(
+    receipt_id: int,
+    body: VehicolCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id:
+        raise HTTPException(404, "Bonul nu a fost gasit.")
+
+    existing = (await db.execute(
+        select(Vehicol).where(Vehicol.receipt_id == receipt_id)
+    )).scalar_one_or_none()
+
+    if existing and not existing.is_deleted:
+        for k, v in body.model_dump().items():
+            setattr(existing, k, v)
+        existing.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(existing)
+        await broadcaster.notify(account_id)
+        return existing
+    else:
+        vehicol = Vehicol(
+            account_id=account_id,
+            receipt_id=receipt_id,
+            **body.model_dump(),
+        )
+        db.add(vehicol)
+        await db.commit()
+        await db.refresh(vehicol)
+        await broadcaster.notify(account_id)
+        return vehicol
 
 
 @router.delete("/{receipt_id}", status_code=204)

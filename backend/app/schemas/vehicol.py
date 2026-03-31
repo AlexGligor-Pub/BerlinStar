@@ -1,0 +1,30 @@
+from __future__ import annotations
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class VehicolCreate(BaseModel):
+    numar_masina: str = Field(..., max_length=50)
+    marca: str | None = Field(None, max_length=100)
+    model: str | None = Field(None, max_length=100)
+    numar_kilometrii: int | None = Field(None, ge=0)
+    vin: str | None = Field(None, max_length=17)
+    observatii: str | None = None
+
+
+class VehicolRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    account_id: int
+    receipt_id: int
+    numar_masina: str
+    marca: str | None
+    model: str | None
+    numar_kilometrii: int | None
+    vin: str | None
+    observatii: str | None
+    created_at: datetime
+    updated_at: datetime | None
+    is_deleted: bool
+    deleted_at: datetime | None

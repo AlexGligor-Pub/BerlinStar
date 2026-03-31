@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.receipt import PayMethod
+from app.schemas.vehicol import VehicolRead
 
 
 class ReceiptItemCreate(BaseModel):
@@ -123,3 +124,4 @@ class ReceiptRead(BaseModel):
     is_deleted: bool
     deleted_at: datetime | None
     receipt_items: list[ReceiptItemRead]
+    vehicol: VehicolRead | None = None

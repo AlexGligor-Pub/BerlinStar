@@ -60,6 +60,7 @@ export default function POS() {
       clientNume: r.clientNume,
       clientCui: r.clientCui,
       clientTip: r.clientTip,
+      vehicol: r.vehicol ?? null,
     });
     setShowDevizModal(false);
   }

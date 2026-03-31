@@ -3,6 +3,15 @@ import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
 
+export interface VehicolData {
+  numarMasina: string;
+  marca?: string | null;
+  model?: string | null;
+  numarKilometrii?: number | null;
+  vin?: string | null;
+  observatii?: string | null;
+}
+
 export interface Receipt {
   id: string;
   date: string;
@@ -29,6 +38,7 @@ export interface Receipt {
   chitantaNr: number;
   programareId: number | null;
   locationId: number | null;
+  vehicol?: VehicolData | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -70,6 +80,14 @@ function mapFromApi(r: any): Receipt {
     chitantaNr: r.chitanta_nr ?? 0,
     programareId: r.programare_id ?? null,
     locationId: r.location_id ?? null,
+    vehicol: r.vehicol ? {
+      numarMasina: r.vehicol.numar_masina,
+      marca: r.vehicol.marca ?? null,
+      model: r.vehicol.model ?? null,
+      numarKilometrii: r.vehicol.numar_kilometrii ?? null,
+      vin: r.vehicol.vin ?? null,
+      observatii: r.vehicol.observatii ?? null,
+    } : null,
   };
 }
 
@@ -247,6 +265,24 @@ export async function updateReceiptClient(id: string, clientId: number | null): 
   if (!res.ok) return;
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
+export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Promise<void> {
+  const res = await apiFetch(`/api/receipts/${id}/vehicol`, {
+    method: "PUT",
+    body: JSON.stringify({
+      numar_masina: vehicol.numarMasina,
+      marca: vehicol.marca ?? null,
+      model: vehicol.model ?? null,
+      numar_kilometrii: vehicol.numarKilometrii ?? null,
+      vin: vehicol.vin ?? null,
+      observatii: vehicol.observatii ?? null,
+    }),
+  });
+  if (!res.ok) return;
+  const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 }

@@ -489,6 +489,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   descriere: r.descriere ?? "",
                   dateTehn: r.dateTehn ?? "",
                   items: r.items,
+                  vehicol: r.vehicol ?? null,
                 });
                 navigate("/");
               }}
@@ -606,6 +607,26 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <div class="rcard-extra-card">
                 <div class="rcard-extra-title">Observații</div>
                 <div class="rcard-extra-text">{r.dateTehn}</div>
+              </div>
+            </Show>
+            <Show when={!!r.vehicol}>
+              <div class="rcard-extra-card">
+                <div class="rcard-extra-title">Vehicol</div>
+                <div style="font-size:13px;display:grid;gap:3px">
+                  <strong>{r.vehicol!.numarMasina}</strong>
+                  <Show when={r.vehicol!.marca || r.vehicol!.model}>
+                    <span>{[r.vehicol!.marca, r.vehicol!.model].filter(Boolean).join(" ")}</span>
+                  </Show>
+                  <Show when={r.vehicol!.numarKilometrii != null}>
+                    <span>Km: {r.vehicol!.numarKilometrii!.toLocaleString("ro-RO")}</span>
+                  </Show>
+                  <Show when={r.vehicol!.vin}>
+                    <span style="font-size:11px;color:var(--text-muted)">VIN: {r.vehicol!.vin}</span>
+                  </Show>
+                  <Show when={r.vehicol!.observatii}>
+                    <span style="color:var(--text-muted);white-space:pre-wrap">{r.vehicol!.observatii}</span>
+                  </Show>
+                </div>
               </div>
             </Show>
           </div>

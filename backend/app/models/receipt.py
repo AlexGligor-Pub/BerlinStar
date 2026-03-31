@@ -55,6 +55,7 @@ class Receipt(Base):
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
     )
     client: Mapped["Client | None"] = relationship("Client")
+    vehicol: Mapped["Vehicol | None"] = relationship("Vehicol", back_populates="receipt", uselist=False, lazy="selectin")
 
 
 class ReceiptItem(Base):
@@ -84,3 +85,4 @@ class ReceiptItem(Base):
 
 from app.models.employee import Employee  # noqa: E402
 from app.models.client import Client  # noqa: E402
+from app.models.vehicol import Vehicol  # noqa: E402

@@ -17,5 +17,6 @@ from .anvelopa import Anvelopa, TipAnvelopa
 from .loc_cazare import LocCazare
 from .cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from .programare import Programare, ProgramareStatus
+from .vehicol import Vehicol
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus", "Vehicol"]
