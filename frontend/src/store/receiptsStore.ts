@@ -121,7 +121,7 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
   if (locationId !== undefined) _lastLocationId = locationId ?? null;
   _nextCursor = null;
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30`;
+    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
@@ -143,7 +143,7 @@ export async function loadMoreReceipts() {
   if (!_nextCursor || loadingMore()) return;
   setLoadingMore(true);
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30&last_id=${_nextCursor}`;
+    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30&last_id=${_nextCursor}`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;

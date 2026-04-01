@@ -126,7 +126,12 @@ async def list_receipts(
     if location_id is not None:
         stmt = stmt.where(or_(Receipt.location_id == location_id, Receipt.location_id.is_(None)))
     stmt = apply_filters(stmt, Receipt, filters)
-    stmt = apply_sort(stmt, Receipt, sort)
+    if sort in ("-activity", "activity"):
+        activity_col = func.coalesce(Receipt.updated_at, Receipt.created_at)
+        order = activity_col.desc() if sort.startswith("-") else activity_col.asc()
+        stmt = stmt.order_by(order, Receipt.id.desc())
+    else:
+        stmt = apply_sort(stmt, Receipt, sort)
     stmt = stmt.limit(limit + 1)
 
     rows = (await db.execute(stmt)).scalars().all()
