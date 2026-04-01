@@ -300,6 +300,7 @@ export default function ShoppingList() {
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
   const [showResumeModal, setShowResumeModal] = createSignal(false);
+  const [finalizing, setFinalizing] = createSignal(false);
 
   // Guard: don't save meta before onMount decides what to load
   let metaSaveEnabled = false;
@@ -441,6 +442,8 @@ export default function ShoppingList() {
   async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
+    if (finalizing()) return;
+    setFinalizing(true);
     const receiptId = loadedReceiptId();
     const receiptData = {
       date: new Date().toISOString(),
@@ -467,6 +470,7 @@ export default function ShoppingList() {
       }
     } catch (e: any) {
       setErrorMsg(e?.message ?? "Eroare necunoscuta.");
+      setFinalizing(false);
       return;
     }
 
@@ -495,6 +499,7 @@ export default function ShoppingList() {
     setLoadedProgramareId(null);
     setSelectedClient(null);
 
+    setFinalizing(false);
     if (warns.length > 0) {
       setErrorMsg(`Bon salvat, dar ${warns.join(" și ")}. Poți edita din Recepție.`);
     } else {
@@ -609,10 +614,10 @@ export default function ShoppingList() {
         </div>
         <button
           class="btn btn-primary w-full"
-          disabled={cart.items.length === 0}
+          disabled={cart.items.length === 0 || finalizing()}
           onClick={handleFinalize}
         >
-          Finalizeaza
+          {finalizing() ? "Se salvează..." : "Finalizeaza"}
         </button>
       </div>
 
