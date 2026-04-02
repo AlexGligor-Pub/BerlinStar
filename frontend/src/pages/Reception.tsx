@@ -144,7 +144,7 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
 
 function ClientSection(props: { receipt: Receipt }) {
   const r = () => props.receipt;
-  const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic">("juridic");
+  const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic" | null>(null);
   const [searchCui, setSearchCui] = createSignal("");
   const [searchNume, setSearchNume] = createSignal("");
   const [resultsCui, setResultsCui] = createSignal<ClientItem[]>([]);
@@ -169,7 +169,7 @@ function ClientSection(props: { receipt: Receipt }) {
   }
 
   function changeTip(tip: "fizic" | "juridic") {
-    setTipFilter(tip);
+    setTipFilter(prev => prev === tip ? null : tip);
     clearSearch();
   }
 
@@ -207,7 +207,9 @@ function ClientSection(props: { receipt: Receipt }) {
     setResultsNume([]); setSearchedNume(false);
     setSearchingNume(true);
     try {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(q)}&limit=20`);
+      const tip = tipFilter();
+      const url = `/api/clienti?q=${encodeURIComponent(q)}&limit=20${tip ? `&tip=${tip}` : ""}`;
+      const res = await apiFetch(url);
       if (!res.ok) return;
       setResultsNume((await res.json()).items ?? []);
       setSearchedNume(true);
@@ -234,7 +236,7 @@ function ClientSection(props: { receipt: Receipt }) {
 
   function openAddModal() {
     const form = emptyClientForm();
-    form.tip = tipFilter();
+    form.tip = tipFilter() ?? "fizic";
     setModalForm(form); setModalError(null); setShowModal(true);
   }
 
@@ -268,7 +270,6 @@ function ClientSection(props: { receipt: Receipt }) {
         <div class="rclient-assigned">
           <div class="rclient-name">
             {r().clientNume}
-            <Show when={r().clientNumarMasina}><span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:8px">{r().clientNumarMasina}</span></Show>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
@@ -306,7 +307,6 @@ function ClientSection(props: { receipt: Receipt }) {
                   {(c) => (
                     <button class="rclient-result-item" onClick={() => assign(c)}>
                       <span class="rclient-result-name">{c.nume}</span>
-                      <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                       <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                     </button>
                   )}
@@ -348,7 +348,6 @@ function ClientSection(props: { receipt: Receipt }) {
                 {(c) => (
                   <button class="rclient-result-item" onClick={() => assign(c)}>
                     <span class="rclient-result-name">{c.nume}</span>
-                    <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                     <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                   </button>
                 )}
@@ -457,9 +456,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <span class="rcard-titlu">{r.titlu}</span>
             <Show when={r.clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
-            </Show>
-            <Show when={r.clientNumarMasina}>
-              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNumarMasina}</span>
             </Show>
             <Show when={r.devizNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>

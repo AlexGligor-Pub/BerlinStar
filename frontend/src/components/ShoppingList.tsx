@@ -123,7 +123,6 @@ function PosClientSearch(props: {
       <Show when={props.value}>
         <div style="font-size:11px;color:var(--text-muted);padding:2px 2px 0">
           {props.value!.tip === "juridic" ? "Juridică" : "Fizică"}
-          <Show when={props.value!.numar_masina}> · {props.value!.numar_masina}</Show>
           <Show when={props.value!.cui}> · CUI: {props.value!.cui}</Show>
         </div>
       </Show>
@@ -136,7 +135,6 @@ function PosClientSearch(props: {
                 onMouseDown={(e) => { e.preventDefault(); pick(c); }}
               >
                 <span style="font-weight:600">{c.nume}</span>
-                <Show when={c.numar_masina}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">{c.numar_masina}</span></Show>
                 <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
                 <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{c.tip === "juridic" ? "Juridică" : "Fizică"}</span>
               </button>
@@ -282,6 +280,7 @@ export default function ShoppingList() {
   const [dateTehn, setDateTehn] = createSignal("");
   const [modal, setModal] = createSignal<ModalType>(null);
   const [modalDraft, setModalDraft] = createSignal("");
+  const [modalUppercase, setModalUppercase] = createSignal(true);
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
   const [showSuccess, setShowSuccess] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
@@ -294,6 +293,7 @@ export default function ShoppingList() {
   const [vehicol, setVehicol] = createSignal<VehicolData | null>(null);
   const [showVehicolModal, setShowVehicolModal] = createSignal(false);
   const [vehicolDraft, setVehicolDraft] = createSignal<VehicolData>({ numarMasina: "" });
+  const [obsUppercase, setObsUppercase] = createSignal(true);
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
@@ -429,6 +429,7 @@ export default function ShoppingList() {
 
   function openModal(type: ModalType) {
     setModalDraft(type === "descriere" ? descriere() : dateTehn());
+    setModalUppercase(true);
     setModal(type);
   }
 
@@ -557,6 +558,7 @@ export default function ShoppingList() {
           onClick={() => {
             const draft = vehicol() ?? { numarMasina: titlu().trim() };
             setVehicolDraft({ ...draft });
+            setObsUppercase(true);
             setShowVehicolModal(true);
           }}
           title="Vehicul"
@@ -742,7 +744,7 @@ export default function ShoppingList() {
       {/* Titlu warning toast */}
       <Show when={showTitluWarn()}>
         <div class="titlu-warn-toast">
-          Scrie un titlu pentru a finaliza!
+          Scrie un număr de mașină pentru a finaliza!
         </div>
       </Show>
 
@@ -839,12 +841,12 @@ export default function ShoppingList() {
       {/* Vehicol modal */}
       <Show when={showVehicolModal()}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:420px;width:100%">
+          <div class="sl-modal" style="max-width:600px;width:100%">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Vehicul</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>✕</button>
             </div>
-            <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+            <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:75vh">
               <input
                 class="input"
                 placeholder="Număr mașină *"
@@ -881,10 +883,22 @@ export default function ShoppingList() {
               <textarea
                 class="sl-modal-textarea"
                 placeholder="Observații..."
-                rows={4}
+                rows={10}
+                style={obsUppercase() ? "text-transform:uppercase" : ""}
                 value={vehicolDraft().observatii ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, observatii: e.currentTarget.value || null }))}
+                onInput={(e) => {
+                  const val = obsUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+                  setVehicolDraft((d) => ({ ...d, observatii: val || null }));
+                }}
               />
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
+                <input
+                  type="checkbox"
+                  checked={!obsUppercase()}
+                  onChange={(e) => setObsUppercase(!e.currentTarget.checked)}
+                />
+                Scriere normală (litere mici/mari)
+              </label>
             </div>
             <div class="sl-modal-footer">
               <Show when={vehicol() !== null}>
@@ -907,7 +921,7 @@ export default function ShoppingList() {
       {/* Modal */}
       <Show when={modal() !== null}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal">
+          <div class="sl-modal" style="max-width:600px;width:100%">
             <div class="sl-modal-header">
               <span class="sl-modal-title">
                 {modal() === "descriere" ? "Descriere" : "Observații"}
@@ -919,10 +933,26 @@ export default function ShoppingList() {
               placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Observații ..."}
               maxlength={200}
               value={modalDraft()}
-              onInput={(e) => setModalDraft(e.currentTarget.value)}
-              rows={10}
+              onInput={(e) => {
+                const val = modal() === "dateTehn" && modalUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+                setModalDraft(val);
+              }}
+              rows={14}
+              style={modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase" : ""}
               autofocus
             />
+            <Show when={modal() === "dateTehn"}>
+              <div style="padding:4px 12px 8px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
+                  <input
+                    type="checkbox"
+                    checked={!modalUppercase()}
+                    onChange={(e) => setModalUppercase(!e.currentTarget.checked)}
+                  />
+                  Scriere normală (litere mici/mari)
+                </label>
+              </div>
+            </Show>
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={confirmModal}>Salveaza</button>

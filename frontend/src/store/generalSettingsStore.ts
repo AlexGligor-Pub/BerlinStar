@@ -13,7 +13,21 @@ function mapFromApi(data: any): GeneralSettingsData {
   };
 }
 
-const [generalSettings, setGeneralSettings] = createSignal<GeneralSettingsData | null>(null);
+const LS_KEY = "general_settings";
+
+function saveToLS(data: GeneralSettingsData): void {
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch { /* ignore */ }
+}
+
+function loadFromLS(): GeneralSettingsData | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as GeneralSettingsData;
+  } catch { return null; }
+}
+
+const [generalSettings, setGeneralSettings] = createSignal<GeneralSettingsData | null>(loadFromLS());
 
 export { generalSettings };
 
@@ -21,7 +35,9 @@ export async function loadGeneralSettings(): Promise<void> {
   try {
     const res = await apiFetch("/api/general-settings");
     if (!res.ok) return;
-    setGeneralSettings(mapFromApi(await res.json()));
+    const data = mapFromApi(await res.json());
+    setGeneralSettings(data);
+    saveToLS(data);
   } catch {
     // păstrează valoarea existentă la eroare de rețea
   }
@@ -39,5 +55,7 @@ export async function updateGeneralSettings(
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Eroare la salvarea setărilor.");
-  setGeneralSettings(mapFromApi(await res.json()));
+  const data = mapFromApi(await res.json());
+  setGeneralSettings(data);
+  saveToLS(data);
 }

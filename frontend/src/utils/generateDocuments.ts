@@ -537,7 +537,38 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   const bw = CW / 2 - 5;
   const col2X = ML + bw + 10;
   const y1 = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, bw);
-  const y2 = drawClientBlock(doc, "Client", r, col2X, y, bw);
+  let y2 = drawClientBlock(doc, "Client", r, col2X, y, bw);
+
+  // Vehicol sub datele clientului
+  const veh = r.vehicol;
+  if (veh) {
+    y2 += 2;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text("VEHICUL", col2X, y2);
+    y2 += 3.5;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.text(ro(veh.numarMasina), col2X, y2);
+    y2 += 4.2;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    if (veh.marca || veh.model) {
+      doc.text([ro(veh.marca), ro(veh.model)].filter(Boolean).join(" "), col2X, y2);
+      y2 += 3.5;
+    }
+    const kmVin: string[] = [];
+    if (veh.numarKilometrii != null) kmVin.push(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`);
+    if (veh.vin) kmVin.push(`VIN: ${veh.vin}`);
+    if (kmVin.length) { doc.text(kmVin.join("  ·  "), col2X, y2); y2 += 3.5; }
+    if (veh.observatii?.trim()) {
+      const ol: string[] = doc.splitTextToSize(ro(veh.observatii.trim()), bw);
+      doc.text(ol, col2X, y2);
+      y2 += ol.length * 3.5;
+    }
+  }
+
   y = Math.max(y1, y2) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
@@ -545,43 +576,6 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
 
   y = drawItemsTable(doc, autoTable, r, y, tvaPct);
   y = drawTotals(doc, r, y, tvaPct);
-
-  const veh = r.vehicol;
-  if (veh) {
-    hline(doc, y, C.veryLight, 0.1);
-    y += 3;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...C.black);
-    doc.text("VEHICUL", ML, y);
-    y += 3.5;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...C.black);
-    doc.text(ro(veh.numarMasina), ML, y);
-    y += 4.5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    if (veh.marca || veh.model) {
-      doc.text([ro(veh.marca), ro(veh.model)].filter(Boolean).join(" "), ML, y);
-      y += 3.5;
-    }
-    if (veh.numarKilometrii != null) {
-      doc.text(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`, ML, y);
-      y += 3.5;
-    }
-    if (veh.vin) {
-      doc.text(`VIN: ${veh.vin}`, ML, y);
-      y += 3.5;
-    }
-    if (veh.observatii?.trim()) {
-      const ol: string[] = doc.splitTextToSize(ro(veh.observatii.trim()), CW);
-      doc.text(ol, ML, y);
-      y += ol.length * 4 + 3;
-    } else {
-      y += 2;
-    }
-  }
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);

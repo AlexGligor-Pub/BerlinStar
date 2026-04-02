@@ -310,7 +310,7 @@ let _reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
 function scheduleReload() {
   clearTimeout(_reloadTimer);
-  _reloadTimer = setTimeout(() => loadReceipts(), 800);
+  _reloadTimer = setTimeout(() => loadReceipts(), 300);
 }
 
 let _posEs: EventSource | null = null;
