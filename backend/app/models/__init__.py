@@ -18,5 +18,6 @@ from .loc_cazare import LocCazare
 from .cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from .programare import Programare, ProgramareStatus
 from .vehicol import Vehicol
+from .general_settings import GeneralSettings
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus", "Vehicol"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings"]

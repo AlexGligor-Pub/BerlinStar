@@ -7,6 +7,7 @@ import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
+import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
@@ -550,12 +551,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
                 {docLoading() === "deviz" ? "..." : "Deviz"}
               </button>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
-                {docLoading() === "factura" ? "..." : "Factura"}
-              </button>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
-                {docLoading() === "chitanta" ? "..." : "Chitanta"}
-              </button>
+              <Show when={generalSettings()?.useFactura !== false}>
+                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
+                  {docLoading() === "factura" ? "..." : "Factura"}
+                </button>
+                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
+                  {docLoading() === "chitanta" ? "..." : "Chitanta"}
+                </button>
+              </Show>
             </div>
 
           </div>
@@ -696,6 +699,7 @@ export default function Reception() {
 
   onMount(() => {
     connectSSE();
+    loadGeneralSettings();
   });
 
   onCleanup(() => disconnectSSE());

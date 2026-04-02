@@ -2,6 +2,7 @@ import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMou
 import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 import { device, updateDevice } from "../store/deviceStore";
+import { generalSettings, loadGeneralSettings, updateGeneralSettings } from "../store/generalSettingsStore";
 
 interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; image_path: string | null; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; logo_path: string | null; background_path: string | null; website: string | null; bank_name: string | null; iban: string | null; capital_social: number | null; }
@@ -2495,15 +2496,70 @@ function DispozitivulMeuPanel() {
   );
 }
 
+// ─── Setări generale panel ────────────────────────────────────────────────────
+
+function SetariGeneralePanel() {
+  const [saving, setSaving] = createSignal(false);
+  const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
+
+  onMount(() => { loadGeneralSettings(); });
+
+  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean }>) {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await updateGeneralSettings(patch);
+      setMsg({ ok: true, text: "Salvat." });
+      setTimeout(() => setMsg(null), 2000);
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? "Eroare la salvare." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="cfg-panel">
+      <h2 class="cfg-panel-title">Setări generale</h2>
+      <div style="display:flex;flex-direction:column;gap:16px;max-width:400px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input
+            type="checkbox"
+            checked={generalSettings()?.useFactura !== false}
+            disabled={saving()}
+            onChange={(e) => handleChange({ useFactura: e.currentTarget.checked })}
+          />
+          <span>Activează Factură și Chitanță</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <input
+            type="checkbox"
+            checked={generalSettings()?.useAviz !== false}
+            disabled={saving()}
+            onChange={(e) => handleChange({ useAviz: e.currentTarget.checked })}
+          />
+          <span>Activează Aviz</span>
+        </label>
+        <Show when={msg()}>
+          <div style={{ color: msg()!.ok ? "var(--success, #3ea96a)" : "var(--danger)" }}>
+            {msg()!.text}
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 const TOPICS = [
-  { id: "locatii",        label: "Locații",             panel: LocatiiPanel },
-  { id: "departamente",   label: "Departamente",         panel: DepartamentePanel },
-  { id: "angajati",       label: "Angajați",             panel: AngajatiPanel },
-  { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
-  { id: "companii",       label: "Companiile mele",       panel: CompaniiPanel },
-  { id: "disclaimers",    label: "Disclaimers",             panel: DisclaimersPanel },
-  { id: "registre",       label: "Registre",                panel: RegisterPanel },
-  { id: "dispozitiv",     label: "Dispozitivul meu",        panel: DispozitivulMeuPanel },
+  { id: "locatii",         label: "Locații",                 panel: LocatiiPanel },
+  { id: "departamente",    label: "Departamente",             panel: DepartamentePanel },
+  { id: "angajati",        label: "Angajați",                 panel: AngajatiPanel },
+  { id: "produse",         label: "Produse și Servicii",      panel: ProduseSiServiciiPanel },
+  { id: "companii",        label: "Companiile mele",          panel: CompaniiPanel },
+  { id: "disclaimers",     label: "Disclaimers",              panel: DisclaimersPanel },
+  { id: "registre",        label: "Registre",                 panel: RegisterPanel },
+  { id: "dispozitiv",      label: "Dispozitivul meu",         panel: DispozitivulMeuPanel },
+  { id: "setari-generale", label: "Setări generale",          panel: SetariGeneralePanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -2591,6 +2647,7 @@ export default function Configurari() {
           <Match when={active() === "disclaimers"}><DisclaimersPanel /></Match>
           <Match when={active() === "registre"}><RegisterPanel /></Match>
           <Match when={active() === "dispozitiv"}><DispozitivulMeuPanel /></Match>
+          <Match when={active() === "setari-generale"}><SetariGeneralePanel /></Match>
         </Switch>
       </main>
     </div>
