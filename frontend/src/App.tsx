@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import POS from "./pages/POS";
 import Reception from "./pages/Reception";
 import Configurari from "./pages/Configurari";
+import Rapoarte from "./pages/Rapoarte";
 import Clienti from "./pages/Clienti";
 import HotelAnvelope from "./pages/HotelAnvelope";
 import Programari from "./pages/Programari";
@@ -49,6 +50,11 @@ export default function App() {
       <Route path="/configurari" component={() => (
         <Show when={adminVisible()} fallback={<Navigate href="/" />}>
           <Protected component={Configurari} />
+        </Show>
+      )} />
+      <Route path="/rapoarte" component={() => (
+        <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Protected component={Rapoarte} />
         </Show>
       )} />
       <Route path="/clienti" component={() => <Protected component={Clienti} />} />
