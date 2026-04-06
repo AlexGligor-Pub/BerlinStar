@@ -65,21 +65,23 @@ function TargetAngajatiPanel() {
     return Math.max(...vals, 1);
   });
 
-  const fmt = (v: string) =>
-    parseFloat(v).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (v: string | number) => {
+    const n = typeof v === "string" ? parseFloat(v) : v;
+    return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
 
   return (
     <div class="cfg-panel" style="max-width:100%">
       <h2 class="cfg-panel-title">Target Angajați</h2>
       <p class="cfg-hint" style="margin-bottom:8px;max-width:620px;line-height:1.6">
         Graficul afișează acumularea curentă a targetului pentru fiecare angajat. Bara colorată
-        reprezintă valoarea vânzărilor înregistrate de angajat în perioada curentă. Linia verticală
-        indică targetul lunar setat. Targetul fiecărui angajat se configurează din{" "}
+        reprezintă valoarea vânzărilor înregistrate în perioada curentă. Linia orizontală indică
+        targetul lunar setat. Targetul se configurează din{" "}
         <strong>Configurări → Angajați</strong>.
       </p>
 
       {/* Sort controls */}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <button
           class="btn btn-sm"
           classList={{ "btn-primary": sortBy() === "target", "btn-ghost": sortBy() !== "target" }}
@@ -96,6 +98,18 @@ function TargetAngajatiPanel() {
         </button>
       </div>
 
+      {/* Legend */}
+      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
+          <div style="width:14px;height:14px;border-radius:3px;background:var(--accent,#5b7cfa)" />
+          Acumulare curentă
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
+          <div style="width:20px;height:2px;background:var(--text-muted);opacity:0.7;border-radius:1px" />
+          Target lunar
+        </div>
+      </div>
+
       <Show when={loading()}>
         <p class="cfg-hint">Se încarcă...</p>
       </Show>
@@ -105,60 +119,47 @@ function TargetAngajatiPanel() {
       </Show>
 
       <Show when={!loading() && sorted().length > 0}>
-        {/* Legend */}
-        <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
-            <div style="width:14px;height:14px;border-radius:3px;background:var(--accent,#5b7cfa)" />
-            Acumulare curentă
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
-            <div style="width:2px;height:14px;background:var(--text-muted);opacity:0.7" />
-            Target lunar
-          </div>
-        </div>
+        <div class="rapoarte-chart-wrap">
+          <div class="rapoarte-bars">
+            <For each={sorted()}>
+              {(e) => {
+                const acc = parseFloat(e.current_target_accumulation);
+                const tgt = parseFloat(e.target);
+                const mv = maxValue();
+                const accPct = Math.min((acc / mv) * 100, 100);
+                const tgtPct = tgt > 0 ? Math.min((tgt / mv) * 100, 100) : 0;
+                const progressPct = tgt > 0 ? (acc / tgt) * 100 : 0;
+                const barColor = progressPct >= 100
+                  ? "var(--success,#3ea96a)"
+                  : "var(--accent,#5b7cfa)";
 
-        <div style="display:flex;flex-direction:column;gap:10px">
-          <For each={sorted()}>
-            {(e) => {
-              const acc = parseFloat(e.current_target_accumulation);
-              const tgt = parseFloat(e.target);
-              const mv = maxValue();
-              const accPct = Math.min((acc / mv) * 100, 100);
-              const tgtPct = tgt > 0 ? Math.min((tgt / mv) * 100, 100) : 0;
-              const progressPct = tgt > 0 ? (acc / tgt) * 100 : 0;
-              const barColor = progressPct >= 100
-                ? "var(--success,#3ea96a)"
-                : "var(--accent,#5b7cfa)";
-
-              return (
-                <div class="target-row">
-                  <div class="target-row__name">
-                    <Avatar name={e.name} imagePath={e.image_path} size={28} />
-                    <span title={e.name}>{e.name}</span>
-                  </div>
-                  <div class="target-row__bar">
-                    <div style={`height:100%;width:${accPct}%;background:${barColor};border-radius:5px;transition:width 0.5s ease`} />
-                    <Show when={tgtPct > 0}>
+                return (
+                  <div
+                    class="rapoarte-col"
+                    title={`${e.name}: ${fmt(e.current_target_accumulation)} lei (${Math.round(progressPct)}%)`}
+                  >
+                    <div class="rapoarte-col__bar-area">
                       <div
-                        style={`position:absolute;left:${tgtPct}%;top:-4px;bottom:-4px;width:2px;background:var(--text-muted);opacity:0.6;z-index:2;border-radius:1px`}
-                        title={`Target: ${fmt(e.target)} lei`}
+                        class="rapoarte-col__bar"
+                        style={`height:${accPct}%;background:${barColor}`}
                       />
-                    </Show>
+                      <Show when={tgtPct > 0}>
+                        <div
+                          class="rapoarte-col__target"
+                          style={`bottom:${tgtPct}%`}
+                          title={`Target: ${fmt(e.target)} lei`}
+                        />
+                      </Show>
+                    </div>
+                    <Avatar name={e.name} imagePath={e.image_path} size={28} />
+                    <div class="rapoarte-col__name-wrap">
+                      <span class="rapoarte-col__name">{e.name}</span>
+                    </div>
                   </div>
-                  <div class="target-row__value">
-                    <span style="font-size:0.85rem;font-weight:600;color:var(--text)">
-                      {fmt(e.current_target_accumulation)} lei
-                    </span>
-                    <Show when={tgt > 0}>
-                      <span style="font-size:0.75rem;color:var(--text-muted)">
-                        din {fmt(e.target)} lei ({Math.round(progressPct)}%)
-                      </span>
-                    </Show>
-                  </div>
-                </div>
-              );
-            }}
-          </For>
+                );
+              }}
+            </For>
+          </div>
         </div>
       </Show>
     </div>
