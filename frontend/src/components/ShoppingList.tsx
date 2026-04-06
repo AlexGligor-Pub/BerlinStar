@@ -536,7 +536,7 @@ export default function ShoppingList() {
           </Show>
         </div>
         <div class="sl-header-right">
-          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adauga produs manual">+ Manual</button>
+          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adaugă produs/serviciu manual">+ Produs/Serviciu</button>
           <Show when={cart.items.length > 0}>
             <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={() => setShowClearConfirm(true)}>Sterge tot</button>
           </Show>
@@ -753,7 +753,7 @@ export default function ShoppingList() {
         <div class="sl-modal-overlay">
           <div class="sl-modal">
             <div class="sl-modal-header">
-              <span class="sl-modal-title">Adauga produs manual</span>
+              <span class="sl-modal-title">Adaugă produs/serviciu manual</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>✕</button>
             </div>
             <div class="sl-edit-item-body">
