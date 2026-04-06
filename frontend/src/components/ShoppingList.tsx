@@ -612,7 +612,7 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-titlu">
-        <div style="position:relative;flex:1;min-width:0">
+        <div style="position:relative;flex:4;min-width:0">
           <input
             class="input-titlu"
             type="text"
@@ -627,6 +627,7 @@ export default function ShoppingList() {
             <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:var(--text-muted);pointer-events:none">...</span>
           </Show>
         </div>
+        <div style="flex:1;flex-shrink:0" />
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
           classList={{ "sl-extra-btn--active": vehicol() !== null }}
