@@ -1,4 +1,4 @@
-import { For, Show, Switch, Match, createSignal, onMount, createMemo } from "solid-js";
+import { For, Show, Switch, Match, createSignal, onMount, createMemo, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
 
 interface EmployeeReport {
@@ -30,10 +30,79 @@ function Avatar(props: { name: string; imagePath: string | null; size?: number }
   );
 }
 
+function daysElapsedThisMonth(): number {
+  const now = new Date();
+  return now.getDate(); // day of month = days elapsed since start (inclusive)
+}
+
+function EmployeePopup(props: {
+  employee: EmployeeReport;
+  onClose: () => void;
+}) {
+  const e = props.employee;
+  const acc = parseFloat(e.current_target_accumulation);
+  const tgt = parseFloat(e.target);
+  const progressPct = tgt > 0 ? (acc / tgt) * 100 : 0;
+  const days = daysElapsedThisMonth();
+
+  const fmt = (v: number) =>
+    v.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const barColor = progressPct >= 100 ? "var(--success,#3ea96a)" : "var(--accent,#5b7cfa)";
+
+  let timer: ReturnType<typeof setTimeout>;
+  onMount(() => {
+    timer = setTimeout(props.onClose, 5000);
+  });
+  onCleanup(() => clearTimeout(timer));
+
+  return (
+    <div class="emp-popup-overlay" onClick={props.onClose}>
+      <div class="emp-popup" onClick={(ev) => ev.stopPropagation()}>
+        <button class="emp-popup__close" onClick={props.onClose} aria-label="Închide">✕</button>
+        <div class="emp-popup__avatar">
+          <Avatar name={e.name} imagePath={e.image_path} size={72} />
+        </div>
+        <div class="emp-popup__name">{e.name}</div>
+
+        <div class="emp-popup__stats">
+          <div class="emp-popup__stat">
+            <span class="emp-popup__stat-label">Acumulare</span>
+            <span class="emp-popup__stat-value">{fmt(acc)} lei</span>
+          </div>
+          <div class="emp-popup__stat">
+            <span class="emp-popup__stat-label">Target lunar</span>
+            <span class="emp-popup__stat-value">{fmt(tgt)} lei</span>
+          </div>
+          <div class="emp-popup__stat">
+            <span class="emp-popup__stat-label">Progres</span>
+            <span class="emp-popup__stat-value" style={`color:${barColor};font-weight:700`}>
+              {Math.round(progressPct)}%
+            </span>
+          </div>
+          <div class="emp-popup__stat">
+            <span class="emp-popup__stat-label">Zile scurse din lună</span>
+            <span class="emp-popup__stat-value">{days} zile</span>
+          </div>
+        </div>
+
+        {/* Mini progress bar */}
+        <div style="margin-top:14px;background:var(--border,#e5e7eb);border-radius:4px;height:8px;overflow:hidden">
+          <div style={`height:100%;width:${Math.min(progressPct, 100)}%;background:${barColor};border-radius:4px;transition:width 0.4s ease`} />
+        </div>
+        <p style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 0;text-align:right">
+          Se închide automat în 5 s
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function TargetAngajatiPanel() {
   const [employees, setEmployees] = createSignal<EmployeeReport[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [sortBy, setSortBy] = createSignal<"target" | "name">("target");
+  const [popup, setPopup] = createSignal<EmployeeReport | null>(null);
 
   onMount(async () => {
     try {
@@ -76,7 +145,7 @@ function TargetAngajatiPanel() {
       <p class="cfg-hint" style="margin-bottom:8px;max-width:620px;line-height:1.6">
         Graficul afișează acumularea curentă a targetului pentru fiecare angajat. Bara colorată
         reprezintă valoarea vânzărilor înregistrate în perioada curentă. Linia orizontală indică
-        targetul lunar setat. Targetul se configurează din{" "}
+        targetul lunar setat. Apasă pe o bară pentru detalii. Targetul se configurează din{" "}
         <strong>Configurări → Angajați</strong>.
       </p>
 
@@ -132,13 +201,24 @@ function TargetAngajatiPanel() {
                 const barColor = progressPct >= 100
                   ? "var(--success,#3ea96a)"
                   : "var(--accent,#5b7cfa)";
+                const showPct = progressPct > 0.05;
 
                 return (
                   <div
                     class="rapoarte-col"
-                    title={`${e.name}: ${fmt(e.current_target_accumulation)} lei (${Math.round(progressPct)}%)`}
+                    onClick={() => setPopup(e)}
+                    style="cursor:pointer"
                   >
                     <div class="rapoarte-col__bar-area">
+                      {/* Percentage label above bar */}
+                      <Show when={showPct}>
+                        <div
+                          class="rapoarte-col__pct"
+                          style={`bottom:calc(${accPct}% + 4px)`}
+                        >
+                          {Math.round(progressPct)}%
+                        </div>
+                      </Show>
                       <div
                         class="rapoarte-col__bar"
                         style={`height:${accPct}%;background:${barColor}`}
@@ -161,6 +241,10 @@ function TargetAngajatiPanel() {
             </For>
           </div>
         </div>
+      </Show>
+
+      <Show when={popup() !== null}>
+        <EmployeePopup employee={popup()!} onClose={() => setPopup(null)} />
       </Show>
     </div>
   );
