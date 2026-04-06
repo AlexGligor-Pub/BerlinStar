@@ -105,6 +105,7 @@ function TargetAngajatiPanel() {
   const [sortBy, setSortBy] = createSignal<"target" | "name">("target");
   const [popup, setPopup] = createSignal<EmployeeReport | null>(null);
   const [selectedDescs, setSelectedDescs] = createSignal<Set<string>>(new Set());
+  const [showZeroTarget, setShowZeroTarget] = createSignal(false);
 
   onMount(async () => {
     try {
@@ -118,10 +119,17 @@ function TargetAngajatiPanel() {
     }
   });
 
-  // Unique non-null descriptions, sorted alphabetically
+  // Employees with target > 0 (base pool, respects showZeroTarget toggle)
+  const withTarget = createMemo(() =>
+    showZeroTarget()
+      ? employees()
+      : employees().filter(e => parseFloat(e.target) > 0)
+  );
+
+  // Unique descriptions only from the base pool (so chips reflect visible employees)
   const uniqueDescs = createMemo(() => {
     const set = new Set<string>();
-    for (const e of employees()) {
+    for (const e of withTarget()) {
       if (e.description?.trim()) set.add(e.description.trim());
     }
     return [...set].sort((a, b) => a.localeCompare(b, "ro"));
@@ -138,8 +146,8 @@ function TargetAngajatiPanel() {
 
   const filtered = createMemo(() => {
     const sel = selectedDescs();
-    if (sel.size === 0) return employees();
-    return employees().filter(e => e.description?.trim() && sel.has(e.description.trim()));
+    if (sel.size === 0) return withTarget();
+    return withTarget().filter(e => e.description?.trim() && sel.has(e.description.trim()));
   });
 
   const sorted = createMemo(() => {
@@ -175,8 +183,8 @@ function TargetAngajatiPanel() {
         <strong>Configurări → Angajați</strong>.
       </p>
 
-      {/* Sort controls */}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      {/* Sort controls + zero-target toggle */}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         <button
           class="btn btn-sm"
           classList={{ "btn-primary": sortBy() === "target", "btn-ghost": sortBy() !== "target" }}
@@ -190,6 +198,14 @@ function TargetAngajatiPanel() {
           onClick={() => setSortBy("name")}
         >
           După nume
+        </button>
+        <button
+          class="btn btn-sm"
+          classList={{ "btn-primary": showZeroTarget(), "btn-ghost": !showZeroTarget() }}
+          onClick={() => { setShowZeroTarget(v => !v); setSelectedDescs(new Set<string>()); }}
+          style="margin-left:auto"
+        >
+          {showZeroTarget() ? "Ascunde fără target" : "Arată fără target"}
         </button>
       </div>
 
