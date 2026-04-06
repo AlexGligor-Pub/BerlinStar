@@ -312,6 +312,69 @@ export default function ShoppingList() {
     saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v });
   });
 
+  const [plateSearching, setPlateSearching] = createSignal(false);
+  const [showNewClientModal, setShowNewClientModal] = createSignal(false);
+  const [newClientNameDraft, setNewClientNameDraft] = createSignal("");
+  const [pendingPlate, setPendingPlate] = createSignal("");
+
+  async function handlePlateBlur() {
+    const plate = titlu().trim().toUpperCase();
+    if (!plate) return;
+    if (vehicol()?.numarMasina?.toUpperCase() === plate) return;
+    setPlateSearching(true);
+    try {
+      // 1. Caută în ClientVehicol
+      let res = await apiFetch(`/api/clienti?q_masina=${encodeURIComponent(plate)}&limit=5`);
+      let clients = res.ok ? (await res.json()).items : [];
+      // 2. Fallback: caută în Client.numar_masina
+      if (clients.length === 0) {
+        res = await apiFetch(`/api/clienti?q=${encodeURIComponent(plate)}&limit=5`);
+        const all = res.ok ? (await res.json()).items : [];
+        clients = all.filter((c: any) => c.numar_masina?.toUpperCase() === plate);
+      }
+      if (clients.length > 0) {
+        const c = clients[0];
+        const vRes = await apiFetch(`/api/clienti/${c.id}/vehicole`);
+        const vehicles: any[] = vRes.ok ? await vRes.json() : [];
+        const veh = vehicles.find((v) => v.numar_masina?.toUpperCase() === plate && !v.is_deleted);
+        setVehicol({
+          numarMasina: plate,
+          marca: veh?.marca ?? null,
+          model: veh?.model ?? null,
+          numarKilometrii: veh?.numar_kilometrii ?? null,
+          vin: veh?.vin ?? null,
+          observatii: veh?.observatii ?? null,
+        });
+        setSelectedClient({ id: c.id, nume: c.nume, cui: c.cui ?? null, tip: c.tip, numar_masina: c.numar_masina ?? null });
+      } else {
+        setPendingPlate(plate);
+        setNewClientNameDraft("");
+        setShowNewClientModal(true);
+      }
+    } finally {
+      setPlateSearching(false);
+    }
+  }
+
+  async function handleCreateNewClient() {
+    const name = newClientNameDraft().trim();
+    const plate = pendingPlate();
+    if (!name || !plate) return;
+    const res = await apiFetch("/api/clienti", {
+      method: "POST",
+      body: JSON.stringify({ tip: "fizic", nume: name, numar_masina: plate }),
+    });
+    if (!res.ok) return;
+    const c = await res.json();
+    await apiFetch(`/api/clienti/${c.id}/vehicole`, {
+      method: "POST",
+      body: JSON.stringify({ numar_masina: plate }),
+    });
+    setVehicol({ numarMasina: plate, marca: null, model: null, numarKilometrii: null, vin: null, observatii: null });
+    setSelectedClient({ id: c.id, nume: c.nume, cui: c.cui ?? null, tip: c.tip, numar_masina: plate });
+    setShowNewClientModal(false);
+  }
+
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
   const [manualQty, setManualQty] = createSignal("1");
@@ -544,14 +607,20 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-titlu">
-        <input
-          class="input-titlu"
-          type="text"
-          placeholder="Nr. masina ex: B 100 TST"
-          maxlength={200}
-          value={titlu()}
-          onInput={(e) => setTitlu(e.currentTarget.value)}
-        />
+        <div style="position:relative;flex:1;min-width:0">
+          <input
+            class="input-titlu"
+            type="text"
+            placeholder="Nr. masina ex: B 100 TST"
+            maxlength={200}
+            value={titlu()}
+            onInput={(e) => setTitlu(e.currentTarget.value)}
+            onBlur={handlePlateBlur}
+          />
+          <Show when={plateSearching()}>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:var(--text-muted);pointer-events:none">...</span>
+          </Show>
+        </div>
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
           classList={{ "sl-extra-btn--active": vehicol() !== null }}
@@ -956,6 +1025,42 @@ export default function ShoppingList() {
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={confirmModal}>Salveaza</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal client nou (nr. mașină necunoscut) */}
+      <Show when={showNewClientModal()}>
+        <div class="sl-modal-overlay" onClick={() => setShowNewClientModal(false)}>
+          <div class="sl-modal" onClick={(e) => e.stopPropagation()} style="max-width:360px">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Client nou</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewClientModal(false)}>✕</button>
+            </div>
+            <div class="sl-modal-body" style="padding:16px 20px">
+              <p style="margin:0 0 12px;font-size:0.85rem;color:var(--text-muted)">
+                Vehicolul <strong>{pendingPlate()}</strong> nu a fost găsit.
+                Introduceți numele clientului pentru a-l crea și asocia.
+              </p>
+              <input
+                class="input"
+                placeholder="Nume client"
+                value={newClientNameDraft()}
+                onInput={(e) => setNewClientNameDraft(e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleCreateNewClient(); }}
+                autofocus
+              />
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewClientModal(false)}>Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={!newClientNameDraft().trim()}
+                onClick={handleCreateNewClient}
+              >
+                Creează și asociază
+              </button>
             </div>
           </div>
         </div>
