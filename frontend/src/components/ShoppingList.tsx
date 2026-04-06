@@ -317,10 +317,15 @@ export default function ShoppingList() {
   const [newClientNameDraft, setNewClientNameDraft] = createSignal("");
   const [pendingPlate, setPendingPlate] = createSignal("");
 
+  function normPlate(p: string) {
+    return p.replace(/\s+/g, "").toUpperCase();
+  }
+
   async function handlePlateBlur() {
+    if (plateSearching()) return;
     const plate = titlu().trim().toUpperCase();
     if (!plate) return;
-    if (vehicol()?.numarMasina?.toUpperCase() === plate) return;
+    if (vehicol()?.numarMasina === plate) return;
     setPlateSearching(true);
     try {
       // 1. Caută în ClientVehicol
@@ -330,13 +335,13 @@ export default function ShoppingList() {
       if (clients.length === 0) {
         res = await apiFetch(`/api/clienti?q=${encodeURIComponent(plate)}&limit=5`);
         const all = res.ok ? (await res.json()).items : [];
-        clients = all.filter((c: any) => c.numar_masina?.toUpperCase() === plate);
+        clients = all.filter((c: any) => normPlate(c.numar_masina ?? "") === normPlate(plate));
       }
       if (clients.length > 0) {
         const c = clients[0];
         const vRes = await apiFetch(`/api/clienti/${c.id}/vehicole`);
         const vehicles: any[] = vRes.ok ? await vRes.json() : [];
-        const veh = vehicles.find((v) => v.numar_masina?.toUpperCase() === plate && !v.is_deleted);
+        const veh = vehicles.find((v) => normPlate(v.numar_masina ?? "") === normPlate(plate));
         setVehicol({
           numarMasina: plate,
           marca: veh?.marca ?? null,
@@ -614,7 +619,8 @@ export default function ShoppingList() {
             placeholder="Nr. masina ex: B 100 TST"
             maxlength={200}
             value={titlu()}
-            onInput={(e) => setTitlu(e.currentTarget.value)}
+            onInput={(e) => setTitlu(e.currentTarget.value.toUpperCase())}
+            onKeyDown={(e) => { if (e.key === "Enter") handlePlateBlur(); }}
             onBlur={handlePlateBlur}
           />
           <Show when={plateSearching()}>
@@ -833,23 +839,25 @@ export default function ShoppingList() {
                   type="text"
                   placeholder="Ex: Transport, Consultanta..."
                   value={manualName()}
-                  onInput={(e) => setManualName(e.currentTarget.value)}
+                  onInput={(e) => setManualName(e.currentTarget.value.toUpperCase())}
+                  onKeyDown={(e) => { if (e.key === "Enter") confirmManual(); }}
                   autofocus
                 />
               </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Tip</label>
-                <select
-                  class="input sl-edit-input"
-                  value={manualTip()}
-                  onChange={(e) => {
-                    setManualTip(e.currentTarget.value);
-                    setManualUnit(e.currentTarget.value === "Serviciu" ? "ora" : "buc");
-                  }}
-                >
-                  <option value="Produs">Produs</option>
-                  <option value="Serviciu">Serviciu</option>
-                </select>
+                <div class="sl-tip-toggle">
+                  <button
+                    class={`btn btn-sm${manualTip() === "Produs" ? " btn-primary" : " btn-ghost"}`}
+                    onClick={() => { setManualTip("Produs"); setManualUnit("buc"); }}
+                    type="button"
+                  >Produs</button>
+                  <button
+                    class={`btn btn-sm${manualTip() === "Serviciu" ? " btn-primary" : " btn-ghost"}`}
+                    onClick={() => { setManualTip("Serviciu"); setManualUnit("ora"); }}
+                    type="button"
+                  >Serviciu</button>
+                </div>
               </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">U.M.</label>
@@ -1032,8 +1040,8 @@ export default function ShoppingList() {
 
       {/* Modal client nou (nr. mașină necunoscut) */}
       <Show when={showNewClientModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowNewClientModal(false)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()} style="max-width:360px">
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:360px">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Client nou</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewClientModal(false)}>✕</button>
