@@ -4,6 +4,7 @@ import { apiFetch } from "../utils/api";
 interface EmployeeReport {
   id: number;
   name: string;
+  description: string | null;
   target: string;
   current_target_accumulation: string;
   image_path: string | null;
@@ -103,6 +104,7 @@ function TargetAngajatiPanel() {
   const [loading, setLoading] = createSignal(true);
   const [sortBy, setSortBy] = createSignal<"target" | "name">("target");
   const [popup, setPopup] = createSignal<EmployeeReport | null>(null);
+  const [selectedDescs, setSelectedDescs] = createSignal<Set<string>>(new Set());
 
   onMount(async () => {
     try {
@@ -116,8 +118,32 @@ function TargetAngajatiPanel() {
     }
   });
 
+  // Unique non-null descriptions, sorted alphabetically
+  const uniqueDescs = createMemo(() => {
+    const set = new Set<string>();
+    for (const e of employees()) {
+      if (e.description?.trim()) set.add(e.description.trim());
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, "ro"));
+  });
+
+  function toggleDesc(desc: string) {
+    setSelectedDescs(prev => {
+      const next = new Set(prev);
+      if (next.has(desc)) next.delete(desc);
+      else next.add(desc);
+      return next;
+    });
+  }
+
+  const filtered = createMemo(() => {
+    const sel = selectedDescs();
+    if (sel.size === 0) return employees();
+    return employees().filter(e => e.description?.trim() && sel.has(e.description.trim()));
+  });
+
   const sorted = createMemo(() => {
-    const list = [...employees()];
+    const list = [...filtered()];
     if (sortBy() === "name") {
       return list.sort((a, b) => a.name.localeCompare(b.name, "ro"));
     }
@@ -166,6 +192,32 @@ function TargetAngajatiPanel() {
           După nume
         </button>
       </div>
+
+      {/* Description filter chips */}
+      <Show when={uniqueDescs().length > 0}>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <span style="font-size:0.78rem;color:var(--text-muted);flex-shrink:0">Filtrează:</span>
+          <For each={uniqueDescs()}>
+            {(desc) => (
+              <button
+                class="desc-chip"
+                classList={{ "desc-chip--active": selectedDescs().has(desc) }}
+                onClick={() => toggleDesc(desc)}
+              >
+                {desc}
+              </button>
+            )}
+          </For>
+          <Show when={selectedDescs().size > 0}>
+            <button
+              class="desc-chip desc-chip--clear"
+              onClick={() => setSelectedDescs(new Set())}
+            >
+              ✕ Resetează
+            </button>
+          </Show>
+        </div>
+      </Show>
 
       {/* Legend */}
       <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:12px">

@@ -3573,6 +3573,50 @@ body {
   z-index: 2;
 }
 
+/* ── Description filter chips ── */
+.desc-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.desc-chip:hover {
+  background: var(--surface2);
+}
+
+.desc-chip--active {
+  background: var(--accent, #5b7cfa);
+  border-color: var(--accent, #5b7cfa);
+  color: #fff;
+}
+
+.desc-chip--active:hover {
+  background: var(--accent, #5b7cfa);
+  filter: brightness(1.1);
+}
+
+.desc-chip--clear {
+  border-color: transparent;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 0.75rem;
+}
+
+.desc-chip--clear:hover {
+  color: var(--danger, #e05555);
+  background: transparent;
+}
+
 .rapoarte-col__pct {
   position: absolute;
   left: 50%;
