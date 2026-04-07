@@ -39,6 +39,7 @@ export interface Receipt {
   programareId: number | null;
   locationId: number | null;
   vehicol?: VehicolData | null;
+  updatedAt?: string | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -88,6 +89,7 @@ function mapFromApi(r: any): Receipt {
       vin: r.vehicol.vin ?? null,
       observatii: r.vehicol.observatii ?? null,
     } : null,
+    updatedAt: r.updated_at ?? null,
   };
 }
 
