@@ -8,6 +8,7 @@ class AnvelopaCreate(BaseModel):
     client_id: int | None = None
     marca_id: int | None = None
     dimensiune_id: int | None = None
+    profil_id: int | None = None
     tip: TipAnvelopa = TipAnvelopa.VARA
     adancime: float | None = Field(default=None, ge=0)
     comments: str | None = None
@@ -16,6 +17,7 @@ class AnvelopaCreate(BaseModel):
 class AnvelopaUpdate(BaseModel):
     marca_id: int | None = None
     dimensiune_id: int | None = None
+    profil_id: int | None = None
     tip: TipAnvelopa | None = None
     adancime: float | None = Field(default=None, ge=0)
     comments: str | None = None
@@ -28,12 +30,14 @@ class AnvelopaRead(BaseModel):
     client_id: int | None
     marca_id: int | None
     dimensiune_id: int | None
+    profil_id: int | None = None
     tip: TipAnvelopa
     adancime: float | None
     comments: str | None
     # denormalizat pentru afișare
     marca_nume: str | None = None
     dimensiune_valoare: str | None = None
+    profil_valoare: str | None = None
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool

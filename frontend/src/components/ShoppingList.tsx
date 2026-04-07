@@ -47,12 +47,31 @@ function emptyClientForm() {
   return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
+interface VehicolWithClient {
+  vehicol: {
+    id: number;
+    numar_masina: string;
+    marca: string | null;
+    model: string | null;
+    numar_kilometrii: number | null;
+    vin: string | null;
+    observatii: string | null;
+  };
+  client: {
+    id: number;
+    nume: string;
+    tip: string;
+    cui: string | null;
+    numar_masina: string | null;
+  };
+}
+
 // ─── PosClientSearch ──────────────────────────────────────────────────────────
 
 function PosClientSearch(props: {
   value: ClientItem | null;
   onSelect: (c: ClientItem | null) => void;
-  onAddNew: () => void;
+  onAddNew?: () => void;
 }) {
   const [q, setQ] = createSignal("");
   const [results, setResults] = createSignal<ClientItem[]>([]);
@@ -106,7 +125,7 @@ function PosClientSearch(props: {
         <input
           class="input"
           style="flex:1;font-size:13px"
-          placeholder="Caută client după nume, CUI sau nr. mașină..."
+          placeholder="Caută client după nume ..."
           value={q()}
           onInput={(e) => { setQ(e.currentTarget.value); if (!props.value) search(e.currentTarget.value); }}
           onFocus={() => { if (props.value) return; if (results().length) setOpen(true); }}
@@ -145,7 +164,9 @@ function PosClientSearch(props: {
       <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
         <div style="position:absolute;left:0;right:0;z-index:300;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px;display:flex;align-items:center;gap:8px">
           <span style="color:var(--text-muted)">Niciun client găsit.</span>
-          <button class="btn btn-sm btn-primary" onMouseDown={(e) => { e.preventDefault(); props.onAddNew(); setOpen(false); }}>+ Adaugă client</button>
+          <Show when={props.onAddNew}>
+            <button class="btn btn-sm btn-primary" onMouseDown={(e) => { e.preventDefault(); props.onAddNew!(); setOpen(false); }}>+ Adaugă client</button>
+          </Show>
         </div>
       </Show>
     </div>
@@ -217,19 +238,21 @@ function AddClientModal(props: {
 
   return (
     <div class="sl-modal-overlay">
-      <div class="sl-modal" style="max-width:420px;width:100%">
+      <div class="sl-modal" style="max-width:560px;width:100%">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Adaugă client</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
         </div>
-        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+          <PosClientSearch
+            value={null}
+            onSelect={(c) => { if (c) props.onSaved(c); }}
+          />
+          <div style="border-top:1px solid var(--border);margin:2px 0" />
           <div style="display:flex;gap:8px">
             <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
             <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
           </div>
-          <Show when={form().tip === "fizic"}>
-            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
-          </Show>
           <Show when={form().tip === "juridic"}>
             <div style="display:flex;gap:6px">
               <input
@@ -247,7 +270,6 @@ function AddClientModal(props: {
             <Show when={anafError()}>
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
-            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
           </Show>
           <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
           <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -359,7 +381,7 @@ function EditClientModal(props: {
 
   return (
     <div class="sl-modal-overlay">
-      <div class="sl-modal" style="max-width:420px;width:100%">
+      <div class="sl-modal" style="max-width:560px;width:100%">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Editează client</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
@@ -368,14 +390,16 @@ function EditClientModal(props: {
           <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.875rem">Se încarcă...</div>
         </Show>
         <Show when={!loading()}>
-          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+            <PosClientSearch
+              value={null}
+              onSelect={(c) => { if (c) props.onSaved(c); }}
+            />
+            <div style="border-top:1px solid var(--border);margin:2px 0" />
             <div style="display:flex;gap:8px">
               <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
               <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
             </div>
-            <Show when={form().tip === "fizic"}>
-              <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
-            </Show>
             <Show when={form().tip === "juridic"}>
               <div style="display:flex;gap:6px">
                 <input
@@ -393,7 +417,6 @@ function EditClientModal(props: {
               <Show when={anafError()}>
                 <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
               </Show>
-              <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
             </Show>
             <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
             <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -461,9 +484,25 @@ export default function ShoppingList() {
   });
 
   const [plateSearching, setPlateSearching] = createSignal(false);
+  const [vehicolPickList, setVehicolPickList] = createSignal<VehicolWithClient[]>([]);
+  const [showVehicolPickModal, setShowVehicolPickModal] = createSignal(false);
 
-  function normPlate(p: string) {
-    return p.replace(/\s+/g, "").toUpperCase();
+  function applyVehicolWithClient(item: VehicolWithClient) {
+    setVehicol({
+      numarMasina: item.vehicol.numar_masina,
+      marca: item.vehicol.marca ?? null,
+      model: item.vehicol.model ?? null,
+      numarKilometrii: item.vehicol.numar_kilometrii ?? null,
+      vin: item.vehicol.vin ?? null,
+      observatii: item.vehicol.observatii ?? null,
+    });
+    setSelectedClient({
+      id: item.client.id,
+      nume: item.client.nume,
+      cui: item.client.cui ?? null,
+      tip: item.client.tip,
+      numar_masina: item.client.numar_masina ?? null,
+    });
   }
 
   async function handlePlateBlur() {
@@ -473,29 +512,14 @@ export default function ShoppingList() {
     if (vehicol()?.numarMasina === plate) return;
     setPlateSearching(true);
     try {
-      // 1. Caută în ClientVehicol
-      let res = await apiFetch(`/api/clienti?q_masina=${encodeURIComponent(plate)}&limit=5`);
-      let clients = res.ok ? (await res.json()).items : [];
-      // 2. Fallback: caută în Client.numar_masina
-      if (clients.length === 0) {
-        res = await apiFetch(`/api/clienti?q=${encodeURIComponent(plate)}&limit=5`);
-        const all = res.ok ? (await res.json()).items : [];
-        clients = all.filter((c: any) => normPlate(c.numar_masina ?? "") === normPlate(plate));
-      }
-      if (clients.length > 0) {
-        const c = clients[0];
-        const vRes = await apiFetch(`/api/clienti/${c.id}/vehicole`);
-        const vehicles: any[] = vRes.ok ? await vRes.json() : [];
-        const veh = vehicles.find((v) => normPlate(v.numar_masina ?? "") === normPlate(plate));
-        setVehicol({
-          numarMasina: plate,
-          marca: veh?.marca ?? null,
-          model: veh?.model ?? null,
-          numarKilometrii: veh?.numar_kilometrii ?? null,
-          vin: veh?.vin ?? null,
-          observatii: veh?.observatii ?? null,
-        });
-        setSelectedClient({ id: c.id, nume: c.nume, cui: c.cui ?? null, tip: c.tip, numar_masina: c.numar_masina ?? null });
+      const res = await apiFetch(`/api/clienti/vehicole-by-plate?q_masina=${encodeURIComponent(plate)}`);
+      if (!res.ok) return;
+      const results: VehicolWithClient[] = await res.json();
+      if (results.length === 1) {
+        applyVehicolWithClient(results[0]);
+      } else if (results.length > 1) {
+        setVehicolPickList(results);
+        setShowVehicolPickModal(true);
       }
     } finally {
       setPlateSearching(false);
@@ -739,9 +763,9 @@ export default function ShoppingList() {
             class="input-titlu"
             type="text"
             placeholder="Nr. masina ex: B 100 TST"
-            maxlength={200}
+            maxlength={100}
             value={titlu()}
-            onInput={(e) => setTitlu(e.currentTarget.value.toUpperCase())}
+            onInput={(e) => setTitlu(e.currentTarget.value.replace(/\s/g, "").toUpperCase())}
             onKeyDown={(e) => { if (e.key === "Enter") handlePlateBlur(); }}
             onBlur={handlePlateBlur}
           />
@@ -749,7 +773,6 @@ export default function ShoppingList() {
             <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:var(--text-muted);pointer-events:none">...</span>
           </Show>
         </div>
-        <div style="flex:1;flex-shrink:0" />
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
           classList={{ "sl-extra-btn--active": vehicol() !== null }}
@@ -781,13 +804,30 @@ export default function ShoppingList() {
         </button>
       </div>
 
-      <div style="padding:0 8px 4px">
-        <PosClientSearch
-          value={selectedClient()}
-          onSelect={setSelectedClient}
-          onAddNew={() => setShowAddClientModal(true)}
-        />
-      </div>
+      <Show when={vehicol() !== null || selectedClient() !== null}>
+        <div style="padding:2px 10px 4px;display:grid;gap:1px">
+          <Show when={vehicol() !== null}>
+            <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {[
+                vehicol()!.numarMasina,
+                vehicol()!.marca,
+                vehicol()!.model,
+                vehicol()!.numarKilometrii != null ? `${vehicol()!.numarKilometrii} km` : null,
+                vehicol()!.vin,
+              ].filter(Boolean).join(" · ")}
+            </div>
+          </Show>
+          <Show when={selectedClient() !== null}>
+            <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {[
+                selectedClient()!.nume,
+                selectedClient()!.tip === "juridic" ? "Juridică" : "Fizică",
+                selectedClient()!.cui ? `CUI: ${selectedClient()!.cui}` : null,
+              ].filter(Boolean).join(" · ")}
+            </div>
+          </Show>
+        </div>
+      </Show>
 
       <div class="shopping-list-body">
         <Show
@@ -1050,6 +1090,44 @@ export default function ShoppingList() {
               >
                 Adauga
               </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Vehicol pick modal — multiple results for plate search */}
+      <Show when={showVehicolPickModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:480px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Selectează vehiculul</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>✕</button>
+            </div>
+            <div style="padding:8px;display:grid;gap:6px;overflow-y:auto;max-height:60vh">
+              <For each={vehicolPickList()}>
+                {(item) => (
+                  <button
+                    style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;text-align:left;width:100%"
+                    onClick={() => { applyVehicolWithClient(item); setShowVehicolPickModal(false); }}
+                  >
+                    <div>
+                      <div style="font-weight:600;font-size:14px">{item.vehicol.numar_masina}</div>
+                      <div style="font-size:12px;color:var(--text-muted)">
+                        {[item.vehicol.marca, item.vehicol.model].filter(Boolean).join(" ") || "—"}
+                      </div>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);text-align:right">
+                      <div>{item.client.nume}</div>
+                      <Show when={item.client.cui}>
+                        <div>CUI: {item.client.cui}</div>
+                      </Show>
+                    </div>
+                  </button>
+                )}
+              </For>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>Anulează</button>
             </div>
           </div>
         </div>

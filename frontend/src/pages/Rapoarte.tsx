@@ -119,11 +119,16 @@ function TargetAngajatiPanel() {
     }
   });
 
-  // Employees with target > 0 (base pool, respects showZeroTarget toggle)
+  // Employees with progress >= 1% (base pool, respects showZeroTarget toggle)
   const withTarget = createMemo(() =>
     showZeroTarget()
       ? employees()
-      : employees().filter(e => parseFloat(e.target) > 0)
+      : employees().filter(e => {
+          const tgt = parseFloat(e.target);
+          const acc = parseFloat(e.current_target_accumulation);
+          const pct = tgt > 0 ? (acc / tgt) * 100 : 0;
+          return pct >= 1;
+        })
   );
 
   // Unique descriptions only from the base pool (so chips reflect visible employees)
@@ -242,7 +247,7 @@ function TargetAngajatiPanel() {
           Acumulare curentă
         </div>
         <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
-          <div style="width:20px;height:2px;background:var(--text-muted);opacity:0.7;border-radius:1px" />
+          <div style="width:20px;height:2px;background:#FFD700;opacity:0.9;border-radius:1px" />
           Target lunar
         </div>
       </div>

@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.client import Client
+from app.models.client_vehicol import ClientVehicol
 from app.schemas.client import ClientCreate, ClientRead
+from app.schemas.client_vehicol import ClientVehicolCreate, ClientVehicolRead, ClientVehicolWithClientRead, ClientShort
 from app.schemas.common import Page
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -20,6 +23,7 @@ async def list_clienti(
     last_id: int | None = None,
     limit: int = 100,
     q: str | None = None,
+    q_masina: str | None = None,
     tip: str | None = None,
     cui: str | None = None,
     db: AsyncSession = Depends(get_db),
@@ -30,8 +34,19 @@ async def list_clienti(
     if last_id is not None:
         stmt = stmt.where(Client.id > last_id)
     if q:
+        stmt = stmt.where(Client.nume.ilike(f"%{q}%"))
+    if q_masina:
+        subq = (
+            select(ClientVehicol.client_id)
+            .where(
+                ClientVehicol.account_id == account_id,
+                ClientVehicol.is_deleted == False,
+                ClientVehicol.numar_masina.ilike(f"%{q_masina}%"),
+            )
+            .distinct()
+        )
         stmt = stmt.where(
-            (Client.nume.ilike(f"%{q}%")) | (Client.numar_masina.ilike(f"%{q}%"))
+            Client.id.in_(subq) | Client.numar_masina.ilike(f"%{q_masina}%")
         )
     if tip:
         stmt = stmt.where(Client.tip == tip)
@@ -53,6 +68,40 @@ async def create_client(
     await db.commit()
     await db.refresh(client)
     return client
+
+
+@router.get("/vehicole-by-plate", response_model=list[ClientVehicolWithClientRead])
+async def search_vehicole_by_plate(
+    q_masina: str,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    normalized = q_masina.replace(" ", "").upper()
+    stmt = (
+        select(ClientVehicol, Client)
+        .join(Client, Client.id == ClientVehicol.client_id)
+        .where(
+            ClientVehicol.account_id == account_id,
+            ClientVehicol.is_deleted == False,
+            Client.is_deleted == False,
+            func.upper(func.replace(ClientVehicol.numar_masina, " ", "")) == normalized,
+        )
+        .order_by(ClientVehicol.id)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [
+        ClientVehicolWithClientRead(
+            vehicol=ClientVehicolRead.model_validate(v),
+            client=ClientShort(
+                id=c.id,
+                nume=c.nume,
+                tip=c.tip,
+                cui=c.cui,
+                numar_masina=c.numar_masina,
+            ),
+        )
+        for v, c in rows
+    ]
 
 
 @router.get("/{client_id}", response_model=ClientRead)
@@ -95,3 +144,76 @@ async def delete_client(
     if client is None or client.account_id != account_id:
         raise HTTPException(404, "Clientul nu a fost găsit.")
     await soft_delete(db, Client, client_id)
+
+
+# ── Vehicole per client ────────────────────────────────────────────────────────
+
+@router.get("/{client_id}/vehicole", response_model=list[ClientVehicolRead])
+async def list_client_vehicole(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    client = await db.get(Client, client_id)
+    if client is None or client.account_id != account_id or client.is_deleted:
+        raise HTTPException(404, "Clientul nu a fost găsit.")
+    stmt = (
+        select(ClientVehicol)
+        .where(
+            ClientVehicol.client_id == client_id,
+            ClientVehicol.account_id == account_id,
+            ClientVehicol.is_deleted == False,
+        )
+        .order_by(ClientVehicol.id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+@router.post("/{client_id}/vehicole", response_model=ClientVehicolRead, status_code=201)
+async def create_client_vehicol(
+    client_id: int,
+    body: ClientVehicolCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    client = await db.get(Client, client_id)
+    if client is None or client.account_id != account_id or client.is_deleted:
+        raise HTTPException(404, "Clientul nu a fost găsit.")
+    v = ClientVehicol(**body.model_dump(), client_id=client_id, account_id=account_id)
+    db.add(v)
+    await db.commit()
+    await db.refresh(v)
+    return v
+
+
+@router.patch("/{client_id}/vehicole/{v_id}", response_model=ClientVehicolRead)
+async def update_client_vehicol(
+    client_id: int,
+    v_id: int,
+    body: ClientVehicolCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    v = await db.get(ClientVehicol, v_id)
+    if v is None or v.client_id != client_id or v.account_id != account_id or v.is_deleted:
+        raise HTTPException(404, "Vehicolul nu a fost găsit.")
+    for k, val in body.model_dump().items():
+        setattr(v, k, val)
+    v.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(v)
+    return v
+
+
+@router.delete("/{client_id}/vehicole/{v_id}", status_code=204)
+async def delete_client_vehicol(
+    client_id: int,
+    v_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    v = await db.get(ClientVehicol, v_id)
+    if v is None or v.client_id != client_id or v.account_id != account_id:
+        raise HTTPException(404, "Vehicolul nu a fost găsit.")
+    await soft_delete(db, ClientVehicol, v_id)

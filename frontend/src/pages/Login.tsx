@@ -139,7 +139,7 @@ export default function Login() {
             </button>
           </form>
           <button class="btn btn-ghost w-full" style="margin-top:16px" type="button" onClick={() => switchMode("register")}>
-            Creeaza cont nou
+            Cont nou
           </button>
         </Show>
 
@@ -206,7 +206,7 @@ export default function Login() {
               />
             </div>
             <button class="btn btn-primary w-full mt-8" type="submit" disabled={loading()}>
-              {loading() ? "Se creeaza..." : "Creeaza cont"}
+              {loading() ? "Se creează..." : "Finalizează"}
             </button>
           </form>
           <button class="btn btn-ghost w-full mt-4" type="button" onClick={() => switchMode("login")}>

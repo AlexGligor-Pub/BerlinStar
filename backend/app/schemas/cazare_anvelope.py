@@ -18,6 +18,7 @@ class CazareCreate(BaseModel):
     dep_prezoane: bool = False
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool = False
+    numar_masina: str | None = None
 
 
 class CazareCheckoutBody(BaseModel):
@@ -38,6 +39,7 @@ class CazareUpdateBody(BaseModel):
     dep_prezoane: bool | None = None
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool | None = None
+    numar_masina: str | None = None
 
 
 class CazareItemRead(BaseModel):
@@ -75,6 +77,7 @@ class CazareRead(BaseModel):
     dep_prezoane: bool = False
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool = False
+    numar_masina: str | None = None
     referinta_cazare_data_checkin: str | None = None
     referinta_cazare_items: list[CazareItemRead] = []
     items: list[CazareItemRead] = []

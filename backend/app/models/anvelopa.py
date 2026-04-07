@@ -31,6 +31,9 @@ class Anvelopa(Base):
     dimensiune_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("dimensiuni_anvelope.id", ondelete="SET NULL"), nullable=True
     )
+    profil_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("profiluri_anvelope.id", ondelete="SET NULL"), nullable=True
+    )
     tip: Mapped[TipAnvelopa] = mapped_column(
         SAEnum(TipAnvelopa, name="tip_anvelopa", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,
@@ -47,3 +50,4 @@ class Anvelopa(Base):
 
     marca: Mapped["MarcaAnvelopa | None"] = relationship("MarcaAnvelopa")  # type: ignore[name-defined]
     dimensiune: Mapped["DimensiuneAnvelopa | None"] = relationship("DimensiuneAnvelopa")  # type: ignore[name-defined]
+    profil: Mapped["ProfilAnvelopa | None"] = relationship("ProfilAnvelopa")  # type: ignore[name-defined]
