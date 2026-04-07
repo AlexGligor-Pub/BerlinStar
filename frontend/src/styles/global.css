@@ -878,7 +878,7 @@ body {
 }
 
 .input-titlu {
-  flex: 1;
+  width: 100%;
   min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--border);
@@ -1057,6 +1057,11 @@ body {
   flex: 1;
   font-size: 1rem;
   text-align: left;
+}
+
+.sl-tip-toggle {
+  display: flex;
+  gap: 6px;
 }
 
 .sl-qty-presets {
@@ -3567,8 +3572,8 @@ body {
   left: -3px;
   right: -3px;
   height: 2px;
-  background: var(--text-muted, #999);
-  opacity: 0.75;
+  background: #FFD700;
+  opacity: 0.9;
   border-radius: 1px;
   z-index: 2;
 }
