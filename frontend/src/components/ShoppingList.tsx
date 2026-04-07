@@ -461,9 +461,6 @@ export default function ShoppingList() {
   });
 
   const [plateSearching, setPlateSearching] = createSignal(false);
-  const [showNewClientModal, setShowNewClientModal] = createSignal(false);
-  const [newClientNameDraft, setNewClientNameDraft] = createSignal("");
-  const [pendingPlate, setPendingPlate] = createSignal("");
 
   function normPlate(p: string) {
     return p.replace(/\s+/g, "").toUpperCase();
@@ -499,33 +496,10 @@ export default function ShoppingList() {
           observatii: veh?.observatii ?? null,
         });
         setSelectedClient({ id: c.id, nume: c.nume, cui: c.cui ?? null, tip: c.tip, numar_masina: c.numar_masina ?? null });
-      } else {
-        setPendingPlate(plate);
-        setNewClientNameDraft("");
-        setShowNewClientModal(true);
       }
     } finally {
       setPlateSearching(false);
     }
-  }
-
-  async function handleCreateNewClient() {
-    const name = newClientNameDraft().trim();
-    const plate = pendingPlate();
-    if (!name || !plate) return;
-    const res = await apiFetch("/api/clienti", {
-      method: "POST",
-      body: JSON.stringify({ tip: "fizic", nume: name, numar_masina: plate }),
-    });
-    if (!res.ok) return;
-    const c = await res.json();
-    await apiFetch(`/api/clienti/${c.id}/vehicole`, {
-      method: "POST",
-      body: JSON.stringify({ numar_masina: plate }),
-    });
-    setVehicol({ numarMasina: plate, marca: null, model: null, numarKilometrii: null, vin: null, observatii: null });
-    setSelectedClient({ id: c.id, nume: c.nume, cui: c.cui ?? null, tip: c.tip, numar_masina: plate });
-    setShowNewClientModal(false);
   }
 
   const [showManual, setShowManual] = createSignal(false);
@@ -1204,41 +1178,6 @@ export default function ShoppingList() {
         </div>
       </Show>
 
-      {/* Modal client nou (nr. mașină necunoscut) */}
-      <Show when={showNewClientModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:360px">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Client nou</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewClientModal(false)}>✕</button>
-            </div>
-            <div class="sl-modal-body" style="padding:16px 20px">
-              <p style="margin:0 0 12px;font-size:0.85rem;color:var(--text-muted)">
-                Vehicolul <strong>{pendingPlate()}</strong> nu a fost găsit.
-                Introduceți numele clientului pentru a-l crea și asocia.
-              </p>
-              <input
-                class="input"
-                placeholder="Nume client"
-                value={newClientNameDraft()}
-                onInput={(e) => setNewClientNameDraft(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleCreateNewClient(); }}
-                autofocus
-              />
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewClientModal(false)}>Anulează</button>
-              <button
-                class="btn btn-primary btn-sm"
-                disabled={!newClientNameDraft().trim()}
-                onClick={handleCreateNewClient}
-              >
-                Creează și asociază
-              </button>
-            </div>
-          </div>
-        </div>
-      </Show>
     </div>
   );
 }
