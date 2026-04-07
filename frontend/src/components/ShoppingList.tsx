@@ -734,7 +734,7 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-titlu">
-        <div style="position:relative;flex:4;min-width:0">
+        <div style="position:relative;flex:7;min-width:0">
           <input
             class="input-titlu"
             type="text"
