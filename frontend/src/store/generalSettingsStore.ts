@@ -4,12 +4,14 @@ import { apiFetch } from "../utils/api";
 export interface GeneralSettingsData {
   useFactura: boolean;
   useAviz: boolean;
+  afiseazaTehnicianDeviz: boolean;
 }
 
 function mapFromApi(data: any): GeneralSettingsData {
   return {
     useFactura: data.use_factura,
     useAviz: data.use_aviz,
+    afiseazaTehnicianDeviz: data.afiseaza_tehnician_deviz ?? false,
   };
 }
 
@@ -44,11 +46,12 @@ export async function loadGeneralSettings(): Promise<void> {
 }
 
 export async function updateGeneralSettings(
-  patch: Partial<{ useFactura: boolean; useAviz: boolean }>
+  patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean }>
 ): Promise<void> {
   const body: Record<string, boolean> = {};
   if (patch.useFactura !== undefined) body.use_factura = patch.useFactura;
   if (patch.useAviz !== undefined) body.use_aviz = patch.useAviz;
+  if (patch.afiseazaTehnicianDeviz !== undefined) body.afiseaza_tehnician_deviz = patch.afiseazaTehnicianDeviz;
 
   const res = await apiFetch("/api/general-settings", {
     method: "PATCH",

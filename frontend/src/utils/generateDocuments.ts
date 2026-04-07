@@ -256,26 +256,60 @@ function drawClientBlock(
 }
 
 /** Tabel articole cu TVA per linie */
-function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number): number {
+function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number, showTehnician = false): number {
   const rows = r.items.map((item, idx) => {
     const total = item.price * item.qty;
     const net = total / (1 + tvaPct / 100);
     const tva = total - net;
-    return [
+    const row = [
       String(idx + 1),
       ro(item.name),
+    ];
+    if (showTehnician) {
+      const teh = item.employeeName ? ro(item.employeeName).slice(0, 15) : "";
+      row.push(teh);
+    }
+    row.push(
       String(item.qty),
       ro(item.unit),
       item.price.toFixed(2),
       net.toFixed(2),
       tva.toFixed(2),
       total.toFixed(2),
-    ];
+    );
+    return row;
   });
+
+  const head = showTehnician
+    ? [["#", "Denumire", "Tehnician", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]]
+    : [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]];
+
+  const columnStyles: Record<number, any> = showTehnician
+    ? {
+        0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 22 },
+        3: { halign: "center", cellWidth: 11 },
+        4: { halign: "center", cellWidth: 11 },
+        5: { halign: "right", cellWidth: 20 },
+        6: { halign: "right", cellWidth: 20 },
+        7: { halign: "right", cellWidth: 20 },
+        8: { halign: "right", cellWidth: 22, fontStyle: "bold" },
+      }
+    : {
+        0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
+        1: { cellWidth: "auto" },
+        2: { halign: "center", cellWidth: 11 },
+        3: { halign: "center", cellWidth: 11 },
+        4: { halign: "right", cellWidth: 22 },
+        5: { halign: "right", cellWidth: 22 },
+        6: { halign: "right", cellWidth: 22 },
+        7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
+      };
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]],
+    head,
     body: rows,
     styles: {
       fontSize: 7.5,
@@ -293,16 +327,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
       lineWidth: 0.2,
     },
     alternateRowStyles: {},
-    columnStyles: {
-      0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
-      1: { cellWidth: "auto" },
-      2: { halign: "center", cellWidth: 11 },
-      3: { halign: "center", cellWidth: 11 },
-      4: { halign: "right", cellWidth: 22 },
-      5: { halign: "right", cellWidth: 22 },
-      6: { halign: "right", cellWidth: 22 },
-      7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
-    },
+    columnStyles,
     margin: { left: ML, right: MR },
     tableWidth: CW,
   });
@@ -513,7 +538,7 @@ async function drawFooterWithBranding(doc: any, website: string | null | undefin
 
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
-export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> {
+export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician = false): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const tvaPct = ctx.company?.tva_percentage ?? 0;
@@ -574,7 +599,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext): Promise<void> 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
 
-  y = drawItemsTable(doc, autoTable, r, y, tvaPct);
+  y = drawItemsTable(doc, autoTable, r, y, tvaPct, showTehnician);
   y = drawTotals(doc, r, y, tvaPct);
 
   if (r.descriere?.trim()) {
@@ -883,6 +908,7 @@ interface CazareForPdf {
   clientReprezentant: string | null;
   employeeName: string | null;
   locCazareNume: string | null;
+  numarMasina?: string | null;
   comments: string | null;
   depAnvelope?: boolean;
   depCapace?: boolean;
@@ -896,6 +922,7 @@ interface CazareForPdf {
     anvelopa: {
       marcaNume: string | null;
       dimensiuneValoare: string | null;
+      profilValoare?: string | null;
       tip: string;
       adancime: number | null;
     } | null;
@@ -904,6 +931,7 @@ interface CazareForPdf {
     anvelopa: {
       marcaNume: string | null;
       dimensiuneValoare: string | null;
+      profilValoare?: string | null;
       tip: string;
       adancime: number | null;
     } | null;
@@ -939,6 +967,7 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
     y += al.length * 3.5;
   }
   if (cazare.clientTelefon) { doc.text(`Tel: ${cazare.clientTelefon}`, x, y); y += 3.5; }
+  if (cazare.numarMasina)   { doc.text(`Nr. masina: ${cazare.numarMasina}`, x, y); y += 3.5; }
   return y;
 }
 
@@ -951,6 +980,7 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
         String(idx + 1),
         t(a.marcaNume ?? "—"),
         t(a.dimensiuneValoare ?? "—"),
+        t(a.profilValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
       ];
@@ -960,7 +990,7 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
 
   autoTable(doc, {
     startY: y,
-    head: [["#", "Marcă", "Dimensiune", "Tip", "Adâncime"]],
+    head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
     body: rows,
     theme: "grid",
     styles: { font, fontSize: 7.5, cellPadding: 2 },
@@ -969,9 +999,10 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
     columnStyles: {
       0: { halign: "center", cellWidth: 8 },
       1: { cellWidth: "auto" },
-      2: { cellWidth: 35 },
-      3: { halign: "center", cellWidth: 18 },
-      4: { halign: "center", cellWidth: 22 },
+      2: { cellWidth: 28 },
+      3: { halign: "center", cellWidth: 16 },
+      4: { halign: "center", cellWidth: 16 },
+      5: { halign: "center", cellWidth: 20 },
     },
     margin: { left: ML, right: MR },
     tableWidth: CW,
@@ -1075,19 +1106,20 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
           String(idx + 1),
           t(a.marcaNume ?? "—"),
           t(a.dimensiuneValoare ?? "—"),
+          t(a.profilValoare ?? "—"),
           TIP_PDF_LABELS[a.tip] ?? a.tip,
           a.adancime != null ? `${a.adancime} mm` : "—",
         ];
       });
       autoTable(doc, {
         startY: y,
-        head: [["#", "Marcă", "Dimensiune", "Tip", "Adâncime"]],
+        head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
         body: oldRows,
         theme: "grid",
         styles: { font: FONT },
         headStyles: { fillColor: [220, 38, 38], textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
         bodyStyles: { fontSize: 7.5, cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 18 }, 4: { halign: "center", cellWidth: 22 } },
+        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 16 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
         margin: { left: ML, right: MR },
         tableWidth: CW,
       });

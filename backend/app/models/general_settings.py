@@ -11,3 +11,4 @@ class GeneralSettings(Base):
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False, unique=True)
     use_factura: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     use_aviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    afiseaza_tehnician_deviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

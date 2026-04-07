@@ -2512,7 +2512,7 @@ function SetariGeneralePanel() {
 
   onMount(() => { loadGeneralSettings(); });
 
-  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean }>) {
+  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean }>) {
     setSaving(true);
     setMsg(null);
     try {
@@ -2561,6 +2561,21 @@ function SetariGeneralePanel() {
             Controlează vizibilitatea funcționalității de <strong>Aviz de însoțire a mărfii</strong>. Când este
             dezactivat, câmpurile de serie și număr pentru Aviz sunt ascunse din secțiunea
             <strong> Registre</strong> (Configurări). Funcționalitatea de generare aviz urmează să fie implementată.
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.afiseazaTehnicianDeviz === true}
+              disabled={saving()}
+              onChange={(e) => handleChange({ afiseazaTehnicianDeviz: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Afișează angajat/tehnician pe deviz</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Când este activat, devizul generat va include o coloană <strong>Tehnician</strong> cu numele angajatului
+            asociat fiecărui produs/serviciu.
           </p>
         </div>
         <Show when={msg()}>

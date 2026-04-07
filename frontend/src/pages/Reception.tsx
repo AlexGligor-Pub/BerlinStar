@@ -311,6 +311,7 @@ function ClientSection(props: { receipt: Receipt }) {
                     </button>
                   )}
                 </For>
+                <button class="btn btn-sm btn-ghost" style="font-size:0.78rem;width:100%;margin-top:2px" onClick={openAddModal}>+ Adaugă client nou</button>
               </div>
             </Show>
             <Show when={searchedCui() && !searchingCui() && resultsCui().length === 0 && !anafLoading()}>
@@ -334,7 +335,7 @@ function ClientSection(props: { receipt: Receipt }) {
 
           {/* Nume */}
           <div class="rclient-search-row">
-            <input class="input" style="font-size:0.82rem" placeholder="Nume sau nr. mașină..." value={searchNume()}
+            <input class="input" style="font-size:0.82rem" placeholder="Nume..." value={searchNume()}
               onInput={e => { setSearchNume(e.currentTarget.value); setResultsNume([]); setSearchedNume(false); }}
               onKeyDown={e => e.key === "Enter" && searchByNume()}
             />
@@ -352,6 +353,7 @@ function ClientSection(props: { receipt: Receipt }) {
                   </button>
                 )}
               </For>
+              <button class="btn btn-sm btn-ghost" style="font-size:0.78rem;width:100%;margin-top:2px" onClick={openAddModal}>+ Adaugă client nou</button>
             </div>
           </Show>
           <Show when={searchedNume() && !searchingNume() && resultsNume().length === 0}>
@@ -422,7 +424,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
-      if (docType === "deviz") await generateDeviz(r, ctx);
+      if (docType === "deviz") await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true);
       else if (docType === "factura") await generateFactura(r, ctx);
       else await generateChitanta(r, ctx);
     } catch (e: any) {
@@ -446,6 +448,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const date = new Date(r.date);
   const dateStr = date.toLocaleDateString("ro-RO");
   const timeStr = date.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  const updatedDate = r.updatedAt ? new Date(r.updatedAt) : null;
+  const isUpdated = updatedDate && updatedDate > date;
+  const updatedDateStr = isUpdated ? updatedDate!.toLocaleDateString("ro-RO") : null;
+  const updatedTimeStr = isUpdated ? updatedDate!.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : null;
 
   return (
     <div class="rcard" classList={{ "rcard--open": expanded() }}>
@@ -467,7 +473,12 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {r.chitantaSerie}{r.chitantaNr}</span>
             </Show>
           </div>
-          <span class="rcard-meta">{dateStr} {timeStr}</span>
+          <span class="rcard-meta">
+            {dateStr} {timeStr}
+            <Show when={isUpdated}>
+              <span style="margin-left:6px;color:var(--text-muted)">· upd. {updatedDateStr} {updatedTimeStr}</span>
+            </Show>
+          </span>
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">
