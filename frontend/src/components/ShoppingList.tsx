@@ -272,6 +272,153 @@ function AddClientModal(props: {
   );
 }
 
+// ─── EditClientModal ──────────────────────────────────────────────────────────
+
+function EditClientModal(props: {
+  clientId: number;
+  onSaved: (c: ClientItem) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = createSignal(emptyClientForm());
+  const [saving, setSaving] = createSignal(false);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [anafError, setAnafError] = createSignal<string | null>(null);
+
+  const pf = (field: string, value: any) => setForm((f) => ({ ...f, [field]: value }));
+
+  onMount(async () => {
+    const res = await apiFetch(`/api/clienti/${props.clientId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setForm({
+        tip: data.tip ?? "fizic",
+        nume: data.nume ?? "",
+        description: data.description ?? "",
+        cui: data.cui ?? "",
+        reprezentant: data.reprezentant ?? "",
+        telefon: data.telefon ?? "",
+        email: data.email ?? "",
+        adresa: data.adresa ?? "",
+        numar_masina: data.numar_masina ?? "",
+        comments: data.comments ?? "",
+      });
+    }
+    setLoading(false);
+  });
+
+  async function searchAnaf() {
+    const cui = parseInt(form().cui.replace(/\D/g, ""));
+    if (!cui) return;
+    setAnafLoading(true);
+    setAnafError(null);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm((f) => ({
+        ...f,
+        nume: data.name ?? f.nume,
+        adresa: data.address ?? f.adresa,
+        reprezentant: data.representative ?? f.reprezentant,
+      }));
+    } catch {
+      setAnafError("Eroare la interogarea ANAF.");
+    } finally {
+      setAnafLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    const f = form();
+    if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch(`/api/clienti/${props.clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          tip: f.tip, nume: f.nume.trim(),
+          description: f.description.trim() || null,
+          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          telefon: f.telefon.trim() || null, email: f.email.trim() || null,
+          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+          comments: f.comments.trim() || null,
+        }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
+      const updated = await res.json();
+      props.onSaved({ id: updated.id, nume: updated.nume, cui: updated.cui ?? null, tip: updated.tip, numar_masina: updated.numar_masina ?? null });
+    } catch {
+      setError("Eroare la salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="sl-modal-overlay">
+      <div class="sl-modal" style="max-width:420px;width:100%">
+        <div class="sl-modal-header">
+          <span class="sl-modal-title">Editează client</span>
+          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
+        </div>
+        <Show when={loading()}>
+          <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.875rem">Se încarcă...</div>
+        </Show>
+        <Show when={!loading()}>
+          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+            <div style="display:flex;gap:8px">
+              <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
+              <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
+            </div>
+            <Show when={form().tip === "fizic"}>
+              <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
+            </Show>
+            <Show when={form().tip === "juridic"}>
+              <div style="display:flex;gap:6px">
+                <input
+                  class="input"
+                  style="flex:1"
+                  placeholder="CUI"
+                  value={form().cui}
+                  onInput={(e) => pf("cui", e.currentTarget.value)}
+                  onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
+                />
+                <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
+                  {anafLoading() ? "..." : "ANAF"}
+                </button>
+              </div>
+              <Show when={anafError()}>
+                <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
+              </Show>
+              <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
+            </Show>
+            <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
+            <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
+            <Show when={form().tip === "juridic"}>
+              <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
+            </Show>
+            <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
+            <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
+            <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
+            <Show when={error()}>
+              <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
+            </Show>
+          </div>
+          <div class="sl-modal-footer">
+            <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+            <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
+              {saving() ? "Se salvează..." : "Salvează"}
+            </button>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 // ─── ShoppingList ─────────────────────────────────────────────────────────────
 
 export default function ShoppingList() {
@@ -299,6 +446,7 @@ export default function ShoppingList() {
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
+  const [showEditClientModal, setShowEditClientModal] = createSignal(false);
   const [showResumeModal, setShowResumeModal] = createSignal(false);
   const [finalizing, setFinalizing] = createSignal(false);
 
@@ -649,6 +797,14 @@ export default function ShoppingList() {
         >
           Obs.
         </button>
+        <button
+          class="btn btn-ghost btn-sm sl-extra-btn"
+          classList={{ "sl-extra-btn--active": selectedClient() !== null }}
+          onClick={() => selectedClient() ? setShowEditClientModal(true) : setShowAddClientModal(true)}
+          title="Client"
+        >
+          Client
+        </button>
       </div>
 
       <div style="padding:0 8px 4px">
@@ -722,6 +878,15 @@ export default function ShoppingList() {
         <AddClientModal
           onSaved={(c) => { setSelectedClient(c); setShowAddClientModal(false); }}
           onClose={() => setShowAddClientModal(false)}
+        />
+      </Show>
+
+      {/* Edit client modal */}
+      <Show when={showEditClientModal() && selectedClient() !== null}>
+        <EditClientModal
+          clientId={selectedClient()!.id}
+          onSaved={(c) => { setSelectedClient(c); setShowEditClientModal(false); }}
+          onClose={() => setShowEditClientModal(false)}
         />
       </Show>
 
