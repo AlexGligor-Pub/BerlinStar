@@ -18,6 +18,7 @@ interface CartMeta {
   dateTehn: string;
   client: ClientItem | null;
   vehicol: VehicolData | null;
+  receiptId: string | null;
 }
 
 function saveCartMeta(m: CartMeta) {
@@ -479,8 +480,9 @@ export default function ShoppingList() {
   // Save titlu/descriere/dateTehn/client/vehicol to localStorage whenever they change (after mount)
   createEffect(() => {
     const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient(), v = vehicol();
+    const rid = loadedReceiptId();
     if (!metaSaveEnabled) return;
-    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v });
+    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v, receiptId: rid });
   });
 
   const [plateSearching, setPlateSearching] = createSignal(false);
@@ -603,6 +605,7 @@ export default function ShoppingList() {
       setDateTehn(meta.dateTehn ?? "");
       setSelectedClient(meta.client ?? null);
       setVehicol(meta.vehicol ?? null);
+      setLoadedReceiptId(meta.receiptId ?? null);
     }
     setShowResumeModal(false);
   }
