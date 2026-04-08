@@ -14,8 +14,12 @@ from .register import Register
 from .marca_anvelopa import MarcaAnvelopa
 from .dimensiune_anvelopa import DimensiuneAnvelopa
 from .anvelopa import Anvelopa, TipAnvelopa
+from .profil_anvelopa import ProfilAnvelopa
 from .loc_cazare import LocCazare
 from .cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from .programare import Programare, ProgramareStatus
+from .vehicol import Vehicol
+from .general_settings import GeneralSettings
+from .client_vehicol import ClientVehicol
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "ClientVehicol"]

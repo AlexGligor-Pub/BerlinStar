@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
-import { saveReceipt, updateReceiptContent, updateReceiptClient } from "../store/receiptsStore";
+import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
@@ -17,6 +17,8 @@ interface CartMeta {
   descriere: string;
   dateTehn: string;
   client: ClientItem | null;
+  vehicol: VehicolData | null;
+  receiptId: string | null;
 }
 
 function saveCartMeta(m: CartMeta) {
@@ -46,12 +48,31 @@ function emptyClientForm() {
   return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
+interface VehicolWithClient {
+  vehicol: {
+    id: number;
+    numar_masina: string;
+    marca: string | null;
+    model: string | null;
+    numar_kilometrii: number | null;
+    vin: string | null;
+    observatii: string | null;
+  };
+  client: {
+    id: number;
+    nume: string;
+    tip: string;
+    cui: string | null;
+    numar_masina: string | null;
+  };
+}
+
 // ─── PosClientSearch ──────────────────────────────────────────────────────────
 
 function PosClientSearch(props: {
   value: ClientItem | null;
   onSelect: (c: ClientItem | null) => void;
-  onAddNew: () => void;
+  onAddNew?: () => void;
 }) {
   const [q, setQ] = createSignal("");
   const [results, setResults] = createSignal<ClientItem[]>([]);
@@ -105,7 +126,7 @@ function PosClientSearch(props: {
         <input
           class="input"
           style="flex:1;font-size:13px"
-          placeholder="Caută client după nume, CUI sau nr. mașină..."
+          placeholder="Caută client după nume ..."
           value={q()}
           onInput={(e) => { setQ(e.currentTarget.value); if (!props.value) search(e.currentTarget.value); }}
           onFocus={() => { if (props.value) return; if (results().length) setOpen(true); }}
@@ -122,7 +143,6 @@ function PosClientSearch(props: {
       <Show when={props.value}>
         <div style="font-size:11px;color:var(--text-muted);padding:2px 2px 0">
           {props.value!.tip === "juridic" ? "Juridică" : "Fizică"}
-          <Show when={props.value!.numar_masina}> · {props.value!.numar_masina}</Show>
           <Show when={props.value!.cui}> · CUI: {props.value!.cui}</Show>
         </div>
       </Show>
@@ -135,7 +155,6 @@ function PosClientSearch(props: {
                 onMouseDown={(e) => { e.preventDefault(); pick(c); }}
               >
                 <span style="font-weight:600">{c.nume}</span>
-                <Show when={c.numar_masina}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">{c.numar_masina}</span></Show>
                 <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
                 <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{c.tip === "juridic" ? "Juridică" : "Fizică"}</span>
               </button>
@@ -146,7 +165,9 @@ function PosClientSearch(props: {
       <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
         <div style="position:absolute;left:0;right:0;z-index:300;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px;display:flex;align-items:center;gap:8px">
           <span style="color:var(--text-muted)">Niciun client găsit.</span>
-          <button class="btn btn-sm btn-primary" onMouseDown={(e) => { e.preventDefault(); props.onAddNew(); setOpen(false); }}>+ Adaugă client</button>
+          <Show when={props.onAddNew}>
+            <button class="btn btn-sm btn-primary" onMouseDown={(e) => { e.preventDefault(); props.onAddNew!(); setOpen(false); }}>+ Adaugă client</button>
+          </Show>
         </div>
       </Show>
     </div>
@@ -218,19 +239,21 @@ function AddClientModal(props: {
 
   return (
     <div class="sl-modal-overlay">
-      <div class="sl-modal" style="max-width:420px;width:100%">
+      <div class="sl-modal" style="max-width:560px;width:100%">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Adaugă client</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
         </div>
-        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:60vh">
+        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+          <PosClientSearch
+            value={null}
+            onSelect={(c) => { if (c) props.onSaved(c); }}
+          />
+          <div style="border-top:1px solid var(--border);margin:2px 0" />
           <div style="display:flex;gap:8px">
             <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
             <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
           </div>
-          <Show when={form().tip === "fizic"}>
-            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
-          </Show>
           <Show when={form().tip === "juridic"}>
             <div style="display:flex;gap:6px">
               <input
@@ -248,7 +271,6 @@ function AddClientModal(props: {
             <Show when={anafError()}>
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
-            <input class="input" placeholder="Număr mașină" value={form().numar_masina} onInput={(e) => pf("numar_masina", e.currentTarget.value.toUpperCase())} />
           </Show>
           <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
           <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -273,6 +295,154 @@ function AddClientModal(props: {
   );
 }
 
+// ─── EditClientModal ──────────────────────────────────────────────────────────
+
+function EditClientModal(props: {
+  clientId: number;
+  onSaved: (c: ClientItem) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = createSignal(emptyClientForm());
+  const [saving, setSaving] = createSignal(false);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<string | null>(null);
+  const [anafLoading, setAnafLoading] = createSignal(false);
+  const [anafError, setAnafError] = createSignal<string | null>(null);
+
+  const pf = (field: string, value: any) => setForm((f) => ({ ...f, [field]: value }));
+
+  onMount(async () => {
+    const res = await apiFetch(`/api/clienti/${props.clientId}`);
+    if (res.ok) {
+      const data = await res.json();
+      setForm({
+        tip: data.tip ?? "fizic",
+        nume: data.nume ?? "",
+        description: data.description ?? "",
+        cui: data.cui ?? "",
+        reprezentant: data.reprezentant ?? "",
+        telefon: data.telefon ?? "",
+        email: data.email ?? "",
+        adresa: data.adresa ?? "",
+        numar_masina: data.numar_masina ?? "",
+        comments: data.comments ?? "",
+      });
+    }
+    setLoading(false);
+  });
+
+  async function searchAnaf() {
+    const cui = parseInt(form().cui.replace(/\D/g, ""));
+    if (!cui) return;
+    setAnafLoading(true);
+    setAnafError(null);
+    try {
+      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setForm((f) => ({
+        ...f,
+        nume: data.name ?? f.nume,
+        adresa: data.address ?? f.adresa,
+        reprezentant: data.representative ?? f.reprezentant,
+      }));
+    } catch {
+      setAnafError("Eroare la interogarea ANAF.");
+    } finally {
+      setAnafLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    const f = form();
+    if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    setSaving(true); setError(null);
+    try {
+      const res = await apiFetch(`/api/clienti/${props.clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          tip: f.tip, nume: f.nume.trim(),
+          description: f.description.trim() || null,
+          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          telefon: f.telefon.trim() || null, email: f.email.trim() || null,
+          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+          comments: f.comments.trim() || null,
+        }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
+      const updated = await res.json();
+      props.onSaved({ id: updated.id, nume: updated.nume, cui: updated.cui ?? null, tip: updated.tip, numar_masina: updated.numar_masina ?? null });
+    } catch {
+      setError("Eroare la salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="sl-modal-overlay">
+      <div class="sl-modal" style="max-width:560px;width:100%">
+        <div class="sl-modal-header">
+          <span class="sl-modal-title">Editează client</span>
+          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
+        </div>
+        <Show when={loading()}>
+          <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.875rem">Se încarcă...</div>
+        </Show>
+        <Show when={!loading()}>
+          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+            <PosClientSearch
+              value={null}
+              onSelect={(c) => { if (c) props.onSaved(c); }}
+            />
+            <div style="border-top:1px solid var(--border);margin:2px 0" />
+            <div style="display:flex;gap:8px">
+              <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
+              <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
+            </div>
+            <Show when={form().tip === "juridic"}>
+              <div style="display:flex;gap:6px">
+                <input
+                  class="input"
+                  style="flex:1"
+                  placeholder="CUI"
+                  value={form().cui}
+                  onInput={(e) => pf("cui", e.currentTarget.value)}
+                  onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
+                />
+                <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
+                  {anafLoading() ? "..." : "ANAF"}
+                </button>
+              </div>
+              <Show when={anafError()}>
+                <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
+              </Show>
+            </Show>
+            <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
+            <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
+            <Show when={form().tip === "juridic"}>
+              <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
+            </Show>
+            <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
+            <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
+            <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
+            <Show when={error()}>
+              <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
+            </Show>
+          </div>
+          <div class="sl-modal-footer">
+            <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+            <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
+              {saving() ? "Se salvează..." : "Salvează"}
+            </button>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 // ─── ShoppingList ─────────────────────────────────────────────────────────────
 
 export default function ShoppingList() {
@@ -281,6 +451,7 @@ export default function ShoppingList() {
   const [dateTehn, setDateTehn] = createSignal("");
   const [modal, setModal] = createSignal<ModalType>(null);
   const [modalDraft, setModalDraft] = createSignal("");
+  const [modalUppercase, setModalUppercase] = createSignal(true);
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
   const [showSuccess, setShowSuccess] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
@@ -290,21 +461,72 @@ export default function ShoppingList() {
 
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
+  const [vehicol, setVehicol] = createSignal<VehicolData | null>(null);
+  const [showVehicolModal, setShowVehicolModal] = createSignal(false);
+  const [vehicolDraft, setVehicolDraft] = createSignal<VehicolData>({ numarMasina: "" });
+  const [obsUppercase, setObsUppercase] = createSignal(true);
+
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
+  const [showEditClientModal, setShowEditClientModal] = createSignal(false);
   const [showResumeModal, setShowResumeModal] = createSignal(false);
+  const [finalizing, setFinalizing] = createSignal(false);
 
   // Guard: don't save meta before onMount decides what to load
   let metaSaveEnabled = false;
 
-  // Save titlu/descriere/dateTehn/client to localStorage whenever they change (after mount)
+  // Save titlu/descriere/dateTehn/client/vehicol to localStorage whenever they change (after mount)
   createEffect(() => {
-    const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient();
+    const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient(), v = vehicol();
+    const rid = loadedReceiptId();
     if (!metaSaveEnabled) return;
-    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c });
+    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v, receiptId: rid });
   });
+
+  const [plateSearching, setPlateSearching] = createSignal(false);
+  const [vehicolPickList, setVehicolPickList] = createSignal<VehicolWithClient[]>([]);
+  const [showVehicolPickModal, setShowVehicolPickModal] = createSignal(false);
+
+  function applyVehicolWithClient(item: VehicolWithClient) {
+    setVehicol({
+      numarMasina: item.vehicol.numar_masina,
+      marca: item.vehicol.marca ?? null,
+      model: item.vehicol.model ?? null,
+      numarKilometrii: item.vehicol.numar_kilometrii ?? null,
+      vin: item.vehicol.vin ?? null,
+      observatii: item.vehicol.observatii ?? null,
+    });
+    setSelectedClient({
+      id: item.client.id,
+      nume: item.client.nume,
+      cui: item.client.cui ?? null,
+      tip: item.client.tip,
+      numar_masina: item.client.numar_masina ?? null,
+    });
+  }
+
+  async function handlePlateBlur() {
+    if (plateSearching()) return;
+    const plate = titlu().trim().toUpperCase();
+    if (!plate) return;
+    if (vehicol()?.numarMasina === plate) return;
+    setPlateSearching(true);
+    try {
+      const res = await apiFetch(`/api/clienti/vehicole-by-plate?q_masina=${encodeURIComponent(plate)}`);
+      if (!res.ok) return;
+      const results: VehicolWithClient[] = await res.json();
+      if (results.length === 1) {
+        applyVehicolWithClient(results[0]);
+      } else if (results.length > 1) {
+        setVehicolPickList(results);
+        setShowVehicolPickModal(true);
+      }
+    } finally {
+      setPlateSearching(false);
+    }
+  }
 
   const [showManual, setShowManual] = createSignal(false);
   const [manualName, setManualName] = createSignal("");
@@ -364,6 +586,7 @@ export default function ShoppingList() {
       setDateTehn(r.dateTehn);
       replaceCart(r.items);
       loadResumeClient(r);
+      setVehicol(r.vehicol ?? null);
       metaSaveEnabled = true;
     } else if (cart.items.length > 0) {
       // Există o listă salvată — arată modalul de alegere
@@ -381,6 +604,8 @@ export default function ShoppingList() {
       setDescriere(meta.descriere ?? "");
       setDateTehn(meta.dateTehn ?? "");
       setSelectedClient(meta.client ?? null);
+      setVehicol(meta.vehicol ?? null);
+      setLoadedReceiptId(meta.receiptId ?? null);
     }
     setShowResumeModal(false);
   }
@@ -392,6 +617,7 @@ export default function ShoppingList() {
     setDescriere("");
     setDateTehn("");
     setSelectedClient(null);
+    setVehicol(null);
     setLoadedReceiptId(null);
     setShowResumeModal(false);
   }
@@ -407,6 +633,7 @@ export default function ShoppingList() {
     setDateTehn(d.dateTehn);
     replaceCart(d.items);
     loadResumeClient(d);
+    setVehicol(d.vehicol ?? null);
   });
 
   let warnTimer: ReturnType<typeof setTimeout>;
@@ -419,6 +646,7 @@ export default function ShoppingList() {
 
   function openModal(type: ModalType) {
     setModalDraft(type === "descriere" ? descriere() : dateTehn());
+    setModalUppercase(true);
     setModal(type);
   }
 
@@ -432,6 +660,8 @@ export default function ShoppingList() {
   async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
+    if (finalizing()) return;
+    setFinalizing(true);
     const receiptId = loadedReceiptId();
     const receiptData = {
       date: new Date().toISOString(),
@@ -449,31 +679,51 @@ export default function ShoppingList() {
       programareId: loadedProgramareId(),
       locationId: device()?.locationId ?? null,
     };
+    let saved;
     try {
-      let saved;
       if (receiptId !== null) {
         saved = await updateReceiptContent(receiptId, receiptData);
       } else {
         saved = await saveReceipt(receiptData);
       }
-      const client = selectedClient();
-      if (client !== null) {
-        await updateReceiptClient(saved.id, client.id);
-      }
-      clearCart();
-      clearCartMeta();
-      selectEmployee(null);
-      setTitlu("");
-      setDescriere("");
-      setDateTehn("");
-      setLoadedReceiptId(null);
-      setLoadedProgramareId(null);
-      setSelectedClient(null);
+    } catch (e: any) {
+      setErrorMsg(e?.message ?? "Eroare necunoscuta.");
+      setFinalizing(false);
+      return;
+    }
+
+    const warns: string[] = [];
+
+    const client = selectedClient();
+    if (client !== null) {
+      try { await updateReceiptClient(saved.id, client.id); }
+      catch { warns.push("clientul nu a putut fi asociat"); }
+    }
+
+    const veh = vehicol();
+    if (veh !== null) {
+      try { await saveReceiptVehicol(saved.id, veh); }
+      catch { warns.push("vehicolul nu a putut fi asociat"); }
+    }
+
+    clearCart();
+    clearCartMeta();
+    selectEmployee(null);
+    setTitlu("");
+    setDescriere("");
+    setDateTehn("");
+    setVehicol(null);
+    setLoadedReceiptId(null);
+    setLoadedProgramareId(null);
+    setSelectedClient(null);
+
+    setFinalizing(false);
+    if (warns.length > 0) {
+      setErrorMsg(`Bon salvat, dar ${warns.join(" și ")}. Poți edita din Recepție.`);
+    } else {
       setShowSuccess(true);
       clearTimeout(successTimer);
       successTimer = setTimeout(() => setShowSuccess(false), 1000);
-    } catch (e: any) {
-      setErrorMsg(e?.message ?? "Eroare necunoscuta.");
     }
   }
 
@@ -503,7 +753,7 @@ export default function ShoppingList() {
           </Show>
         </div>
         <div class="sl-header-right">
-          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adauga produs manual">+ Manual</button>
+          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adaugă produs/serviciu manual">+ Produs/Serviciu</button>
           <Show when={cart.items.length > 0}>
             <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={() => setShowClearConfirm(true)}>Sterge tot</button>
           </Show>
@@ -511,39 +761,76 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-titlu">
-        <input
-          class="input-titlu"
-          type="text"
-          placeholder="Titlu *"
-          maxlength={200}
-          value={titlu()}
-          onInput={(e) => setTitlu(e.currentTarget.value)}
-        />
+        <div style="position:relative;flex:7;min-width:0">
+          <input
+            class="input-titlu"
+            type="text"
+            placeholder="Nr. masina ex: B 100 TST"
+            maxlength={100}
+            value={titlu()}
+            onInput={(e) => setTitlu(e.currentTarget.value.replace(/\s/g, "").toUpperCase())}
+            onKeyDown={(e) => { if (e.key === "Enter") handlePlateBlur(); }}
+            onBlur={handlePlateBlur}
+          />
+          <Show when={plateSearching()}>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:0.75rem;color:var(--text-muted);pointer-events:none">...</span>
+          </Show>
+        </div>
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
-          classList={{ "sl-extra-btn--active": descriere().trim() !== "" }}
-          onClick={() => openModal("descriere")}
-          title="Descriere"
+          classList={{ "sl-extra-btn--active": vehicol() !== null }}
+          onClick={() => {
+            const draft = vehicol() ?? { numarMasina: titlu().trim() };
+            setVehicolDraft({ ...draft });
+            setObsUppercase(true);
+            setShowVehicolModal(true);
+          }}
+          title="Vehicul"
         >
-          Desc.
+          Masina
         </button>
         <button
           class="btn btn-ghost btn-sm sl-extra-btn"
           classList={{ "sl-extra-btn--active": dateTehn().trim() !== "" }}
           onClick={() => openModal("dateTehn")}
-          title="Date tehnice"
+          title="Observatii"
         >
-          Tehn.
+          Obs.
+        </button>
+        <button
+          class="btn btn-ghost btn-sm sl-extra-btn"
+          classList={{ "sl-extra-btn--active": selectedClient() !== null }}
+          onClick={() => selectedClient() ? setShowEditClientModal(true) : setShowAddClientModal(true)}
+          title="Client"
+        >
+          Client
         </button>
       </div>
 
-      <div style="padding:0 8px 4px">
-        <PosClientSearch
-          value={selectedClient()}
-          onSelect={setSelectedClient}
-          onAddNew={() => setShowAddClientModal(true)}
-        />
-      </div>
+      <Show when={vehicol() !== null || selectedClient() !== null}>
+        <div style="padding:2px 10px 4px;display:grid;gap:1px">
+          <Show when={vehicol() !== null}>
+            <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {[
+                vehicol()!.numarMasina,
+                vehicol()!.marca,
+                vehicol()!.model,
+                vehicol()!.numarKilometrii != null ? `${vehicol()!.numarKilometrii} km` : null,
+                vehicol()!.vin,
+              ].filter(Boolean).join(" · ")}
+            </div>
+          </Show>
+          <Show when={selectedClient() !== null}>
+            <div style="font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {[
+                selectedClient()!.nume,
+                selectedClient()!.tip === "juridic" ? "Juridică" : "Fizică",
+                selectedClient()!.cui ? `CUI: ${selectedClient()!.cui}` : null,
+              ].filter(Boolean).join(" · ")}
+            </div>
+          </Show>
+        </div>
+      </Show>
 
       <div class="shopping-list-body">
         <Show
@@ -578,10 +865,10 @@ export default function ShoppingList() {
         </div>
         <button
           class="btn btn-primary w-full"
-          disabled={cart.items.length === 0}
+          disabled={cart.items.length === 0 || finalizing()}
           onClick={handleFinalize}
         >
-          Finalizeaza
+          {finalizing() ? "Se salvează..." : "Finalizeaza"}
         </button>
       </div>
 
@@ -608,6 +895,15 @@ export default function ShoppingList() {
         <AddClientModal
           onSaved={(c) => { setSelectedClient(c); setShowAddClientModal(false); }}
           onClose={() => setShowAddClientModal(false)}
+        />
+      </Show>
+
+      {/* Edit client modal */}
+      <Show when={showEditClientModal() && selectedClient() !== null}>
+        <EditClientModal
+          clientId={selectedClient()!.id}
+          onSaved={(c) => { setSelectedClient(c); setShowEditClientModal(false); }}
+          onClose={() => setShowEditClientModal(false)}
         />
       </Show>
 
@@ -706,7 +1002,7 @@ export default function ShoppingList() {
       {/* Titlu warning toast */}
       <Show when={showTitluWarn()}>
         <div class="titlu-warn-toast">
-          Scrie un titlu pentru a finaliza!
+          Scrie un număr de mașină pentru a finaliza!
         </div>
       </Show>
 
@@ -715,7 +1011,7 @@ export default function ShoppingList() {
         <div class="sl-modal-overlay">
           <div class="sl-modal">
             <div class="sl-modal-header">
-              <span class="sl-modal-title">Adauga produs manual</span>
+              <span class="sl-modal-title">Adaugă produs/serviciu manual</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>✕</button>
             </div>
             <div class="sl-edit-item-body">
@@ -726,23 +1022,25 @@ export default function ShoppingList() {
                   type="text"
                   placeholder="Ex: Transport, Consultanta..."
                   value={manualName()}
-                  onInput={(e) => setManualName(e.currentTarget.value)}
+                  onInput={(e) => setManualName(e.currentTarget.value.toUpperCase())}
+                  onKeyDown={(e) => { if (e.key === "Enter") confirmManual(); }}
                   autofocus
                 />
               </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Tip</label>
-                <select
-                  class="input sl-edit-input"
-                  value={manualTip()}
-                  onChange={(e) => {
-                    setManualTip(e.currentTarget.value);
-                    setManualUnit(e.currentTarget.value === "Serviciu" ? "ora" : "buc");
-                  }}
-                >
-                  <option value="Produs">Produs</option>
-                  <option value="Serviciu">Serviciu</option>
-                </select>
+                <div class="sl-tip-toggle">
+                  <button
+                    class={`btn btn-sm${manualTip() === "Produs" ? " btn-primary" : " btn-ghost"}`}
+                    onClick={() => { setManualTip("Produs"); setManualUnit("buc"); }}
+                    type="button"
+                  >Produs</button>
+                  <button
+                    class={`btn btn-sm${manualTip() === "Serviciu" ? " btn-primary" : " btn-ghost"}`}
+                    onClick={() => { setManualTip("Serviciu"); setManualUnit("ora"); }}
+                    type="button"
+                  >Serviciu</button>
+                </div>
               </div>
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">U.M.</label>
@@ -766,7 +1064,7 @@ export default function ShoppingList() {
                 />
               </div>
               <div class="sl-qty-presets">
-                {[10, 50, 100, 200, 300, 500, 1000].map(v => (
+                {[2,3,4,5,6,7,8,10, 50, 100].map(v => (
                   <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setManualQty(String(v))}>{v}</button>
                 ))}
               </div>
@@ -800,25 +1098,159 @@ export default function ShoppingList() {
         </div>
       </Show>
 
+      {/* Vehicol pick modal — multiple results for plate search */}
+      <Show when={showVehicolPickModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:480px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Selectează vehiculul</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>✕</button>
+            </div>
+            <div style="padding:8px;display:grid;gap:6px;overflow-y:auto;max-height:60vh">
+              <For each={vehicolPickList()}>
+                {(item) => (
+                  <button
+                    style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;text-align:left;width:100%"
+                    onClick={() => { applyVehicolWithClient(item); setShowVehicolPickModal(false); }}
+                  >
+                    <div>
+                      <div style="font-weight:600;font-size:14px">{item.vehicol.numar_masina}</div>
+                      <div style="font-size:12px;color:var(--text-muted)">
+                        {[item.vehicol.marca, item.vehicol.model].filter(Boolean).join(" ") || "—"}
+                      </div>
+                    </div>
+                    <div style="font-size:12px;color:var(--text-muted);text-align:right">
+                      <div>{item.client.nume}</div>
+                      <Show when={item.client.cui}>
+                        <div>CUI: {item.client.cui}</div>
+                      </Show>
+                    </div>
+                  </button>
+                )}
+              </For>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>Anulează</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Vehicol modal */}
+      <Show when={showVehicolModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:600px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Vehicul</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>✕</button>
+            </div>
+            <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:75vh">
+              <input
+                class="input"
+                placeholder="Număr mașină *"
+                value={vehicolDraft().numarMasina}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarMasina: e.currentTarget.value.toUpperCase() }))}
+              />
+              <input
+                class="input"
+                placeholder="Marcă"
+                value={vehicolDraft().marca ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, marca: e.currentTarget.value || null }))}
+              />
+              <input
+                class="input"
+                placeholder="Model"
+                value={vehicolDraft().model ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, model: e.currentTarget.value || null }))}
+              />
+              <input
+                class="input"
+                type="number"
+                min="0"
+                placeholder="Număr kilometri"
+                value={vehicolDraft().numarKilometrii ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarKilometrii: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
+              />
+              <input
+                class="input"
+                placeholder="VIN"
+                maxlength={17}
+                value={vehicolDraft().vin ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, vin: e.currentTarget.value.toUpperCase() || null }))}
+              />
+              <textarea
+                class="sl-modal-textarea"
+                placeholder="Observații..."
+                rows={10}
+                style={obsUppercase() ? "text-transform:uppercase" : ""}
+                value={vehicolDraft().observatii ?? ""}
+                onInput={(e) => {
+                  const val = obsUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+                  setVehicolDraft((d) => ({ ...d, observatii: val || null }));
+                }}
+              />
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
+                <input
+                  type="checkbox"
+                  checked={!obsUppercase()}
+                  onChange={(e) => setObsUppercase(!e.currentTarget.checked)}
+                />
+                Scriere normală (litere mici/mari)
+              </label>
+            </div>
+            <div class="sl-modal-footer">
+              <Show when={vehicol() !== null}>
+                <button class="btn btn-ghost btn-sm" onClick={() => { setVehicol(null); setShowVehicolModal(false); }}>Șterge</button>
+              </Show>
+              <div style="flex:1" />
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={vehicolDraft().numarMasina.trim() === ""}
+                onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
+              >
+                Salvează
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* Modal */}
       <Show when={modal() !== null}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal">
+          <div class="sl-modal" style="max-width:600px;width:100%">
             <div class="sl-modal-header">
               <span class="sl-modal-title">
-                {modal() === "descriere" ? "Descriere" : "Date tehnice"}
+                {modal() === "descriere" ? "Descriere" : "Observații"}
               </span>
               <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>✕</button>
             </div>
             <textarea
               class="sl-modal-textarea"
-              placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Date tehnice..."}
+              placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Observații ..."}
               maxlength={200}
               value={modalDraft()}
-              onInput={(e) => setModalDraft(e.currentTarget.value)}
-              rows={10}
+              onInput={(e) => {
+                const val = modal() === "dateTehn" && modalUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+                setModalDraft(val);
+              }}
+              rows={14}
+              style={modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase" : ""}
               autofocus
             />
+            <Show when={modal() === "dateTehn"}>
+              <div style="padding:4px 12px 8px">
+                <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
+                  <input
+                    type="checkbox"
+                    checked={!modalUppercase()}
+                    onChange={(e) => setModalUppercase(!e.currentTarget.checked)}
+                  />
+                  Scriere normală (litere mici/mari)
+                </label>
+              </div>
+            </Show>
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={confirmModal}>Salveaza</button>
@@ -826,6 +1258,7 @@ export default function ShoppingList() {
           </div>
         </div>
       </Show>
+
     </div>
   );
 }

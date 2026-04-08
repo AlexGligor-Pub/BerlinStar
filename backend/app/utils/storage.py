@@ -3,6 +3,7 @@ import logging
 import os
 import uuid
 from botocore.client import Config
+from fastapi import HTTPException, UploadFile
 
 log = logging.getLogger("berlinstar.storage")
 
@@ -30,6 +31,16 @@ def upload_image(account_id: int, folder: str, file_bytes: bytes, content_type: 
 # backward-compat alias (unused externally but keeps imports clean)
 def upload_employee_image(file_bytes: bytes, content_type: str) -> str:
     return upload_image(0, "employees", file_bytes, content_type)
+
+
+async def validate_image(file: UploadFile, max_mb: int = 5) -> bytes:
+    """Valideaza tipul si dimensiunea imaginii, returneaza bytes-ii fisierului."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
+    data = await file.read()
+    if len(data) > max_mb * 1024 * 1024:
+        raise HTTPException(400, f"Imaginea nu poate depasi {max_mb}MB.")
+    return data
 
 
 def delete_image_by_url(url: str) -> None:

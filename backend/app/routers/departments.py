@@ -12,7 +12,8 @@ from app.schemas.department import DepartmentCreate, DepartmentUpdate, Departmen
 from app.schemas.category import CategoryRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
-from app.utils.storage import upload_image, delete_image_by_url
+from app.utils.paginate import paginate
+from app.utils.storage import upload_image, delete_image_by_url, validate_image
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -45,11 +46,7 @@ async def list_departments(
     stmt = apply_filters(stmt, Department, filters)
     stmt = apply_sort(stmt, Department, sort)
     stmt = stmt.limit(limit + 1)
-
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=DepartmentRead, status_code=201)
@@ -123,11 +120,7 @@ async def upload_department_image(
     department = await db.get(Department, department_id)
     if department is None or department.account_id != account_id or department.is_deleted:
         raise HTTPException(404, "Departamentul nu a fost găsit.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
-    data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    data = await validate_image(file)
     old_url = department.image_path
     url = upload_image(account_id, "departments", data, file.content_type)
     department.image_path = url
@@ -176,8 +169,4 @@ async def list_department_categories(
     stmt = apply_filters(stmt, Category, filters)
     stmt = apply_sort(stmt, Category, sort)
     stmt = stmt.limit(limit + 1)
-
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)

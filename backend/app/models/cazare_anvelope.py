@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, date, timezone
-from sqlalchemy import Integer, Text, Boolean, DateTime, Date, ForeignKey, Index
+from sqlalchemy import Integer, String, Text, Boolean, DateTime, Date, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -35,6 +35,7 @@ class CazareAnvelope(Base):
         Integer, ForeignKey("cazari_anvelope.id", ondelete="SET NULL"), nullable=True
     )
     montate_pe_masina: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    numar_masina: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

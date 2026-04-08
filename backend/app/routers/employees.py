@@ -11,7 +11,8 @@ from app.models.location import employee_locations
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
-from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url
+from app.utils.paginate import paginate
+from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url, validate_image
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -50,10 +51,7 @@ async def list_employees(
     stmt = apply_sort(stmt, Employee, sort)
     stmt = stmt.limit(limit + 1)
 
-    rows = (await db.execute(stmt)).scalars().all()
-    has_more = len(rows) > limit
-    page = rows[:limit]
-    return Page(items=page, next_cursor=page[-1].id if has_more else None)
+    return await paginate(db, stmt, limit)
 
 
 @router.post("", response_model=EmployeeRead, status_code=201)
@@ -97,11 +95,7 @@ async def upload_image(
     employee = await db.get(Employee, employee_id)
     if employee is None or employee.account_id != account_id or employee.is_deleted:
         raise HTTPException(404, "Angajatul nu a fost găsit.")
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(400, "Fisierul trebuie sa fie o imagine.")
-    data = await file.read()
-    if len(data) > 5 * 1024 * 1024:
-        raise HTTPException(400, "Imaginea nu poate depasi 5MB.")
+    data = await validate_image(file)
     old_url = employee.image_path
     url = storage_upload_image(account_id, "employees", data, file.content_type)
     employee.image_path = url

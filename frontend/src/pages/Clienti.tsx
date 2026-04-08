@@ -16,6 +16,17 @@ interface Client {
   comments: string | null;
 }
 
+interface ClientVehicol {
+  id: number;
+  client_id: number;
+  numar_masina: string;
+  marca: string | null;
+  model: string | null;
+  numar_kilometrii: number | null;
+  vin: string | null;
+  observatii: string | null;
+}
+
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
     <div class="cfg-confirm-overlay">
@@ -34,10 +45,15 @@ function emptyForm() {
   return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
+function emptyVForm() {
+  return { numar_masina: "", marca: "", model: "", numar_kilometrii: "", vin: "", observatii: "" };
+}
+
 export default function Clienti() {
   const [clienti, setClienti] = createSignal<Client[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch] = createSignal("");
+  const [searchMasina, setSearchMasina] = createSignal("");
 
   const [viewId, setViewId] = createSignal<number | null>(null);
   const [editId, setEditId] = createSignal<number | null>(null);
@@ -52,6 +68,16 @@ export default function Clienti() {
 
   const [anafLoading, setAnafLoading] = createSignal(false);
   const [anafError, setAnafError] = createSignal<string | null>(null);
+
+  // Vehicole state
+  const [vehicoleMap, setVehicoleMap] = createSignal<Record<number, ClientVehicol[]>>({});
+  const [vLoadingId, setVLoadingId] = createSignal<number | null>(null);
+  const [vAddMode, setVAddMode] = createSignal<number | null>(null);
+  const [vEditId, setVEditId] = createSignal<number | null>(null);
+  const [vForm, setVForm] = createSignal(emptyVForm());
+  const [vDeleteTarget, setVDeleteTarget] = createSignal<{ v: ClientVehicol; clientId: number } | null>(null);
+  const [vSaving, setVSaving] = createSignal(false);
+  const [vError, setVError] = createSignal<string | null>(null);
 
   async function searchAnaf(cui: string, setF: (f: ReturnType<typeof emptyForm>) => void, f: ReturnType<typeof emptyForm>) {
     const cuiNum = parseInt(cui.replace(/\D/g, ""));
@@ -80,7 +106,8 @@ export default function Clienti() {
     setLoading(true);
     try {
       const q = search() ? `&q=${encodeURIComponent(search())}` : "";
-      const res = await apiFetch(`/api/clienti?limit=200${q}`);
+      const qm = searchMasina() ? `&q_masina=${encodeURIComponent(searchMasina())}` : "";
+      const res = await apiFetch(`/api/clienti?limit=200${q}${qm}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setClienti(data.items ?? []);
@@ -92,6 +119,21 @@ export default function Clienti() {
   }
 
   onMount(load);
+
+  async function loadVehicole(clientId: number) {
+    if (vehicoleMap()[clientId] !== undefined) return;
+    setVLoadingId(clientId);
+    try {
+      const res = await apiFetch(`/api/clienti/${clientId}/vehicole`);
+      if (!res.ok) throw new Error();
+      const data: ClientVehicol[] = await res.json();
+      setVehicoleMap((m) => ({ ...m, [clientId]: data }));
+    } catch {
+      setVehicoleMap((m) => ({ ...m, [clientId]: [] }));
+    } finally {
+      setVLoadingId(null);
+    }
+  }
 
   function startEdit(c: Client) {
     setEditId(c.id);
@@ -130,8 +172,14 @@ export default function Clienti() {
     }
   }
 
-  function startView(c: Client) { setViewId(c.id); setEditId(null); setAddMode(false); setError(null); }
-  function closeView() { setViewId(null); }
+  function startView(c: Client) {
+    setViewId(c.id);
+    setEditId(null);
+    setAddMode(false);
+    setError(null);
+    loadVehicole(c.id);
+  }
+  function closeView() { setViewId(null); setVAddMode(null); setVEditId(null); }
 
   function startAdd() { setNewForm(emptyForm()); setAddMode(true); setEditId(null); setViewId(null); setError(null); }
   function cancelAdd() { setAddMode(false); setError(null); }
@@ -176,6 +224,120 @@ export default function Clienti() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Vehicole CRUD
+  function startVAdd(clientId: number) {
+    setVAddMode(clientId);
+    setVEditId(null);
+    setVForm(emptyVForm());
+    setVError(null);
+  }
+
+  function startVEdit(v: ClientVehicol) {
+    setVEditId(v.id);
+    setVAddMode(null);
+    setVForm({
+      numar_masina: v.numar_masina,
+      marca: v.marca ?? "",
+      model: v.model ?? "",
+      numar_kilometrii: v.numar_kilometrii != null ? String(v.numar_kilometrii) : "",
+      vin: v.vin ?? "",
+      observatii: v.observatii ?? "",
+    });
+    setVError(null);
+  }
+
+  async function saveVAdd(clientId: number) {
+    const f = vForm();
+    if (!f.numar_masina.trim()) { setVError("Numărul mașinii este obligatoriu."); return; }
+    setVSaving(true); setVError(null);
+    try {
+      const res = await apiFetch(`/api/clienti/${clientId}/vehicole`, {
+        method: "POST",
+        body: JSON.stringify({
+          numar_masina: f.numar_masina.trim(),
+          marca: f.marca.trim() || null,
+          model: f.model.trim() || null,
+          numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+          vin: f.vin.trim() || null,
+          observatii: f.observatii.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const created: ClientVehicol = await res.json();
+      setVehicoleMap((m) => ({ ...m, [clientId]: [...(m[clientId] ?? []), created] }));
+      setVAddMode(null);
+    } catch {
+      setVError("Eroare la salvare.");
+    } finally {
+      setVSaving(false);
+    }
+  }
+
+  async function saveVEdit(clientId: number, vId: number) {
+    const f = vForm();
+    if (!f.numar_masina.trim()) { setVError("Numărul mașinii este obligatoriu."); return; }
+    setVSaving(true); setVError(null);
+    try {
+      const res = await apiFetch(`/api/clienti/${clientId}/vehicole/${vId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          numar_masina: f.numar_masina.trim(),
+          marca: f.marca.trim() || null,
+          model: f.model.trim() || null,
+          numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+          vin: f.vin.trim() || null,
+          observatii: f.observatii.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      const updated: ClientVehicol = await res.json();
+      setVehicoleMap((m) => ({ ...m, [clientId]: (m[clientId] ?? []).map((v) => v.id === vId ? updated : v) }));
+      setVEditId(null);
+    } catch {
+      setVError("Eroare la salvare.");
+    } finally {
+      setVSaving(false);
+    }
+  }
+
+  async function confirmDeleteVehicol() {
+    const target = vDeleteTarget();
+    if (!target) return;
+    setVSaving(true);
+    try {
+      await apiFetch(`/api/clienti/${target.clientId}/vehicole/${target.v.id}`, { method: "DELETE" });
+      setVehicoleMap((m) => ({ ...m, [target.clientId]: (m[target.clientId] ?? []).filter((v) => v.id !== target.v.id) }));
+      setVDeleteTarget(null);
+      setVEditId(null);
+    } catch {
+      setVError("Eroare la ștergere.");
+    } finally {
+      setVSaving(false);
+    }
+  }
+
+  function VehicolForm(props: { f: ReturnType<typeof emptyVForm>; setF: (f: ReturnType<typeof emptyVForm>) => void }) {
+    return (
+      <div class="cfg-location-fields" style="gap:6px">
+        <input
+          class="input"
+          placeholder="Număr mașină *"
+          value={props.f.numar_masina}
+          onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })}
+        />
+        <div style="display:flex;gap:6px">
+          <input class="input" placeholder="Marcă" style="flex:1" value={props.f.marca} onInput={(e) => props.setF({ ...props.f, marca: e.currentTarget.value })} />
+          <input class="input" placeholder="Model" style="flex:1" value={props.f.model} onInput={(e) => props.setF({ ...props.f, model: e.currentTarget.value })} />
+        </div>
+        <div style="display:flex;gap:6px">
+          <input class="input" placeholder="Km" type="number" style="flex:1" value={props.f.numar_kilometrii} onInput={(e) => props.setF({ ...props.f, numar_kilometrii: e.currentTarget.value })} />
+          <input class="input" placeholder="VIN" style="flex:2" value={props.f.vin} onInput={(e) => props.setF({ ...props.f, vin: e.currentTarget.value.toUpperCase() })} />
+        </div>
+        <input class="input" placeholder="Observații" value={props.f.observatii} onInput={(e) => props.setF({ ...props.f, observatii: e.currentTarget.value })} />
+      </div>
+    );
   }
 
   function ClientForm(props: { f: ReturnType<typeof emptyForm>; setF: (f: ReturnType<typeof emptyForm>) => void }) {
@@ -234,13 +396,20 @@ export default function Clienti() {
     <div class="page-content">
       <div class="page-header">
         <h1 class="page-title">Clienți</h1>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input
             class="input reception-search"
             type="search"
-            placeholder="Caută după nume sau nr. mașină..."
+            placeholder="Caută după nume..."
             value={search()}
             onInput={(e) => { setSearch(e.currentTarget.value); load(); }}
+          />
+          <input
+            class="input reception-search"
+            type="search"
+            placeholder="Caută după nr. mașină..."
+            value={searchMasina()}
+            onInput={(e) => { setSearchMasina(e.currentTarget.value); load(); }}
           />
           <button class="btn btn-primary btn-sm" onClick={startAdd}>+ Adaugă client</button>
         </div>
@@ -286,44 +455,123 @@ export default function Clienti() {
                   </button>
                 </div>
               </Show>
+
               <Show when={viewId() === c.id}>
-                <div class="cfg-location-info">
-                  <span class="cfg-location-name">
-                    {c.nume}
-                    <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
-                      {c.tip === "juridic" ? "Juridică" : "Fizică"}
+                <div style="display:flex;gap:16px;flex-wrap:wrap;width:100%">
+                  {/* Detalii client — stânga */}
+                  <div class="cfg-location-info" style="flex:1;min-width:200px">
+                    <span class="cfg-location-name">
+                      {c.nume}
+                      <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
+                        {c.tip === "juridic" ? "Juridică" : "Fizică"}
+                      </span>
                     </span>
-                  </span>
-                  <Show when={c.description}>
-                    <span class="cfg-location-desc"><strong>Descriere:</strong> {c.description}</span>
-                  </Show>
-                  <Show when={c.tip === "juridic" && c.cui}>
-                    <span class="cfg-location-desc"><strong>CUI:</strong> {c.cui}</span>
-                  </Show>
-                  <Show when={c.tip === "juridic" && c.reprezentant}>
-                    <span class="cfg-location-desc"><strong>Reprezentant:</strong> {c.reprezentant}</span>
-                  </Show>
-                  <Show when={c.telefon}>
-                    <span class="cfg-location-desc"><strong>Telefon:</strong> {c.telefon}</span>
-                  </Show>
-                  <Show when={c.email}>
-                    <span class="cfg-location-desc"><strong>Email:</strong> {c.email}</span>
-                  </Show>
-                  <Show when={c.adresa}>
-                    <span class="cfg-location-desc"><strong>Adresă:</strong> {c.adresa}</span>
-                  </Show>
-                  <Show when={c.numar_masina}>
-                    <span class="cfg-location-desc"><strong>Nr. mașină:</strong> {c.numar_masina}</span>
-                  </Show>
-                  <Show when={c.comments}>
-                    <span class="cfg-location-desc" style="font-style:italic"><strong>Comentarii:</strong> {c.comments}</span>
-                  </Show>
-                </div>
-                <div class="cfg-location-actions" style="margin-top:8px">
-                  <button class="btn btn-sm btn-ghost" onClick={closeView}>Închide</button>
-                  <button class="btn btn-sm btn-primary" onClick={() => startEdit(c)}>Editează</button>
+                    <Show when={c.description}>
+                      <span class="cfg-location-desc"><strong>Descriere:</strong> {c.description}</span>
+                    </Show>
+                    <Show when={c.tip === "juridic" && c.cui}>
+                      <span class="cfg-location-desc"><strong>CUI:</strong> {c.cui}</span>
+                    </Show>
+                    <Show when={c.tip === "juridic" && c.reprezentant}>
+                      <span class="cfg-location-desc"><strong>Reprezentant:</strong> {c.reprezentant}</span>
+                    </Show>
+                    <Show when={c.telefon}>
+                      <span class="cfg-location-desc"><strong>Telefon:</strong> {c.telefon}</span>
+                    </Show>
+                    <Show when={c.email}>
+                      <span class="cfg-location-desc"><strong>Email:</strong> {c.email}</span>
+                    </Show>
+                    <Show when={c.adresa}>
+                      <span class="cfg-location-desc"><strong>Adresă:</strong> {c.adresa}</span>
+                    </Show>
+                    <Show when={c.numar_masina}>
+                      <span class="cfg-location-desc"><strong>Nr. mașină:</strong> {c.numar_masina}</span>
+                    </Show>
+                    <Show when={c.comments}>
+                      <span class="cfg-location-desc" style="font-style:italic"><strong>Comentarii:</strong> {c.comments}</span>
+                    </Show>
+                    <div class="cfg-location-actions" style="margin-top:8px">
+                      <button class="btn btn-sm btn-ghost" onClick={closeView}>Închide</button>
+                      <button class="btn btn-sm btn-primary" onClick={() => startEdit(c)}>Editează</button>
+                    </div>
+                  </div>
+
+                  {/* Vehicole — dreapta */}
+                  <div style="flex:1;min-width:200px;border-left:1px solid var(--border,#e5e7eb);padding-left:16px">
+                    <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--text-muted)">Mașini</div>
+
+                    <Show when={vLoadingId() === c.id}>
+                      <p class="cfg-hint" style="font-size:12px">Se încarcă...</p>
+                    </Show>
+
+                    <Show when={vError()}>
+                      <p style="color:var(--danger,#ef4444);font-size:12px;margin-bottom:4px">{vError()}</p>
+                    </Show>
+
+                    <For each={vehicoleMap()[c.id] ?? []}>
+                      {(v) => (
+                        <div style="margin-bottom:8px">
+                          <Show when={vEditId() === v.id}>
+                            <VehicolForm f={vForm()} setF={setVForm} />
+                            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+                              <button class="btn btn-sm btn-ghost" onClick={() => { setVEditId(null); setVError(null); }}>Anulează</button>
+                              <Show when={adminVisible()}>
+                                <button class="btn btn-sm btn-danger" onClick={() => setVDeleteTarget({ v, clientId: c.id })}>Șterge</button>
+                              </Show>
+                              <button class="btn btn-sm btn-primary" disabled={vSaving()} onClick={() => saveVEdit(c.id, v.id)}>
+                                {vSaving() ? "..." : "Salvează"}
+                              </button>
+                            </div>
+                          </Show>
+                          <Show when={vEditId() !== v.id}>
+                            <div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+                              <span style="font-size:13px">
+                                <strong>{v.numar_masina}</strong>
+                                <Show when={v.marca || v.model}>
+                                  <span style="color:var(--text-muted);margin-left:6px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                                </Show>
+                                <Show when={v.numar_kilometrii != null}>
+                                  <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{v.numar_kilometrii} km</span>
+                                </Show>
+                              </span>
+                              <button class="btn btn-sm btn-ghost" style="font-size:11px;padding:2px 8px" onClick={() => startVEdit(v)}>Editează</button>
+                            </div>
+                            <Show when={v.vin}>
+                              <div style="font-size:11px;color:var(--text-muted)">VIN: {v.vin}</div>
+                            </Show>
+                            <Show when={v.observatii}>
+                              <div style="font-size:11px;color:var(--text-muted)">{v.observatii}</div>
+                            </Show>
+                          </Show>
+                        </div>
+                      )}
+                    </For>
+
+                    <Show when={(vehicoleMap()[c.id] ?? []).length === 0 && vLoadingId() !== c.id}>
+                      <p class="cfg-hint" style="font-size:12px;margin-bottom:6px">Nicio mașină înregistrată.</p>
+                    </Show>
+
+                    <Show when={vAddMode() === c.id}>
+                      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border,#e5e7eb)">
+                        <VehicolForm f={vForm()} setF={setVForm} />
+                        <div style="display:flex;gap:6px;margin-top:6px">
+                          <button class="btn btn-sm btn-ghost" onClick={() => { setVAddMode(null); setVError(null); }}>Anulează</button>
+                          <button class="btn btn-sm btn-primary" disabled={vSaving()} onClick={() => saveVAdd(c.id)}>
+                            {vSaving() ? "..." : "Salvează"}
+                          </button>
+                        </div>
+                      </div>
+                    </Show>
+
+                    <Show when={vAddMode() !== c.id}>
+                      <button class="btn btn-sm btn-ghost" style="margin-top:6px;font-size:12px" onClick={() => startVAdd(c.id)}>
+                        + Adaugă mașină
+                      </button>
+                    </Show>
+                  </div>
                 </div>
               </Show>
+
               <Show when={editId() !== c.id && viewId() !== c.id}>
                 <div class="cfg-location-info" style="cursor:pointer;flex:1" onClick={() => startView(c)}>
                   <span class="cfg-location-name">
@@ -364,6 +612,15 @@ export default function Clienti() {
           saving={saving()}
           onConfirm={confirmDelete}
           onCancel={() => setDeleteTarget(null)}
+        />
+      </Show>
+
+      <Show when={vDeleteTarget()}>
+        <DeleteModal
+          label={vDeleteTarget()!.v.numar_masina}
+          saving={vSaving()}
+          onConfirm={confirmDeleteVehicol}
+          onCancel={() => setVDeleteTarget(null)}
         />
       </Show>
     </div>

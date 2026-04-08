@@ -13,6 +13,11 @@ export interface DimensiuneAnvelopa {
   valoare: string;
 }
 
+export interface ProfilAnvelopa {
+  id: number;
+  valoare: string;
+}
+
 export interface LocCazare {
   id: number;
   nume: string;
@@ -26,11 +31,13 @@ export interface Anvelopa {
   clientId: number | null;
   marcaId: number | null;
   dimensiuneId: number | null;
+  profilId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
   comments: string | null;
   marcaNume: string | null;
   dimensiuneValoare: string | null;
+  profilValoare: string | null;
 }
 
 export interface CazareItem {
@@ -55,6 +62,7 @@ export interface Cazare {
   clientReprezentant: string | null;
   employeeName: string | null;
   locCazareNume: string | null;
+  numarMasina: string | null;
   depAnvelope: boolean;
   depCapace: boolean;
   depRotiComplete: boolean;
@@ -75,11 +83,13 @@ function mapAnvelopa(a: any): Anvelopa {
     clientId: a.client_id ?? null,
     marcaId: a.marca_id ?? null,
     dimensiuneId: a.dimensiune_id ?? null,
+    profilId: a.profil_id ?? null,
     tip: a.tip as TipAnvelopa,
     adancime: a.adancime ?? null,
     comments: a.comments ?? null,
     marcaNume: a.marca_nume ?? null,
     dimensiuneValoare: a.dimensiune_valoare ?? null,
+    profilValoare: a.profil_valoare ?? null,
   };
 }
 
@@ -100,6 +110,7 @@ function mapCazare(c: any): Cazare {
     clientReprezentant: c.client_reprezentant ?? null,
     employeeName: c.employee_name ?? null,
     locCazareNume: c.loc_cazare_nume ?? null,
+    numarMasina: c.numar_masina ?? null,
     depAnvelope: c.dep_anvelope ?? true,
     depCapace: c.dep_capace ?? false,
     depRotiComplete: c.dep_roti_complete ?? false,
@@ -126,13 +137,14 @@ function mapCazare(c: any): Cazare {
 const [cazari, setCazari] = createSignal<Cazare[]>([]);
 const [marci, setMarci] = createSignal<MarcaAnvelopa[]>([]);
 const [dimensiuni, setDimensiuni] = createSignal<DimensiuneAnvelopa[]>([]);
+const [profiluri, setProfiluri] = createSignal<ProfilAnvelopa[]>([]);
 const [locuriCazare, setLocuriCazare] = createSignal<LocCazare[]>([]);
 const [cazariHasMore, setCazariHasMore] = createSignal(false);
 const [cazariLoadingMore, setCazariLoadingMore] = createSignal(false);
 const [cazariNextCursor, setCazariNextCursor] = createSignal<number | null>(null);
 let _lastCazariParams: Parameters<typeof loadCazari>[0];
 
-export { cazari, marci, dimensiuni, locuriCazare, cazariHasMore, cazariLoadingMore };
+export { cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore };
 
 // ─── Load functions ───────────────────────────────────────────────────────────
 
@@ -194,6 +206,7 @@ export async function loadAnvelope(clientId: number): Promise<Anvelopa[]> {
 
 const MARCI_CACHE_KEY = "bs_marci_anvelope";
 const DIM_CACHE_KEY = "bs_dimensiuni_anvelope";
+const PROFIL_CACHE_KEY = "bs_profiluri_anvelope";
 const LOCURI_CACHE_KEY = "bs_locuri_cazare";
 const CACHE_TTL = 10 * 60 * 1000;
 
@@ -259,6 +272,26 @@ export async function loadLocuriCazare(force = false) {
   } catch {}
 }
 
+export async function loadProfil(force = false) {
+  if (!force) {
+    try {
+      const cached = localStorage.getItem(PROFIL_CACHE_KEY);
+      if (cached) {
+        const { ts, items } = JSON.parse(cached);
+        if (Date.now() - ts < CACHE_TTL) { setProfiluri(items); return; }
+      }
+    } catch {}
+  }
+  try {
+    const res = await apiFetch("/api/profiluri-anvelope?limit=500");
+    if (!res.ok) return;
+    const data = await res.json();
+    const items: ProfilAnvelopa[] = data.items.map((p: any) => ({ id: p.id, valoare: p.valoare }));
+    setProfiluri(items);
+    localStorage.setItem(PROFIL_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
+  } catch {}
+}
+
 export function invalidateLocuriCache() {
   localStorage.removeItem(LOCURI_CACHE_KEY);
 }
@@ -267,4 +300,7 @@ export function invalidateMarciCache() {
 }
 export function invalidateDimensiuniCache() {
   localStorage.removeItem(DIM_CACHE_KEY);
+}
+export function invalidateProfilCache() {
+  localStorage.removeItem(PROFIL_CACHE_KEY);
 }

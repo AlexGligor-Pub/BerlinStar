@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import type { CartItem } from "./cartStore";
+import type { VehicolData } from "./receiptsStore";
 
 interface ResumeData {
   id?: string;
@@ -12,6 +13,7 @@ interface ResumeData {
   clientCui?: string | null;
   clientTip?: string | null;
   programareId?: number | null;
+  vehicol?: VehicolData | null;
 }
 
 const [resumeData, setResumeData] = createSignal<ResumeData | null>(null);

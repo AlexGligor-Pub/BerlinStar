@@ -3,6 +3,15 @@ import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
 
+export interface VehicolData {
+  numarMasina: string;
+  marca?: string | null;
+  model?: string | null;
+  numarKilometrii?: number | null;
+  vin?: string | null;
+  observatii?: string | null;
+}
+
 export interface Receipt {
   id: string;
   date: string;
@@ -29,6 +38,8 @@ export interface Receipt {
   chitantaNr: number;
   programareId: number | null;
   locationId: number | null;
+  vehicol?: VehicolData | null;
+  updatedAt?: string | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -70,6 +81,15 @@ function mapFromApi(r: any): Receipt {
     chitantaNr: r.chitanta_nr ?? 0,
     programareId: r.programare_id ?? null,
     locationId: r.location_id ?? null,
+    vehicol: r.vehicol ? {
+      numarMasina: r.vehicol.numar_masina,
+      marca: r.vehicol.marca ?? null,
+      model: r.vehicol.model ?? null,
+      numarKilometrii: r.vehicol.numar_kilometrii ?? null,
+      vin: r.vehicol.vin ?? null,
+      observatii: r.vehicol.observatii ?? null,
+    } : null,
+    updatedAt: r.updated_at ?? null,
   };
 }
 
@@ -103,7 +123,7 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
   if (locationId !== undefined) _lastLocationId = locationId ?? null;
   _nextCursor = null;
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30`;
+    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
@@ -125,7 +145,7 @@ export async function loadMoreReceipts() {
   if (!_nextCursor || loadingMore()) return;
   setLoadingMore(true);
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-id&unpaid_days=30&last_id=${_nextCursor}`;
+    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30&last_id=${_nextCursor}`;
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
@@ -244,9 +264,35 @@ export async function updateReceiptClient(id: string, clientId: number | null): 
     method: "PATCH",
     body: JSON.stringify({ client_id: clientId }),
   });
-  if (!res.ok) return;
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
+export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Promise<void> {
+  const res = await apiFetch(`/api/receipts/${id}/vehicol`, {
+    method: "PUT",
+    body: JSON.stringify({
+      numar_masina: vehicol.numarMasina,
+      marca: vehicol.marca ?? null,
+      model: vehicol.model ?? null,
+      numar_kilometrii: vehicol.numarKilometrii ?? null,
+      vin: vehicol.vin ?? null,
+      observatii: vehicol.observatii ?? null,
+    }),
+  });
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
 }
@@ -266,7 +312,7 @@ let _reloadTimer: ReturnType<typeof setTimeout> | undefined;
 
 function scheduleReload() {
   clearTimeout(_reloadTimer);
-  _reloadTimer = setTimeout(() => loadReceipts(), 800);
+  _reloadTimer = setTimeout(() => loadReceipts(), 300);
 }
 
 let _posEs: EventSource | null = null;

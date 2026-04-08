@@ -21,11 +21,13 @@ def _serialize(a: Anvelopa) -> dict:
         "client_id": a.client_id,
         "marca_id": a.marca_id,
         "dimensiune_id": a.dimensiune_id,
+        "profil_id": a.profil_id,
         "tip": a.tip,
         "adancime": a.adancime,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
         "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,
+        "profil_valoare": a.profil.valoare if a.profil else None,
         "created_at": a.created_at,
         "updated_at": a.updated_at,
         "is_deleted": a.is_deleted,
@@ -56,7 +58,7 @@ async def list_anvelope(
     from sqlalchemy.orm import selectinload
     stmt2 = (
         select(Anvelopa)
-        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune))
+        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
         .where(Anvelopa.account_id == account_id, Anvelopa.is_deleted == False)
     )
     if client_id is not None:
@@ -84,7 +86,7 @@ async def create_anvelopa(
     # reload with relationships
     result = await db.execute(
         select(Anvelopa)
-        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune))
+        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
         .where(Anvelopa.id == anv.id)
     )
     anv = result.scalar_one()
@@ -100,7 +102,7 @@ async def get_anvelopa(
     from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Anvelopa)
-        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune))
+        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
         .where(Anvelopa.id == anvelopa_id)
     )
     anv = result.scalar_one_or_none()
@@ -126,7 +128,7 @@ async def update_anvelopa(
     await db.commit()
     result = await db.execute(
         select(Anvelopa)
-        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune))
+        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
         .where(Anvelopa.id == anvelopa_id)
     )
     anv = result.scalar_one()

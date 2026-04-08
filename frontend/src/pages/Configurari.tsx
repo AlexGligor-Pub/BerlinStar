@@ -2,6 +2,7 @@ import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMou
 import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 import { device, updateDevice } from "../store/deviceStore";
+import { generalSettings, loadGeneralSettings, updateGeneralSettings } from "../store/generalSettingsStore";
 
 interface Location { id: number; name: string; description: string | null; disclaimer_id: number | null; register_id: number | null; company_id: number | null; department_ids: number[]; employee_ids: number[]; image_path: string | null; }
 interface CompanyItem { id: number; cui: number; name: string; address: string | null; nr_reg_com: string | null; phone: string | null; postal_code: string | null; is_vat_payer: boolean | null; tva_percentage: number | null; registration_status: string | null; description: string | null; comments: string | null; logo_path: string | null; background_path: string | null; website: string | null; bank_name: string | null; iban: string | null; capital_social: number | null; }
@@ -2320,17 +2321,21 @@ function RegisterPanel() {
           <input class="input" placeholder="Serie" value={f().deviz_serie} onInput={e => s({ deviz_serie: e.currentTarget.value })} />
           <input class="input" type="number" min="0" placeholder="Număr" value={f().deviz_numar} onInput={e => s({ deviz_numar: parseInt(e.currentTarget.value) || 0 })} />
 
-          <span class="cfg-register-label">Factură</span>
-          <input class="input" placeholder="Serie" value={f().factura_serie} onInput={e => s({ factura_serie: e.currentTarget.value })} />
-          <input class="input" type="number" min="0" placeholder="Număr" value={f().factura_numar} onInput={e => s({ factura_numar: parseInt(e.currentTarget.value) || 0 })} />
+          <Show when={generalSettings()?.useFactura !== false}>
+            <span class="cfg-register-label">Factură</span>
+            <input class="input" placeholder="Serie" value={f().factura_serie} onInput={e => s({ factura_serie: e.currentTarget.value })} />
+            <input class="input" type="number" min="0" placeholder="Număr" value={f().factura_numar} onInput={e => s({ factura_numar: parseInt(e.currentTarget.value) || 0 })} />
 
-          <span class="cfg-register-label">Chitanță</span>
-          <input class="input" placeholder="Serie" value={f().chitanta_serie} onInput={e => s({ chitanta_serie: e.currentTarget.value })} />
-          <input class="input" type="number" min="0" placeholder="Număr" value={f().chitanta_numar} onInput={e => s({ chitanta_numar: parseInt(e.currentTarget.value) || 0 })} />
+            <span class="cfg-register-label">Chitanță</span>
+            <input class="input" placeholder="Serie" value={f().chitanta_serie} onInput={e => s({ chitanta_serie: e.currentTarget.value })} />
+            <input class="input" type="number" min="0" placeholder="Număr" value={f().chitanta_numar} onInput={e => s({ chitanta_numar: parseInt(e.currentTarget.value) || 0 })} />
+          </Show>
 
-          <span class="cfg-register-label">Aviz însoțire</span>
-          <input class="input" placeholder="Serie" value={f().aviz_serie} onInput={e => s({ aviz_serie: e.currentTarget.value })} />
-          <input class="input" type="number" min="0" placeholder="Număr" value={f().aviz_numar} onInput={e => s({ aviz_numar: parseInt(e.currentTarget.value) || 0 })} />
+          <Show when={generalSettings()?.useAviz !== false}>
+            <span class="cfg-register-label">Aviz însoțire</span>
+            <input class="input" placeholder="Serie" value={f().aviz_serie} onInput={e => s({ aviz_serie: e.currentTarget.value })} />
+            <input class="input" type="number" min="0" placeholder="Număr" value={f().aviz_numar} onInput={e => s({ aviz_numar: parseInt(e.currentTarget.value) || 0 })} />
+          </Show>
         </div>
       </div>
     );
@@ -2384,10 +2389,14 @@ function RegisterPanel() {
                       <span class="cfg-location-desc" style="opacity:0.7">{companyName(r.company_id)}</span>
                     </Show>
                     <span class="cfg-location-desc">
-                      Deviz: {r.deviz_serie || "—"} / {r.deviz_numar} &nbsp;·&nbsp;
-                      Factură: {r.factura_serie || "—"} / {r.factura_numar} &nbsp;·&nbsp;
-                      Chitanță: {r.chitanta_serie || "—"} / {r.chitanta_numar} &nbsp;·&nbsp;
-                      Aviz însoțire: {r.aviz_serie || "—"} / {r.aviz_numar}
+                      Deviz: {r.deviz_serie || "—"} / {r.deviz_numar}
+                      <Show when={generalSettings()?.useFactura !== false}>
+                        &nbsp;·&nbsp;Factură: {r.factura_serie || "—"} / {r.factura_numar}
+                        &nbsp;·&nbsp;Chitanță: {r.chitanta_serie || "—"} / {r.chitanta_numar}
+                      </Show>
+                      <Show when={generalSettings()?.useAviz !== false}>
+                        &nbsp;·&nbsp;Aviz însoțire: {r.aviz_serie || "—"} / {r.aviz_numar}
+                      </Show>
                     </span>
                   </div>
                   <div class="cfg-location-actions">
@@ -2495,15 +2504,100 @@ function DispozitivulMeuPanel() {
   );
 }
 
+// ─── Setări generale panel ────────────────────────────────────────────────────
+
+function SetariGeneralePanel() {
+  const [saving, setSaving] = createSignal(false);
+  const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
+
+  onMount(() => { loadGeneralSettings(); });
+
+  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean }>) {
+    setSaving(true);
+    setMsg(null);
+    try {
+      await updateGeneralSettings(patch);
+      setMsg({ ok: true, text: "Salvat." });
+      setTimeout(() => setMsg(null), 2000);
+    } catch (e: any) {
+      setMsg({ ok: false, text: e.message ?? "Eroare la salvare." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div class="cfg-panel">
+      <h2 class="cfg-panel-title">Setări generale</h2>
+      <div style="display:flex;flex-direction:column;gap:20px;max-width:520px">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.useFactura !== false}
+              disabled={saving()}
+              onChange={(e) => handleChange({ useFactura: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Activează Factură și Chitanță</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Controlează vizibilitatea butoanelor de <strong>Factură</strong> și <strong>Chitanță</strong> din pagina
+            <strong> Recepție</strong>. Când este dezactivat, aceste butoane sunt ascunse și nu pot fi generate documente
+            de factură sau chitanță. De asemenea, ascunde câmpurile de serie și număr pentru Factură și Chitanță din
+            secțiunea <strong>Registre</strong> (Configurări).
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.useAviz !== false}
+              disabled={saving()}
+              onChange={(e) => handleChange({ useAviz: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Activează Aviz de însoțire</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Controlează vizibilitatea funcționalității de <strong>Aviz de însoțire a mărfii</strong>. Când este
+            dezactivat, câmpurile de serie și număr pentru Aviz sunt ascunse din secțiunea
+            <strong> Registre</strong> (Configurări). Funcționalitatea de generare aviz urmează să fie implementată.
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.afiseazaTehnicianDeviz === true}
+              disabled={saving()}
+              onChange={(e) => handleChange({ afiseazaTehnicianDeviz: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Afișează angajat/tehnician pe deviz</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Când este activat, devizul generat va include o coloană <strong>Tehnician</strong> cu numele angajatului
+            asociat fiecărui produs/serviciu.
+          </p>
+        </div>
+        <Show when={msg()}>
+          <div style={{ color: msg()!.ok ? "var(--success, #3ea96a)" : "var(--danger)" }}>
+            {msg()!.text}
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 const TOPICS = [
-  { id: "locatii",        label: "Locații",             panel: LocatiiPanel },
-  { id: "departamente",   label: "Departamente",         panel: DepartamentePanel },
-  { id: "angajati",       label: "Angajați",             panel: AngajatiPanel },
-  { id: "produse",        label: "Produse și Servicii",  panel: ProduseSiServiciiPanel },
-  { id: "companii",       label: "Companiile mele",       panel: CompaniiPanel },
-  { id: "disclaimers",    label: "Disclaimers",             panel: DisclaimersPanel },
-  { id: "registre",       label: "Registre",                panel: RegisterPanel },
-  { id: "dispozitiv",     label: "Dispozitivul meu",        panel: DispozitivulMeuPanel },
+  { id: "locatii",         label: "Locații",                 panel: LocatiiPanel },
+  { id: "departamente",    label: "Departamente",             panel: DepartamentePanel },
+  { id: "angajati",        label: "Angajați",                 panel: AngajatiPanel },
+  { id: "produse",         label: "Produse și Servicii",      panel: ProduseSiServiciiPanel },
+  { id: "companii",        label: "Companiile mele",          panel: CompaniiPanel },
+  { id: "disclaimers",     label: "Disclaimers",              panel: DisclaimersPanel },
+  { id: "registre",        label: "Registre",                 panel: RegisterPanel },
+  { id: "dispozitiv",      label: "Dispozitivul meu",         panel: DispozitivulMeuPanel },
+  { id: "setari-generale", label: "Setări generale",          panel: SetariGeneralePanel },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -2591,6 +2685,7 @@ export default function Configurari() {
           <Match when={active() === "disclaimers"}><DisclaimersPanel /></Match>
           <Match when={active() === "registre"}><RegisterPanel /></Match>
           <Match when={active() === "dispozitiv"}><DispozitivulMeuPanel /></Match>
+          <Match when={active() === "setari-generale"}><SetariGeneralePanel /></Match>
         </Switch>
       </main>
     </div>

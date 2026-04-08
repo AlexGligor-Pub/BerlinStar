@@ -3,11 +3,18 @@ import { apiFetch } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import {
-  cazari, marci, dimensiuni, locuriCazare, cazariHasMore, cazariLoadingMore,
-  loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadLocuriCazare,
-  invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache,
+  cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
+  loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
+  invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
+
+interface ClientVehicol {
+  id: number;
+  numar_masina: string;
+  marca: string | null;
+  model: string | null;
+}
 import { generateCazareCheckin, generateCazareCheckout } from "../utils/generateDocuments";
 import type { CompanyData } from "../utils/generateDocuments";
 
@@ -110,7 +117,6 @@ function ClientSearch(props: {
                 onMouseDown={() => pick(c)}
               >
                 <span style="font-weight:600">{c.nume}</span>
-                <Show when={c.numar_masina}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">{c.numar_masina}</span></Show>
                 <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
               </button>
             )}
@@ -140,7 +146,6 @@ function ClientInfoBlock(props: { client: ClientItem | null }) {
         <Show when={props.client!.cui}><div><span style="color:var(--text-muted)">CUI:</span> {props.client!.cui}</div></Show>
         <Show when={props.client!.telefon}><div><span style="color:var(--text-muted)">Tel:</span> {props.client!.telefon}</div></Show>
         <Show when={props.client!.adresa}><div><span style="color:var(--text-muted)">Adresă:</span> {props.client!.adresa}</div></Show>
-        <Show when={props.client!.numar_masina}><div><span style="color:var(--text-muted)">Nr. mașină:</span> {props.client!.numar_masina}</div></Show>
       </div>
     </Show>
   );
@@ -214,16 +219,19 @@ function AnvelopaForm(props: {
 }) {
   const [marcaId, setMarcaId] = createSignal<number | "">(props.initialData?.marcaId ?? "");
   const [dimensiuneId, setDimensiuneId] = createSignal<number | "">(props.initialData?.dimensiuneId ?? "");
+  const [profilId, setProfilId] = createSignal<number | "">(props.initialData?.profilId ?? "");
   const [tip, setTip] = createSignal<TipAnvelopa>(props.initialData?.tip ?? "vara");
   const [adancime, setAdancime] = createSignal(props.initialData?.adancime != null ? String(props.initialData.adancime) : "");
   const [err, setErr] = createSignal("");
-  // inline adaugare marca/dimensiune noua
+  // inline adaugare marca/dimensiune/profil noua
   const [newMarca, setNewMarca] = createSignal("");
   const [newDim, setNewDim] = createSignal("");
+  const [newProfilVal, setNewProfilVal] = createSignal("");
 
   onMount(() => {
     loadMarci();
     loadDimensiuni();
+    loadProfil();
   });
 
   async function addMarca() {
@@ -236,6 +244,19 @@ function AnvelopaForm(props: {
       await loadMarci(true);
       setMarcaId(d.id);
       setNewMarca("");
+    }
+  }
+
+  async function addProfilInline() {
+    const v = newProfilVal().trim();
+    if (!v) return;
+    const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+    if (res.ok) {
+      const d = await res.json();
+      invalidateProfilCache();
+      await loadProfil(true);
+      setProfilId(d.id);
+      setNewProfilVal("");
     }
   }
 
@@ -256,6 +277,7 @@ function AnvelopaForm(props: {
     setErr("");
     const marcaOption = marci().find((m) => m.id === marcaId());
     const dimOption = dimensiuni().find((d) => d.id === dimensiuneId());
+    const profilOption = profiluri().find((p) => p.id === profilId());
     // ID negativ temporar — va fi creat pe server la save-ul cazării
     const tempId = -Date.now();
     props.onSaved({
@@ -263,11 +285,13 @@ function AnvelopaForm(props: {
       clientId: props.clientId,
       marcaId: marcaId() !== "" ? (marcaId() as number) : null,
       dimensiuneId: dimensiuneId() !== "" ? (dimensiuneId() as number) : null,
+      profilId: profilId() !== "" ? (profilId() as number) : null,
       tip: tip(),
       adancime: adancime() !== "" ? parseFloat(adancime()) : null,
       comments: null,
       marcaNume: marcaOption?.nume ?? null,
       dimensiuneValoare: dimOption?.valoare ?? null,
+      profilValoare: profilOption?.valoare ?? null,
     });
   }
 
@@ -286,6 +310,12 @@ function AnvelopaForm(props: {
           <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" />
           <input class="input" style="flex:1" placeholder="Dimensiune nouă..." value={newDim()} onInput={(e) => setNewDim(e.currentTarget.value)} />
           <button class="btn btn-ghost btn-sm" onClick={addDim} disabled={!newDim().trim()}>+</button>
+        </div>
+        {/* Profil */}
+        <div style="display:flex;gap:6px;align-items:center">
+          <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" />
+          <input class="input" style="flex:1" placeholder="Profil nou..." value={newProfilVal()} onInput={(e) => setNewProfilVal(e.currentTarget.value)} />
+          <button class="btn btn-ghost btn-sm" onClick={addProfilInline} disabled={!newProfilVal().trim()}>+</button>
         </div>
         {/* Tip + Adâncime */}
         <div style="display:flex;gap:6px">
@@ -346,6 +376,7 @@ function CazareCard(props: {
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:3px;font-size:11px;color:var(--text-muted)">
         <span><strong>Cazare:</strong> {fmtDate(c().dataCheckin)}</span>
         <Show when={c().dataCheckout}><span><strong>Check-out:</strong> {fmtDate(c().dataCheckout)}</span></Show>
+        <Show when={c().numarMasina}><span><strong>Mașină:</strong> {c().numarMasina}</span></Show>
         <Show when={c().locCazareNume}><span><strong>Loc:</strong> {c().locCazareNume}</span></Show>
         <Show when={c().employeeName}><span><strong>Angajat:</strong> {c().employeeName}</span></Show>
         <Show when={c().dataCheckout}>
@@ -359,7 +390,7 @@ function CazareCard(props: {
           {(item) => (
             <Show when={item.anvelopa}>
               <span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px">
-                {item.anvelopa!.marcaNume ?? "—"} {item.anvelopa!.dimensiuneValoare ?? ""} · {TIP_LABELS[item.anvelopa!.tip]}
+                {item.anvelopa!.marcaNume ?? "—"} {item.anvelopa!.dimensiuneValoare ?? ""}<Show when={item.anvelopa!.profilValoare}> /{item.anvelopa!.profilValoare}</Show> · {TIP_LABELS[item.anvelopa!.tip]}
                 <Show when={item.anvelopa!.adancime != null}> · {item.anvelopa!.adancime}mm</Show>
               </span>
             </Show>
@@ -415,6 +446,9 @@ export default function HotelAnvelope() {
   const [newReferintaCazareId, setNewReferintaCazareId] = createSignal<number | null>(null);
   const [newMontatePeMasina, setNewMontatePeMasina] = createSignal(false);
   const [clientCazariVechi, setClientCazariVechi] = createSignal<Array<{ id: number; dataCheckin: string }>>([]);
+  const [newClientVehicole, setNewClientVehicole] = createSignal<ClientVehicol[]>([]);
+  const [newSelectedVehicol, setNewSelectedVehicol] = createSignal<string | null>(null);
+  const [newVehicolLocked, setNewVehicolLocked] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
 
@@ -446,6 +480,9 @@ export default function HotelAnvelope() {
   const [editReferintaCazareId, setEditReferintaCazareId] = createSignal<number | null>(null);
   const [editMontatePeMasina, setEditMontatePeMasina] = createSignal(false);
   const [editClientCazariVechi, setEditClientCazariVechi] = createSignal<Array<{ id: number; dataCheckin: string }>>([]);
+  const [editClientVehicole, setEditClientVehicole] = createSignal<ClientVehicol[]>([]);
+  const [editSelectedVehicol, setEditSelectedVehicol] = createSignal<string | null>(null);
+  const [editVehicolLocked, setEditVehicolLocked] = createSignal(true);
   const [editSaving, setEditSaving] = createSignal(false);
   const [editErr, setEditErr] = createSignal("");
 
@@ -455,19 +492,21 @@ export default function HotelAnvelope() {
   const [filterTip, setFilterTip] = createSignal<TipAnvelopa | "">("");
 
   // ── Admin section ──────────────────────────────────────────────────────────
-  const [adminTab, setAdminTab] = createSignal<"locuri" | "marci" | "dimensiuni">("locuri");
+  const [adminTab, setAdminTab] = createSignal<"locuri" | "marci" | "dimensiuni" | "profiluri">("locuri");
 
   // admin forms - adăugare
   const [newLocNume, setNewLocNume] = createSignal("");
   const [newLocDesc, setNewLocDesc] = createSignal("");
   const [newMarcaNume, setNewMarcaNume] = createSignal("");
   const [newDimValoare, setNewDimValoare] = createSignal("");
+  const [newProfilValoare, setNewProfilValoare] = createSignal("");
 
   // admin edit modals
   const [editAdminTarget, setEditAdminTarget] = createSignal<
     | { type: "loc"; id: number; nume: string; description: string }
     | { type: "marca"; id: number; nume: string }
     | { type: "dim"; id: number; valoare: string }
+    | { type: "profil"; id: number; valoare: string }
     | null
   >(null);
   const [editAdminVal1, setEditAdminVal1] = createSignal("");
@@ -479,6 +518,7 @@ export default function HotelAnvelope() {
     | { type: "loc"; id: number; label: string }
     | { type: "marca"; id: number; label: string }
     | { type: "dim"; id: number; label: string }
+    | { type: "profil"; id: number; label: string }
     | null
   >(null);
   const [adminDeleting, setAdminDeleting] = createSignal(false);
@@ -540,6 +580,7 @@ export default function HotelAnvelope() {
     if (adminVisible()) {
       loadMarci();
       loadDimensiuni();
+      loadProfil();
     }
   });
 
@@ -589,6 +630,9 @@ export default function HotelAnvelope() {
     setNewReferintaCazareId(null);
     setNewMontatePeMasina(false);
     setClientCazariVechi([]);
+    setNewClientVehicole([]);
+    setNewSelectedVehicol(null);
+    setNewVehicolLocked(true);
     setSaveErr("");
     setShowNewModal(true);
   }
@@ -599,12 +643,23 @@ export default function HotelAnvelope() {
     setSelectedAnvIds(new Set<number>());
     setNewReferintaCazareId(null);
     setNewMontatePeMasina(false);
+    setNewClientVehicole([]);
+    setNewSelectedVehicol(null);
+    setNewVehicolLocked(true);
     if (c) {
       try {
-        const res = await apiFetch(`/api/cazare-anvelope?client_id=${c.id}&limit=20`);
-        if (res.ok) {
-          const data = await res.json();
+        const [cazRes, vRes] = await Promise.all([
+          apiFetch(`/api/cazare-anvelope?client_id=${c.id}&limit=20`),
+          apiFetch(`/api/clienti/${c.id}/vehicole`),
+        ]);
+        if (cazRes.ok) {
+          const data = await cazRes.json();
           setClientCazariVechi(data.items.map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
+        }
+        if (vRes.ok) {
+          const vData: ClientVehicol[] = await vRes.json();
+          setNewClientVehicole(vData);
+          if (vData.length === 1) setNewSelectedVehicol(vData[0].numar_masina);
         }
       } catch {}
     } else {
@@ -630,6 +685,7 @@ export default function HotelAnvelope() {
             client_id: draft.clientId,
             marca_id: draft.marcaId,
             dimensiune_id: draft.dimensiuneId,
+            profil_id: draft.profilId,
             tip: draft.tip,
             adancime: draft.adancime,
           }),
@@ -659,6 +715,7 @@ export default function HotelAnvelope() {
         dep_prezoane: newDepPrezoane(),
         referinta_cazare_id: newReferintaCazareId(),
         montate_pe_masina: newMontatePeMasina(),
+        numar_masina: newSelectedVehicol() || null,
       };
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -692,16 +749,27 @@ export default function HotelAnvelope() {
     setEditMontatePeMasina(c.montatePeMasina);
     setShowEditAnvForm(false);
     setEditErr("");
+    setEditClientVehicole([]);
+    setEditSelectedVehicol(c.numarMasina ?? null);
+    setEditVehicolLocked(true);
     if (c.clientId) {
       try {
-        const res = await apiFetch(`/api/cazare-anvelope?client_id=${c.clientId}&limit=20`);
-        if (res.ok) {
-          const data = await res.json();
+        const [cazRes, vRes] = await Promise.all([
+          apiFetch(`/api/cazare-anvelope?client_id=${c.clientId}&limit=20`),
+          apiFetch(`/api/clienti/${c.clientId}/vehicole`),
+        ]);
+        if (cazRes.ok) {
+          const data = await cazRes.json();
           setEditClientCazariVechi(data.items.filter((caz: any) => caz.id !== c.id).map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
+        }
+        if (vRes.ok) {
+          const vData: ClientVehicol[] = await vRes.json();
+          setEditClientVehicole(vData);
         }
       } catch {}
     } else {
       setEditClientCazariVechi([]);
+      setEditClientVehicole([]);
     }
     // încarcă doar anvelopele din această cazare
     const anvs: Anvelopa[] = c.items
@@ -730,6 +798,7 @@ export default function HotelAnvelope() {
             client_id: draft.clientId,
             marca_id: draft.marcaId,
             dimensiune_id: draft.dimensiuneId,
+            profil_id: draft.profilId,
             tip: draft.tip,
             adancime: draft.adancime,
           }),
@@ -755,6 +824,7 @@ export default function HotelAnvelope() {
           dep_prezoane: editDepPrezoane(),
           referinta_cazare_id: editReferintaCazareId(),
           montate_pe_masina: editMontatePeMasina(),
+          numar_masina: editSelectedVehicol() || null,
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(err.detail ?? "Eroare la salvare."); return; }
@@ -789,6 +859,7 @@ export default function HotelAnvelope() {
         clientReprezentant: d.client_reprezentant ?? null,
         employeeName: d.employee_name ?? null,
         locCazareNume: d.loc_cazare_nume ?? null,
+        numarMasina: d.numar_masina ?? null,
         depAnvelope: d.dep_anvelope ?? true,
         depCapace: d.dep_capace ?? false,
         depRotiComplete: d.dep_roti_complete ?? false,
@@ -804,6 +875,8 @@ export default function HotelAnvelope() {
             marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
             tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
             marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
+            profilValoare: item.anvelopa.profil_valoare ?? null,
+            profilId: item.anvelopa.profil_id ?? null,
           } : null,
         })),
         items: (d.items ?? []).map((item: any) => ({
@@ -812,8 +885,10 @@ export default function HotelAnvelope() {
           anvelopa: item.anvelopa ? {
             id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
             marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
+            profilId: item.anvelopa.profil_id ?? null,
             tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
             marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
+            profilValoare: item.anvelopa.profil_valoare ?? null,
           } : null,
         })),
       }));
@@ -844,7 +919,7 @@ export default function HotelAnvelope() {
             setClientCazariVechi(data.items.map((caz: any) => ({ id: caz.id, dataCheckin: caz.data_checkin })));
           }
         } catch { setClientCazariVechi([]); }
-        setNewClient({
+        const clientObj: ClientItem = {
           id: c.clientId,
           nume: c.clientNume ?? "",
           cui: c.clientCui,
@@ -852,7 +927,20 @@ export default function HotelAnvelope() {
           adresa: c.clientAdresa,
           reprezentant: c.clientReprezentant,
           numar_masina: null,
-        });
+        };
+        setNewClient(clientObj);
+        // fetch vehicles for this client
+        try {
+          const vRes = await apiFetch(`/api/clienti/${c.clientId}/vehicole`);
+          if (vRes.ok) {
+            const vData: ClientVehicol[] = await vRes.json();
+            setNewClientVehicole(vData);
+            // pre-select the vehicle from the old cazare if it still exists
+            const existing = c.numarMasina ? vData.find((v) => v.numar_masina === c.numarMasina) : null;
+            setNewSelectedVehicol(existing ? c.numarMasina! : (vData.length === 1 ? vData[0].numar_masina : null));
+          }
+        } catch { setNewClientVehicole([]); setNewSelectedVehicol(null); }
+        setNewVehicolLocked(true);
         setShowNewModal(true);
       }
     } finally { setCheckoutSaving(false); }
@@ -905,6 +993,15 @@ export default function HotelAnvelope() {
     setNewDimValoare("");
   }
 
+  async function addProfilAdmin() {
+    const v = newProfilValoare().trim();
+    if (!v) return;
+    await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+    invalidateProfilCache();
+    await loadProfil(true);
+    setNewProfilValoare("");
+  }
+
 
   // ── Admin Edit / Delete helpers ───────────────────────────────────────────
 
@@ -914,6 +1011,7 @@ export default function HotelAnvelope() {
     if (t.type === "loc") { setEditAdminVal1(t.nume); setEditAdminVal2(t.description); }
     else if (t.type === "marca") { setEditAdminVal1(t.nume); setEditAdminVal2(""); }
     else if (t.type === "dim") { setEditAdminVal1(t.valoare); setEditAdminVal2(""); }
+    else if (t.type === "profil") { setEditAdminVal1(t.valoare); setEditAdminVal2(""); }
   }
 
   async function saveAdminEdit() {
@@ -942,6 +1040,13 @@ export default function HotelAnvelope() {
         });
         invalidateDimensiuniCache();
         await loadDimensiuni(true);
+      } else if (t.type === "profil") {
+        await apiFetch(`/api/profiluri-anvelope/${t.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ valoare: editAdminVal1().trim() }),
+        });
+        invalidateProfilCache();
+        await loadProfil(true);
       }
       setEditAdminTarget(null);
     } finally { setEditAdminSaving(false); }
@@ -964,6 +1069,10 @@ export default function HotelAnvelope() {
         await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, { method: "DELETE" });
         invalidateDimensiuniCache();
         await loadDimensiuni(true);
+      } else if (t.type === "profil") {
+        await apiFetch(`/api/profiluri-anvelope/${t.id}`, { method: "DELETE" });
+        invalidateProfilCache();
+        await loadProfil(true);
       }
       setAdminDeleteTarget(null);
     } finally { setAdminDeleting(false); }
@@ -1024,6 +1133,7 @@ export default function HotelAnvelope() {
               <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("locuri")}>Locuri</button>
               <button class={`btn btn-sm ${adminTab() === "marci" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("marci")}>Mărci</button>
               <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("dimensiuni")}>Dim.</button>
+              <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("profiluri")}>Profil</button>
             </div>
 
             {/* Locuri */}
@@ -1079,6 +1189,26 @@ export default function HotelAnvelope() {
                         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
                         <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
                           <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
+                        </div>
+                      </div>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </Show>
+
+            {/* Profiluri */}
+            <Show when={adminTab() === "profiluri"}>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <input class="input" style="font-size:12px" placeholder="ex: 60, 55, 45 *" value={newProfilValoare()} onInput={(e) => setNewProfilValoare(e.currentTarget.value)} />
+                <button class="btn btn-primary btn-sm w-full" onClick={addProfilAdmin} disabled={!newProfilValoare().trim()}>+ Adaugă</button>
+                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
+                  <For each={profiluri()}>
+                    {(p) => (
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{p.valoare}</span>
+                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
+                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "profil", id: p.id, valoare: p.valoare })}>Edit</button>
                         </div>
                       </div>
                     )}
@@ -1180,6 +1310,35 @@ export default function HotelAnvelope() {
                     <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
                     <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
                   </div>
+                  <Show when={editClientVehicole().length > 0}>
+                    <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                        <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
+                        <Show when={editVehicolLocked() && editClientVehicole().length > 1}>
+                          <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px" onClick={() => setEditVehicolLocked(false)}>Schimbă</button>
+                        </Show>
+                      </div>
+                      <div style="display:flex;flex-direction:column;gap:3px">
+                        <For each={editClientVehicole()}>
+                          {(v) => (
+                            <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:${editVehicolLocked() ? "default" : "pointer"};background:${editSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
+                              <input
+                                type="radio"
+                                name="edit-vehicol"
+                                checked={editSelectedVehicol() === v.numar_masina}
+                                disabled={editVehicolLocked() && editClientVehicole().length > 1}
+                                onChange={() => setEditSelectedVehicol(v.numar_masina)}
+                              />
+                              <strong>{v.numar_masina}</strong>
+                              <Show when={v.marca || v.model}>
+                                <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                              </Show>
+                            </label>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </Show>
                   <Show when={editReferintaCazareId() !== null}>
                     <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
                       <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
@@ -1330,14 +1489,14 @@ export default function HotelAnvelope() {
             <div class="sl-modal" style="max-width:420px;width:100%">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">
-                  {t().type === "loc" ? "Editare loc cazare" : t().type === "marca" ? "Editare marcă" : "Editare dimensiune"}
+                  {t().type === "loc" ? "Editare loc cazare" : t().type === "marca" ? "Editare marcă" : t().type === "dim" ? "Editare dimensiune" : "Editare profil"}
                 </span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>✕</button>
               </div>
               <div style="padding:16px 24px;display:flex;flex-direction:column;gap:8px">
                 <input
                   class="input"
-                  placeholder={t().type === "dim" ? "Valoare (ex: 205/55 R16)" : "Nume *"}
+                  placeholder={t().type === "dim" ? "Valoare (ex: 205/55 R16)" : t().type === "profil" ? "Valoare profil (ex: 60)" : "Nume *"}
                   value={editAdminVal1()}
                   onInput={(e) => setEditAdminVal1(e.currentTarget.value)}
                 />
@@ -1409,6 +1568,35 @@ export default function HotelAnvelope() {
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
                 <ClientSearch value={newClient()} onSelect={handleClientSelect} />
                 <ClientInfoBlock client={newClient()} />
+                <Show when={newClient() && newClientVehicole().length > 0}>
+                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
+                      <Show when={newVehicolLocked() && newClientVehicole().length > 1}>
+                        <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px" onClick={() => setNewVehicolLocked(false)}>Schimbă</button>
+                      </Show>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <For each={newClientVehicole()}>
+                        {(v) => (
+                          <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:${newVehicolLocked() ? "default" : "pointer"};background:${newSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
+                            <input
+                              type="radio"
+                              name="new-vehicol"
+                              checked={newSelectedVehicol() === v.numar_masina}
+                              disabled={newVehicolLocked() && newClientVehicole().length > 1}
+                              onChange={() => setNewSelectedVehicol(v.numar_masina)}
+                            />
+                            <strong>{v.numar_masina}</strong>
+                            <Show when={v.marca || v.model}>
+                              <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                            </Show>
+                          </label>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
                 <Show when={newReferintaCazareId() !== null}>
                   <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
                     <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>

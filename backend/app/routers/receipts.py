@@ -20,6 +20,9 @@ from app.models.location import Location
 from app.models.register import Register
 from app.models.company import Company
 from app.models.disclaimer import Disclaimer
+from app.models.vehicol import Vehicol
+from app.models.client_vehicol import ClientVehicol
+from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
@@ -57,6 +60,29 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
         )
 
 
+async def _ensure_client_vehicol(db: AsyncSession, account_id: int, client_id: int, vehicol: Vehicol) -> None:
+    """Creează legătura ClientVehicol dacă nu există deja."""
+    if not vehicol.numar_masina:
+        return
+    existing = (await db.execute(
+        select(ClientVehicol).where(
+            ClientVehicol.account_id == account_id,
+            ClientVehicol.client_id == client_id,
+            ClientVehicol.numar_masina == vehicol.numar_masina,
+            ClientVehicol.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if existing is None:
+        db.add(ClientVehicol(
+            account_id=account_id,
+            client_id=client_id,
+            numar_masina=vehicol.numar_masina,
+            marca=vehicol.marca,
+            model=vehicol.model,
+            vin=vehicol.vin,
+        ))
+
+
 def _serialize(receipt: Receipt) -> dict:
     data = ReceiptRead.model_validate(receipt).model_dump()
     data["receipt_items"] = [
@@ -70,6 +96,8 @@ def _serialize(receipt: Receipt) -> dict:
     data["client_tip"]          = c.tip           if c else None
     data["client_reprezentant"]  = c.reprezentant  if c else None
     data["client_numar_masina"]  = c.numar_masina  if c else None
+    v = receipt.vehicol
+    data["vehicol"] = VehicolRead.model_validate(v).model_dump() if v and not v.is_deleted else None
     return data
 
 
@@ -122,7 +150,12 @@ async def list_receipts(
     if location_id is not None:
         stmt = stmt.where(or_(Receipt.location_id == location_id, Receipt.location_id.is_(None)))
     stmt = apply_filters(stmt, Receipt, filters)
-    stmt = apply_sort(stmt, Receipt, sort)
+    if sort in ("-activity", "activity"):
+        activity_col = func.coalesce(Receipt.updated_at, Receipt.created_at)
+        order = activity_col.desc() if sort.startswith("-") else activity_col.asc()
+        stmt = stmt.order_by(order, Receipt.id.desc())
+    else:
+        stmt = apply_sort(stmt, Receipt, sort)
     stmt = stmt.limit(limit + 1)
 
     rows = (await db.execute(stmt)).scalars().all()
@@ -353,6 +386,12 @@ async def patch_receipt_client(
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost găsit.")
     receipt.client_id = body.client_id
+    if body.client_id:
+        vehicol = (await db.execute(
+            select(Vehicol).where(Vehicol.receipt_id == receipt_id, Vehicol.is_deleted == False)
+        )).scalar_one_or_none()
+        if vehicol:
+            await _ensure_client_vehicol(db, account_id, body.client_id, vehicol)
     await db.commit()
     result = await db.execute(
         select(Receipt)
@@ -411,6 +450,15 @@ async def assign_number(
         setattr(receipt, serie_field, reg_serie)
         setattr(receipt, nr_field, new_nr)
         receipt.updated_at = datetime.now(timezone.utc)
+
+        # Asociere automată client-vehicul dacă lipsește
+        if receipt.client_id:
+            vehicol = (await db.execute(
+                select(Vehicol).where(Vehicol.receipt_id == receipt_id, Vehicol.is_deleted == False)
+            )).scalar_one_or_none()
+            if vehicol:
+                await _ensure_client_vehicol(db, account_id, receipt.client_id, vehicol)
+
         await db.commit()
         serie = reg_serie
         nr = new_nr
@@ -448,6 +496,46 @@ async def assign_number(
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
     return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
+
+
+@router.put("/{receipt_id}/vehicol", response_model=VehicolRead)
+async def upsert_vehicol(
+    receipt_id: int,
+    body: VehicolCreate,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
+        raise HTTPException(404, "Bonul nu a fost gasit.")
+
+    existing = (await db.execute(
+        select(Vehicol).where(Vehicol.receipt_id == receipt_id)
+    )).scalar_one_or_none()
+
+    if existing and not existing.is_deleted:
+        for k, v in body.model_dump().items():
+            setattr(existing, k, v)
+        existing.updated_at = datetime.now(timezone.utc)
+        if receipt.client_id:
+            await _ensure_client_vehicol(db, account_id, receipt.client_id, existing)
+        await db.commit()
+        await db.refresh(existing)
+        await broadcaster.notify(account_id)
+        return existing
+    else:
+        vehicol = Vehicol(
+            account_id=account_id,
+            receipt_id=receipt_id,
+            **body.model_dump(),
+        )
+        db.add(vehicol)
+        if receipt.client_id:
+            await _ensure_client_vehicol(db, account_id, receipt.client_id, vehicol)
+        await db.commit()
+        await db.refresh(vehicol)
+        await broadcaster.notify(account_id)
+        return vehicol
 
 
 @router.delete("/{receipt_id}", status_code=204)

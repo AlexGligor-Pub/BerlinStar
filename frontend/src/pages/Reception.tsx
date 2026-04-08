@@ -7,6 +7,7 @@ import type { DocContext } from "../utils/generateDocuments";
 import { setResume } from "../store/resumeStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
+import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
@@ -143,7 +144,7 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
 
 function ClientSection(props: { receipt: Receipt }) {
   const r = () => props.receipt;
-  const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic">("juridic");
+  const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic" | null>(null);
   const [searchCui, setSearchCui] = createSignal("");
   const [searchNume, setSearchNume] = createSignal("");
   const [resultsCui, setResultsCui] = createSignal<ClientItem[]>([]);
@@ -168,7 +169,7 @@ function ClientSection(props: { receipt: Receipt }) {
   }
 
   function changeTip(tip: "fizic" | "juridic") {
-    setTipFilter(tip);
+    setTipFilter(prev => prev === tip ? null : tip);
     clearSearch();
   }
 
@@ -206,7 +207,9 @@ function ClientSection(props: { receipt: Receipt }) {
     setResultsNume([]); setSearchedNume(false);
     setSearchingNume(true);
     try {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(q)}&limit=20`);
+      const tip = tipFilter();
+      const url = `/api/clienti?q=${encodeURIComponent(q)}&limit=20${tip ? `&tip=${tip}` : ""}`;
+      const res = await apiFetch(url);
       if (!res.ok) return;
       setResultsNume((await res.json()).items ?? []);
       setSearchedNume(true);
@@ -233,7 +236,7 @@ function ClientSection(props: { receipt: Receipt }) {
 
   function openAddModal() {
     const form = emptyClientForm();
-    form.tip = tipFilter();
+    form.tip = tipFilter() ?? "fizic";
     setModalForm(form); setModalError(null); setShowModal(true);
   }
 
@@ -267,7 +270,6 @@ function ClientSection(props: { receipt: Receipt }) {
         <div class="rclient-assigned">
           <div class="rclient-name">
             {r().clientNume}
-            <Show when={r().clientNumarMasina}><span style="font-size:12px;color:var(--text-muted);font-weight:400;margin-left:8px">{r().clientNumarMasina}</span></Show>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
@@ -305,11 +307,11 @@ function ClientSection(props: { receipt: Receipt }) {
                   {(c) => (
                     <button class="rclient-result-item" onClick={() => assign(c)}>
                       <span class="rclient-result-name">{c.nume}</span>
-                      <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                       <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                     </button>
                   )}
                 </For>
+                <button class="btn btn-sm btn-ghost" style="font-size:0.78rem;width:100%;margin-top:2px" onClick={openAddModal}>+ Adaugă client nou</button>
               </div>
             </Show>
             <Show when={searchedCui() && !searchingCui() && resultsCui().length === 0 && !anafLoading()}>
@@ -333,7 +335,7 @@ function ClientSection(props: { receipt: Receipt }) {
 
           {/* Nume */}
           <div class="rclient-search-row">
-            <input class="input" style="font-size:0.82rem" placeholder="Nume sau nr. mașină..." value={searchNume()}
+            <input class="input" style="font-size:0.82rem" placeholder="Nume..." value={searchNume()}
               onInput={e => { setSearchNume(e.currentTarget.value); setResultsNume([]); setSearchedNume(false); }}
               onKeyDown={e => e.key === "Enter" && searchByNume()}
             />
@@ -347,11 +349,11 @@ function ClientSection(props: { receipt: Receipt }) {
                 {(c) => (
                   <button class="rclient-result-item" onClick={() => assign(c)}>
                     <span class="rclient-result-name">{c.nume}</span>
-                    <Show when={c.numar_masina}><span class="rclient-result-meta">{c.numar_masina}</span></Show>
                     <Show when={c.cui}><span class="rclient-result-meta">CUI {c.cui}</span></Show>
                   </button>
                 )}
               </For>
+              <button class="btn btn-sm btn-ghost" style="font-size:0.78rem;width:100%;margin-top:2px" onClick={openAddModal}>+ Adaugă client nou</button>
             </div>
           </Show>
           <Show when={searchedNume() && !searchingNume() && resultsNume().length === 0}>
@@ -422,7 +424,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
-      if (docType === "deviz") await generateDeviz(r, ctx);
+      if (docType === "deviz") await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true);
       else if (docType === "factura") await generateFactura(r, ctx);
       else await generateChitanta(r, ctx);
     } catch (e: any) {
@@ -446,6 +448,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const date = new Date(r.date);
   const dateStr = date.toLocaleDateString("ro-RO");
   const timeStr = date.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+  const updatedDate = r.updatedAt ? new Date(r.updatedAt) : null;
+  const isUpdated = updatedDate && updatedDate > date;
+  const updatedDateStr = isUpdated ? updatedDate!.toLocaleDateString("ro-RO") : null;
+  const updatedTimeStr = isUpdated ? updatedDate!.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : null;
 
   return (
     <div class="rcard" classList={{ "rcard--open": expanded() }}>
@@ -457,9 +463,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <Show when={r.clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
             </Show>
-            <Show when={r.clientNumarMasina}>
-              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNumarMasina}</span>
-            </Show>
             <Show when={r.devizNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>
             </Show>
@@ -470,7 +473,12 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {r.chitantaSerie}{r.chitantaNr}</span>
             </Show>
           </div>
-          <span class="rcard-meta">{dateStr} {timeStr}</span>
+          <span class="rcard-meta">
+            {dateStr} {timeStr}
+            <Show when={isUpdated}>
+              <span style="margin-left:6px;color:var(--text-muted)">· upd. {updatedDateStr} {updatedTimeStr}</span>
+            </Show>
+          </span>
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">
@@ -485,10 +493,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
               onClick={(e) => {
                 e.stopPropagation();
                 setResume({
+                  id: r.id,
                   titlu: r.titlu,
                   descriere: r.descriere ?? "",
                   dateTehn: r.dateTehn ?? "",
                   items: r.items,
+                  clientId: r.clientId,
+                  clientNume: r.clientNume,
+                  clientCui: r.clientCui,
+                  clientTip: r.clientTip,
+                  vehicol: r.vehicol ?? null,
                 });
                 navigate("/");
               }}
@@ -544,12 +558,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
                 {docLoading() === "deviz" ? "..." : "Deviz"}
               </button>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
-                {docLoading() === "factura" ? "..." : "Factura"}
-              </button>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
-                {docLoading() === "chitanta" ? "..." : "Chitanta"}
-              </button>
+              <Show when={generalSettings()?.useFactura !== false}>
+                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
+                  {docLoading() === "factura" ? "..." : "Factura"}
+                </button>
+                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
+                  {docLoading() === "chitanta" ? "..." : "Chitanta"}
+                </button>
+              </Show>
             </div>
 
           </div>
@@ -604,8 +620,28 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
             <Show when={!!r.dateTehn}>
               <div class="rcard-extra-card">
-                <div class="rcard-extra-title">Date tehnice</div>
+                <div class="rcard-extra-title">Observații</div>
                 <div class="rcard-extra-text">{r.dateTehn}</div>
+              </div>
+            </Show>
+            <Show when={!!r.vehicol}>
+              <div class="rcard-extra-card">
+                <div class="rcard-extra-title">Vehicul</div>
+                <div style="font-size:13px;display:grid;gap:3px">
+                  <strong>{r.vehicol!.numarMasina}</strong>
+                  <Show when={r.vehicol!.marca || r.vehicol!.model}>
+                    <span>{[r.vehicol!.marca, r.vehicol!.model].filter(Boolean).join(" ")}</span>
+                  </Show>
+                  <Show when={r.vehicol!.numarKilometrii != null}>
+                    <span>Km: {r.vehicol!.numarKilometrii!.toLocaleString("ro-RO")}</span>
+                  </Show>
+                  <Show when={r.vehicol!.vin}>
+                    <span style="font-size:11px;color:var(--text-muted)">VIN: {r.vehicol!.vin}</span>
+                  </Show>
+                  <Show when={r.vehicol!.observatii}>
+                    <span style="color:var(--text-muted);white-space:pre-wrap">{r.vehicol!.observatii}</span>
+                  </Show>
+                </div>
               </div>
             </Show>
           </div>
@@ -670,6 +706,7 @@ export default function Reception() {
 
   onMount(() => {
     connectSSE();
+    loadGeneralSettings();
   });
 
   onCleanup(() => disconnectSSE());

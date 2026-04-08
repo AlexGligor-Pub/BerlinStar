@@ -25,11 +25,13 @@ def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
         "client_id": a.client_id,
         "marca_id": a.marca_id,
         "dimensiune_id": a.dimensiune_id,
+        "profil_id": a.profil_id,
         "tip": a.tip,
         "adancime": a.adancime,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
         "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,
+        "profil_valoare": a.profil.valoare if a.profil else None,
         "created_at": a.created_at,
         "updated_at": a.updated_at,
         "is_deleted": a.is_deleted,
@@ -56,6 +58,7 @@ def _serialize(c: CazareAnvelope) -> dict:
         "dep_prezoane": c.dep_prezoane,
         "referinta_cazare_id": c.referinta_cazare_id,
         "montate_pe_masina": c.montate_pe_masina,
+        "numar_masina": c.numar_masina,
         "referinta_cazare_data_checkin": str(c.referinta_cazare.data_checkin) if c.referinta_cazare else None,
         "referinta_cazare_items": [
             {"id": item.id, "anvelopa_id": item.anvelopa_id, "anvelopa": _serialize_anvelopa(item.anvelopa)}
@@ -91,12 +94,16 @@ def _load_stmt(account_id: int):
             selectinload(CazareAnvelope.loc_cazare),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.marca),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.dimensiune),
+            selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.profil),
             selectinload(CazareAnvelope.items).selectinload(
                 CazareAnvelopaItem.anvelopa
             ).selectinload(Anvelopa.marca),
             selectinload(CazareAnvelope.items).selectinload(
                 CazareAnvelopaItem.anvelopa
             ).selectinload(Anvelopa.dimensiune),
+            selectinload(CazareAnvelope.items).selectinload(
+                CazareAnvelopaItem.anvelopa
+            ).selectinload(Anvelopa.profil),
         )
         .where(CazareAnvelope.account_id == account_id, CazareAnvelope.is_deleted == False)
     )
@@ -169,6 +176,7 @@ async def create_cazare(
         dep_prezoane=body.dep_prezoane,
         referinta_cazare_id=body.referinta_cazare_id,
         montate_pe_masina=body.montate_pe_masina,
+        numar_masina=body.numar_masina,
     )
     db.add(cazare)
     await db.flush()
@@ -231,6 +239,7 @@ async def update_cazare(
     cazare.referinta_cazare_id = body.referinta_cazare_id
     if body.montate_pe_masina is not None:
         cazare.montate_pe_masina = body.montate_pe_masina
+    cazare.numar_masina = body.numar_masina
     cazare.updated_at = datetime.now(timezone.utc)
 
     if body.anvelopa_ids is not None:
