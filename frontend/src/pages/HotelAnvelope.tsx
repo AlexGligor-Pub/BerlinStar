@@ -1,7 +1,9 @@
-import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup } from "solid-js";
+import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { apiFetch } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
 import { employees, loadEmployees } from "../store/employeesStore";
+import { posHotelCtx } from "../store/posHotelStore";
 import {
   cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
@@ -423,9 +425,12 @@ function CazareCard(props: {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function HotelAnvelope() {
+  const [searchParams] = useSearchParams();
   const [view, setView] = createSignal<"active" | "istoric">("active");
   const [loading, setLoading] = createSignal(false);
   const [companyData, setCompanyData] = createSignal<CompanyData | null>(null);
+  const [viewOnlyCazare, setViewOnlyCazare] = createSignal<Cazare | null>(null);
+  const [pageSelectedClient, setPageSelectedClient] = createSignal<ClientItem | null>(null);
 
   // ── Modal Cazare Nouă ──────────────────────────────────────────────────────
   const [showNewModal, setShowNewModal] = createSignal(false);
@@ -529,12 +534,43 @@ export default function HotelAnvelope() {
     setLoading(true);
     try {
       await Promise.all([
-        fetchCazari(),
         loadLocuriCazare(),
         loadEmployees(),
         fetchCompany(),
       ]);
     } finally { setLoading(false); }
+
+    // Dacă vine din POS cu context activ → auto-selectează clientul și încarcă cazarile
+    const ctx = posHotelCtx();
+    if (ctx) {
+      try {
+        const res = await apiFetch(`/api/clienti/${ctx.clientId}`);
+        if (res.ok) {
+          const c = await res.json();
+          const clientItem: ClientItem = {
+            id: c.id, nume: c.nume, cui: c.cui ?? null,
+            telefon: c.telefon ?? null, adresa: c.adresa ?? null,
+            reprezentant: c.reprezentant ?? null, numar_masina: c.numar_masina ?? null,
+          };
+          setPageSelectedClient(clientItem);
+          await loadCazari({ clientId: c.id, activa: true, limit: 200 });
+        }
+      } catch {}
+    } else {
+      await fetchCazari();
+    }
+
+    // Dacă vine cu param viewCazare → deschide modal view-only
+    const viewId = searchParams.viewCazare;
+    if (viewId) {
+      try {
+        const res = await apiFetch(`/api/cazare-anvelope/${viewId}`);
+        if (res.ok) {
+          const d = await res.json();
+          setViewOnlyCazare(mapCazare(d));
+        }
+      } catch {}
+    }
 
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreCazari(); },
@@ -543,6 +579,58 @@ export default function HotelAnvelope() {
     if (sentinelRef) observer.observe(sentinelRef);
     onCleanup(() => observer.disconnect());
   });
+
+  function mapCazare(d: any): Cazare {
+    return {
+      id: d.id,
+      clientId: d.client_id ?? null,
+      employeeId: d.employee_id ?? null,
+      locCazareId: d.loc_cazare_id ?? null,
+      dataCheckin: d.data_checkin,
+      dataCheckout: d.data_checkout ?? null,
+      comments: d.comments ?? null,
+      createdAt: d.created_at,
+      clientNume: d.client_nume ?? null,
+      clientCui: d.client_cui ?? null,
+      clientTelefon: d.client_telefon ?? null,
+      clientAdresa: d.client_adresa ?? null,
+      clientReprezentant: d.client_reprezentant ?? null,
+      employeeName: d.employee_name ?? null,
+      locCazareNume: d.loc_cazare_nume ?? null,
+      numarMasina: d.numar_masina ?? null,
+      depAnvelope: d.dep_anvelope ?? true,
+      depCapace: d.dep_capace ?? false,
+      depRotiComplete: d.dep_roti_complete ?? false,
+      depAntifurturi: d.dep_antifurturi ?? false,
+      depPrezoane: d.dep_prezoane ?? false,
+      referintaCazareId: d.referinta_cazare_id ?? null,
+      montatePeMasina: d.montate_pe_masina ?? false,
+      referintaCazareDataCheckin: d.referinta_cazare_data_checkin ?? null,
+      referintaCazareItems: (d.referinta_cazare_items ?? []).map((item: any) => ({
+        id: item.id, anvelopaId: item.anvelopa_id ?? null,
+        anvelopa: item.anvelopa ? {
+          id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
+          marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
+          tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
+          marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
+          profilValoare: item.anvelopa.profil_valoare ?? null,
+          profilId: item.anvelopa.profil_id ?? null,
+        } : null,
+      })),
+      items: (d.items ?? []).map((item: any) => ({
+        id: item.id,
+        anvelopaId: item.anvelopa_id ?? null,
+        anvelopa: item.anvelopa ? {
+          id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
+          marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
+          profilId: item.anvelopa.profil_id ?? null,
+          tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
+          marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
+          profilValoare: item.anvelopa.profil_valoare ?? null,
+        } : null,
+      })),
+    };
+  }
 
   async function fetchCompany() {
     try {
@@ -570,11 +658,8 @@ export default function HotelAnvelope() {
     }
   }
 
-  createEffect(() => {
-    const v = view();
-    void v;
-    fetchCazari();
-  });
+  // defer: true → sare prima rulare (onMount gestionează încărcarea inițială)
+  createEffect(on(view, () => { fetchCazari(); }, { defer: true }));
 
   createEffect(() => {
     if (adminVisible()) {
@@ -614,7 +699,9 @@ export default function HotelAnvelope() {
   }
 
   function openNewModal() {
-    setNewClient(null);
+    const ctx = posHotelCtx();
+    const preClient = ctx ? pageSelectedClient() : null;
+    setNewClient(preClient);
     setClientAnvelope([]);
     setSelectedAnvIds(new Set<number>());
     setShowAnvForm(false);
@@ -635,6 +722,10 @@ export default function HotelAnvelope() {
     setNewVehicolLocked(true);
     setSaveErr("");
     setShowNewModal(true);
+    // Dacă avem context POS, încarcă datele clientului pre-setat
+    if (preClient) {
+      handleClientSelect(preClient);
+    }
   }
 
   async function handleClientSelect(c: ClientItem | null) {
@@ -701,7 +792,8 @@ export default function HotelAnvelope() {
 
       const finalIds = Array.from(selectedAnvIds()).map((id) => tempToReal.get(id) ?? id);
 
-      const body = {
+      const ctx = posHotelCtx();
+      const body: Record<string, any> = {
         client_id: newClient()!.id,
         employee_id: newEmpId() !== "" ? newEmpId() : null,
         loc_cazare_id: newLocId() !== "" ? newLocId() : null,
@@ -717,6 +809,7 @@ export default function HotelAnvelope() {
         montate_pe_masina: newMontatePeMasina(),
         numar_masina: newSelectedVehicol() || null,
       };
+      if (ctx) body.receipt_id = parseInt(ctx.receiptId);
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -838,60 +931,18 @@ export default function HotelAnvelope() {
     if (!c) return;
     setCheckoutSaving(true);
     try {
+      const ctx = posHotelCtx();
+      const checkoutBody: Record<string, any> = {
+        data_checkout: checkoutDate(),
+        comments: checkoutComments().trim() || null,
+      };
+      if (ctx) checkoutBody.receipt_id = parseInt(ctx.receiptId);
       const res = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
         method: "PATCH",
-        body: JSON.stringify({ data_checkout: checkoutDate(), comments: checkoutComments().trim() || null }),
+        body: JSON.stringify(checkoutBody),
       });
       if (!res.ok) return;
-      const updated: Cazare = await res.json().then((d: any) => ({
-        id: d.id,
-        clientId: d.client_id ?? null,
-        employeeId: d.employee_id ?? null,
-        locCazareId: d.loc_cazare_id ?? null,
-        dataCheckin: d.data_checkin,
-        dataCheckout: d.data_checkout ?? null,
-        comments: d.comments ?? null,
-        createdAt: d.created_at,
-        clientNume: d.client_nume ?? null,
-        clientCui: d.client_cui ?? null,
-        clientTelefon: d.client_telefon ?? null,
-        clientAdresa: d.client_adresa ?? null,
-        clientReprezentant: d.client_reprezentant ?? null,
-        employeeName: d.employee_name ?? null,
-        locCazareNume: d.loc_cazare_nume ?? null,
-        numarMasina: d.numar_masina ?? null,
-        depAnvelope: d.dep_anvelope ?? true,
-        depCapace: d.dep_capace ?? false,
-        depRotiComplete: d.dep_roti_complete ?? false,
-        depAntifurturi: d.dep_antifurturi ?? false,
-        depPrezoane: d.dep_prezoane ?? false,
-        referintaCazareId: d.referinta_cazare_id ?? null,
-        montatePeMasina: d.montate_pe_masina ?? false,
-        referintaCazareDataCheckin: d.referinta_cazare_data_checkin ?? null,
-        referintaCazareItems: (d.referinta_cazare_items ?? []).map((item: any) => ({
-          id: item.id, anvelopaId: item.anvelopa_id ?? null,
-          anvelopa: item.anvelopa ? {
-            id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
-            marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
-            tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
-            marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
-            profilValoare: item.anvelopa.profil_valoare ?? null,
-            profilId: item.anvelopa.profil_id ?? null,
-          } : null,
-        })),
-        items: (d.items ?? []).map((item: any) => ({
-          id: item.id,
-          anvelopaId: item.anvelopa_id ?? null,
-          anvelopa: item.anvelopa ? {
-            id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
-            marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
-            profilId: item.anvelopa.profil_id ?? null,
-            tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
-            marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
-            profilValoare: item.anvelopa.profil_valoare ?? null,
-          } : null,
-        })),
-      }));
+      const updated: Cazare = await res.json().then((d: any) => mapCazare(d));
       setCheckoutCazare(null);
       await generateCazareCheckout(updated, companyData());
       await fetchCazari();
@@ -1554,14 +1605,14 @@ export default function HotelAnvelope() {
       {/* Modal: Cazare Noua */}
       <Show when={showNewModal()}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
+          <div class="sl-modal" style="max-width:1300px;width:100%;max-height:95vh;overflow-y:auto">
             <div class="sl-modal-header">
               <span class="sl-modal-title">Cazare Nouă</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>✕</button>
             </div>
 
             <div class="sl-modal-body" style="padding:20px 24px">
-              <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start">
+              <div style="display:grid;grid-template-columns:1fr 1.8fr 1fr;gap:16px;align-items:start">
 
               {/* ─ Coloana stânga: Client ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
@@ -1616,7 +1667,7 @@ export default function HotelAnvelope() {
                 </Show>
               </div>
 
-              {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
+              {/* ─ Coloana mijloc: Anvelope ─ */}
               <div style="display:flex;flex-direction:column;gap:16px">
 
               {/* ─ Zona 2: Anvelope ─ */}
@@ -1707,7 +1758,13 @@ export default function HotelAnvelope() {
                 </Show>
               </div>
 
-              {/* ─ Zona 3: Date Cazare ─ */}
+              <Show when={saveErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
+              </Show>
+
+              </div>{/* end coloana mijloc */}
+
+              {/* ─ Coloana dreapta: Date Cazare ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                 <div style="display:grid;gap:8px">
@@ -1717,15 +1774,10 @@ export default function HotelAnvelope() {
                     <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
                     <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
                   </div>
-                  <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
+                  <textarea class="input" rows={4} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
                 </div>
               </div>
 
-              <Show when={saveErr()}>
-                <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
-              </Show>
-
-              </div>{/* end coloana dreapta */}
               </div>{/* end grid */}
             </div>
 
@@ -1824,6 +1876,68 @@ export default function HotelAnvelope() {
                 <button class="btn btn-primary btn-sm" onClick={() => doCheckout()} disabled={checkoutSaving()}>
                   {checkoutSaving() ? "Se procesează..." : "Confirmă Scoaterea"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Modal View-Only Cazare (navigare din POS) */}
+      <Show when={viewOnlyCazare()}>
+        {(c) => (
+          <div class="sl-modal-overlay" onClick={() => setViewOnlyCazare(null)}>
+            <div class="sl-modal" style="max-width:700px;width:95%" onClick={(e) => e.stopPropagation()}>
+              <div class="sl-modal-header">
+                <span class="sl-modal-title">
+                  {c().dataCheckout ? "Scoatere Anvelope" : "Cazare Anvelope"} — Vizualizare
+                </span>
+                <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>✕</button>
+              </div>
+              <div class="sl-modal-body" style="padding:16px 20px;display:grid;gap:10px">
+                <Show when={c().clientNume}>
+                  <div><span style="color:var(--text-muted)">Client:</span> <strong>{c().clientNume}</strong></div>
+                </Show>
+                <Show when={c().numarMasina}>
+                  <div><span style="color:var(--text-muted)">Nr. mașină:</span> {c().numarMasina}</div>
+                </Show>
+                <div><span style="color:var(--text-muted)">Check-in:</span> {fmtDate(c().dataCheckin)}</div>
+                <Show when={c().dataCheckout}>
+                  <div><span style="color:var(--text-muted)">Check-out:</span> {fmtDate(c().dataCheckout)}</div>
+                </Show>
+                <Show when={c().locCazareNume}>
+                  <div><span style="color:var(--text-muted)">Locație:</span> {c().locCazareNume}</div>
+                </Show>
+                <Show when={c().employeeName}>
+                  <div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div>
+                </Show>
+                <Show when={c().comments}>
+                  <div><span style="color:var(--text-muted)">Comentarii:</span> {c().comments}</div>
+                </Show>
+                <Show when={c().items.length > 0}>
+                  <div style="margin-top:8px">
+                    <div style="font-weight:600;margin-bottom:6px;font-size:13px">Anvelope ({c().items.length})</div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <For each={c().items}>
+                        {(item) => (
+                          <Show when={item.anvelopa}>
+                            <div style="font-size:12px;background:var(--bg);border-radius:4px;padding:6px 8px">
+                              {[
+                                item.anvelopa!.marcaNume,
+                                item.anvelopa!.dimensiuneValoare,
+                                item.anvelopa!.profilValoare,
+                                TIP_LABELS[item.anvelopa!.tip],
+                                item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime}mm` : null,
+                              ].filter(Boolean).join(" · ")}
+                            </div>
+                          </Show>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+              </div>
+              <div class="sl-modal-footer">
+                <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>Închide</button>
               </div>
             </div>
           </div>

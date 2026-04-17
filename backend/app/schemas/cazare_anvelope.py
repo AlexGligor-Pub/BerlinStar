@@ -19,11 +19,13 @@ class CazareCreate(BaseModel):
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool = False
     numar_masina: str | None = None
+    receipt_id: int | None = None
 
 
 class CazareCheckoutBody(BaseModel):
     data_checkout: date
     comments: str | None = None
+    receipt_id: int | None = None
 
 
 class CazareUpdateBody(BaseModel):
@@ -40,6 +42,7 @@ class CazareUpdateBody(BaseModel):
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool | None = None
     numar_masina: str | None = None
+    receipt_id: int | None = None
 
 
 class CazareItemRead(BaseModel):
@@ -78,6 +81,7 @@ class CazareRead(BaseModel):
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool = False
     numar_masina: str | None = None
+    receipt_id: int | None = None
     referinta_cazare_data_checkin: str | None = None
     referinta_cazare_items: list[CazareItemRead] = []
     items: list[CazareItemRead] = []

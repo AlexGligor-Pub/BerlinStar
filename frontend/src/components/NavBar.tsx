@@ -3,6 +3,7 @@ import { auth, logout, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
 import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
 import { adminVisible, setAdminVisible } from "../store/adminStore";
+import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
 import { Show, createSignal, onCleanup, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
 import { API_BASE } from "../utils/api";
@@ -171,6 +172,30 @@ export default function NavBar() {
             </div>
           </Show>
         </div>
+
+        <Show when={posHotelCtx()}>
+          {(ctx) => (
+            <div style="display:flex;align-items:center;gap:8px;font-size:13px;flex:1;justify-content:center;overflow:hidden;min-width:0">
+              <span style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px">
+                {ctx().titlu}
+              </span>
+              <span style="color:var(--text-muted);flex-shrink:0">·</span>
+              <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-muted);max-width:150px">
+                {ctx().clientNume}
+              </span>
+              <button
+                class="btn btn-ghost btn-sm"
+                style="white-space:nowrap;flex-shrink:0"
+                onClick={() => {
+                  clearPosHotelCtx();
+                  navigate("/");
+                }}
+              >
+                ← POS
+              </button>
+            </div>
+          )}
+        </Show>
 
         <Show when={trialBanner()}>
           <span class="navbar-trial-badge">{trialBanner()}</span>

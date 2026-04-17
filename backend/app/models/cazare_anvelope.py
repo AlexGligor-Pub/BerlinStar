@@ -36,6 +36,9 @@ class CazareAnvelope(Base):
     )
     montate_pe_masina: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     numar_masina: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    receipt_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("receipts.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
@@ -49,6 +52,7 @@ class CazareAnvelope(Base):
     client: Mapped["Client | None"] = relationship("Client")  # type: ignore[name-defined]
     employee: Mapped["Employee | None"] = relationship("Employee")  # type: ignore[name-defined]
     loc_cazare: Mapped["LocCazare | None"] = relationship("LocCazare")  # type: ignore[name-defined]
+    receipt: Mapped["Receipt | None"] = relationship("Receipt", back_populates="cazari_anvelope")  # type: ignore[name-defined]
     referinta_cazare: Mapped["CazareAnvelope | None"] = relationship(
         "CazareAnvelope",
         primaryjoin="foreign(CazareAnvelope.referinta_cazare_id) == remote(CazareAnvelope.id)",

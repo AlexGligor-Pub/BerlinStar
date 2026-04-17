@@ -396,10 +396,26 @@ function ClientSection(props: { receipt: Receipt }) {
   );
 }
 
+interface CazareBasic {
+  id: number;
+  data_checkin: string;
+  data_checkout: string | null;
+  numar_masina: string | null;
+}
+
 function ReceiptCard(props: { receipt: Receipt }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
+  const [cazariHotel, setCazariHotel] = createSignal<CazareBasic[]>([]);
+
+  createEffect(() => {
+    if (!expanded()) return;
+    apiFetch(`/api/cazare-anvelope?receipt_id=${props.receipt.id}&limit=10`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => { if (data) setCazariHotel(data.items ?? []); })
+      .catch(() => {});
+  });
   const [metodaDraft, setMetodaDraft] = createSignal(props.receipt.metodaPlata ?? "");
   const [partialDraft, setPartialDraft] = createSignal(
     props.receipt.partialPay?.toFixed(2) ?? "100.00"
@@ -641,6 +657,44 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <Show when={r.vehicol!.observatii}>
                     <span style="color:var(--text-muted);white-space:pre-wrap">{r.vehicol!.observatii}</span>
                   </Show>
+                </div>
+              </div>
+            </Show>
+            <Show when={cazariHotel().length > 0}>
+              <div class="rcard-extra-card">
+                <div class="rcard-extra-title">Hotel Anvelope</div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <For each={cazariHotel()}>
+                    {(c) => {
+                      const fmtDate = (ymd: string) =>
+                        new Date(ymd + "T12:00:00").toLocaleDateString("ro-RO");
+                      const luni = () => {
+                        if (!c.data_checkout) return null;
+                        const a = new Date(c.data_checkin + "T12:00:00");
+                        const b = new Date(c.data_checkout + "T12:00:00");
+                        const diff = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+                        const zile = Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+                        if (diff === 0) return `${zile} ${zile === 1 ? "zi" : "zile"}`;
+                        const extra = Math.round(zile - diff * 30.44);
+                        return extra > 0
+                          ? `${diff} ${diff === 1 ? "lună" : "luni"} și ${extra} zile`
+                          : `${diff} ${diff === 1 ? "lună" : "luni"}`;
+                      };
+                      return (
+                        <button
+                          style="font-size:13px;color:var(--accent);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;text-align:left;line-height:1.5"
+                          onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
+                        >
+                          {c.data_checkout ? "Scoatere" : "Cazare"}
+                          <span style="font-size:11px;color:var(--text-muted);margin-left:6px;text-decoration:none">
+                            {c.data_checkout
+                              ? `${fmtDate(c.data_checkin)} → ${fmtDate(c.data_checkout)} · ${luni()}`
+                              : fmtDate(c.data_checkin)}
+                          </span>
+                        </button>
+                      );
+                    }}
+                  </For>
                 </div>
               </div>
             </Show>

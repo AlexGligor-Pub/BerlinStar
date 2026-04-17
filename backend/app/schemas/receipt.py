@@ -1,9 +1,17 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.receipt import PayMethod
 from app.schemas.vehicol import VehicolRead
+
+
+class CazareBasicRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    data_checkin: date
+    data_checkout: date | None
+    numar_masina: str | None
 
 
 class ReceiptItemCreate(BaseModel):
@@ -125,3 +133,4 @@ class ReceiptRead(BaseModel):
     deleted_at: datetime | None
     receipt_items: list[ReceiptItemRead]
     vehicol: VehicolRead | None = None
+    cazari_anvelope: list[CazareBasicRead] = []

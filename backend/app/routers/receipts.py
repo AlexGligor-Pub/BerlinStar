@@ -22,6 +22,7 @@ from app.models.company import Company
 from app.models.disclaimer import Disclaimer
 from app.models.vehicol import Vehicol
 from app.models.client_vehicol import ClientVehicol
+from app.models.cazare_anvelope import CazareAnvelope
 from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
@@ -98,6 +99,16 @@ def _serialize(receipt: Receipt) -> dict:
     data["client_numar_masina"]  = c.numar_masina  if c else None
     v = receipt.vehicol
     data["vehicol"] = VehicolRead.model_validate(v).model_dump() if v and not v.is_deleted else None
+    data["cazari_anvelope"] = [
+        {
+            "id": caz.id,
+            "data_checkin": caz.data_checkin.isoformat(),
+            "data_checkout": caz.data_checkout.isoformat() if caz.data_checkout else None,
+            "numar_masina": caz.numar_masina,
+        }
+        for caz in (receipt.cazari_anvelope or [])
+        if not caz.is_deleted
+    ]
     return data
 
 
@@ -275,7 +286,10 @@ async def get_receipt(
 ):
     receipt = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.cazari_anvelope),
+        )
         .where(Receipt.id == receipt_id)
     )).scalar_one_or_none()
     if receipt is None or receipt.account_id != account_id:

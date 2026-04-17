@@ -59,6 +59,7 @@ def _serialize(c: CazareAnvelope) -> dict:
         "referinta_cazare_id": c.referinta_cazare_id,
         "montate_pe_masina": c.montate_pe_masina,
         "numar_masina": c.numar_masina,
+        "receipt_id": c.receipt_id,
         "referinta_cazare_data_checkin": str(c.referinta_cazare.data_checkin) if c.referinta_cazare else None,
         "referinta_cazare_items": [
             {"id": item.id, "anvelopa_id": item.anvelopa_id, "anvelopa": _serialize_anvelopa(item.anvelopa)}
@@ -113,6 +114,7 @@ def _load_stmt(account_id: int):
 async def list_cazari(
     activa: bool | None = None,
     client_id: int | None = None,
+    receipt_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     last_id: int | None = None,
@@ -128,6 +130,8 @@ async def list_cazari(
         stmt = stmt.where(CazareAnvelope.data_checkout.isnot(None))
     if client_id is not None:
         stmt = stmt.where(CazareAnvelope.client_id == client_id)
+    if receipt_id is not None:
+        stmt = stmt.where(CazareAnvelope.receipt_id == receipt_id)
     if date_from:
         stmt = stmt.where(CazareAnvelope.data_checkin >= date_from)
     if date_to:
@@ -177,6 +181,7 @@ async def create_cazare(
         referinta_cazare_id=body.referinta_cazare_id,
         montate_pe_masina=body.montate_pe_masina,
         numar_masina=body.numar_masina,
+        receipt_id=body.receipt_id,
     )
     db.add(cazare)
     await db.flush()
@@ -240,6 +245,8 @@ async def update_cazare(
     if body.montate_pe_masina is not None:
         cazare.montate_pe_masina = body.montate_pe_masina
     cazare.numar_masina = body.numar_masina
+    if body.receipt_id is not None:
+        cazare.receipt_id = body.receipt_id
     cazare.updated_at = datetime.now(timezone.utc)
 
     if body.anvelopa_ids is not None:
@@ -275,6 +282,8 @@ async def checkout_cazare(
     cazare.data_checkout = body.data_checkout
     if body.comments is not None:
         cazare.comments = body.comments
+    if body.receipt_id is not None:
+        cazare.receipt_id = body.receipt_id
     cazare.updated_at = datetime.now(timezone.utc)
     await db.commit()
 

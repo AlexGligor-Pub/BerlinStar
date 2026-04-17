@@ -1,10 +1,12 @@
 import { For, Show, createEffect, createSignal, onMount } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
+import { savePosHotelCtx } from "../store/posHotelStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -445,7 +447,15 @@ function EditClientModal(props: {
 
 // ─── ShoppingList ─────────────────────────────────────────────────────────────
 
+interface CazareBasic {
+  id: number;
+  data_checkin: string;
+  data_checkout: string | null;
+  numar_masina: string | null;
+}
+
 export default function ShoppingList() {
+  const navigate = useNavigate();
   const [titlu, setTitlu] = createSignal("");
   const [descriere, setDescriere] = createSignal("");
   const [dateTehn, setDateTehn] = createSignal("");
@@ -473,6 +483,9 @@ export default function ShoppingList() {
   const [showEditClientModal, setShowEditClientModal] = createSignal(false);
   const [showResumeModal, setShowResumeModal] = createSignal(false);
   const [finalizing, setFinalizing] = createSignal(false);
+
+  const [linkedCazari, setLinkedCazari] = createSignal<CazareBasic[]>([]);
+  const [goingToHotel, setGoingToHotel] = createSignal(false);
 
   // Guard: don't save meta before onMount decides what to load
   let metaSaveEnabled = false;
@@ -635,6 +648,85 @@ export default function ShoppingList() {
     loadResumeClient(d);
     setVehicol(d.vehicol ?? null);
   });
+
+  // Încarcă cazarile legate de receiptul curent
+  createEffect(async () => {
+    const rId = loadedReceiptId();
+    if (!rId) { setLinkedCazari([]); return; }
+    try {
+      const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${rId}&limit=10`);
+      if (res.ok) {
+        const data = await res.json();
+        setLinkedCazari(data.items ?? []);
+      }
+    } catch {
+      // ignoră erori de rețea
+    }
+  });
+
+  async function handleGoToHotel() {
+    const client = selectedClient();
+    if (!titlu().trim()) {
+      setErrorMsg("Introduceți numărul mașinii (titlul devizului) înainte de a merge la Hotel Anvelope.");
+      return;
+    }
+    if (!client) {
+      setErrorMsg("Adăugați un client înainte de a merge la Hotel Anvelope.");
+      return;
+    }
+    if (goingToHotel()) return;
+    setGoingToHotel(true);
+
+    let rId = loadedReceiptId();
+
+    if (rId === null && cart.items.length === 0) {
+      setErrorMsg("Adăugați cel puțin un produs în deviz înainte de a merge la Hotel Anvelope.");
+      setGoingToHotel(false);
+      return;
+    }
+
+    try {
+      if (cart.items.length > 0) {
+        const receiptData = {
+          date: new Date().toISOString(),
+          titlu: titlu().trim(),
+          clientId: null,
+          clientNume: null, clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null, clientNumarMasina: null,
+          descriere: descriere().trim() || undefined,
+          dateTehn: dateTehn().trim() || undefined,
+          items: [...cart.items],
+          total: cartTotal(),
+          devizSerie: "", devizNr: 0,
+          facturaSerie: "", facturaNr: 0,
+          chitantaSerie: "", chitantaNr: 0,
+          programareId: loadedProgramareId(),
+          locationId: device()?.locationId ?? null,
+        };
+        let saved;
+        if (rId !== null) {
+          saved = await updateReceiptContent(rId, receiptData);
+        } else {
+          saved = await saveReceipt(receiptData);
+        }
+        rId = saved.id;
+        setLoadedReceiptId(rId);
+        try { await updateReceiptClient(rId, client.id); } catch { /* ignoră */ }
+      }
+    } catch {
+      setErrorMsg("Eroare la salvarea devizului.");
+      setGoingToHotel(false);
+      return;
+    }
+
+    savePosHotelCtx({
+      receiptId: String(rId),
+      titlu: titlu().trim(),
+      clientId: client.id,
+      clientNume: client.nume,
+    });
+    setGoingToHotel(false);
+    navigate("/hotel-anvelope");
+  }
 
   let warnTimer: ReturnType<typeof setTimeout>;
   let successTimer: ReturnType<typeof setTimeout>;
@@ -832,6 +924,25 @@ export default function ShoppingList() {
         </div>
       </Show>
 
+      <Show when={linkedCazari().length > 0}>
+        <div style="padding:2px 10px 4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--text-muted)">Hotel:</span>
+          <For each={linkedCazari()}>
+            {(c) => {
+              const label = c.data_checkout ? "Scoatere" : "Cazare";
+              return (
+                <button
+                  style="font-size:11px;color:var(--accent);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0"
+                  onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
+                >
+                  {label}
+                </button>
+              );
+            }}
+          </For>
+        </div>
+      </Show>
+
       <div class="shopping-list-body">
         <Show
           when={cart.items.length > 0}
@@ -869,6 +980,14 @@ export default function ShoppingList() {
           onClick={handleFinalize}
         >
           {finalizing() ? "Se salvează..." : "Finalizeaza"}
+        </button>
+        <button
+          class="btn btn-ghost btn-sm w-full"
+          style="margin-top:4px"
+          disabled={goingToHotel()}
+          onClick={handleGoToHotel}
+        >
+          {goingToHotel() ? "Se salvează..." : "Cazare Anvelope"}
         </button>
       </div>
 
