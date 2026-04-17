@@ -12,3 +12,4 @@ class GeneralSettings(Base):
     use_factura: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     use_aviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     afiseaza_tehnician_deviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dezactiveaza_hotel_anvelope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

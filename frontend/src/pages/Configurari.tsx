@@ -2512,7 +2512,7 @@ function SetariGeneralePanel() {
 
   onMount(() => { loadGeneralSettings(); });
 
-  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean }>) {
+  async function handleChange(patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean; dezactiveazaHotelAnvelope: boolean }>) {
     setSaving(true);
     setMsg(null);
     try {
@@ -2576,6 +2576,21 @@ function SetariGeneralePanel() {
           <p class="cfg-hint" style="margin:0 0 0 26px">
             Când este activat, devizul generat va include o coloană <strong>Tehnician</strong> cu numele angajatului
             asociat fiecărui produs/serviciu.
+          </p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.dezactiveazaHotelAnvelope === true}
+              disabled={saving()}
+              onChange={(e) => handleChange({ dezactiveazaHotelAnvelope: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Dezactivează Hotel Anvelope</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Când este activat, butonul <strong>Hotel Anvelope</strong> dispare din meniu și butonul
+            <strong> Cazare Anvelope</strong> dispare din POS. Datele existente nu sunt șterse.
           </p>
         </div>
         <Show when={msg()}>

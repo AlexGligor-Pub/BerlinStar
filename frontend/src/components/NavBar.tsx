@@ -4,6 +4,7 @@ import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
 import { adminVisible, setAdminVisible } from "../store/adminStore";
 import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
+import { generalSettings } from "../store/generalSettingsStore";
 import { Show, createSignal, onCleanup, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
 import { API_BASE } from "../utils/api";
@@ -118,12 +119,14 @@ export default function NavBar() {
                   </svg>
                   <span>Clienți</span>
                 </button>
-                <button class="logo-nav-tile" onClick={() => handleNavigate("/hotel-anvelope")}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
-                  </svg>
-                  <span>Hotel Anvelope</span>
-                </button>
+                <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
+                  <button class="logo-nav-tile" onClick={() => handleNavigate("/hotel-anvelope")}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+                    </svg>
+                    <span>Hotel Anvelope</span>
+                  </button>
+                </Show>
                 <Show when={adminVisible()}>
                   <button class="logo-nav-tile" onClick={() => handleNavigate("/rapoarte")}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">

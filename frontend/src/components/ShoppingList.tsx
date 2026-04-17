@@ -7,6 +7,7 @@ import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx } from "../store/posHotelStore";
+import { generalSettings } from "../store/generalSettingsStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -981,14 +982,16 @@ export default function ShoppingList() {
         >
           {finalizing() ? "Se salvează..." : "Finalizeaza"}
         </button>
-        <button
-          class="btn btn-ghost btn-sm w-full"
-          style="margin-top:4px"
-          disabled={goingToHotel()}
-          onClick={handleGoToHotel}
-        >
-          {goingToHotel() ? "Se salvează..." : "Cazare Anvelope"}
-        </button>
+        <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
+          <button
+            class="btn btn-ghost btn-sm w-full"
+            style="margin-top:4px"
+            disabled={goingToHotel()}
+            onClick={handleGoToHotel}
+          >
+            {goingToHotel() ? "Se salvează..." : "Cazare Anvelope"}
+          </button>
+        </Show>
       </div>
 
       {/* Resume modal */}

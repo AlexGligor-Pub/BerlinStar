@@ -5,6 +5,7 @@ export interface GeneralSettingsData {
   useFactura: boolean;
   useAviz: boolean;
   afiseazaTehnicianDeviz: boolean;
+  dezactiveazaHotelAnvelope: boolean;
 }
 
 function mapFromApi(data: any): GeneralSettingsData {
@@ -12,6 +13,7 @@ function mapFromApi(data: any): GeneralSettingsData {
     useFactura: data.use_factura,
     useAviz: data.use_aviz,
     afiseazaTehnicianDeviz: data.afiseaza_tehnician_deviz ?? false,
+    dezactiveazaHotelAnvelope: data.dezactiveaza_hotel_anvelope ?? false,
   };
 }
 
@@ -46,12 +48,13 @@ export async function loadGeneralSettings(): Promise<void> {
 }
 
 export async function updateGeneralSettings(
-  patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean }>
+  patch: Partial<{ useFactura: boolean; useAviz: boolean; afiseazaTehnicianDeviz: boolean; dezactiveazaHotelAnvelope: boolean }>
 ): Promise<void> {
   const body: Record<string, boolean> = {};
   if (patch.useFactura !== undefined) body.use_factura = patch.useFactura;
   if (patch.useAviz !== undefined) body.use_aviz = patch.useAviz;
   if (patch.afiseazaTehnicianDeviz !== undefined) body.afiseaza_tehnician_deviz = patch.afiseazaTehnicianDeviz;
+  if (patch.dezactiveazaHotelAnvelope !== undefined) body.dezactiveaza_hotel_anvelope = patch.dezactiveazaHotelAnvelope;
 
   const res = await apiFetch("/api/general-settings", {
     method: "PATCH",
