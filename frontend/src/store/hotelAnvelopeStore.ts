@@ -51,6 +51,8 @@ export interface Cazare {
   clientId: number | null;
   employeeId: number | null;
   locCazareId: number | null;
+  locationId: number | null;
+  locationName: string | null;
   dataCheckin: string;
   dataCheckout: string | null;
   comments: string | null;
@@ -99,6 +101,8 @@ function mapCazare(c: any): Cazare {
     clientId: c.client_id ?? null,
     employeeId: c.employee_id ?? null,
     locCazareId: c.loc_cazare_id ?? null,
+    locationId: c.location_id ?? null,
+    locationName: c.location_name ?? null,
     dataCheckin: c.data_checkin,
     dataCheckout: c.data_checkout ?? null,
     comments: c.comments ?? null,
@@ -153,6 +157,7 @@ function buildCazariQs(params: Parameters<typeof loadCazari>[0], lastId?: number
   qs.set("limit", String(params?.limit ?? 30));
   if (params?.activa !== undefined) qs.set("activa", String(params.activa));
   if (params?.clientId !== undefined) qs.set("client_id", String(params.clientId));
+  if (params?.locationId !== undefined) qs.set("location_id", String(params.locationId));
   if (params?.dateFrom) qs.set("date_from", params.dateFrom);
   if (params?.dateTo) qs.set("date_to", params.dateTo);
   if (lastId !== undefined) qs.set("last_id", String(lastId));
@@ -162,6 +167,7 @@ function buildCazariQs(params: Parameters<typeof loadCazari>[0], lastId?: number
 export async function loadCazari(params?: {
   activa?: boolean;
   clientId?: number;
+  locationId?: number;
   dateFrom?: string;
   dateTo?: string;
   limit?: number;

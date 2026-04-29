@@ -466,6 +466,7 @@ export default function ShoppingList() {
   const [showTitluWarn, setShowTitluWarn] = createSignal(false);
   const [showSuccess, setShowSuccess] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal<string | null>(null);
+  const [warnMsg, setWarnMsg] = createSignal<string | null>(null);
   const [editItem, setEditItem] = createSignal<CartItem | null>(null);
   const [editQty, setEditQty] = createSignal("1");
   const [editPrice, setEditPrice] = createSignal("0");
@@ -668,11 +669,11 @@ export default function ShoppingList() {
   async function handleGoToHotel() {
     const client = selectedClient();
     if (!titlu().trim()) {
-      setErrorMsg("Introduceți numărul mașinii (titlul devizului) înainte de a merge la Hotel Anvelope.");
+      setWarnMsg("Mai este un pas — introduceți numărul mașinii (titlul devizului) înainte de a merge la Hotel Anvelope.");
       return;
     }
     if (!client) {
-      setErrorMsg("Adăugați un client înainte de a merge la Hotel Anvelope.");
+      setWarnMsg("Mai este un pas — adăugați un client înainte de a merge la Hotel Anvelope.");
       return;
     }
     if (goingToHotel()) return;
@@ -681,7 +682,7 @@ export default function ShoppingList() {
     let rId = loadedReceiptId();
 
     if (rId === null && cart.items.length === 0) {
-      setErrorMsg("Adăugați cel puțin un produs în deviz înainte de a merge la Hotel Anvelope.");
+      setWarnMsg("Mai este un pas — adăugați cel puțin un produs în deviz înainte de a merge la Hotel Anvelope.");
       setGoingToHotel(false);
       return;
     }
@@ -1107,6 +1108,20 @@ export default function ShoppingList() {
             </div>
             <p class="sl-error-modal-msg">{errorMsg()}</p>
             <button class="btn btn-primary btn-sm" onClick={() => setErrorMsg(null)}>OK</button>
+          </div>
+        </div>
+      </Show>
+
+      {/* Warning modal */}
+      <Show when={warnMsg() !== null}>
+        <div class="sl-modal-overlay">
+          <div class="sl-error-modal">
+            <div class="sl-error-modal-header" style="color: #f97316;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Un pas înainte</span>
+            </div>
+            <p class="sl-error-modal-msg">{warnMsg()}</p>
+            <button class="btn btn-primary btn-sm" onClick={() => setWarnMsg(null)}>OK</button>
           </div>
         </div>
       </Show>

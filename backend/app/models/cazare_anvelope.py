@@ -23,6 +23,9 @@ class CazareAnvelope(Base):
     loc_cazare_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("locuri_cazare.id", ondelete="SET NULL"), nullable=True
     )
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     data_checkin: Mapped[date] = mapped_column(Date, nullable=False)
     data_checkout: Mapped[date | None] = mapped_column(Date, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -52,6 +55,7 @@ class CazareAnvelope(Base):
     client: Mapped["Client | None"] = relationship("Client")  # type: ignore[name-defined]
     employee: Mapped["Employee | None"] = relationship("Employee")  # type: ignore[name-defined]
     loc_cazare: Mapped["LocCazare | None"] = relationship("LocCazare")  # type: ignore[name-defined]
+    location: Mapped["Location | None"] = relationship("Location")  # type: ignore[name-defined]
     receipt: Mapped["Receipt | None"] = relationship("Receipt", back_populates="cazari_anvelope")  # type: ignore[name-defined]
     referinta_cazare: Mapped["CazareAnvelope | None"] = relationship(
         "CazareAnvelope",

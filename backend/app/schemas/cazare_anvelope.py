@@ -8,6 +8,7 @@ class CazareCreate(BaseModel):
     client_id: int | None = None
     employee_id: int | None = None
     loc_cazare_id: int | None = None
+    location_id: int | None = None
     data_checkin: date
     comments: str | None = None
     anvelopa_ids: list[int] = []
@@ -59,6 +60,7 @@ class CazareRead(BaseModel):
     client_id: int | None
     employee_id: int | None
     loc_cazare_id: int | None
+    location_id: int | None = None
     data_checkin: date
     data_checkout: date | None
     comments: str | None
@@ -73,6 +75,7 @@ class CazareRead(BaseModel):
     client_reprezentant: str | None = None
     employee_name: str | None = None
     loc_cazare_nume: str | None = None
+    location_name: str | None = None
     dep_anvelope: bool = True
     dep_capace: bool = False
     dep_roti_complete: bool = False

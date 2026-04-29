@@ -908,6 +908,7 @@ interface CazareForPdf {
   clientReprezentant: string | null;
   employeeName: string | null;
   locCazareNume: string | null;
+  locationName?: string | null;
   numarMasina?: string | null;
   comments: string | null;
   depAnvelope?: boolean;
@@ -1055,6 +1056,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
 
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
+  if (cazare.locationName) { doc.text(`Locație: ${t(cazare.locationName)}`, ML, y); y += 4.5; }
   if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
   if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
   if (cazare.comments) {
@@ -1088,16 +1090,31 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   y = drawAnvelopeTable(doc, autoTable, cazare, y, t, FONT);
   y += 4;
 
-  if (cazare.montatePeMasina && cazare.referintaCazareId) {
-    setF("bold", 8.5);
-    doc.setTextColor(220, 38, 38);
+  if (cazare.referintaCazareId) {
+    const isMontate = !!cazare.montatePeMasina;
+    const refColor: [number, number, number] = isMontate ? [22, 163, 74] : [220, 38, 38];
     const refDate = cazare.referintaCazareDataCheckin ? ` (intrare: ${fmtDate(cazare.referintaCazareDataCheckin)})` : "";
-    const refLine: string[] = doc.splitTextToSize(`Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost montate pe mașina clientului.`, CW);
-    doc.text(refLine, ML, y);
-    y += refLine.length * 4.5 + 2;
+
+    hline(doc, y);
+    y += 5;
+
+    setF("bold", 8);
     doc.setTextColor(...C.black);
+    doc.text("ANVELOPE SCOASE DIN DEPOZIT — CAZAREA ANTERIOARĂ", ML, y);
+    y += 5;
+
     setF("normal", 8.5);
-    // Tabel anvelope montate
+    doc.setTextColor(...refColor);
+    const descText = isMontate
+      ? `Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost scoase din depozit și MONTATE PE MAȘINA CLIENTULUI. ` +
+        `Acestea au înlocuit anvelopele de sezon care sunt depozitate acum. Clientul a plecat cu anvelopele montate pe vehicul.`
+      : `Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost scoase din depozit și PREDATE CLIENTULUI fără a fi montate. ` +
+        `Clientul a ridicat anvelopele și le va monta separat. Anvelopele depozitate acum reprezintă un set diferit.`;
+    const descLines: string[] = doc.splitTextToSize(descText, CW);
+    doc.text(descLines, ML, y);
+    y += descLines.length * 4.2 + 4;
+    doc.setTextColor(...C.black);
+
     const oldItems = (cazare.referintaCazareItems ?? []).filter((i) => i.anvelopa != null);
     if (oldItems.length > 0) {
       const oldRows = oldItems.map((item, idx) => {
@@ -1117,7 +1134,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
         body: oldRows,
         theme: "grid",
         styles: { font: FONT },
-        headStyles: { fillColor: [220, 38, 38], textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+        headStyles: { fillColor: refColor, textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
         bodyStyles: { fontSize: 7.5, cellPadding: 2 },
         columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 16 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
         margin: { left: ML, right: MR },
@@ -1125,7 +1142,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
       });
       y = (doc as any).lastAutoTable.finalY + 3;
     }
-    y += 2;
+    y += 4;
   }
 
   y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
@@ -1180,6 +1197,7 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
 
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
+  if (cazare.locationName) { doc.text(`Locație: ${t(cazare.locationName)}`, ML, y); y += 4.5; }
   if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
   if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
 

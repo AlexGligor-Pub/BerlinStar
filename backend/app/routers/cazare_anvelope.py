@@ -42,12 +42,14 @@ def _serialize(c: CazareAnvelope) -> dict:
     client = c.client
     emp = c.employee
     loc = c.loc_cazare
+    location = c.location
     return {
         "id": c.id,
         "account_id": c.account_id,
         "client_id": c.client_id,
         "employee_id": c.employee_id,
         "loc_cazare_id": c.loc_cazare_id,
+        "location_id": c.location_id,
         "data_checkin": c.data_checkin,
         "data_checkout": c.data_checkout,
         "comments": c.comments,
@@ -75,6 +77,7 @@ def _serialize(c: CazareAnvelope) -> dict:
         "client_reprezentant": client.reprezentant if client else None,
         "employee_name": emp.name if emp else None,
         "loc_cazare_nume": loc.nume if loc else None,
+        "location_name": location.name if location else None,
         "items": [
             {
                 "id": item.id,
@@ -93,6 +96,7 @@ def _load_stmt(account_id: int):
             selectinload(CazareAnvelope.client),
             selectinload(CazareAnvelope.employee),
             selectinload(CazareAnvelope.loc_cazare),
+            selectinload(CazareAnvelope.location),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.marca),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.dimensiune),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.profil),
@@ -115,6 +119,7 @@ async def list_cazari(
     activa: bool | None = None,
     client_id: int | None = None,
     receipt_id: int | None = None,
+    location_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     last_id: int | None = None,
@@ -132,6 +137,8 @@ async def list_cazari(
         stmt = stmt.where(CazareAnvelope.client_id == client_id)
     if receipt_id is not None:
         stmt = stmt.where(CazareAnvelope.receipt_id == receipt_id)
+    if location_id is not None:
+        stmt = stmt.where(CazareAnvelope.location_id == location_id)
     if date_from:
         stmt = stmt.where(CazareAnvelope.data_checkin >= date_from)
     if date_to:
@@ -171,6 +178,7 @@ async def create_cazare(
         client_id=body.client_id,
         employee_id=body.employee_id,
         loc_cazare_id=body.loc_cazare_id,
+        location_id=body.location_id,
         data_checkin=body.data_checkin,
         comments=body.comments,
         dep_anvelope=body.dep_anvelope,
