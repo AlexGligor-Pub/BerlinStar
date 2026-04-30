@@ -155,7 +155,7 @@ async def list_receipts(
         date_conditions.append(and_(*range_clauses))
     if unpaid_days is not None and unpaid_days > 0:
         past = datetime.now(timezone.utc) - timedelta(days=unpaid_days)
-        date_conditions.append(and_(Receipt.created_at >= past, Receipt.pay_method == PayMethod.NEPLATIT))
+        date_conditions.append(and_(Receipt.created_at >= past, Receipt.pay_method.in_([PayMethod.NEPLATIT, PayMethod.PARTIAL])))
     if date_conditions:
         stmt = stmt.where(or_(*date_conditions))
     if location_id is not None:
@@ -323,7 +323,11 @@ async def patch_receipt(
 
     result = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+            selectinload(Receipt.cazari_anvelope),
+        )
         .where(Receipt.id == receipt_id)
     )).scalar_one()
 
