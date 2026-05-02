@@ -3761,3 +3761,416 @@ body {
     font-size: 0.72rem;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AdminV2 — Sidebar layout
+───────────────────────────────────────────────────────────────────────────── */
+
+.adminv2-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.adminv2-mobile-header {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.adminv2-mobile-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.adminv2-hamburger {
+  padding: 6px;
+  line-height: 0;
+}
+
+.adminv2-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.adminv2-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 29;
+}
+
+/* Sidebar */
+.adminv2-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.adminv2-sidebar-header {
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.adminv2-sidebar-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.adminv2-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+
+.adminv2-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-radius: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.adminv2-nav-item:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.adminv2-nav-item--active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent);
+  border-right: 3px solid var(--accent);
+}
+
+.adminv2-nav-item__icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Content area */
+.adminv2-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Override sticky top — no 56px navbar in adminv2 */
+.adminv2-content .page-header {
+  top: 0;
+}
+
+/* ── Account cards grid ──────────────────────────────────────────────────── */
+
+.account-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.account-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.account-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.account-card--deleted {
+  opacity: 0.6;
+}
+
+.account-card__avatar {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1.4rem;
+  text-align: center;
+  padding: 20px 0 16px;
+  letter-spacing: 0.05em;
+}
+
+.account-card__body {
+  padding: 12px 16px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-card__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.account-card__username {
+  font-size: 0.82rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.account-card__email {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.account-card__actions {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface2);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Admin modal body — scrollable content area between header and footer */
+.admin-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 62vh;
+  padding: 2px 0;
+}
+
+/* Form rows inside admin modals */
+.admin-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.admin-form-row--check {
+  flex-direction: row;
+  align-items: center;
+}
+
+.admin-form-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.admin-textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+/* Account preview grid */
+.admin-preview-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 10px 16px;
+  align-items: start;
+}
+
+.admin-preview-grid .admin-form-label {
+  padding-top: 2px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+/* Upload modal */
+.adminv2-upload-modal {
+  width: 480px;
+  max-width: 95vw;
+}
+
+.adminv2-upload-modal .sl-modal-body {
+  padding: 16px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Hotel Anvelope — Image cards
+───────────────────────────────────────────────────────────────────────────── */
+
+.hotel-img-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  max-width: 1000px;
+}
+
+.hotel-img-card {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.hotel-img-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.hotel-img-card__title {
+  padding: 10px 14px 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+}
+
+.hotel-img-card__img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.hotel-img-card__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  aspect-ratio: 16 / 9;
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border: 2px dashed var(--border);
+  margin: 8px;
+  border-radius: var(--radius-sm);
+}
+
+.hotel-img-card__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.hotel-img-card:hover .hotel-img-card__overlay {
+  opacity: 1;
+}
+
+/* Upload drop zone */
+.hotel-upload-drop {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  overflow: hidden;
+}
+
+.hotel-upload-drop:hover,
+.hotel-upload-drop--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.hotel-upload-drop__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 24px;
+}
+
+.hotel-upload-drop__preview {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AdminV2 — Mobile responsive
+───────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .adminv2-mobile-header {
+    display: flex;
+  }
+
+  .adminv2-backdrop {
+    display: block;
+  }
+
+  .adminv2-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 30;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
+  }
+
+  .adminv2-sidebar--open {
+    transform: translateX(0);
+  }
+
+  .adminv2-content {
+    padding: 16px;
+  }
+
+  .hotel-img-grid {
+    grid-template-columns: 1fr;
+  }
+}

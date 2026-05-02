@@ -162,6 +162,7 @@ function SearchableSelect<T extends { id: number }>(props: {
   onSelect: (id: number | "") => void;
   getLabel: (item: T) => string;
   placeholder: string;
+  onAddNew?: (value: string) => Promise<void> | void;
 }) {
   const [query, setQuery] = createSignal("");
   const [open, setOpen] = createSignal(false);
@@ -204,7 +205,22 @@ function SearchableSelect<T extends { id: number }>(props: {
             )}
           </For>
           <Show when={filtered().length === 0}>
-            <div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">Niciun rezultat</div>
+            <Show
+              when={query().trim() && props.onAddNew}
+              fallback={<div style="padding:6px 10px;font-size:12px;color:var(--text-muted)">Niciun rezultat</div>}
+            >
+              <div
+                style="padding:6px 10px;font-size:12px;color:var(--primary);cursor:pointer;font-weight:500"
+                onMouseDown={async (e) => {
+                  e.preventDefault();
+                  await props.onAddNew!(query().trim());
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                + Adaugă "{query()}"
+              </div>
+            </Show>
           </Show>
         </div>
       </Show>
@@ -226,10 +242,6 @@ function AnvelopaForm(props: {
   const [tip, setTip] = createSignal<TipAnvelopa>(props.initialData?.tip ?? "vara");
   const [adancime, setAdancime] = createSignal(props.initialData?.adancime != null ? String(props.initialData.adancime) : "");
   const [err, setErr] = createSignal("");
-  // inline adaugare marca/dimensiune/profil noua
-  const [newMarca, setNewMarca] = createSignal("");
-  const [newDim, setNewDim] = createSignal("");
-  const [newProfilVal, setNewProfilVal] = createSignal("");
 
   onMount(() => {
     loadMarci();
@@ -237,42 +249,33 @@ function AnvelopaForm(props: {
     loadProfil();
   });
 
-  async function addMarca() {
-    const n = newMarca().trim();
-    if (!n) return;
-    const res = await apiFetch("/api/marci-anvelope", { method: "POST", body: JSON.stringify({ nume: n }) });
+  async function addMarca(name: string) {
+    const res = await apiFetch("/api/marci-anvelope", { method: "POST", body: JSON.stringify({ nume: name }) });
     if (res.ok) {
       const d = await res.json();
       invalidateMarciCache();
       await loadMarci(true);
       setMarcaId(d.id);
-      setNewMarca("");
     }
   }
 
-  async function addProfilInline() {
-    const v = newProfilVal().trim();
-    if (!v) return;
-    const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+  async function addProfilInline(value: string) {
+    const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
     if (res.ok) {
       const d = await res.json();
       invalidateProfilCache();
       await loadProfil(true);
       setProfilId(d.id);
-      setNewProfilVal("");
     }
   }
 
-  async function addDim() {
-    const v = newDim().trim();
-    if (!v) return;
-    const res = await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+  async function addDim(value: string) {
+    const res = await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
     if (res.ok) {
       const d = await res.json();
       invalidateDimensiuniCache();
       await loadDimensiuni(true);
       setDimensiuneId(d.id);
-      setNewDim("");
     }
   }
 
@@ -303,33 +306,20 @@ function AnvelopaForm(props: {
       <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Anvelopă nouă</div>
       <div style="display:grid;gap:6px">
         {/* Marcă */}
-        <div style="display:flex;gap:6px;align-items:center">
-          <SearchableSelect items={marci()} value={marcaId()} onSelect={setMarcaId} getLabel={(m) => m.nume} placeholder="Marcă" />
-          <input class="input" style="flex:1" placeholder="Marcă nouă..." value={newMarca()} onInput={(e) => setNewMarca(e.currentTarget.value)} />
-          <button class="btn btn-ghost btn-sm" onClick={addMarca} disabled={!newMarca().trim()}>+</button>
-        </div>
-        {/* Dimensiune */}
-        <div style="display:flex;gap:6px;align-items:center">
-          <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" />
-          <input class="input" style="flex:1" placeholder="Dimensiune nouă..." value={newDim()} onInput={(e) => setNewDim(e.currentTarget.value)} />
-          <button class="btn btn-ghost btn-sm" onClick={addDim} disabled={!newDim().trim()}>+</button>
-        </div>
+        <SearchableSelect items={marci()} value={marcaId()} onSelect={setMarcaId} getLabel={(m) => m.nume} placeholder="Marcă" onAddNew={addMarca} />
         {/* Profil */}
-        <div style="display:flex;gap:6px;align-items:center">
-          <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" />
-          <input class="input" style="flex:1" placeholder="Profil nou..." value={newProfilVal()} onInput={(e) => setNewProfilVal(e.currentTarget.value)} />
-          <button class="btn btn-ghost btn-sm" onClick={addProfilInline} disabled={!newProfilVal().trim()}>+</button>
-        </div>
-        {/* Tip + Adâncime */}
-        <div style="display:flex;gap:6px">
-          <select class="input" style="flex:1" value={tip()} onChange={(e) => setTip(e.currentTarget.value as TipAnvelopa)}>
-            <option value="iarna">Iarnă</option>
-            <option value="vara">Vară</option>
-            <option value="ms">M+S</option>
-            <option value="altele">Altele</option>
-          </select>
-          <input class="input" type="number" style="flex:1" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
-        </div>
+        <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" onAddNew={addProfilInline} />
+        {/* Dimensiune */}
+        <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" onAddNew={addDim} />
+        {/* Adâncime */}
+        <input class="input" type="number" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
+        {/* Tip */}
+        <select class="input" value={tip()} onChange={(e) => setTip(e.currentTarget.value as TipAnvelopa)}>
+          <option value="iarna">Iarnă</option>
+          <option value="vara">Vară</option>
+          <option value="ms">M+S</option>
+          <option value="altele">Altele</option>
+        </select>
       </div>
       <Show when={err()}><p style="color:var(--danger);font-size:12px;margin:6px 0 0">{err()}</p></Show>
       <div style="display:flex;gap:6px;margin-top:8px">
@@ -459,6 +449,7 @@ export default function HotelAnvelope() {
   const [newVehicolLocked, setNewVehicolLocked] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
+  const [cazareImageUrl, setCazareImageUrl] = createSignal<string | null>(null);
 
   // ── Modal Checkout ─────────────────────────────────────────────────────────
   const [checkoutCazare, setCheckoutCazare] = createSignal<Cazare | null>(null);
@@ -542,6 +533,11 @@ export default function HotelAnvelope() {
         fetchCompany(),
       ]);
     } finally { setLoading(false); }
+
+    apiFetch("/api/global-settings/hotel-anvelope")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setCazareImageUrl(d.hotel_cazare_image_path ?? null); })
+      .catch(() => {});
 
     // Dacă vine din POS cu context activ → auto-selectează clientul și încarcă cazarile
     const ctx = posHotelCtx();
@@ -1613,16 +1609,16 @@ export default function HotelAnvelope() {
       {/* Modal: Cazare Noua */}
       <Show when={showNewModal()}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="width:96vw;max-width:1600px;max-height:98vh;overflow-y:auto">
-            <div class="sl-modal-header">
+          <div class="sl-modal" style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
+            <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
               <span class="sl-modal-title">Cazare Nouă</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>✕</button>
             </div>
 
-            <div class="sl-modal-body" style="padding:20px 24px">
-              <div style="display:grid;grid-template-columns:1fr 1.8fr 1fr;gap:16px;align-items:start">
+            <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1.8fr 1.3fr;min-height:0">
 
               {/* ─ Coloana stânga: Client ─ */}
+              <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border)">
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
                 <ClientSearch value={newClient()} onSelect={handleClientSelect} />
@@ -1683,11 +1679,12 @@ export default function HotelAnvelope() {
                   </div>
                 </Show>
               </div>
+              </div>
 
-              {/* ─ Coloana mijloc: Anvelope ─ */}
-              <div style="display:flex;flex-direction:column;gap:16px">
+              {/* ─ Coloana mijloc: Anvelope + Date Cazare ─ */}
+              <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:16px">
 
-              {/* ─ Zona 2: Anvelope ─ */}
+              {/* ─ Zona: Anvelope ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
                 <Show when={!newClient()}>
@@ -1775,13 +1772,7 @@ export default function HotelAnvelope() {
                 </Show>
               </div>
 
-              <Show when={saveErr()}>
-                <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
-              </Show>
-
-              </div>{/* end coloana mijloc */}
-
-              {/* ─ Coloana dreapta: Date Cazare ─ */}
+              {/* ─ Date Cazare ─ */}
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                 <div style="display:grid;gap:8px">
@@ -1795,10 +1786,32 @@ export default function HotelAnvelope() {
                 </div>
               </div>
 
-              </div>{/* end grid */}
+              <Show when={saveErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
+              </Show>
+
+              </div>{/* end coloana mijloc */}
+
+              {/* ─ Coloana dreapta: Imagine Cazare Roti ─ */}
+              <div style="overflow:hidden;position:relative">
+                <Show
+                  when={cazareImageUrl()}
+                  fallback={
+                    <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface2)">
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                        <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                      </svg>
+                      <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
+                    </div>
+                  }
+                >
+                  <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:cover;display:block" />
+                </Show>
+              </div>
+
             </div>
 
-            <div class="sl-modal-footer">
+            <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0">
               <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>Anulează</button>
               <button class="btn btn-primary btn-sm" onClick={saveCazare} disabled={saving()}>
                 {saving() ? "Se salvează..." : "Salvează Cazarea"}

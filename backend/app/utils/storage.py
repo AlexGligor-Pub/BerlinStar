@@ -43,6 +43,17 @@ async def validate_image(file: UploadFile, max_mb: int = 5) -> bytes:
     return data
 
 
+def upload_global_image(key: str, file_bytes: bytes, content_type: str) -> str:
+    """Upload a system-level image to a fixed S3 key (overwrites, no UUID)."""
+    bucket     = os.getenv("S3_BUCKET", "professorprimedev")
+    public_url = os.getenv("S3_PUBLIC_URL", "https://professorprimedev.nbg1.your-objectstorage.com")
+
+    ext = content_type.split("/")[-1].replace("jpeg", "jpg")
+    object_key = f"global/hotel_anvelope/{key}.{ext}"
+    _s3_client().put_object(Bucket=bucket, Key=object_key, Body=file_bytes, ContentType=content_type, ACL="public-read")
+    return f"{public_url}/{object_key}"
+
+
 def delete_image_by_url(url: str) -> None:
     """Delete an object from S3 given its full public URL. Silently ignores errors."""
     try:
