@@ -146,7 +146,7 @@ const [locuriCazare, setLocuriCazare] = createSignal<LocCazare[]>([]);
 const [cazariHasMore, setCazariHasMore] = createSignal(false);
 const [cazariLoadingMore, setCazariLoadingMore] = createSignal(false);
 const [cazariNextCursor, setCazariNextCursor] = createSignal<number | null>(null);
-let _lastCazariParams: Parameters<typeof loadCazari>[0];
+const [_lastCazariParams, _setLastCazariParams] = createSignal<Parameters<typeof loadCazari>[0]>(undefined);
 
 export { cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore };
 
@@ -172,7 +172,7 @@ export async function loadCazari(params?: {
   dateTo?: string;
   limit?: number;
 }) {
-  _lastCazariParams = params;
+  _setLastCazariParams(params);
   try {
     const res = await apiFetch(`/api/cazare-anvelope?${buildCazariQs(params)}`);
     if (!res.ok) return;
@@ -189,7 +189,7 @@ export async function loadMoreCazari() {
   if (cursor == null) return;
   setCazariLoadingMore(true);
   try {
-    const qs = buildCazariQs(_lastCazariParams, cursor);
+    const qs = buildCazariQs(_lastCazariParams(), cursor);
     const res = await apiFetch(`/api/cazare-anvelope?${qs}`);
     if (!res.ok) return;
     const data = await res.json();
@@ -216,86 +216,58 @@ const PROFIL_CACHE_KEY = "bs_profiluri_anvelope";
 const LOCURI_CACHE_KEY = "bs_locuri_cazare";
 const CACHE_TTL = 10 * 60 * 1000;
 
-export async function loadMarci(force = false) {
+async function loadCached<T>(
+  cacheKey: string,
+  url: string,
+  setter: (items: T[]) => void,
+  mapper: (raw: any) => T,
+  force: boolean,
+): Promise<void> {
   if (!force) {
     try {
-      const cached = localStorage.getItem(MARCI_CACHE_KEY);
-      if (cached) {
-        const { ts, items } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) { setMarci(items); return; }
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const { ts, items } = JSON.parse(raw);
+        if (Date.now() - ts < CACHE_TTL) { setter(items); return; }
       }
     } catch {}
   }
   try {
-    const res = await apiFetch("/api/marci-anvelope?limit=500");
+    const res = await apiFetch(`${url}?limit=500`);
     if (!res.ok) return;
     const data = await res.json();
-    const items: MarcaAnvelopa[] = data.items.map((m: any) => ({ id: m.id, nume: m.nume }));
-    setMarci(items);
-    localStorage.setItem(MARCI_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
+    const items: T[] = data.items.map(mapper);
+    setter(items);
+    localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items }));
   } catch {}
 }
 
-export async function loadDimensiuni(force = false) {
-  if (!force) {
-    try {
-      const cached = localStorage.getItem(DIM_CACHE_KEY);
-      if (cached) {
-        const { ts, items } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) { setDimensiuni(items); return; }
-      }
-    } catch {}
-  }
-  try {
-    const res = await apiFetch("/api/dimensiuni-anvelope?limit=500");
-    if (!res.ok) return;
-    const data = await res.json();
-    const items: DimensiuneAnvelopa[] = data.items.map((d: any) => ({ id: d.id, valoare: d.valoare }));
-    setDimensiuni(items);
-    localStorage.setItem(DIM_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
-  } catch {}
+export function loadMarci(force = false) {
+  return loadCached<MarcaAnvelopa>(
+    MARCI_CACHE_KEY, "/api/marci-anvelope", setMarci,
+    (m) => ({ id: m.id, nume: m.nume }), force,
+  );
 }
 
-export async function loadLocuriCazare(force = false) {
-  if (!force) {
-    try {
-      const cached = localStorage.getItem(LOCURI_CACHE_KEY);
-      if (cached) {
-        const { ts, items } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) { setLocuriCazare(items); return; }
-      }
-    } catch {}
-  }
-  try {
-    const res = await apiFetch("/api/loc-cazare?limit=500");
-    if (!res.ok) return;
-    const data = await res.json();
-    const items: LocCazare[] = data.items.map((l: any) => ({
-      id: l.id, nume: l.nume, description: l.description ?? null,
-    }));
-    setLocuriCazare(items);
-    localStorage.setItem(LOCURI_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
-  } catch {}
+export function loadDimensiuni(force = false) {
+  return loadCached<DimensiuneAnvelopa>(
+    DIM_CACHE_KEY, "/api/dimensiuni-anvelope", setDimensiuni,
+    (d) => ({ id: d.id, valoare: d.valoare }), force,
+  );
 }
 
-export async function loadProfil(force = false) {
-  if (!force) {
-    try {
-      const cached = localStorage.getItem(PROFIL_CACHE_KEY);
-      if (cached) {
-        const { ts, items } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL) { setProfiluri(items); return; }
-      }
-    } catch {}
-  }
-  try {
-    const res = await apiFetch("/api/profiluri-anvelope?limit=500");
-    if (!res.ok) return;
-    const data = await res.json();
-    const items: ProfilAnvelopa[] = data.items.map((p: any) => ({ id: p.id, valoare: p.valoare }));
-    setProfiluri(items);
-    localStorage.setItem(PROFIL_CACHE_KEY, JSON.stringify({ ts: Date.now(), items }));
-  } catch {}
+export function loadLocuriCazare(force = false) {
+  return loadCached<LocCazare>(
+    LOCURI_CACHE_KEY, "/api/loc-cazare", setLocuriCazare,
+    (l) => ({ id: l.id, nume: l.nume, description: l.description ?? null }), force,
+  );
+}
+
+export function loadProfil(force = false) {
+  return loadCached<ProfilAnvelopa>(
+    PROFIL_CACHE_KEY, "/api/profiluri-anvelope", setProfiluri,
+    (p) => ({ id: p.id, valoare: p.valoare }), force,
+  );
 }
 
 export function invalidateLocuriCache() {

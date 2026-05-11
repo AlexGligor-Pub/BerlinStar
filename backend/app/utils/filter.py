@@ -4,14 +4,18 @@ from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import DeclarativeBase
 from fastapi import HTTPException
 
+_columns_cache: dict[type, frozenset[str]] = {}
+
+
+def _valid_columns(model: type[DeclarativeBase]) -> frozenset[str]:
+    cached = _columns_cache.get(model)
+    if cached is None:
+        cached = frozenset(c.key for c in sa_inspect(model).columns)
+        _columns_cache[model] = cached
+    return cached
+
 
 def apply_filters(stmt, model: type[DeclarativeBase], filters_json: str | None):
-    """
-    Aplica filtre custom dintr-un JSON string pe un statement SQLAlchemy.
-
-    Exemplu: filters='{"currency":"RON","type":"Produs"}'
-    Campurile necunoscute sunt ignorate (nu expun erori interne).
-    """
     if not filters_json:
         return stmt
     try:
@@ -19,11 +23,9 @@ def apply_filters(stmt, model: type[DeclarativeBase], filters_json: str | None):
     except Exception:
         raise HTTPException(status_code=400, detail="Parametrul 'filters' trebuie sa fie JSON valid.")
 
-    mapper = sa_inspect(model)
-    valid_columns = {c.key for c in mapper.columns}
-
+    valid = _valid_columns(model)
     for field, value in filters.items():
-        if field not in valid_columns:
+        if field not in valid:
             continue
         stmt = stmt.where(getattr(model, field) == value)
 

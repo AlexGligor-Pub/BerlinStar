@@ -19,6 +19,15 @@ class _SafeDict(dict):
         return "{" + key + "}"
 
 
+def _build_msg(subject: str, from_label: str, to_address: str, body_html: str) -> MIMEMultipart:
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_label
+    msg["To"] = to_address
+    msg.attach(MIMEText(body_html, "html"))
+    return msg
+
+
 def _smtp_send(host: str, port: int, user: str, password: str, use_tls: bool, msg: MIMEMultipart) -> None:
     """Blocking SMTP send — called inside run_in_executor."""
     if use_tls:
@@ -31,6 +40,16 @@ def _smtp_send(host: str, port: int, user: str, password: str, use_tls: bool, ms
         with smtplib.SMTP_SSL(host, port, timeout=15) as server:
             server.login(user, password)
             server.send_message(msg)
+
+
+async def _dispatch(settings: GlobalSettings, msg: MIMEMultipart) -> None:
+    """Run blocking SMTP send in thread pool using the running event loop."""
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        None, _smtp_send,
+        settings.smtp_host, settings.smtp_port, settings.smtp_user,
+        settings.smtp_password, settings.smtp_use_tls, msg,
+    )
 
 
 async def _get_global(db: AsyncSession) -> GlobalSettings | None:
@@ -85,20 +104,10 @@ async def send_test_email(
         "<p>Dacă îl primiți, configurația SMTP funcționează corect.</p>"
     )
     from_label = f"{settings.smtp_from_name or 'BerlinStar'} <{settings.smtp_from_address}>"
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = from_label
-    msg["To"] = to_address
-    msg.attach(MIMEText(body_html, "html"))
+    msg = _build_msg(subject, from_label, to_address, body_html)
 
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, _smtp_send,
-            settings.smtp_host, settings.smtp_port, settings.smtp_user,
-            settings.smtp_password, settings.smtp_use_tls, msg,
-        )
+        await _dispatch(settings, msg)
         await _log(db, account_id=account_id, to_address=to_address,
                    scenario=None, subject=subject, status="ok", body_html=body_html)
     except Exception as exc:
@@ -136,20 +145,10 @@ async def send_email(
     subject = template.subject.format_map(safe_vars)
     body_html = template.body.format_map(safe_vars)
     from_label = f"{settings.smtp_from_name or 'BerlinStar'} <{settings.smtp_from_address}>"
-
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = from_label
-    msg["To"] = to_address
-    msg.attach(MIMEText(body_html, "html"))
+    msg = _build_msg(subject, from_label, to_address, body_html)
 
     try:
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(
-            None, _smtp_send,
-            settings.smtp_host, settings.smtp_port, settings.smtp_user,
-            settings.smtp_password, settings.smtp_use_tls, msg,
-        )
+        await _dispatch(settings, msg)
         await _log(db, account_id=account_id, to_address=to_address,
                    scenario=scenario, subject=subject, status="ok", body_html=body_html)
     except Exception as exc:

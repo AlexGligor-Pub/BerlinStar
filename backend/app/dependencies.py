@@ -8,7 +8,7 @@ from app.config import SECRET_KEY, ALGORITHM
 _oauth2 = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 
-async def get_account_id(token: str = Depends(_oauth2)) -> int:
+def _decode_token(token: str) -> int:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return int(payload["sub"])
@@ -16,13 +16,11 @@ async def get_account_id(token: str = Depends(_oauth2)) -> int:
         raise HTTPException(401, "Token expirat.")
     except Exception:
         raise HTTPException(401, "Token invalid.")
+
+
+async def get_account_id(token: str = Depends(_oauth2)) -> int:
+    return _decode_token(token)
 
 
 async def get_account_id_from_query(token: str = Query(...)) -> int:
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return int(payload["sub"])
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(401, "Token expirat.")
-    except Exception:
-        raise HTTPException(401, "Token invalid.")
+    return _decode_token(token)
