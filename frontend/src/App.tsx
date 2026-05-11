@@ -14,7 +14,6 @@ import Clienti from "./pages/Clienti";
 import HotelAnvelope from "./pages/HotelAnvelope";
 import Programari from "./pages/Programari";
 import NoAccess from "./pages/NoAccess";
-import Admin from "./pages/Admin";
 import AdminV2 from "./pages/AdminV2";
 import HealthCheck from "./pages/HealthCheck";
 
@@ -61,7 +60,6 @@ export default function App() {
       <Route path="/clienti" component={() => <Protected component={Clienti} />} />
       <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
       <Route path="/programari" component={() => <Protected component={Programari} />} />
-      <Route path="/admin" component={Admin} />
       <Route path="/adminv2" component={AdminV2} />
     </Router>
   );
