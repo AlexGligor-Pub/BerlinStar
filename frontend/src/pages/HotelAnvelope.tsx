@@ -336,6 +336,7 @@ function CazareCard(props: {
   cazare: Cazare;
   companyData: CompanyData | null;
   onCheckout: (c: Cazare) => void;
+  onCheckoutNew: (c: Cazare) => void;
   onEdit: (c: Cazare) => void;
   onView: (c: Cazare) => void;
 }) {
@@ -399,6 +400,7 @@ function CazareCard(props: {
       <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
         <Show when={!c().dataCheckout}>
           <button class="btn btn-primary btn-sm" onClick={() => props.onCheckout(c())}>Scoatere</button>
+          <button class="btn btn-ghost btn-sm" onClick={() => props.onCheckoutNew(c())}>Scoatere și introducere nouă</button>
           <button class="btn btn-ghost btn-sm" onClick={() => props.onEdit(c())}>Editează</button>
         </Show>
         <button class="btn btn-ghost btn-sm" onClick={() => props.onView(c())}>Vezi detalii</button>
@@ -824,7 +826,10 @@ export default function HotelAnvelope() {
     } finally { setSaving(false); }
   }
 
-  function openCheckout(c: Cazare) {
+  const [checkoutAndNew, setCheckoutAndNew] = createSignal(false);
+
+  function openCheckout(c: Cazare, andNew = false) {
+    setCheckoutAndNew(andNew);
     setCheckoutCazare(c);
     setCheckoutDate(todayStr());
     setCheckoutComments(c.comments ?? "");
@@ -929,7 +934,8 @@ export default function HotelAnvelope() {
     } finally { setEditSaving(false); }
   }
 
-  async function doCheckout(andNew = false) {
+  async function doCheckout() {
+    const andNew = checkoutAndNew();
     const c = checkoutCazare();
     if (!c) return;
     setCheckoutSaving(true);
@@ -1316,6 +1322,7 @@ export default function HotelAnvelope() {
                   cazare={c}
                   companyData={companyData()}
                   onCheckout={openCheckout}
+                  onCheckoutNew={(c) => openCheckout(c, true)}
                   onEdit={openEdit}
                   onView={(c) => setViewOnlyCazare(c)}
                 />
@@ -1483,12 +1490,19 @@ export default function HotelAnvelope() {
                   <Show when={editAnvelope().length > 0}>
                     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
                       <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
-                      <div style="display:flex;flex-wrap:wrap;gap:6px">
-                        <button class={`btn btn-sm ${editDepAnvelope() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepAnvelope(v => !v)}>Anvelope</button>
-                        <button class={`btn btn-sm ${editDepCapace() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepCapace(v => !v)}>Capace</button>
-                        <button class={`btn btn-sm ${editDepRotiComplete() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepRotiComplete(v => !v)}>Roti complete</button>
-                        <button class={`btn btn-sm ${editDepAntifurturi() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepAntifurturi(v => !v)}>Antifurturi</button>
-                        <button class={`btn btn-sm ${editDepPrezoane() ? "btn-primary" : "btn-ghost"}`} onClick={() => setEditDepPrezoane(v => !v)}>Prezoane</button>
+                      <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                        {([
+                          ["Anvelope", editDepAnvelope, setEditDepAnvelope],
+                          ["Capace", editDepCapace, setEditDepCapace],
+                          ["Roti complete", editDepRotiComplete, setEditDepRotiComplete],
+                          ["Antifurturi", editDepAntifurturi, setEditDepAntifurturi],
+                          ["Prezoane", editDepPrezoane, setEditDepPrezoane],
+                        ] as const).map(([label, get, set]) => (
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                            <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                            {label}
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </Show>
@@ -1750,12 +1764,19 @@ export default function HotelAnvelope() {
                   <Show when={clientAnvelope().length > 0}>
                     <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
                       <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
-                      <div style="display:flex;flex-wrap:wrap;gap:6px">
-                        <button class={`btn btn-sm ${newDepAnvelope() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepAnvelope(v => !v)}>Anvelope</button>
-                        <button class={`btn btn-sm ${newDepCapace() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepCapace(v => !v)}>Capace</button>
-                        <button class={`btn btn-sm ${newDepRotiComplete() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepRotiComplete(v => !v)}>Roti complete</button>
-                        <button class={`btn btn-sm ${newDepAntifurturi() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepAntifurturi(v => !v)}>Antifurturi</button>
-                        <button class={`btn btn-sm ${newDepPrezoane() ? "btn-primary" : "btn-ghost"}`} onClick={() => setNewDepPrezoane(v => !v)}>Prezoane</button>
+                      <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                        {([
+                          ["Anvelope", newDepAnvelope, setNewDepAnvelope],
+                          ["Capace", newDepCapace, setNewDepCapace],
+                          ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
+                          ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
+                          ["Prezoane", newDepPrezoane, setNewDepPrezoane],
+                        ] as const).map(([label, get, set]) => (
+                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                            <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                            {label}
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </Show>
@@ -1910,9 +1931,6 @@ export default function HotelAnvelope() {
 
               <div class="sl-modal-footer">
                 <button class="btn btn-ghost btn-sm" onClick={() => setCheckoutCazare(null)}>Anulează</button>
-                <button class="btn btn-ghost btn-sm" onClick={() => doCheckout(true)} disabled={checkoutSaving()}>
-                  {checkoutSaving() ? "..." : "Scoatere și introducere nouă"}
-                </button>
                 <button class="btn btn-primary btn-sm" onClick={() => doCheckout()} disabled={checkoutSaving()}>
                   {checkoutSaving() ? "Se procesează..." : "Confirmă Scoaterea"}
                 </button>
