@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,12 +40,32 @@ async def list_accounts(
     return await paginate(db, stmt, limit)
 
 
+async def _send_client_nou(account_name: str, account_email: str, account_id: int) -> None:
+    from sqlalchemy import select
+    from app.database import AsyncSessionLocal
+    from app.models.global_settings import GlobalSettings
+    from app.utils.email_service import send_email
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(GlobalSettings).limit(1))
+        gs = result.scalar_one_or_none()
+        company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
+        await send_email(
+            db,
+            scenario="client_nou",
+            variables={"client_name": account_name, "company_name": company_name},
+            to_address=account_email,
+            account_id=account_id,
+        )
+
+
 @router.post("", response_model=AccountRead, status_code=201)
-async def create_account(body: AccountCreate, db: AsyncSession = Depends(get_db)):
+async def create_account(body: AccountCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     account = Account(**body.model_dump())
     db.add(account)
     await db.commit()
     await db.refresh(account)
+    if account.email:
+        background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
     return account
 
 

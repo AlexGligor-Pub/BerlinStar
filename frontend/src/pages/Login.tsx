@@ -59,6 +59,10 @@ export default function Login() {
     e.preventDefault();
     setError("");
     setRegSuccess("");
+    if (!regEmail().trim()) {
+      setError("Emailul este obligatoriu.");
+      return;
+    }
     if (regPassword() !== regPassword2()) {
       setError("Parolele nu coincid.");
       return;
@@ -71,7 +75,7 @@ export default function Login() {
         body: JSON.stringify({
           name: regName().trim(),
           username: regUsername().trim(),
-          email: regEmail().trim() || null,
+          email: regEmail().trim(),
           password: regPassword(),
         }),
       });
@@ -171,7 +175,7 @@ export default function Login() {
               />
             </div>
             <div class="form-group">
-              <label class="form-label" for="reg-email">Email (optional)</label>
+              <label class="form-label" for="reg-email">Email</label>
               <input
                 id="reg-email"
                 class="input"
@@ -179,6 +183,7 @@ export default function Login() {
                 placeholder="ex: ion@email.com"
                 value={regEmail()}
                 onInput={(e) => setRegEmail(e.currentTarget.value)}
+                required
               />
             </div>
             <div class="form-group">

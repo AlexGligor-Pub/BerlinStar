@@ -446,7 +446,7 @@ export default function HotelAnvelope() {
   const [clientCazariVechi, setClientCazariVechi] = createSignal<Array<{ id: number; dataCheckin: string }>>([]);
   const [newClientVehicole, setNewClientVehicole] = createSignal<ClientVehicol[]>([]);
   const [newSelectedVehicol, setNewSelectedVehicol] = createSignal<string | null>(null);
-  const [newVehicolLocked, setNewVehicolLocked] = createSignal(true);
+  const [_newVehicolLocked, setNewVehicolLocked] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
   const [cazareImageUrl, setCazareImageUrl] = createSignal<string | null>(null);
@@ -752,7 +752,7 @@ export default function HotelAnvelope() {
         if (vRes.ok) {
           const vData: ClientVehicol[] = await vRes.json();
           setNewClientVehicole(vData);
-          if (vData.length === 1) setNewSelectedVehicol(vData[0].numar_masina);
+          if (vData.length > 0) setNewSelectedVehicol(vData[0].numar_masina);
         }
       } catch {}
     } else {
@@ -1027,6 +1027,20 @@ export default function HotelAnvelope() {
     setNewLocNume(""); setNewLocDesc("");
   }
 
+
+  async function addLocInline(name: string) {
+    const res = await apiFetch("/api/loc-cazare", {
+      method: "POST",
+      body: JSON.stringify({ nume: name, description: null }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      invalidateLocuriCache();
+      await loadLocuriCazare(true);
+      setNewLocId(d.id);
+      setEditLocId(d.id);
+    }
+  }
 
   async function addMarca() {
     const n = newMarcaNume().trim();
@@ -1503,7 +1517,7 @@ export default function HotelAnvelope() {
                 <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                   <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                   <div style="display:grid;gap:8px">
-                    <SearchableSelect items={locuriCazare()} value={editLocId()} onSelect={setEditLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" />
+                    <SearchableSelect items={locuriCazare()} value={editLocId()} onSelect={setEditLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
                     <SearchableSelect items={employees()} value={editEmpId()} onSelect={setEditEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
                     <div>
                       <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
@@ -1625,21 +1639,17 @@ export default function HotelAnvelope() {
                 <ClientInfoBlock client={newClient()} />
                 <Show when={newClient() && newClientVehicole().length > 0}>
                   <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <div style="margin-bottom:4px">
                       <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
-                      <Show when={newVehicolLocked() && newClientVehicole().length > 1}>
-                        <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px" onClick={() => setNewVehicolLocked(false)}>Schimbă</button>
-                      </Show>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:3px">
                       <For each={newClientVehicole()}>
                         {(v) => (
-                          <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:${newVehicolLocked() ? "default" : "pointer"};background:${newSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
+                          <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer;background:${newSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
                             <input
                               type="radio"
                               name="new-vehicol"
                               checked={newSelectedVehicol() === v.numar_masina}
-                              disabled={newVehicolLocked() && newClientVehicole().length > 1}
                               onChange={() => setNewSelectedVehicol(v.numar_masina)}
                             />
                             <strong>{v.numar_masina}</strong>
@@ -1776,7 +1786,7 @@ export default function HotelAnvelope() {
               <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
                 <div style="display:grid;gap:8px">
-                  <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" />
+                  <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
                   <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
                   <div>
                     <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>

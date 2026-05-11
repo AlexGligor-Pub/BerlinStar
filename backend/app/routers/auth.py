@@ -2,7 +2,7 @@ from __future__ import annotations
 import base64
 from datetime import datetime, timedelta, timezone
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -61,15 +61,32 @@ class RegisterRequest(BaseModel):
     name: str = Field(..., max_length=200)
     username: str = Field(..., max_length=100)
     password: str = Field(..., min_length=6, max_length=255)
-    email: str | None = Field(None, max_length=255)
+    email: str = Field(..., max_length=255)
 
 
 class RegisterResponse(BaseModel):
     message: str
 
 
+async def _send_client_nou(account_name: str, account_email: str, account_id: int) -> None:
+    from app.database import AsyncSessionLocal
+    from app.models.global_settings import GlobalSettings
+    from app.utils.email_service import send_email
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(GlobalSettings).limit(1))
+        gs = result.scalar_one_or_none()
+        company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
+        await send_email(
+            db,
+            scenario="client_nou",
+            variables={"client_name": account_name, "company_name": company_name},
+            to_address=account_email,
+            account_id=account_id,
+        )
+
+
 @router.post("/register", response_model=RegisterResponse, status_code=201)
-async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(body: RegisterRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     existing = (await db.execute(
         select(Account).where(Account.username == body.username, Account.is_deleted == False)
     )).scalar_one_or_none()
@@ -87,6 +104,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     )
     db.add(account)
     await db.commit()
+    background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
     return RegisterResponse(message="Contul a fost creat cu succes! Vei avea acces timp de 7 zile.")
 
 
