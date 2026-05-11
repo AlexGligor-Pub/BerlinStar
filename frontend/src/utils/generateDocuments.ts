@@ -1152,6 +1152,214 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   doc.save(docFilename("bon_intrare", clientSlug));
 }
 
+/** Bon Scoatere și Introducere Nouă — Hotel Anvelope */
+export async function generateCazareScoatereIntroducere(
+  checkoutCazare: CazareForPdf,
+  newCazare: CazareForPdf,
+  company: CompanyData | null,
+  checkoutDate: string,
+  montatePeMasina: boolean,
+): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal");
+
+  const setF = (style: "normal" | "bold", size: number) => {
+    doc.setFont(FONT, style);
+    doc.setFontSize(size);
+  };
+
+  await drawBackground(doc, company?.background_path);
+  await drawLogo(doc, company?.logo_path, MT);
+
+  let y = drawHeader(doc, "Hotel Anvelope - Scoatere și Introducere Nouă", "", checkoutCazare.id, fmtDate(checkoutDate), FONT);
+  y += 2;
+  hline(doc, y);
+  y += 6;
+
+  // Company block (left) + Client block (right)
+  const bw = (CW - 8) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + 8;
+
+  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
+  setF("normal", 9);
+  const yClient = drawCazareClientBlock(doc, checkoutCazare, rightX, y, bw, t);
+  y = Math.max(yComp, yClient) + 4;
+
+  hline(doc, y);
+  y += 6;
+
+  // Detalii cazare
+  setF("bold", 8);
+  doc.setTextColor(...C.black);
+  doc.text("DETALII CAZARE", ML, y);
+  y += 4;
+
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  if (checkoutCazare.locationName) { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, ML, y); y += 4.5; }
+  if (checkoutCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(checkoutCazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (checkoutCazare.employeeName)  { doc.text(`Angajat: ${t(checkoutCazare.employeeName)}`, ML, y); y += 4.5; }
+  doc.text(`Data intrare: ${fmtDate(checkoutCazare.dataCheckin)}`, ML, y); y += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
+  const zile = Math.round(
+    (new Date(checkoutDate).getTime() - new Date(checkoutCazare.dataCheckin).getTime()) / 86_400_000
+  );
+  setF("bold", 9);
+  doc.setTextColor(...C.black);
+  doc.text(`Durată depozitare: ${zile} zile`, ML, y);
+  y += 6;
+
+  hline(doc, y);
+  y += 6;
+
+  // ─── Section 1: ANVELOPE SCOASE DIN DEPOZIT (dark navy blue) ───────────────
+  const navyBlue: [number, number, number] = [30, 58, 138];
+
+  setF("bold", 9);
+  doc.setTextColor(...navyBlue);
+  doc.text("ANVELOPE SCOASE DIN DEPOZIT", ML, y);
+  y += 5;
+
+  // Dep items for checkout cazare
+  const depItemsOut: string[] = [];
+  if (checkoutCazare.depAnvelope)     depItemsOut.push("Anvelope");
+  if (checkoutCazare.depCapace)       depItemsOut.push("Capace");
+  if (checkoutCazare.depRotiComplete) depItemsOut.push("Roți complete");
+  if (checkoutCazare.depAntifurturi)  depItemsOut.push("Antifurturi");
+  if (checkoutCazare.depPrezoane)     depItemsOut.push("Prezoane");
+  if (depItemsOut.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  // Note about montate pe masina
+  setF("normal", 8);
+  const noteColor: [number, number, number] = montatePeMasina ? [22, 163, 74] : [220, 38, 38];
+  doc.setTextColor(...noteColor);
+  const noteText = montatePeMasina
+    ? "Anvelopele scoase din depozit au fost MONTATE PE MAȘINA CLIENTULUI."
+    : "Anvelopele scoase din depozit au fost PREDATE CLIENTULUI fără a fi montate.";
+  const noteLines: string[] = doc.splitTextToSize(noteText, CW);
+  doc.text(noteLines, ML, y);
+  y += noteLines.length * 4 + 3;
+  doc.setTextColor(...C.black);
+
+  // Tire table — checkout cazare
+  const checkoutRows = checkoutCazare.items
+    .filter((item) => item.anvelopa != null)
+    .map((item, idx) => {
+      const a = item.anvelopa!;
+      return [
+        String(idx + 1),
+        t(a.marcaNume ?? "—"),
+        t(a.dimensiuneValoare ?? "—"),
+        t(a.profilValoare ?? "—"),
+        TIP_PDF_LABELS[a.tip] ?? a.tip,
+        a.adancime != null ? `${a.adancime} mm` : "—",
+      ];
+    });
+
+  if (checkoutRows.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: checkoutRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 28 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 16 },
+        5: { halign: "center", cellWidth: 20 },
+      },
+      margin: { left: ML, right: MR },
+      tableWidth: CW,
+    });
+    y = (doc as any).lastAutoTable.finalY + 4;
+  }
+
+  hline(doc, y);
+  y += 6;
+
+  // ─── Section 2: ANVELOPE INTRODUSE LA DEPOZITARE (marine green) ─────────────
+  const marineGreen: [number, number, number] = [5, 150, 105];
+
+  setF("bold", 9);
+  doc.setTextColor(...marineGreen);
+  doc.text("ANVELOPE INTRODUSE LA DEPOZITARE", ML, y);
+  y += 5;
+
+  // Dep items for new cazare
+  const depItemsIn: string[] = [];
+  if (newCazare.depAnvelope)     depItemsIn.push("Anvelope");
+  if (newCazare.depCapace)       depItemsIn.push("Capace");
+  if (newCazare.depRotiComplete) depItemsIn.push("Roți complete");
+  if (newCazare.depAntifurturi)  depItemsIn.push("Antifurturi");
+  if (newCazare.depPrezoane)     depItemsIn.push("Prezoane");
+  if (depItemsIn.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  // Tire table — new cazare
+  const newRows = newCazare.items
+    .filter((item) => item.anvelopa != null)
+    .map((item, idx) => {
+      const a = item.anvelopa!;
+      return [
+        String(idx + 1),
+        t(a.marcaNume ?? "—"),
+        t(a.dimensiuneValoare ?? "—"),
+        t(a.profilValoare ?? "—"),
+        TIP_PDF_LABELS[a.tip] ?? a.tip,
+        a.adancime != null ? `${a.adancime} mm` : "—",
+      ];
+    });
+
+  if (newRows.length > 0) {
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: newRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: marineGreen, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 28 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 16 },
+        5: { halign: "center", cellWidth: 20 },
+      },
+      margin: { left: ML, right: MR },
+      tableWidth: CW,
+    });
+    y = (doc as any).lastAutoTable.finalY + 4;
+  }
+
+  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
+  await drawFooterWithBranding(doc, company?.website);
+
+  doc.save(docFilename("scoatere_introducere", checkoutCazare.clientNume ?? "client"));
+}
+
 /** Bon Iesire — Hotel Anvelope */
 export async function generateCazareCheckout(cazare: CazareForPdf, company: CompanyData | null): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();

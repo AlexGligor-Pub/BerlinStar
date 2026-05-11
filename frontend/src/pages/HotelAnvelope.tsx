@@ -18,7 +18,7 @@ interface ClientVehicol {
   marca: string | null;
   model: string | null;
 }
-import { generateCazareCheckin, generateCazareCheckout } from "../utils/generateDocuments";
+import { generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere } from "../utils/generateDocuments";
 import type { CompanyData } from "../utils/generateDocuments";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -459,6 +459,11 @@ export default function HotelAnvelope() {
   const [checkoutComments, setCheckoutComments] = createSignal("");
   const [checkoutSaving, setCheckoutSaving] = createSignal(false);
 
+  // ── Modal Combined Scoatere + Introducere Nouă ─────────────────────────────
+  const [combinedCazare, setCombinedCazare] = createSignal<Cazare | null>(null);
+  const [combinedSaving, setCombinedSaving] = createSignal(false);
+  const [combinedErr, setCombinedErr] = createSignal("");
+
   // ── Modal Delete ───────────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = createSignal<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting] = createSignal(false);
@@ -833,6 +838,146 @@ export default function HotelAnvelope() {
     setCheckoutCazare(c);
     setCheckoutDate(todayStr());
     setCheckoutComments(c.comments ?? "");
+  }
+
+  async function openCombined(c: Cazare) {
+    setCheckoutDate(todayStr());
+    setCheckoutComments("");
+    setClientAnvelope([]);
+    setSelectedAnvIds(new Set<number>());
+    setShowAnvForm(false);
+    setAnvEditId(null);
+    setNewLocId(c.locCazareId ?? "");
+    setNewEmpId(c.employeeId ?? "");
+    setNewCheckin(todayStr());
+    setNewComments("");
+    setNewDepAnvelope(true);
+    setNewDepCapace(false);
+    setNewDepRotiComplete(false);
+    setNewDepAntifurturi(false);
+    setNewDepPrezoane(false);
+    setNewMontatePeMasina(false);
+    setNewReferintaCazareId(c.id);
+    setSaveErr("");
+    setCombinedErr("");
+    // Pre-select same client
+    if (c.clientId) {
+      try {
+        const r = await apiFetch(`/api/clienti/${c.clientId}`);
+        if (r.ok) {
+          const data = await r.json();
+          const clientItem: ClientItem = {
+            id: data.id,
+            nume: data.name,
+            cui: data.cui ?? null,
+            telefon: data.phone ?? null,
+            adresa: data.address ?? null,
+            reprezentant: data.reprezentant ?? null,
+            numar_masina: data.numar_masina ?? null,
+          };
+          await handleClientSelect(clientItem);
+          setNewReferintaCazareId(c.id); // handleClientSelect resets it, restore
+        }
+      } catch {}
+    }
+    setCombinedCazare(c);
+  }
+
+  async function doCombinedCheckoutNew() {
+    const c = combinedCazare();
+    if (!c) return;
+    if (!newClient()) { setCombinedErr("Clientul nu a putut fi preluat."); return; }
+    if (selectedAnvIds().size === 0) { setCombinedErr("Selectați cel puțin o anvelopă pentru noua cazare."); return; }
+    setCombinedSaving(true);
+    setCombinedErr("");
+    try {
+      // Create draft anvelope (negative IDs) — same pattern as saveCazare
+      const draftIds = Array.from(selectedAnvIds()).filter((id) => id < 0);
+      const tempToReal = new Map<number, number>();
+      for (const tempId of draftIds) {
+        const draft = clientAnvelope().find((a) => a.id === tempId);
+        if (!draft) continue;
+        const res = await apiFetch("/api/anvelope", {
+          method: "POST",
+          body: JSON.stringify({
+            client_id: draft.clientId,
+            marca_id: draft.marcaId,
+            dimensiune_id: draft.dimensiuneId,
+            profil_id: draft.profilId,
+            tip: draft.tip,
+            adancime: draft.adancime,
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setCombinedErr(err.detail ?? "Eroare la salvare anvelopă.");
+          return;
+        }
+        const d = await res.json();
+        tempToReal.set(tempId, d.id);
+      }
+
+      const finalIds = Array.from(selectedAnvIds()).map((id) => tempToReal.get(id) ?? id);
+
+      // PATCH checkout
+      const checkoutRes = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          data_checkout: checkoutDate(),
+          comments: checkoutComments().trim() || null,
+        }),
+      });
+      if (!checkoutRes.ok) {
+        const err = await checkoutRes.json().catch(() => ({}));
+        setCombinedErr(err.detail ?? "Eroare la scoatere din depozit.");
+        return;
+      }
+      const updatedCheckout: Cazare = await checkoutRes.json().then((d: any) => mapCazare(d));
+
+      // POST new cazare
+      const newCazareRes = await apiFetch("/api/cazare-anvelope", {
+        method: "POST",
+        body: JSON.stringify({
+          client_id: newClient()!.id,
+          employee_id: newEmpId() !== "" ? newEmpId() : null,
+          loc_cazare_id: newLocId() !== "" ? newLocId() : null,
+          data_checkin: newCheckin(),
+          comments: newComments().trim() || null,
+          anvelopa_ids: finalIds,
+          dep_anvelope: newDepAnvelope(),
+          dep_capace: newDepCapace(),
+          dep_roti_complete: newDepRotiComplete(),
+          dep_antifurturi: newDepAntifurturi(),
+          dep_prezoane: newDepPrezoane(),
+          referinta_cazare_id: c.id,
+          montate_pe_masina: newMontatePeMasina(),
+          numar_masina: null,
+          location_id: device()?.locationId ?? null,
+        }),
+      });
+      if (!newCazareRes.ok) {
+        const err = await newCazareRes.json().catch(() => ({}));
+        setCombinedErr(err.detail ?? "Eroare la salvare cazare nouă.");
+        return;
+      }
+      const newCazareData: Cazare = await newCazareRes.json().then((d: any) => mapCazare(d));
+
+      // Generate combined PDF
+      await generateCazareScoatereIntroducere(
+        updatedCheckout as any,
+        newCazareData as any,
+        companyData(),
+        checkoutDate(),
+        newMontatePeMasina(),
+      );
+
+      setCombinedCazare(null);
+      await fetchCazari();
+    } catch (e: any) {
+      setCombinedErr(e?.message ?? "Eroare necunoscută.");
+    } finally {
+      setCombinedSaving(false);
+    }
   }
 
   async function openEdit(c: Cazare) {
@@ -1322,7 +1467,7 @@ export default function HotelAnvelope() {
                   cazare={c}
                   companyData={companyData()}
                   onCheckout={openCheckout}
-                  onCheckoutNew={(c) => openCheckout(c, true)}
+                  onCheckoutNew={(c) => openCombined(c)}
                   onEdit={openEdit}
                   onView={(c) => setViewOnlyCazare(c)}
                 />
@@ -1850,6 +1995,244 @@ export default function HotelAnvelope() {
             </div>
           </div>
         </div>
+      </Show>
+
+      {/* Modal: Scoatere și Introducere Nouă */}
+      <Show when={combinedCazare() !== null}>
+        {(_) => {
+          const c = combinedCazare()!;
+          return (
+            <div class="sl-modal-overlay">
+              <div class="sl-modal" style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
+                <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
+                  <span class="sl-modal-title">Scoatere și Introducere Nouă</span>
+                  <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>✕</button>
+                </div>
+
+                <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:0">
+
+                  {/* ─ Stânga: View scoatere ─ */}
+                  <div style="overflow-y:auto;padding:16px;border-right:2px solid #1e3a8a;display:flex;flex-direction:column;gap:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1e3a8a;padding-bottom:6px;border-bottom:2px solid #1e3a8a">
+                      Scoatere din depozit
+                    </div>
+
+                    {/* Client info */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Client</div>
+                      <div style="display:grid;gap:4px;font-size:13px">
+                        <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c.clientNume ?? "—"}</strong></div>
+                        <Show when={c.clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c.clientCui}</div></Show>
+                        <Show when={c.clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c.clientTelefon}</div></Show>
+                        <Show when={c.numarMasina}><div><span style="color:var(--text-muted)">Mașină:</span> {c.numarMasina}</div></Show>
+                      </div>
+                    </div>
+
+                    {/* Dep items */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">S-a depozitat</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <For each={[
+                          [c.depAnvelope, "Anvelope"],
+                          [c.depCapace, "Capace"],
+                          [c.depRotiComplete, "Roți complete"],
+                          [c.depAntifurturi, "Antifurturi"],
+                          [c.depPrezoane, "Prezoane"],
+                        ] as [boolean, string][]}>
+                          {([val, label]) => (
+                            <Show when={val}>
+                              <span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af">{label}</span>
+                            </Show>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+
+                    {/* Tires table */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope ({c.items.length})</div>
+                      <Show when={c.items.length > 0}>
+                        <div style="overflow-x:auto">
+                          <table style="width:100%;border-collapse:collapse;font-size:12px">
+                            <thead>
+                              <tr style="background:#1e3a8a;color:white">
+                                <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
+                                <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
+                                <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
+                                <th style="padding:5px 8px;text-align:left;font-weight:600">Adânc.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <For each={c.items.filter(i => i.anvelopa)}>
+                                {(item, idx) => (
+                                  <tr style={`background:${idx() % 2 === 0 ? "var(--bg)" : "transparent"}`}>
+                                    <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
+                                    <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                                    <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
+                                    <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime}mm` : "—"}</td>
+                                  </tr>
+                                )}
+                              </For>
+                            </tbody>
+                          </table>
+                        </div>
+                      </Show>
+                      <Show when={c.items.length === 0}>
+                        <p style="color:var(--text-muted);font-size:12px;margin:0">—</p>
+                      </Show>
+                    </div>
+
+                    {/* Anvelopele scoase au fost (montate/predate) */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelopele scoase au fost</div>
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                          <input type="radio" name="combined-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
+                          <div>
+                            <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                            <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                          </div>
+                        </label>
+                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                          <input type="radio" name="combined-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
+                          <div>
+                            <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                            <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Checkout date + comments */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date scoatere</div>
+                      <div style="display:grid;gap:8px">
+                        <div>
+                          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data scoatere</label>
+                          <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
+                        </div>
+                        <textarea class="input" rows={2} placeholder="Comentarii scoatere..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ─ Dreapta: Cazare nouă ─ */}
+                  <div style="overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#065f46;padding-bottom:6px;border-bottom:2px solid #059669">
+                      Introducere nouă la depozitare
+                    </div>
+
+                    {/* Client pre-filled */}
+                    <Show when={newClient()}>
+                      <div style="border:1px solid #059669;border-radius:8px;padding:10px 12px;background:rgba(5,150,105,.06)">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#065f46;margin-bottom:4px">Client (preluat)</div>
+                        <div style="font-size:13px;font-weight:600">{newClient()!.nume}</div>
+                        <Show when={newClient()!.telefon}><div style="font-size:12px;color:var(--text-muted)">{newClient()!.telefon}</div></Show>
+                      </div>
+                    </Show>
+
+                    {/* Tires */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope de introdus</div>
+                      <Show when={!newClient()}>
+                        <p style="color:var(--text-muted);font-size:13px;margin:0">Se încarcă clientul...</p>
+                      </Show>
+                      <Show when={newClient()}>
+                        <Show when={clientAnvelope().length === 0 && !showAnvForm()}>
+                          <p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Nicio anvelopă înregistrată.</p>
+                        </Show>
+                        <div style="display:flex;flex-direction:column;gap:4px">
+                          <For each={clientAnvelope()}>
+                            {(a) => (
+                              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
+                                <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
+                                <span style="flex:1;min-width:0">
+                                  <strong>{a.marcaNume ?? "—"}</strong>
+                                  <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                                  {" · "}{TIP_LABELS[a.tip]}
+                                  <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                                  <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
+                                </span>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setAnvEditId(a.id); setShowAnvForm(true); }}>Edit</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
+                              </div>
+                            )}
+                          </For>
+                        </div>
+                        <Show when={!showAnvForm()}>
+                          <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
+                        </Show>
+                        <Show when={showAnvForm()}>
+                          <AnvelopaForm
+                            clientId={newClient()!.id}
+                            initialData={anvEditId() !== null ? clientAnvelope().find(a => a.id === anvEditId()) : undefined}
+                            onSaved={(a) => {
+                              if (anvEditId() !== null) {
+                                const oldId = anvEditId()!;
+                                setClientAnvelope(p => p.map(x => x.id === oldId ? a : x));
+                                setSelectedAnvIds(p => { const s = new Set(p); s.delete(oldId); s.add(a.id); return s; });
+                              } else {
+                                setClientAnvelope(p => [...p, a]);
+                                setSelectedAnvIds(p => new Set([...p, a.id]));
+                              }
+                              setShowAnvForm(false); setAnvEditId(null);
+                            }}
+                            onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
+                          />
+                        </Show>
+                        {/* Dep items */}
+                        <Show when={clientAnvelope().length > 0}>
+                          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lăsat pentru depozitare:</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                              {([
+                                ["Anvelope", newDepAnvelope, setNewDepAnvelope],
+                                ["Capace", newDepCapace, setNewDepCapace],
+                                ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
+                                ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
+                                ["Prezoane", newDepPrezoane, setNewDepPrezoane],
+                              ] as const).map(([label, get, set]) => (
+                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                                  <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                                  {label}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </Show>
+                      </Show>
+                    </div>
+
+                    {/* Cazare details */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date cazare nouă</div>
+                      <div style="display:grid;gap:8px">
+                        <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
+                        <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
+                        <div>
+                          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
+                          <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
+                        </div>
+                        <textarea class="input" rows={3} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
+                      </div>
+                    </div>
+
+                    <Show when={combinedErr()}>
+                      <p style="color:var(--danger);font-size:13px;margin:0">{combinedErr()}</p>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0">
+                  <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>Anulează</button>
+                  <button class="btn btn-primary btn-sm" onClick={doCombinedCheckoutNew} disabled={combinedSaving()}>
+                    {combinedSaving() ? "Se procesează..." : "Confirmă Scoaterea și Introducerea"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }}
       </Show>
 
       {/* Modal: Checkout */}
