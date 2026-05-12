@@ -995,20 +995,178 @@ const TIP_PDF_LABELS: Record<string, string> = {
   altele: "Altele",
 };
 
-function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string): number {
+export interface VehiculForPdf {
+  numarMasina: string | null;
+  marca?: string | null;
+  model?: string | null;
+  numarKilometrii?: number | null;
+  vin?: string | null;
+  observatii?: string | null;
+}
+
+const CARD_PAD = 3.5;
+const CARD_BORDER: [number, number, number] = [180, 180, 180];
+const CARDS_GAP_X = 8;
+const CARDS_GAP_Y = 3;
+
+function drawCard(doc: any, x: number, y: number, w: number, h: number): void {
+  doc.setDrawColor(...CARD_BORDER);
+  doc.setLineWidth(0.2);
+  doc.rect(x, y, w, h, "S");
+}
+
+function _measureCompanyContent(doc: any, company: any, bw: number, font: string): number {
+  doc.setFont(font, "bold");
+  doc.setFontSize(7);
+  let h = 3.5; // label
+  if (!company) return h + 4;
+
+  doc.setFontSize(9);
+  const nameLines: string[] = doc.splitTextToSize(ro(company.name), bw);
+  h += nameLines.length * 4.2;
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7.5);
+  if (company.cui) h += 3.5;
+  if (company.nr_reg_com) h += 3.5;
+  if (company.address) {
+    const al: string[] = doc.splitTextToSize(ro(company.address), bw);
+    h += al.length * 3.5;
+  }
+  if (company.phone) h += 3.5;
+  if (company.bank_name) h += 3.5;
+  if (company.iban) h += 3.5;
+  if (company.capital_social != null) h += 3.5;
+  return h;
+}
+
+function _measureClientContent(doc: any, cazare: CazareForPdf, bw: number, t: (s: string | null | undefined) => string, font: string): number {
+  doc.setFont(font, "bold");
+  doc.setFontSize(7);
+  let h = 3.5; // label
+
+  doc.setFontSize(9);
+  const nameLines: string[] = doc.splitTextToSize(t(cazare.clientNume ?? "-"), bw);
+  h += nameLines.length * 4.2;
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7.5);
+  if (cazare.clientCui)          h += 3.5;
+  if (cazare.clientReprezentant) h += 3.5;
+  if (cazare.clientAdresa) {
+    const al: string[] = doc.splitTextToSize(t(cazare.clientAdresa), bw);
+    h += al.length * 3.5;
+  }
+  if (cazare.clientTelefon) h += 3.5;
+  return h;
+}
+
+function _measureVehiculContent(doc: any, veh: VehiculForPdf, bw: number, t: (s: string | null | undefined) => string, font: string): number {
+  doc.setFont(font, "bold");
+  doc.setFontSize(7);
+  let h = 3.5; // label
+
+  doc.setFontSize(9);
+  const plate: string[] = doc.splitTextToSize(t(veh.numarMasina ?? "-"), bw);
+  h += plate.length * 4.2;
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7.5);
+  const mm = [veh.marca, veh.model].filter(Boolean).join(" ");
+  if (mm)                        h += 3.5;
+  if (veh.numarKilometrii != null) h += 3.5;
+  if (veh.vin)                   h += 3.5;
+  if (veh.observatii) {
+    const ol: string[] = doc.splitTextToSize(t(veh.observatii), bw);
+    h += ol.length * 3.5;
+  }
+  return h;
+}
+
+function drawCompanyBlockFont(
+  doc: any, label: string, company: any,
+  x: number, y: number, bw: number, font: string,
+): number {
+  doc.setFont(font, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.black);
-  doc.text("NUME CLIENT", x, y);
+  doc.text(ro(label).toUpperCase(), x, y);
+  y += 3.5;
+
+  if (!company) {
+    doc.setFont(font, "normal");
+    doc.setFontSize(8);
+    doc.text("-", x, y);
+    return y + 4;
+  }
+
+  doc.setFontSize(9);
+  const nameLines: string[] = doc.splitTextToSize(ro(company.name), bw);
+  doc.text(nameLines, x, y);
+  y += nameLines.length * 4.2;
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7.5);
+  if (company.cui)         { doc.text(`CUI: ${company.cui}`, x, y); y += 3.5; }
+  if (company.nr_reg_com)  { doc.text(`Reg.Com.: ${ro(company.nr_reg_com)}`, x, y); y += 3.5; }
+  if (company.address) {
+    const al: string[] = doc.splitTextToSize(ro(company.address), bw);
+    doc.text(al, x, y);
+    y += al.length * 3.5;
+  }
+  if (company.phone)       { doc.text(`Tel: ${ro(company.phone)}`, x, y); y += 3.5; }
+  if (company.bank_name)   { doc.text(`Banca: ${ro(company.bank_name)}`, x, y); y += 3.5; }
+  if (company.iban)        { doc.text(`IBAN: ${company.iban}`, x, y); y += 3.5; }
+  if (company.capital_social != null) {
+    doc.text(`Capital social: ${company.capital_social.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lei`, x, y);
+    y += 3.5;
+  }
+  return y;
+}
+
+function drawVehiculBlock(
+  doc: any, veh: VehiculForPdf,
+  x: number, y: number, bw: number, t: (s: string | null | undefined) => string, font: string,
+): number {
+  doc.setFont(font, "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.black);
+  doc.text("VEHICUL", x, y);
   y += 3.5;
 
   doc.setFontSize(9);
+  const plate: string[] = doc.splitTextToSize(t(veh.numarMasina ?? "-"), bw);
+  doc.text(plate, x, y);
+  y += plate.length * 4.2;
+
+  doc.setFont(font, "normal");
+  doc.setFontSize(7.5);
+  const mm = [veh.marca, veh.model].filter(Boolean).join(" ");
+  if (mm)                          { doc.text(t(mm), x, y); y += 3.5; }
+  if (veh.numarKilometrii != null) { doc.text(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`, x, y); y += 3.5; }
+  if (veh.vin)                     { doc.text(`VIN: ${veh.vin}`, x, y); y += 3.5; }
+  if (veh.observatii) {
+    const ol: string[] = doc.splitTextToSize(t(veh.observatii), bw);
+    doc.text(ol, x, y);
+    y += ol.length * 3.5;
+  }
+  return y;
+}
+
+function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string, font = "helvetica"): number {
+  doc.setFont(font, "bold");
+  doc.setFontSize(7);
   doc.setTextColor(...C.black);
+  doc.text("CLIENT", x, y);
+  y += 3.5;
+
+  doc.setFontSize(9);
   const nameLines: string[] = doc.splitTextToSize(t(cazare.clientNume ?? "-"), bw);
   doc.text(nameLines, x, y);
   y += nameLines.length * 4.2;
 
+  doc.setFont(font, "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
   if (cazare.clientCui)          { doc.text(`CUI: ${cazare.clientCui}`, x, y); y += 3.5; }
   if (cazare.clientReprezentant) { doc.text(`Repr.: ${t(cazare.clientReprezentant)}`, x, y); y += 3.5; }
   if (cazare.clientAdresa) {
@@ -1017,8 +1175,46 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
     y += al.length * 3.5;
   }
   if (cazare.clientTelefon) { doc.text(`Tel: ${cazare.clientTelefon}`, x, y); y += 3.5; }
-  if (cazare.numarMasina)   { doc.text(`Nr. masina: ${cazare.numarMasina}`, x, y); y += 3.5; }
   return y;
+}
+
+/** Top section: Prestator card (left col) + Client + optional Vehicle cards (right col). */
+function drawCazareTopCards(
+  doc: any,
+  company: any,
+  cazare: CazareForPdf,
+  vehicle: VehiculForPdf | null,
+  leftX: number,
+  rightX: number,
+  y: number,
+  bw: number,
+  t: (s: string | null | undefined) => string,
+  font: string,
+): number {
+  const innerW = bw - CARD_PAD * 2;
+  const compH    = _measureCompanyContent(doc, company, innerW, font);
+  const clientH  = _measureClientContent(doc, cazare, innerW, t, font);
+  const vehH     = vehicle ? _measureVehiculContent(doc, vehicle, innerW, t, font) : 0;
+
+  const compCardH   = compH + CARD_PAD * 2;
+  const clientCardH = clientH + CARD_PAD * 2;
+  const vehCardH    = vehicle ? vehH + CARD_PAD * 2 : 0;
+  const rightStackH = clientCardH + (vehicle ? CARDS_GAP_Y + vehCardH : 0);
+  const blockH = Math.max(compCardH, rightStackH);
+
+  drawCard(doc, leftX, y, bw, compCardH);
+  drawCompanyBlockFont(doc, "Prestator", company, leftX + CARD_PAD, y + CARD_PAD, innerW, font);
+
+  drawCard(doc, rightX, y, bw, clientCardH);
+  drawCazareClientBlock(doc, cazare, rightX + CARD_PAD, y + CARD_PAD, innerW, t, font);
+
+  if (vehicle) {
+    const vY = y + clientCardH + CARDS_GAP_Y;
+    drawCard(doc, rightX, vY, bw, vehCardH);
+    drawVehiculBlock(doc, vehicle, rightX + CARD_PAD, vY + CARD_PAD, innerW, t, font);
+  }
+
+  return y + blockH;
 }
 
 function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: number, t: (s: string | null | undefined) => string, font = "helvetica"): number {
@@ -1066,6 +1262,7 @@ export async function generateCazareCheckin(
   cazare: CazareForPdf,
   company: CompanyData | null,
   images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
+  vehicle: VehiculForPdf | null = null,
 ): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1089,15 +1286,12 @@ export async function generateCazareCheckin(
   hline(doc, y);
   y += 6;
 
-  // Company block (stanga) + Client block (dreapta)
-  const bw = (CW - 8) / 2;
+  // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
+  const bw = (CW - CARDS_GAP_X) / 2;
   const leftX = ML;
-  const rightX = ML + bw + 8;
+  const rightX = ML + bw + CARDS_GAP_X;
 
-  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
-  setF("normal", 9);
-  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw, t);
-  y = Math.max(yComp, yClient) + 4;
+  y = drawCazareTopCards(doc, company ?? null, cazare, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
 
   hline(doc, y);
   y += 6;
@@ -1266,6 +1460,7 @@ export async function generateCazareScoatereIntroducere(
   checkoutDate: string,
   montatePeMasina: boolean,
   images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
+  vehicle: VehiculForPdf | null = null,
 ): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1289,15 +1484,12 @@ export async function generateCazareScoatereIntroducere(
   hline(doc, y);
   y += 6;
 
-  // Company block (left) + Client block (right)
-  const bw = (CW - 8) / 2;
+  // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
+  const bw = (CW - CARDS_GAP_X) / 2;
   const leftX = ML;
-  const rightX = ML + bw + 8;
+  const rightX = ML + bw + CARDS_GAP_X;
 
-  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
-  setF("normal", 9);
-  const yClient = drawCazareClientBlock(doc, checkoutCazare, rightX, y, bw, t);
-  y = Math.max(yComp, yClient) + 4;
+  y = drawCazareTopCards(doc, company ?? null, checkoutCazare, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
 
   hline(doc, y);
   y += 6;
@@ -1519,6 +1711,7 @@ export async function generateCazareCheckout(
   cazare: CazareForPdf,
   company: CompanyData | null,
   images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
+  vehicle: VehiculForPdf | null = null,
 ): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1543,15 +1736,12 @@ export async function generateCazareCheckout(
   hline(doc, y);
   y += 6;
 
-  // Company block (stanga) + Client block (dreapta)
-  const bw = (CW - 8) / 2;
+  // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
+  const bw = (CW - CARDS_GAP_X) / 2;
   const leftX = ML;
-  const rightX = ML + bw + 8;
+  const rightX = ML + bw + CARDS_GAP_X;
 
-  const yComp = drawCompanyBlock(doc, "Prestator", company ? { ...company } as any : null, leftX, y, bw);
-  setF("normal", 9);
-  const yClient = drawCazareClientBlock(doc, cazare, rightX, y, bw, t);
-  y = Math.max(yComp, yClient) + 4;
+  y = drawCazareTopCards(doc, company ?? null, cazare, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
 
   hline(doc, y);
   y += 6;

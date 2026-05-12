@@ -9,7 +9,7 @@ import {
   cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
-  hotelImages, loadHotelImages, getCazareById,
+  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
 
@@ -359,10 +359,11 @@ function CazareCard(props: {
     try {
       await loadHotelImages();
       const imgs = buildHotelImageProxyUrls();
+      const vehicle = await getVehiculForCazare(c());
       if (type === "checkin") {
-        await generateCazareCheckin(c(), props.companyData, imgs);
+        await generateCazareCheckin(c(), props.companyData, imgs, vehicle);
       } else {
-        await generateCazareCheckout(c(), props.companyData, imgs);
+        await generateCazareCheckout(c(), props.companyData, imgs, vehicle);
       }
     } finally { setPdfLoading(null); }
   }
@@ -374,6 +375,7 @@ function CazareCard(props: {
     try {
       const [successor] = await Promise.all([getCazareById(sucId), loadHotelImages()]);
       if (!successor) return;
+      const vehicle = await getVehiculForCazare(c());
       await generateCazareScoatereIntroducere(
         c() as any,
         successor as any,
@@ -381,6 +383,7 @@ function CazareCard(props: {
         c().dataCheckout!,
         c().successorMontatePeMasina ?? successor.montatePeMasina ?? false,
         buildHotelImageProxyUrls(),
+        vehicle,
       );
     } finally { setPdfLoading(null); }
   }
@@ -471,10 +474,11 @@ export default function HotelAnvelope() {
     try {
       await loadHotelImages();
       const imgs = buildHotelImageProxyUrls();
+      const vehicle = await getVehiculForCazare(c);
       if (type === "checkin") {
-        await generateCazareCheckin(c as any, companyData(), imgs);
+        await generateCazareCheckin(c as any, companyData(), imgs, vehicle);
       } else if (type === "checkout") {
-        await generateCazareCheckout(c as any, companyData(), imgs);
+        await generateCazareCheckout(c as any, companyData(), imgs, vehicle);
       } else {
         if (c.successorCazareId == null || !c.dataCheckout) return;
         const successor = await getCazareById(c.successorCazareId);
@@ -486,6 +490,7 @@ export default function HotelAnvelope() {
           c.dataCheckout,
           c.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
           imgs,
+          vehicle,
         );
       }
     } finally { setViewPdfLoading(null); }
@@ -1033,6 +1038,7 @@ export default function HotelAnvelope() {
 
       // Generate combined PDF
       await loadHotelImages();
+      const combinedVehicle = await getVehiculForCazare(updatedCheckout);
       await generateCazareScoatereIntroducere(
         updatedCheckout as any,
         newCazareData as any,
@@ -1040,6 +1046,7 @@ export default function HotelAnvelope() {
         checkoutDate(),
         newMontatePeMasina(),
         buildHotelImageProxyUrls(),
+        combinedVehicle,
       );
 
       setCombinedCazare(null);
@@ -1170,7 +1177,8 @@ export default function HotelAnvelope() {
       const updated: Cazare = await res.json().then((d: any) => mapCazare(d));
       setCheckoutCazare(null);
       await loadHotelImages();
-      await generateCazareCheckout(updated, companyData(), buildHotelImageProxyUrls());
+      const checkoutVehicle = await getVehiculForCazare(updated);
+      await generateCazareCheckout(updated, companyData(), buildHotelImageProxyUrls(), checkoutVehicle);
       await fetchCazari();
       if (andNew && c.clientId) {
         setClientAnvelope([]);

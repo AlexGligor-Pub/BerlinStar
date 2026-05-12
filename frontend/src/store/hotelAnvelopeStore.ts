@@ -213,6 +213,41 @@ export async function getCazareById(id: number): Promise<Cazare | null> {
   }
 }
 
+export interface VehiculInfo {
+  numarMasina: string;
+  marca: string | null;
+  model: string | null;
+  numarKilometrii: number | null;
+  vin: string | null;
+  observatii: string | null;
+}
+
+function _normalizePlate(s: string): string {
+  return s.replace(/\s+/g, "").toUpperCase();
+}
+
+export async function getVehiculForCazare(cazare: Pick<Cazare, "clientId" | "numarMasina">): Promise<VehiculInfo | null> {
+  if (!cazare.clientId || !cazare.numarMasina) return null;
+  try {
+    const res = await apiFetch(`/api/clienti/${cazare.clientId}/vehicole`);
+    if (!res.ok) return null;
+    const list: any[] = await res.json();
+    const wanted = _normalizePlate(cazare.numarMasina);
+    const v = list.find((x) => _normalizePlate(x.numar_masina ?? "") === wanted);
+    if (!v) return null;
+    return {
+      numarMasina: v.numar_masina ?? cazare.numarMasina,
+      marca: v.marca ?? null,
+      model: v.model ?? null,
+      numarKilometrii: v.numar_kilometrii ?? null,
+      vin: v.vin ?? null,
+      observatii: v.observatii ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function loadAnvelope(clientId: number): Promise<Anvelopa[]> {
   try {
     const res = await apiFetch(`/api/anvelope?client_id=${clientId}&limit=200`);

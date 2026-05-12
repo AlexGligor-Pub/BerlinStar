@@ -461,10 +461,11 @@ function ReceiptCard(props: { receipt: Receipt }) {
       const [full, company] = await Promise.all([getCazareById(cazareId), fetchCompanyData(), loadHotelImages()]);
       if (!full) return;
       const imgs = buildHotelImageProxyUrls();
+      const vehicle = r.vehicol ?? null;
       if (type === "checkin") {
-        await generateCazareCheckin(full as any, company, imgs);
+        await generateCazareCheckin(full as any, company, imgs, vehicle);
       } else if (type === "checkout") {
-        await generateCazareCheckout(full as any, company, imgs);
+        await generateCazareCheckout(full as any, company, imgs, vehicle);
       } else {
         if (full.successorCazareId == null || !full.dataCheckout) return;
         const successor = await getCazareById(full.successorCazareId);
@@ -476,6 +477,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
           full.dataCheckout,
           full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
           imgs,
+          vehicle,
         );
       }
     } finally { setHotelPdfLoading(null); }
@@ -718,29 +720,35 @@ function ReceiptCard(props: { receipt: Receipt }) {
               </div>
             </Show>
             <Show when={cazariHotel().length > 0}>
-              <div class="rcard-extra-card">
-                <div class="rcard-extra-title">Hotel Anvelope</div>
-                <div style="display:flex;flex-direction:column;gap:6px">
-                  <For each={cazariHotel()}>
-                    {(c) => {
-                      const fmtDate = (ymd: string) =>
-                        new Date(ymd + "T12:00:00").toLocaleDateString("ro-RO");
-                      const luni = () => {
-                        if (!c.data_checkout) return null;
-                        const a = new Date(c.data_checkin + "T12:00:00");
-                        const b = new Date(c.data_checkout + "T12:00:00");
-                        const diff = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
-                        const zile = Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
-                        if (diff === 0) return `${zile} ${zile === 1 ? "zi" : "zile"}`;
-                        const extra = Math.round(zile - diff * 30.44);
-                        return extra > 0
-                          ? `${diff} ${diff === 1 ? "lună" : "luni"} și ${extra} zile`
-                          : `${diff} ${diff === 1 ? "lună" : "luni"}`;
-                      };
-                      const pdfBtnStyle = "font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;line-height:1.4";
-                      const isLoading = (type: string) => hotelPdfLoading() === `${c.id}-${type}`;
-                      return (
-                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              {(() => {
+                const fmtDate = (ymd: string) =>
+                  new Date(ymd + "T12:00:00").toLocaleDateString("ro-RO");
+                const luni = (c: CazareBasic) => {
+                  if (!c.data_checkout) return null;
+                  const a = new Date(c.data_checkin + "T12:00:00");
+                  const b = new Date(c.data_checkout + "T12:00:00");
+                  const diff = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+                  const zile = Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
+                  if (diff === 0) return `${zile} ${zile === 1 ? "zi" : "zile"}`;
+                  const extra = Math.round(zile - diff * 30.44);
+                  return extra > 0
+                    ? `${diff} ${diff === 1 ? "lună" : "luni"} și ${extra} zile`
+                    : `${diff} ${diff === 1 ? "lună" : "luni"}`;
+                };
+                const pdfBtnStyle = "font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;line-height:1.4";
+                const isLoading = (id: number, type: string) => hotelPdfLoading() === `${id}-${type}`;
+                const list = cazariHotel();
+                const activeCazare = list.find((c) => !c.data_checkout);
+                const closedCazari = list.filter((c) => c.data_checkout);
+                const cazareForCheckin = activeCazare ?? closedCazari[0] ?? list[0];
+                const cazareForCheckout = closedCazari[0];
+                const cazareForCombined = closedCazari.find((c) => c.successor_cazare_id != null);
+                return (
+                  <div class="rcard-extra-card">
+                    <div class="rcard-extra-title">Hotel Anvelope</div>
+                    <div style="display:flex;flex-direction:column;gap:4px">
+                      <For each={list}>
+                        {(c) => (
                           <button
                             style="font-size:13px;color:var(--accent);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;text-align:left;line-height:1.5"
                             onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
@@ -748,29 +756,39 @@ function ReceiptCard(props: { receipt: Receipt }) {
                             {c.data_checkout ? "Scoatere" : "Cazare"}
                             <span style="font-size:11px;color:var(--text-muted);margin-left:6px;text-decoration:none">
                               {c.data_checkout
-                                ? `${fmtDate(c.data_checkin)} → ${fmtDate(c.data_checkout)} · ${luni()}`
+                                ? `${fmtDate(c.data_checkin)} → ${fmtDate(c.data_checkout)} · ${luni(c)}`
                                 : fmtDate(c.data_checkin)}
                             </span>
                           </button>
-                          <button style={pdfBtnStyle} disabled={isLoading("checkin")} onClick={() => handleHotelPdf(c.id, "checkin")}>
-                            {isLoading("checkin") ? "..." : "PDF Cazare"}
-                          </button>
-                          <Show when={c.data_checkout}>
-                            <button style={pdfBtnStyle} disabled={isLoading("checkout")} onClick={() => handleHotelPdf(c.id, "checkout")}>
-                              {isLoading("checkout") ? "..." : "PDF Scoatere"}
+                        )}
+                      </For>
+                      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+                        <Show when={cazareForCheckin}>
+                          {(c) => (
+                            <button style={pdfBtnStyle} disabled={isLoading(c().id, "checkin")} onClick={() => handleHotelPdf(c().id, "checkin")}>
+                              {isLoading(c().id, "checkin") ? "..." : "PDF Cazare"}
                             </button>
-                          </Show>
-                          <Show when={c.data_checkout && c.successor_cazare_id != null}>
-                            <button style={pdfBtnStyle} disabled={isLoading("combined")} onClick={() => handleHotelPdf(c.id, "combined")}>
-                              {isLoading("combined") ? "..." : "PDF Scoatere + Cazare"}
+                          )}
+                        </Show>
+                        <Show when={cazareForCheckout}>
+                          {(c) => (
+                            <button style={pdfBtnStyle} disabled={isLoading(c().id, "checkout")} onClick={() => handleHotelPdf(c().id, "checkout")}>
+                              {isLoading(c().id, "checkout") ? "..." : "PDF Scoatere"}
                             </button>
-                          </Show>
-                        </div>
-                      );
-                    }}
-                  </For>
-                </div>
-              </div>
+                          )}
+                        </Show>
+                        <Show when={cazareForCombined}>
+                          {(c) => (
+                            <button style={pdfBtnStyle} disabled={isLoading(c().id, "combined")} onClick={() => handleHotelPdf(c().id, "combined")}>
+                              {isLoading(c().id, "combined") ? "..." : "PDF Scoatere + Cazare"}
+                            </button>
+                          )}
+                        </Show>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </Show>
           </div>
 
