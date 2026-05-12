@@ -2,8 +2,8 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
-import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
+import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
+import type { DocContext, CompanyData, MontajRotaRow, CazareSection } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
 import { loadMontajRotiByReceipt, type MontajRota } from "../store/montajRotiStore";
 import { setResume } from "../store/resumeStore";
@@ -507,14 +507,15 @@ function ReceiptCard(props: { receipt: Receipt }) {
   }
 
 
-  async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
+  async function handleDocDownload(docType: "deviz" | "factura" | "chitanta" | "deviz_operatii") {
     const locationId = device()?.locationId;
     if (!locationId) { alert("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);
     try {
+      const apiDocType = docType === "deviz_operatii" ? "deviz" : docType;
       const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
         method: "POST",
-        body: JSON.stringify({ doc_type: docType, location_id: locationId }),
+        body: JSON.stringify({ doc_type: apiDocType, location_id: locationId }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -524,12 +525,71 @@ function ReceiptCard(props: { receipt: Receipt }) {
       const ctx: DocContext = await res.json();
       if (docType === "deviz") await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true);
       else if (docType === "factura") await generateFactura(r, ctx);
-      else await generateChitanta(r, ctx);
+      else if (docType === "chitanta") await generateChitanta(r, ctx);
+      else await handleDevizPlusOperatii(ctx);
     } catch (e: any) {
       alert(e?.message ?? "Eroare necunoscută.");
     } finally {
       setDocLoading(null);
     }
+  }
+
+  async function handleDevizPlusOperatii(ctx: DocContext) {
+    await loadHotelImages();
+    const imgs = buildHotelImageProxyUrls();
+    const vehicle = r.vehicol ?? null;
+
+    // Fetch montaj roti + cazări în paralel
+    const [montajList, cazariRes] = await Promise.all([
+      loadMontajRotiByReceipt(r.id),
+      apiFetch(`/api/cazare-anvelope?receipt_id=${r.id}&limit=20`).then((res) => res.ok ? res.json() : null).catch(() => null),
+    ]);
+
+    const montajRows: MontajRotaRow[] = montajList.map((m) => ({
+      pozitie: m.pozitie,
+      presiune: m.presiune,
+      marcaNume: m.marcaNume,
+      dimensiuneValoare: m.dimensiuneValoare,
+      profilValoare: m.profilValoare,
+      tip: m.tip,
+      adancime: m.adancime,
+    }));
+
+    const cazariBasice: any[] = cazariRes?.items ?? [];
+    const sections: CazareSection[] = [];
+    const renderedIds = new Set<number>();
+
+    for (const cb of cazariBasice) {
+      if (renderedIds.has(cb.id)) continue;
+      const full = await getCazareById(cb.id);
+      if (!full) continue;
+      if (full.dataCheckout && full.successorCazareId != null) {
+        const successor = await getCazareById(full.successorCazareId);
+        if (successor) {
+          sections.push({
+            type: "combined",
+            checkout: full as any,
+            newCazare: successor as any,
+            checkoutDate: full.dataCheckout,
+            montatePeMasina: full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
+          });
+          renderedIds.add(full.id);
+          renderedIds.add(successor.id);
+          continue;
+        }
+      }
+      if (full.dataCheckout) {
+        sections.push({ type: "checkout", cazare: full as any, checkoutDate: full.dataCheckout });
+      } else {
+        sections.push({ type: "checkin", cazare: full as any });
+      }
+      renderedIds.add(full.id);
+    }
+
+    await generateDevizPlusOperatii(
+      r, ctx, vehicle, montajRows, sections, imgs,
+      generalSettings()?.afiseazaTehnicianDeviz === true,
+    );
   }
 
   const isPartial = () => metodaDraft() === "Platit Partial";
@@ -655,6 +715,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
               </Show>
               <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
                 {docLoading() === "deviz" ? "..." : "Deviz"}
+              </button>
+              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz_operatii")}>
+                {docLoading() === "deviz_operatii" ? "..." : "Deviz + Op."}
               </button>
               <Show when={generalSettings()?.useFactura !== false}>
                 <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>

@@ -2013,3 +2013,695 @@ export async function generateMontajRoti(
   const clientSlug = (receipt.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
   doc.save(docFilename("montaj_roti", clientSlug));
 }
+
+// ─── Content helpers (refolosite de generatoarele individuale + PDF combinat) ─
+
+/** Mapping `Receipt` → `ClientInfoForPdf` pentru top-cards. */
+function clientInfoFromReceipt(r: Receipt): ClientInfoForPdf {
+  return {
+    clientNume: r.clientNume ?? null,
+    clientCui: (r as any).clientCui ?? null,
+    clientReprezentant: (r as any).clientReprezentant ?? null,
+    clientAdresa: (r as any).clientAdresa ?? null,
+    clientTelefon: (r as any).clientTelefon ?? null,
+  };
+}
+
+/** Corpul devizului: items table + descriere + observatii + partial pay + disclaimer. */
+function drawDevizContent(
+  doc: any, autoTable: any, r: Receipt, ctx: DocContext, y: number,
+  showTehnician: boolean,
+): number {
+  const tvaPct = ctx.company?.tva_percentage ?? 0;
+  y = drawItemsTable(doc, autoTable, r, y, tvaPct, showTehnician);
+  y = drawTotals(doc, r, y, tvaPct);
+
+  if (r.descriere?.trim()) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text("DESCRIERE", ML, y);
+    y += 3.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.black);
+    const dl: string[] = doc.splitTextToSize(ro(r.descriere.trim()), CW);
+    doc.text(dl, ML, y);
+    y += dl.length * 4 + 3;
+  }
+
+  if (r.dateTehn?.trim()) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text("OBSERVATII", ML, y);
+    y += 3.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.black);
+    const dtl: string[] = doc.splitTextToSize(ro(r.dateTehn.trim()), CW);
+    doc.text(dtl, ML, y);
+    y += dtl.length * 4 + 3;
+  }
+
+  if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...C.black);
+    doc.text(`Platit partial / Avans: ${lei(r.partialPay)}`, ML, y);
+    const totalFinal2 = r.total;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Rest de plata: ${lei(totalFinal2 - r.partialPay)}`, ML, y + 5);
+    y += 12;
+  }
+
+  y = drawDisclaimer(doc, ctx.disclaimer, y);
+  return y;
+}
+
+/** Corpul Montaj Roti: tabel + side image + condiții tehnice. */
+async function drawMontajRotiContent(
+  doc: any, autoTable: any, rows: MontajRotaRow[], montareImageUrl: string | null,
+  t: (s: string | null | undefined) => string, FONT: string, y: number,
+): Promise<number> {
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+  const navyBlue: [number, number, number] = [30, 58, 138];
+
+  const body = rows.map((r, idx) => {
+    const dim = t(r.dimensiuneValoare ?? "—");
+    const profil = t(r.profilValoare ?? "—");
+    const tip = TIP_PDF_LABELS[r.tip] ?? r.tip;
+    return [
+      String(idx + 1),
+      _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie,
+      t(r.marcaNume ?? "—"),
+      `${dim}\n${profil}\n${tip}`,
+      r.adancime != null ? `${r.adancime} mm` : "—",
+      r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
+    ];
+  });
+
+  if (body.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune"]],
+      body,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2, halign: "center" },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: "auto" },
+        3: { halign: "center", cellWidth: 30 },
+        4: { halign: "center", cellWidth: 18 },
+        5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+    await drawSideImage(doc, montareImageUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+    y = tableEndY + 4;
+  }
+
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.black);
+  doc.text(t("CONDIȚII TEHNICE DE LUCRU"), ML, y);
+  y += 3;
+
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.gray);
+  const paragrafe = [
+    "Strângerea prezoanelor de roată s-a efectuat cu cheie dinamometrică, la momentul de strângere specificat în manualul tehnic al vehiculului, conform indicațiilor producătorului autovehiculului sau conform valorilor înscrise pe eticheta situată pe stâlpul ușii șoferului.",
+    "Presiunea pneurilor a fost reglată conform valorilor recomandate de producătorul autovehiculului, indicate pe eticheta de pe stâlpul caroseriei, în manualul de utilizare sau pe capacul rezervorului de combustibil.",
+  ];
+  for (const p of paragrafe) {
+    const lines: string[] = doc.splitTextToSize(t(p), CW);
+    doc.text(lines, ML, y);
+    y += lines.length * 2.6 + 1.5;
+  }
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.black);
+  const atentie = "Atenție: Clientul este sfătuit să verifice strângerea prezoanelor după primii 50 pana la 100 km parcurși de la montaj, la un service autorizat sau cu o cheie dinamometrică calibrată.";
+  const atLines: string[] = doc.splitTextToSize(t(atentie), CW);
+  doc.text(atLines, ML, y);
+  y += atLines.length * 2.6 + 4;
+  doc.setTextColor(...C.black);
+  return y;
+}
+
+/** Corp Cazare Checkin: secțiune CAZARE + tabel anvelope cu side image + ref cazare anterioară. */
+async function drawCazareCheckinContent(
+  doc: any, autoTable: any, cazare: CazareForPdf,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null,
+  t: (s: string | null | undefined) => string, FONT: string, y: number,
+): Promise<number> {
+  const setF = (style: "normal" | "bold", size: number) => { doc.setFont(FONT, style); doc.setFontSize(size); };
+  const marineGreen: [number, number, number] = [5, 150, 105];
+
+  setF("bold", 10);
+  doc.setTextColor(...marineGreen);
+  doc.text("CAZARE", ML, y);
+  y += 5;
+
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
+
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  let yL = y;
+  let yR = y;
+  if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data cazare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  y = Math.max(yL, yR) + 1;
+
+  const depItemsIn: string[] = [];
+  if (cazare.depAnvelope)     depItemsIn.push("Anvelope");
+  if (cazare.depCapace)       depItemsIn.push("Capace");
+  if (cazare.depRotiComplete) depItemsIn.push("Roți complete");
+  if (cazare.depAntifurturi)  depItemsIn.push("Antifurturi");
+  if (cazare.depPrezoane)     depItemsIn.push("Prezoane");
+  if (depItemsIn.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  if (cazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
+  const tireRows = cazare.items.filter((item) => item.anvelopa != null).map((item, idx) => {
+    const a = item.anvelopa!;
+    return [
+      String(idx + 1),
+      t(a.marcaNume ?? "—"),
+      t(a.dimensiuneValoare ?? "—"),
+      t(a.profilValoare ?? "—"),
+      TIP_PDF_LABELS[a.tip] ?? a.tip,
+      a.adancime != null ? `${a.adancime} mm` : "—",
+    ];
+  });
+
+  if (tireRows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: tireRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: marineGreen, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+    await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+    y = tableEndY + 4;
+  }
+
+  if (cazare.referintaCazareId) {
+    const isMontate = !!cazare.montatePeMasina;
+    const refColor: [number, number, number] = isMontate ? [22, 163, 74] : [220, 38, 38];
+    const refDate = cazare.referintaCazareDataCheckin ? ` (intrare: ${fmtDate(cazare.referintaCazareDataCheckin)})` : "";
+
+    hline(doc, y);
+    y += 5;
+    setF("bold", 8);
+    doc.setTextColor(...C.black);
+    doc.text("ANVELOPE SCOASE DIN DEPOZIT — CAZAREA ANTERIOARĂ", ML, y);
+    y += 5;
+
+    setF("normal", 8.5);
+    doc.setTextColor(...refColor);
+    const descText = isMontate
+      ? `Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost scoase din depozit și MONTATE PE MAȘINA CLIENTULUI. ` +
+        `Acestea au înlocuit anvelopele de sezon care sunt depozitate acum. Clientul a plecat cu anvelopele montate pe vehicul.`
+      : `Anvelopele din cazarea anterioară #${cazare.referintaCazareId}${refDate} au fost scoase din depozit și PREDATE CLIENTULUI fără a fi montate. ` +
+        `Clientul a ridicat anvelopele și le va monta separat. Anvelopele depozitate acum reprezintă un set diferit.`;
+    const descLines: string[] = doc.splitTextToSize(descText, CW);
+    doc.text(descLines, ML, y);
+    y += descLines.length * 4.2 + 4;
+    doc.setTextColor(...C.black);
+
+    const oldItems = (cazare.referintaCazareItems ?? []).filter((i) => i.anvelopa != null);
+    if (oldItems.length > 0) {
+      const oldRows = oldItems.map((item, idx) => {
+        const a = item.anvelopa!;
+        return [
+          String(idx + 1),
+          t(a.marcaNume ?? "—"),
+          t(a.dimensiuneValoare ?? "—"),
+          t(a.profilValoare ?? "—"),
+          TIP_PDF_LABELS[a.tip] ?? a.tip,
+          a.adancime != null ? `${a.adancime} mm` : "—",
+        ];
+      });
+      autoTable(doc, {
+        startY: y,
+        head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+        body: oldRows,
+        theme: "grid",
+        styles: { font: FONT },
+        headStyles: { fillColor: refColor, textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+        bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 16 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
+        margin: { left: ML, right: MR },
+        tableWidth: CW,
+      });
+      y = (doc as any).lastAutoTable.finalY + 3;
+    }
+    y += 4;
+  }
+
+  return y;
+}
+
+/** Corp Cazare Checkout: secțiune SCOATERE + tabel + side image. */
+async function drawCazareCheckoutContent(
+  doc: any, autoTable: any, cazare: CazareForPdf, checkoutDate: string,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null,
+  t: (s: string | null | undefined) => string, FONT: string, y: number,
+): Promise<number> {
+  const setF = (style: "normal" | "bold", size: number) => { doc.setFont(FONT, style); doc.setFontSize(size); };
+  const navyBlue: [number, number, number] = [30, 58, 138];
+
+  setF("bold", 10);
+  doc.setTextColor(...navyBlue);
+  doc.text("SCOATERE DIN CAZARE", ML, y);
+  y += 5;
+
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
+
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  let yL = y;
+  let yR = y;
+  if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
+  const zile = Math.round(
+    (new Date(checkoutDate).getTime() - new Date(cazare.dataCheckin).getTime()) / 86_400_000
+  );
+  setF("bold", 9);
+  doc.text(`Durată depozitare: ${zile} zile`, col2X, yR);
+  yR += 5;
+  y = Math.max(yL, yR) + 1;
+
+  const depItemsOut: string[] = [];
+  if (cazare.depAnvelope)     depItemsOut.push("Anvelope");
+  if (cazare.depCapace)       depItemsOut.push("Capace");
+  if (cazare.depRotiComplete) depItemsOut.push("Roți complete");
+  if (cazare.depAntifurturi)  depItemsOut.push("Antifurturi");
+  if (cazare.depPrezoane)     depItemsOut.push("Prezoane");
+  if (depItemsOut.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  if (cazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
+  const rows = cazare.items.filter((item) => item.anvelopa != null).map((item, idx) => {
+    const a = item.anvelopa!;
+    return [
+      String(idx + 1),
+      t(a.marcaNume ?? "—"),
+      t(a.dimensiuneValoare ?? "—"),
+      t(a.profilValoare ?? "—"),
+      TIP_PDF_LABELS[a.tip] ?? a.tip,
+      a.adancime != null ? `${a.adancime} mm` : "—",
+    ];
+  });
+
+  if (rows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: rows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+    const sideUrl = images?.scoatere ?? images?.montare ?? null;
+    await drawSideImage(doc, sideUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+    y = tableEndY + 4;
+  }
+
+  return y;
+}
+
+/** Corp Scoatere + Cazare Nouă (combined). */
+async function drawCazareScoatereIntroducereContent(
+  doc: any, autoTable: any,
+  checkoutCazare: CazareForPdf, newCazare: CazareForPdf,
+  checkoutDate: string, montatePeMasina: boolean,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null,
+  t: (s: string | null | undefined) => string, FONT: string, y: number,
+): Promise<number> {
+  const setF = (style: "normal" | "bold", size: number) => { doc.setFont(FONT, style); doc.setFontSize(size); };
+  const navyBlue: [number, number, number] = [30, 58, 138];
+  const marineGreen: [number, number, number] = [5, 150, 105];
+
+  setF("bold", 10);
+  doc.setTextColor(...navyBlue);
+  doc.text("SCOATERE DIN CAZARE", ML, y);
+  y += 5;
+
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
+
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  let yL = y;
+  let yR = y;
+  if (checkoutCazare.locationName)  { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (checkoutCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(checkoutCazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (checkoutCazare.employeeName)  { doc.text(`Angajat: ${t(checkoutCazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data intrare: ${fmtDate(checkoutCazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
+  const zile = Math.round(
+    (new Date(checkoutDate).getTime() - new Date(checkoutCazare.dataCheckin).getTime()) / 86_400_000
+  );
+  setF("bold", 9);
+  doc.text(`Durată depozitare: ${zile} zile`, col2X, yR);
+  yR += 5;
+  y = Math.max(yL, yR) + 1;
+
+  const depItemsOut: string[] = [];
+  if (checkoutCazare.depAnvelope)     depItemsOut.push("Anvelope");
+  if (checkoutCazare.depCapace)       depItemsOut.push("Capace");
+  if (checkoutCazare.depRotiComplete) depItemsOut.push("Roți complete");
+  if (checkoutCazare.depAntifurturi)  depItemsOut.push("Antifurturi");
+  if (checkoutCazare.depPrezoane)     depItemsOut.push("Prezoane");
+  if (depItemsOut.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  if (checkoutCazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(checkoutCazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+
+  setF("normal", 8);
+  const noteColor: [number, number, number] = montatePeMasina ? [22, 163, 74] : [220, 38, 38];
+  doc.setTextColor(...noteColor);
+  const noteText = montatePeMasina
+    ? "Anvelopele scoase din depozit au fost MONTATE PE MAȘINA CLIENTULUI."
+    : "Anvelopele scoase din depozit au fost PREDATE CLIENTULUI fără a fi montate.";
+  const noteLines: string[] = doc.splitTextToSize(noteText, CW);
+  doc.text(noteLines, ML, y);
+  y += noteLines.length * 4 + 3;
+  doc.setTextColor(...C.black);
+
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
+  const checkoutRows = checkoutCazare.items.filter((item) => item.anvelopa != null).map((item, idx) => {
+    const a = item.anvelopa!;
+    return [
+      String(idx + 1), t(a.marcaNume ?? "—"), t(a.dimensiuneValoare ?? "—"),
+      t(a.profilValoare ?? "—"), TIP_PDF_LABELS[a.tip] ?? a.tip,
+      a.adancime != null ? `${a.adancime} mm` : "—",
+    ];
+  });
+  if (checkoutRows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: checkoutRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 }, 1: { cellWidth: "auto" },
+        2: { cellWidth: 26 }, 3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 }, 5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+    const sideUrl = montatePeMasina
+      ? (images?.montare ?? images?.scoatere)
+      : (images?.scoatere ?? images?.montare);
+    await drawSideImage(doc, sideUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+    y = tableEndY + 4;
+  }
+
+  hline(doc, y);
+  y += 6;
+
+  setF("bold", 10);
+  doc.setTextColor(...marineGreen);
+  doc.text("CAZARE NOUĂ", ML, y);
+  y += 5;
+
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  let yL2 = y;
+  let yR2 = y;
+  if (newCazare.locationName)  { doc.text(`Locație: ${t(newCazare.locationName)}`, col1X, yL2);  yL2 += 4.5; }
+  if (newCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(newCazare.locCazareNume)}`, col1X, yL2); yL2 += 4.5; }
+  if (newCazare.employeeName)  { doc.text(`Angajat: ${t(newCazare.employeeName)}`, col1X, yL2);  yL2 += 4.5; }
+  doc.text(`Data cazare: ${fmtDate(newCazare.dataCheckin)}`, col2X, yR2); yR2 += 4.5;
+  y = Math.max(yL2, yR2) + 1;
+
+  const depItemsIn: string[] = [];
+  if (newCazare.depAnvelope)     depItemsIn.push("Anvelope");
+  if (newCazare.depCapace)       depItemsIn.push("Capace");
+  if (newCazare.depRotiComplete) depItemsIn.push("Roți complete");
+  if (newCazare.depAntifurturi)  depItemsIn.push("Antifurturi");
+  if (newCazare.depPrezoane)     depItemsIn.push("Prezoane");
+  if (depItemsIn.length > 0) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
+    y += 5;
+  }
+
+  if (newCazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(newCazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
+
+  const newRows = newCazare.items.filter((item) => item.anvelopa != null).map((item, idx) => {
+    const a = item.anvelopa!;
+    return [
+      String(idx + 1), t(a.marcaNume ?? "—"), t(a.dimensiuneValoare ?? "—"),
+      t(a.profilValoare ?? "—"), TIP_PDF_LABELS[a.tip] ?? a.tip,
+      a.adancime != null ? `${a.adancime} mm` : "—",
+    ];
+  });
+  if (newRows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: newRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: marineGreen, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 }, 1: { cellWidth: "auto" },
+        2: { cellWidth: 26 }, 3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 }, 5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+    await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+    y = tableEndY + 4;
+  }
+
+  return y;
+}
+
+// ─── Orchestrator: Deviz + Operații ───────────────────────────────────────────
+
+export type CazareSection =
+  | { type: "checkin"; cazare: CazareForPdf }
+  | { type: "checkout"; cazare: CazareForPdf; checkoutDate: string }
+  | { type: "combined"; checkout: CazareForPdf; newCazare: CazareForPdf; checkoutDate: string; montatePeMasina: boolean };
+
+export async function generateDevizPlusOperatii(
+  r: Receipt,
+  ctx: DocContext,
+  vehicle: VehiculForPdf | null,
+  montajRoti: MontajRotaRow[],
+  cazariSections: CazareSection[],
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null,
+  showTehnician = false,
+): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal");
+
+  await drawBackground(doc, ctx.company?.background_path);
+  await drawLogo(doc, ctx.company?.logo_path, MT);
+
+  // ── Page 1: Deviz ─────────────────────────────────────────────────────────
+  let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, fmtDate(r.date), FONT);
+
+  if (r.titlu?.trim()) {
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...C.black);
+    const titluLines: string[] = doc.splitTextToSize(t(r.titlu), CW);
+    doc.text(titluLines, ML, y);
+    y += titluLines.length * 4.5 + 3;
+  }
+
+  const bw = (CW - CARDS_GAP_X) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + CARDS_GAP_X;
+  y = drawCazareTopCards(doc, ctx.company ?? null, clientInfoFromReceipt(r), vehicle, leftX, rightX, y, bw, t, FONT) + 4;
+
+  hline(doc, y, C.lightGray, 0.2);
+  y += 4;
+  y = drawDevizContent(doc, autoTable, r, ctx, y, showTehnician);
+
+  // ── Section: Montaj Roți ──────────────────────────────────────────────────
+  if (montajRoti.length > 0) {
+    doc.addPage();
+    let y2 = MT;
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(30, 58, 138);
+    doc.text(t("MONTARE ROȚI"), ML, y2);
+    y2 += 6;
+    hline(doc, y2, C.lightGray, 0.2);
+    y2 += 4;
+    doc.setTextColor(...C.black);
+    y = await drawMontajRotiContent(doc, autoTable, montajRoti, images?.montare ?? null, t, FONT, y2);
+  }
+
+  // ── Sections: cazări ──────────────────────────────────────────────────────
+  for (const section of cazariSections) {
+    doc.addPage();
+    let yS = MT;
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(13);
+    if (section.type === "checkin") {
+      doc.setTextColor(5, 150, 105);
+      doc.text(t("HOTEL ANVELOPE - CAZARE"), ML, yS);
+    } else if (section.type === "checkout") {
+      doc.setTextColor(30, 58, 138);
+      doc.text(t("HOTEL ANVELOPE - SCOATERE"), ML, yS);
+    } else {
+      doc.setTextColor(30, 58, 138);
+      doc.text(t("HOTEL ANVELOPE - SCOATERE ȘI CAZARE NOUĂ"), ML, yS);
+    }
+    yS += 6;
+    hline(doc, yS, C.lightGray, 0.2);
+    yS += 4;
+    doc.setTextColor(...C.black);
+
+    if (section.type === "checkin") {
+      y = await drawCazareCheckinContent(doc, autoTable, section.cazare, images, t, FONT, yS);
+    } else if (section.type === "checkout") {
+      y = await drawCazareCheckoutContent(doc, autoTable, section.cazare, section.checkoutDate, images, t, FONT, yS);
+    } else {
+      y = await drawCazareScoatereIntroducereContent(
+        doc, autoTable, section.checkout, section.newCazare,
+        section.checkoutDate, section.montatePeMasina, images, t, FONT, yS,
+      );
+    }
+  }
+
+  // ── Final ─────────────────────────────────────────────────────────────────
+  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
+  await drawFooterWithBranding(doc, ctx.company?.website);
+
+  const clientSlug = (r.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
+  doc.save(docFilename("deviz_operatii", clientSlug));
+}
