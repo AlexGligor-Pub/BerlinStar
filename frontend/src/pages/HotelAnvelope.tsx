@@ -9,7 +9,7 @@ import {
   cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
-  hotelImages, loadHotelImages,
+  hotelImages, loadHotelImages, getCazareById,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
 
@@ -342,13 +342,30 @@ function CazareCard(props: {
   onView: (c: Cazare) => void;
 }) {
   const c = () => props.cazare;
-  const [pdfLoading, setPdfLoading] = createSignal<"checkin" | "checkout" | null>(null);
+  const [pdfLoading, setPdfLoading] = createSignal<"checkin" | "checkout" | "combined" | null>(null);
 
   async function handlePdf(type: "checkin" | "checkout") {
     setPdfLoading(type);
     try {
       if (type === "checkin") await generateCazareCheckin(c(), props.companyData);
       else await generateCazareCheckout(c(), props.companyData);
+    } finally { setPdfLoading(null); }
+  }
+
+  async function handleCombinedPdf() {
+    const sucId = c().successorCazareId;
+    if (sucId == null || !c().dataCheckout) return;
+    setPdfLoading("combined");
+    try {
+      const successor = await getCazareById(sucId);
+      if (!successor) return;
+      await generateCazareScoatereIntroducere(
+        c() as any,
+        successor as any,
+        props.companyData,
+        c().dataCheckout!,
+        c().successorMontatePeMasina ?? successor.montatePeMasina ?? false,
+      );
     } finally { setPdfLoading(null); }
   }
 
@@ -411,6 +428,11 @@ function CazareCard(props: {
         <Show when={c().dataCheckout}>
           <button class="btn btn-ghost btn-sm" onClick={() => handlePdf("checkout")} disabled={pdfLoading() === "checkout"}>
             {pdfLoading() === "checkout" ? "..." : "PDF Ieșire"}
+          </button>
+        </Show>
+        <Show when={c().dataCheckout && c().successorCazareId != null}>
+          <button class="btn btn-ghost btn-sm" onClick={handleCombinedPdf} disabled={pdfLoading() === "combined"}>
+            {pdfLoading() === "combined" ? "..." : "PDF Scoatere + Introducere"}
           </button>
         </Show>
       </div>

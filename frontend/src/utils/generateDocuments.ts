@@ -1177,7 +1177,7 @@ export async function generateCazareScoatereIntroducere(
   await drawBackground(doc, company?.background_path);
   await drawLogo(doc, company?.logo_path, MT);
 
-  let y = drawHeader(doc, "Hotel Anvelope - Scoatere și Introducere Nouă", "", checkoutCazare.id, fmtDate(checkoutDate), FONT);
+  let y = drawHeader(doc, "Hotel Anvelope - Scoatere și cazare nouă", "", checkoutCazare.id, fmtDate(checkoutDate), FONT);
   y += 2;
   hline(doc, y);
   y += 6;
@@ -1195,12 +1195,15 @@ export async function generateCazareScoatereIntroducere(
   hline(doc, y);
   y += 6;
 
-  // Detalii cazare
-  setF("bold", 8);
-  doc.setTextColor(...C.black);
-  doc.text("DETALII CAZARE", ML, y);
-  y += 4;
+  // ─── Section 1: SCOATERE DIN DEPOZIT (dark navy blue) ───────────────────────
+  const navyBlue: [number, number, number] = [30, 58, 138];
 
+  setF("bold", 10);
+  doc.setTextColor(...navyBlue);
+  doc.text("SCOATERE DIN DEPOZIT", ML, y);
+  y += 5;
+
+  // Detalii cazare — checkout
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
   if (checkoutCazare.locationName) { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, ML, y); y += 4.5; }
@@ -1214,17 +1217,6 @@ export async function generateCazareScoatereIntroducere(
   setF("bold", 9);
   doc.setTextColor(...C.black);
   doc.text(`Durată depozitare: ${zile} zile`, ML, y);
-  y += 6;
-
-  hline(doc, y);
-  y += 6;
-
-  // ─── Section 1: ANVELOPE SCOASE DIN DEPOZIT (dark navy blue) ───────────────
-  const navyBlue: [number, number, number] = [30, 58, 138];
-
-  setF("bold", 9);
-  doc.setTextColor(...navyBlue);
-  doc.text("ANVELOPE SCOASE DIN DEPOZIT", ML, y);
   y += 5;
 
   // Dep items for checkout cazare
@@ -1239,6 +1231,15 @@ export async function generateCazareScoatereIntroducere(
     doc.setTextColor(...C.black);
     doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
     y += 5;
+  }
+
+  // Observatii — checkout cazare
+  if (checkoutCazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(checkoutCazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
   }
 
   // Note about montate pe masina
@@ -1294,13 +1295,21 @@ export async function generateCazareScoatereIntroducere(
   hline(doc, y);
   y += 6;
 
-  // ─── Section 2: ANVELOPE INTRODUSE LA DEPOZITARE (marine green) ─────────────
+  // ─── Section 2: CAZARE NOUĂ (marine green) ─────────────────────────────────
   const marineGreen: [number, number, number] = [5, 150, 105];
 
-  setF("bold", 9);
+  setF("bold", 10);
   doc.setTextColor(...marineGreen);
-  doc.text("ANVELOPE INTRODUSE LA DEPOZITARE", ML, y);
+  doc.text("CAZARE NOUĂ", ML, y);
   y += 5;
+
+  // Detalii — new cazare
+  setF("normal", 8.5);
+  doc.setTextColor(...C.black);
+  if (newCazare.locationName)  { doc.text(`Locație: ${t(newCazare.locationName)}`, ML, y); y += 4.5; }
+  if (newCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(newCazare.locCazareNume)}`, ML, y); y += 4.5; }
+  if (newCazare.employeeName)  { doc.text(`Angajat: ${t(newCazare.employeeName)}`, ML, y); y += 4.5; }
+  doc.text(`Data cazare: ${fmtDate(newCazare.dataCheckin)}`, ML, y); y += 5;
 
   // Dep items for new cazare
   const depItemsIn: string[] = [];
@@ -1314,6 +1323,15 @@ export async function generateCazareScoatereIntroducere(
     doc.setTextColor(...C.black);
     doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
     y += 5;
+  }
+
+  // Observatii — new cazare
+  if (newCazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(newCazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
   }
 
   // Tire table — new cazare

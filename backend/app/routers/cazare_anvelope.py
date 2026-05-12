@@ -38,7 +38,26 @@ def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
     }
 
 
-def _serialize(c: CazareAnvelope) -> dict:
+async def _fetch_successor_map(
+    db: AsyncSession, account_id: int, ids: list[int]
+) -> dict[int, tuple[int, bool]]:
+    if not ids:
+        return {}
+    rows = (await db.execute(
+        select(
+            CazareAnvelope.referinta_cazare_id,
+            CazareAnvelope.id,
+            CazareAnvelope.montate_pe_masina,
+        ).where(
+            CazareAnvelope.account_id == account_id,
+            CazareAnvelope.is_deleted == False,
+            CazareAnvelope.referinta_cazare_id.in_(ids),
+        )
+    )).all()
+    return {row[0]: (row[1], row[2]) for row in rows}
+
+
+def _serialize(c: CazareAnvelope, successor: tuple[int, bool] | None = None) -> dict:
     client = c.client
     emp = c.employee
     loc = c.loc_cazare
@@ -60,6 +79,8 @@ def _serialize(c: CazareAnvelope) -> dict:
         "dep_prezoane": c.dep_prezoane,
         "referinta_cazare_id": c.referinta_cazare_id,
         "montate_pe_masina": c.montate_pe_masina,
+        "successor_cazare_id": successor[0] if successor else None,
+        "successor_montate_pe_masina": successor[1] if successor else None,
         "numar_masina": c.numar_masina,
         "receipt_id": c.receipt_id,
         "referinta_cazare_data_checkin": str(c.referinta_cazare.data_checkin) if c.referinta_cazare else None,
@@ -149,7 +170,11 @@ async def list_cazari(
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
-    return Page(items=[_serialize(r) for r in page], next_cursor=page[-1].id if has_more else None)
+    succ_map = await _fetch_successor_map(db, account_id, [r.id for r in page])
+    return Page(
+        items=[_serialize(r, succ_map.get(r.id)) for r in page],
+        next_cursor=page[-1].id if has_more else None,
+    )
 
 
 @router.post("", response_model=CazareRead, status_code=201)
@@ -206,7 +231,8 @@ async def create_cazare(
 
     result = await db.execute(_load_stmt(account_id).where(CazareAnvelope.id == cazare.id))
     cazare = result.scalar_one()
-    return _serialize(cazare)
+    succ_map = await _fetch_successor_map(db, account_id, [cazare.id])
+    return _serialize(cazare, succ_map.get(cazare.id))
 
 
 @router.get("/{cazare_id}", response_model=CazareRead)
@@ -221,7 +247,8 @@ async def get_cazare(
     cazare = result.scalar_one_or_none()
     if cazare is None:
         raise HTTPException(404, "Cazarea nu a fost găsită.")
-    return _serialize(cazare)
+    succ_map = await _fetch_successor_map(db, account_id, [cazare.id])
+    return _serialize(cazare, succ_map.get(cazare.id))
 
 
 @router.patch("/{cazare_id}", response_model=CazareRead)
@@ -272,7 +299,8 @@ async def update_cazare(
     db.expire_all()
     result = await db.execute(_load_stmt(account_id).where(CazareAnvelope.id == cazare_id))
     cazare = result.scalar_one()
-    return _serialize(cazare)
+    succ_map = await _fetch_successor_map(db, account_id, [cazare.id])
+    return _serialize(cazare, succ_map.get(cazare.id))
 
 
 @router.patch("/{cazare_id}/checkout", response_model=CazareRead)
@@ -297,7 +325,8 @@ async def checkout_cazare(
 
     result = await db.execute(_load_stmt(account_id).where(CazareAnvelope.id == cazare_id))
     cazare = result.scalar_one()
-    return _serialize(cazare)
+    succ_map = await _fetch_successor_map(db, account_id, [cazare.id])
+    return _serialize(cazare, succ_map.get(cazare.id))
 
 
 @router.delete("/{cazare_id}", status_code=204)

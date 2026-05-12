@@ -72,6 +72,8 @@ export interface Cazare {
   depPrezoane: boolean;
   referintaCazareId: number | null;
   montatePeMasina: boolean;
+  successorCazareId: number | null;
+  successorMontatePeMasina: boolean | null;
   referintaCazareDataCheckin: string | null;
   referintaCazareItems: CazareItem[];
   items: CazareItem[];
@@ -122,6 +124,8 @@ function mapCazare(c: any): Cazare {
     depPrezoane: c.dep_prezoane ?? false,
     referintaCazareId: c.referinta_cazare_id ?? null,
     montatePeMasina: c.montate_pe_masina ?? false,
+    successorCazareId: c.successor_cazare_id ?? null,
+    successorMontatePeMasina: c.successor_montate_pe_masina ?? null,
     referintaCazareDataCheckin: c.referinta_cazare_data_checkin ?? null,
     referintaCazareItems: (c.referinta_cazare_items ?? []).map((item: any) => ({
       id: item.id,
@@ -197,6 +201,16 @@ export async function loadMoreCazari() {
     setCazariHasMore(data.next_cursor != null);
     setCazariNextCursor(data.next_cursor ?? null);
   } catch {} finally { setCazariLoadingMore(false); }
+}
+
+export async function getCazareById(id: number): Promise<Cazare | null> {
+  try {
+    const res = await apiFetch(`/api/cazare-anvelope/${id}`);
+    if (!res.ok) return null;
+    return mapCazare(await res.json());
+  } catch {
+    return null;
+  }
 }
 
 export async function loadAnvelope(clientId: number): Promise<Anvelopa[]> {

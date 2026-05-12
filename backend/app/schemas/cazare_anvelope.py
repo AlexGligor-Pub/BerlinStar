@@ -83,6 +83,8 @@ class CazareRead(BaseModel):
     dep_prezoane: bool = False
     referinta_cazare_id: int | None = None
     montate_pe_masina: bool = False
+    successor_cazare_id: int | None = None
+    successor_montate_pe_masina: bool | None = None
     numar_masina: str | None = None
     receipt_id: int | None = None
     referinta_cazare_data_checkin: str | None = None
