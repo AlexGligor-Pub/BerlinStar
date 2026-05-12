@@ -386,7 +386,7 @@ function CazareCard(props: {
   }
 
   return (
-    <div class="rcard" style="padding:7px 12px">
+    <div class="rcard" style="padding:7px 12px;cursor:pointer" onClick={() => props.onView(c())}>
       {/* Header card */}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="display:flex;align-items:center;gap:10px;min-width:0">
@@ -431,13 +431,12 @@ function CazareCard(props: {
       </div>
 
       {/* Acțiuni */}
-      <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
+      <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap" onClick={(e) => e.stopPropagation()}>
         <Show when={!c().dataCheckout}>
           <button class="btn btn-primary btn-sm" onClick={() => props.onCheckout(c())}>Scoatere</button>
           <button class="btn btn-ghost btn-sm" onClick={() => props.onCheckoutNew(c())}>Scoatere și introducere nouă</button>
           <button class="btn btn-ghost btn-sm" onClick={() => props.onEdit(c())}>Editează</button>
         </Show>
-        <button class="btn btn-ghost btn-sm" onClick={() => props.onView(c())}>Vezi detalii</button>
         <button class="btn btn-ghost btn-sm" onClick={() => handlePdf("checkin")} disabled={pdfLoading() === "checkin"}>
           {pdfLoading() === "checkin" ? "..." : "PDF Intrare"}
         </button>
