@@ -755,7 +755,7 @@ export default function ShoppingList() {
               .filter((it) => it.anvelopa)
               .map((it, i) => ({
                 pozitie: defaultPozitieForIndex(i),
-                presiune: null,
+                presiune: 2.3,
                 ordine: i,
                 marcaId: it.anvelopa.marca_id ?? null,
                 dimensiuneId: it.anvelopa.dimensiune_id ?? null,

@@ -1933,36 +1933,39 @@ export async function generateMontajRoti(
   const SIDE_GAP = 5;
   const tableW = CW - SIDE_IMG_W - SIDE_GAP;
 
-  const body = rows.map((r, idx) => [
-    String(idx + 1),
-    _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie,
-    t(r.marcaNume ?? "—"),
-    t(r.dimensiuneValoare ?? "—"),
-    t(r.profilValoare ?? "—"),
-    TIP_PDF_LABELS[r.tip] ?? r.tip,
-    r.adancime != null ? `${r.adancime} mm` : "—",
-    r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
-  ]);
+  const navyBlue: [number, number, number] = [30, 58, 138];
+
+  const body = rows.map((r, idx) => {
+    const dim = t(r.dimensiuneValoare ?? "—");
+    const profil = t(r.profilValoare ?? "—");
+    const tip = TIP_PDF_LABELS[r.tip] ?? r.tip;
+    return [
+      String(idx + 1),
+      _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie,
+      t(r.marcaNume ?? "—"),
+      `${dim}\n${profil}\n${tip}`,
+      r.adancime != null ? `${r.adancime} mm` : "—",
+      r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
+    ];
+  });
 
   if (body.length > 0) {
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Poziție", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime", "Presiune"]],
+      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune"]],
       body,
       theme: "grid",
-      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
-      headStyles: { fillColor: [...C.black], textColor: [...C.white], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2, halign: "center" },
       bodyStyles: { fontSize: 7.5, cellPadding: 2 },
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: 24 },
         2: { cellWidth: "auto" },
-        3: { cellWidth: 22 },
-        4: { halign: "center", cellWidth: 14 },
-        5: { halign: "center", cellWidth: 14 },
-        6: { halign: "center", cellWidth: 16 },
-        7: { halign: "center", cellWidth: 16 },
+        3: { halign: "center", cellWidth: 30 },
+        4: { halign: "center", cellWidth: 18 },
+        5: { halign: "center", cellWidth: 18 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,

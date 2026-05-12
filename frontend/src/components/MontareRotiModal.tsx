@@ -27,11 +27,13 @@ interface RowDraft extends MontajRotaDraft {
 let _uidSeq = 0;
 function newUid(): number { return ++_uidSeq; }
 
+const DEFAULT_PRESIUNE = 2.3;
+
 function emptyRow(idx: number): RowDraft {
   return {
     uid: newUid(),
     pozitie: defaultPozitieForIndex(idx),
-    presiune: null,
+    presiune: DEFAULT_PRESIUNE,
     ordine: idx,
     marcaId: null,
     dimensiuneId: null,
@@ -136,16 +138,17 @@ export default function MontareRotiModal(props: {
 
   return (
     <div class="sl-modal-overlay">
-      <div class="sl-modal" style="width:min(720px,96vw);max-height:92vh;display:flex;flex-direction:column">
+      <div class="sl-modal" style="width:min(1100px,96vw);max-height:92vh;display:flex;flex-direction:column">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Montare Roți</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
         </div>
 
         <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
-          <For each={rows()}>
-            {(row, idx) => (
-              <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)">
+          <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;align-items:start">
+            <For each={rows()}>
+              {(row, idx) => (
+                <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">
                   <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx() + 1}</span>
                   <div style="display:flex;gap:6px">
@@ -154,7 +157,7 @@ export default function MontareRotiModal(props: {
                   </div>
                 </div>
 
-                <div style="display:grid;gap:6px;grid-template-columns:1fr 1fr">
+                <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
                   {/* Pozitie */}
                   <div>
                     <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Poziție</label>
@@ -198,62 +201,81 @@ export default function MontareRotiModal(props: {
                       </For>
                     </div>
                   </div>
-                </div>
 
-                <div style="display:grid;gap:6px;margin-top:8px">
-                  <SearchableSelect
-                    items={marci()}
-                    value={row.marcaId ?? ""}
-                    onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
-                    getLabel={(m) => m.nume}
-                    placeholder="Marcă"
-                    onAddNew={addMarca}
-                  />
-                  <SearchableSelect
-                    items={profiluri()}
-                    value={row.profilId ?? ""}
-                    onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
-                    getLabel={(p) => p.valoare}
-                    placeholder="Profil"
-                    onAddNew={addProfil}
-                  />
-                  <SearchableSelect
-                    items={dimensiuni()}
-                    value={row.dimensiuneId ?? ""}
-                    onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
-                    getLabel={(d) => d.valoare}
-                    placeholder="Dimensiune"
-                    onAddNew={addDim}
-                  />
-                </div>
+                  {/* Marca */}
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
+                    <SearchableSelect
+                      items={marci()}
+                      value={row.marcaId ?? ""}
+                      onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
+                      getLabel={(m) => m.nume}
+                      placeholder="Marcă"
+                      onAddNew={addMarca}
+                    />
+                  </div>
+                  {/* Profil */}
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
+                    <SearchableSelect
+                      items={profiluri()}
+                      value={row.profilId ?? ""}
+                      onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
+                      getLabel={(p) => p.valoare}
+                      placeholder="Profil"
+                      onAddNew={addProfil}
+                    />
+                  </div>
 
-                <div style="display:grid;gap:6px;grid-template-columns:1fr 1fr;margin-top:8px">
-                  <input
-                    class="input"
-                    type="number"
-                    placeholder="Adâncime (mm)"
-                    step="0.5"
-                    min="0"
-                    value={row.adancime ?? ""}
-                    onInput={(e) => {
-                      const v = e.currentTarget.value;
-                      patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                    }}
-                  />
-                  <select
-                    class="input"
-                    value={row.tip}
-                    onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
-                  >
-                    <option value="iarna">{TIP_LABELS.iarna}</option>
-                    <option value="vara">{TIP_LABELS.vara}</option>
-                    <option value="ms">{TIP_LABELS.ms}</option>
-                    <option value="altele">{TIP_LABELS.altele}</option>
-                  </select>
+                  {/* Dimensiune */}
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
+                    <SearchableSelect
+                      items={dimensiuni()}
+                      value={row.dimensiuneId ?? ""}
+                      onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
+                      getLabel={(d) => d.valoare}
+                      placeholder="Dimensiune"
+                      onAddNew={addDim}
+                    />
+                  </div>
+                  {/* Adancime */}
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                    <input
+                      class="input"
+                      style="width:100%"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      value={row.adancime ?? ""}
+                      onInput={(e) => {
+                        const v = e.currentTarget.value;
+                        patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                      }}
+                    />
+                  </div>
+
+                  {/* Tip — spans both columns */}
+                  <div style="grid-column:1 / -1">
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
+                    <select
+                      class="input"
+                      style="width:100%"
+                      value={row.tip}
+                      onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
+                    >
+                      <option value="iarna">{TIP_LABELS.iarna}</option>
+                      <option value="vara">{TIP_LABELS.vara}</option>
+                      <option value="ms">{TIP_LABELS.ms}</option>
+                      <option value="altele">{TIP_LABELS.altele}</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-            )}
-          </For>
+              )}
+            </For>
+          </div>
 
           <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick={addRow}>
             + Adaugă roată
