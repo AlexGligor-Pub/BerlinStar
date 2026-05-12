@@ -1040,24 +1040,32 @@ function _measureCompanyContent(doc: any, company: any, bw: number, font: string
   return h;
 }
 
-function _measureClientContent(doc: any, cazare: CazareForPdf, bw: number, t: (s: string | null | undefined) => string, font: string): number {
+export interface ClientInfoForPdf {
+  clientNume: string | null;
+  clientCui: string | null;
+  clientReprezentant: string | null;
+  clientAdresa: string | null;
+  clientTelefon: string | null;
+}
+
+function _measureClientContent(doc: any, ci: ClientInfoForPdf, bw: number, t: (s: string | null | undefined) => string, font: string): number {
   doc.setFont(font, "bold");
   doc.setFontSize(7);
   let h = 3.5; // label
 
   doc.setFontSize(9);
-  const nameLines: string[] = doc.splitTextToSize(t(cazare.clientNume ?? "-"), bw);
+  const nameLines: string[] = doc.splitTextToSize(t(ci.clientNume ?? "-"), bw);
   h += nameLines.length * 4.2;
 
   doc.setFont(font, "normal");
   doc.setFontSize(7.5);
-  if (cazare.clientCui)          h += 3.5;
-  if (cazare.clientReprezentant) h += 3.5;
-  if (cazare.clientAdresa) {
-    const al: string[] = doc.splitTextToSize(t(cazare.clientAdresa), bw);
+  if (ci.clientCui)          h += 3.5;
+  if (ci.clientReprezentant) h += 3.5;
+  if (ci.clientAdresa) {
+    const al: string[] = doc.splitTextToSize(t(ci.clientAdresa), bw);
     h += al.length * 3.5;
   }
-  if (cazare.clientTelefon) h += 3.5;
+  if (ci.clientTelefon) h += 3.5;
   return h;
 }
 
@@ -1153,7 +1161,7 @@ function drawVehiculBlock(
   return y;
 }
 
-function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string, font = "helvetica"): number {
+function drawCazareClientBlock(doc: any, ci: ClientInfoForPdf, x: number, y: number, bw: number, t: (s: string | null | undefined) => string, font = "helvetica"): number {
   doc.setFont(font, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.black);
@@ -1161,20 +1169,20 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
   y += 3.5;
 
   doc.setFontSize(9);
-  const nameLines: string[] = doc.splitTextToSize(t(cazare.clientNume ?? "-"), bw);
+  const nameLines: string[] = doc.splitTextToSize(t(ci.clientNume ?? "-"), bw);
   doc.text(nameLines, x, y);
   y += nameLines.length * 4.2;
 
   doc.setFont(font, "normal");
   doc.setFontSize(7.5);
-  if (cazare.clientCui)          { doc.text(`CUI: ${cazare.clientCui}`, x, y); y += 3.5; }
-  if (cazare.clientReprezentant) { doc.text(`Repr.: ${t(cazare.clientReprezentant)}`, x, y); y += 3.5; }
-  if (cazare.clientAdresa) {
-    const al: string[] = doc.splitTextToSize(t(cazare.clientAdresa), bw);
+  if (ci.clientCui)          { doc.text(`CUI: ${ci.clientCui}`, x, y); y += 3.5; }
+  if (ci.clientReprezentant) { doc.text(`Repr.: ${t(ci.clientReprezentant)}`, x, y); y += 3.5; }
+  if (ci.clientAdresa) {
+    const al: string[] = doc.splitTextToSize(t(ci.clientAdresa), bw);
     doc.text(al, x, y);
     y += al.length * 3.5;
   }
-  if (cazare.clientTelefon) { doc.text(`Tel: ${cazare.clientTelefon}`, x, y); y += 3.5; }
+  if (ci.clientTelefon) { doc.text(`Tel: ${ci.clientTelefon}`, x, y); y += 3.5; }
   return y;
 }
 
@@ -1182,7 +1190,7 @@ function drawCazareClientBlock(doc: any, cazare: CazareForPdf, x: number, y: num
 function drawCazareTopCards(
   doc: any,
   company: any,
-  cazare: CazareForPdf,
+  client: ClientInfoForPdf,
   vehicle: VehiculForPdf | null,
   leftX: number,
   rightX: number,
@@ -1193,7 +1201,7 @@ function drawCazareTopCards(
 ): number {
   const innerW = bw - CARD_PAD * 2;
   const compH    = _measureCompanyContent(doc, company, innerW, font);
-  const clientH  = _measureClientContent(doc, cazare, innerW, t, font);
+  const clientH  = _measureClientContent(doc, client, innerW, t, font);
   const vehH     = vehicle ? _measureVehiculContent(doc, vehicle, innerW, t, font) : 0;
 
   const compCardH   = compH + CARD_PAD * 2;
@@ -1206,7 +1214,7 @@ function drawCazareTopCards(
   drawCompanyBlockFont(doc, "Prestator", company, leftX + CARD_PAD, y + CARD_PAD, innerW, font);
 
   drawCard(doc, rightX, y, bw, clientCardH);
-  drawCazareClientBlock(doc, cazare, rightX + CARD_PAD, y + CARD_PAD, innerW, t, font);
+  drawCazareClientBlock(doc, client, rightX + CARD_PAD, y + CARD_PAD, innerW, t, font);
 
   if (vehicle) {
     const vY = y + clientCardH + CARDS_GAP_Y;
@@ -1853,4 +1861,123 @@ export async function generateCazareCheckout(
 
   const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
   doc.save(docFilename("scoatere_cazare", clientSlug));
+}
+
+// ─── Montaj Roti ──────────────────────────────────────────────────────────────
+
+export interface MontajRotaRow {
+  pozitie: string;
+  presiune: number | null;
+  marcaNume: string | null;
+  dimensiuneValoare: string | null;
+  profilValoare: string | null;
+  tip: string;
+  adancime: number | null;
+}
+
+const _POZITIE_LABELS_PDF: Record<string, string> = {
+  dreapta_fata: "Dreapta Față",
+  stanga_fata: "Stânga Față",
+  dreapta_spate: "Dreapta Spate",
+  stanga_spate: "Stânga Spate",
+  rezerva: "Rezervă",
+  nespecificat: "Nespecificat",
+};
+
+/** PDF — Montare Roți */
+export async function generateMontajRoti(
+  receipt: Receipt,
+  company: CompanyData | null,
+  rows: MontajRotaRow[],
+  montareImageUrl: string | null,
+  vehicle: VehiculForPdf | null = null,
+): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal");
+
+  await drawBackground(doc, company?.background_path);
+  await drawLogo(doc, company?.logo_path, MT);
+
+  const fmtReceiptDate = (() => {
+    try { return fmtDate(receipt.date); } catch { return ""; }
+  })();
+  let y = drawHeader(doc, "Montare Roți", "", receipt.id as unknown as number, fmtReceiptDate, FONT);
+  y += 2;
+  hline(doc, y);
+  y += 6;
+
+  const client: ClientInfoForPdf = {
+    clientNume: receipt.clientNume ?? null,
+    clientCui: (receipt as any).clientCui ?? null,
+    clientReprezentant: (receipt as any).clientReprezentant ?? null,
+    clientAdresa: (receipt as any).clientAdresa ?? null,
+    clientTelefon: (receipt as any).clientTelefon ?? null,
+  };
+
+  const bw = (CW - CARDS_GAP_X) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + CARDS_GAP_X;
+  y = drawCazareTopCards(doc, company ?? null, client, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
+
+  hline(doc, y);
+  y += 6;
+
+  // Tabel roți cu imagine în dreapta
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
+  const body = rows.map((r, idx) => [
+    String(idx + 1),
+    _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie,
+    t(r.marcaNume ?? "—"),
+    t(r.dimensiuneValoare ?? "—"),
+    t(r.profilValoare ?? "—"),
+    TIP_PDF_LABELS[r.tip] ?? r.tip,
+    r.adancime != null ? `${r.adancime} mm` : "—",
+    r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
+  ]);
+
+  if (body.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Poziție", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime", "Presiune"]],
+      body,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: [...C.black], textColor: [...C.white], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: 24 },
+        2: { cellWidth: "auto" },
+        3: { cellWidth: 22 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 14 },
+        6: { halign: "center", cellWidth: 16 },
+        7: { halign: "center", cellWidth: 16 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+
+    await drawSideImage(doc, montareImageUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+
+    y = tableEndY + 4;
+  }
+
+  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
+  await drawFooterWithBranding(doc, company?.website);
+
+  const clientSlug = (receipt.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
+  doc.save(docFilename("montaj_roti", clientSlug));
 }

@@ -17,6 +17,7 @@ from .anvelopa import Anvelopa, TipAnvelopa
 from .profil_anvelopa import ProfilAnvelopa
 from .loc_cazare import LocCazare
 from .cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
+from .montaj_rota import MontajRota, PozitieRoata
 from .programare import Programare, ProgramareStatus
 from .vehicol import Vehicol
 from .general_settings import GeneralSettings
@@ -25,4 +26,4 @@ from .client_vehicol import ClientVehicol
 from .email_template import EmailTemplate
 from .email_log import EmailLog
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog"]

@@ -8,6 +8,8 @@ import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
+import MontareRotiModal from "./MontareRotiModal";
+import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft } from "../store/montajRotiStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -666,6 +668,113 @@ export default function ShoppingList() {
     }
   });
 
+  const [montareRotiOpen, setMontareRotiOpen] = createSignal(false);
+  const [montareRotiInitial, setMontareRotiInitial] = createSignal<MontajRotaDraft[]>([]);
+  const [montareRotiReceiptId, setMontareRotiReceiptId] = createSignal<number | null>(null);
+  const [openingMontareRoti, setOpeningMontareRoti] = createSignal(false);
+
+  async function handleMontareRoti() {
+    const client = selectedClient();
+    if (!titlu().trim()) {
+      setWarnMsg("Mai este un pas — introduceți numărul mașinii (titlul devizului) înainte de Montare Roți.");
+      return;
+    }
+    if (!client) {
+      setWarnMsg("Mai este un pas — adăugați un client înainte de Montare Roți.");
+      return;
+    }
+    if (openingMontareRoti()) return;
+    setOpeningMontareRoti(true);
+
+    let rId = loadedReceiptId();
+    if (rId === null && cart.items.length === 0) {
+      setWarnMsg("Adăugați cel puțin un produs în deviz sau salvați bonul înainte de Montare Roți.");
+      setOpeningMontareRoti(false);
+      return;
+    }
+
+    try {
+      if (cart.items.length > 0) {
+        const receiptData = {
+          date: new Date().toISOString(),
+          titlu: titlu().trim(),
+          clientId: null,
+          clientNume: null, clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null, clientNumarMasina: null,
+          descriere: descriere().trim() || undefined,
+          dateTehn: dateTehn().trim() || undefined,
+          items: [...cart.items],
+          total: cartTotal(),
+          devizSerie: "", devizNr: 0,
+          facturaSerie: "", facturaNr: 0,
+          chitantaSerie: "", chitantaNr: 0,
+          programareId: loadedProgramareId(),
+          locationId: device()?.locationId ?? null,
+        };
+        const saved = rId !== null
+          ? await updateReceiptContent(rId, receiptData)
+          : await saveReceipt(receiptData);
+        rId = saved.id;
+        setLoadedReceiptId(rId);
+        try { await updateReceiptClient(rId, client.id); } catch { /* ignoră */ }
+        const veh = vehicol();
+        if (veh !== null) {
+          try { await saveReceiptVehicol(rId, veh); } catch { /* ignoră */ }
+        }
+      }
+    } catch {
+      setErrorMsg("Eroare la salvarea devizului.");
+      setOpeningMontareRoti(false);
+      return;
+    }
+
+    const receiptIdNum = Number(rId);
+    let initial: MontajRotaDraft[] = [];
+    try {
+      const existing = await loadMontajRotiByReceipt(receiptIdNum);
+      if (existing.length > 0) {
+        initial = existing.map((r, i) => ({
+          pozitie: r.pozitie,
+          presiune: r.presiune,
+          ordine: r.ordine ?? i,
+          marcaId: r.marcaId,
+          dimensiuneId: r.dimensiuneId,
+          profilId: r.profilId,
+          tip: r.tip,
+          adancime: r.adancime,
+          comments: r.comments,
+        }));
+      } else {
+        const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${receiptIdNum}&limit=10`);
+        if (res.ok) {
+          const data = await res.json();
+          const cazari = (data?.items ?? []) as any[];
+          const src = cazari.find((c) => c.data_checkout && c.montate_pe_masina);
+          if (src) {
+            const items = (src.items ?? []) as any[];
+            initial = items
+              .filter((it) => it.anvelopa)
+              .map((it, i) => ({
+                pozitie: defaultPozitieForIndex(i),
+                presiune: null,
+                ordine: i,
+                marcaId: it.anvelopa.marca_id ?? null,
+                dimensiuneId: it.anvelopa.dimensiune_id ?? null,
+                profilId: it.anvelopa.profil_id ?? null,
+                tip: it.anvelopa.tip,
+                adancime: it.anvelopa.adancime ?? null,
+                comments: null,
+              }));
+          }
+        }
+      }
+    } catch { /* fallback la modal gol */ }
+
+    setMontareRotiReceiptId(receiptIdNum);
+    setMontareRotiInitial(initial);
+    setMontareRotiOpen(true);
+    setOpeningMontareRoti(false);
+  }
+
   async function handleGoToHotel() {
     const client = selectedClient();
     if (!titlu().trim()) {
@@ -992,8 +1101,25 @@ export default function ShoppingList() {
           >
             {goingToHotel() ? "Se salvează..." : "Cazare Anvelope"}
           </button>
+          <button
+            class="btn btn-ghost btn-sm w-full"
+            style="margin-top:4px"
+            disabled={openingMontareRoti()}
+            onClick={handleMontareRoti}
+          >
+            {openingMontareRoti() ? "Se salvează..." : "Montare Roți"}
+          </button>
         </Show>
       </div>
+
+      <Show when={montareRotiOpen() && montareRotiReceiptId() !== null}>
+        <MontareRotiModal
+          receiptId={montareRotiReceiptId()!}
+          initialItems={montareRotiInitial()}
+          onSaved={() => setMontareRotiOpen(false)}
+          onClose={() => setMontareRotiOpen(false)}
+        />
+      </Show>
 
       {/* Resume modal */}
       <Show when={showResumeModal()}>

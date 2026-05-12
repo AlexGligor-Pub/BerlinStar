@@ -2,9 +2,10 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere } from "../utils/generateDocuments";
-import type { DocContext, CompanyData } from "../utils/generateDocuments";
+import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
+import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
+import { loadMontajRotiByReceipt, type MontajRota } from "../store/montajRotiStore";
 import { setResume } from "../store/resumeStore";
 import { apiFetch, API_BASE } from "../utils/api";
 import { device } from "../store/deviceStore";
@@ -437,6 +438,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const [expanded, setExpanded] = createSignal(false);
   const [confirmDelete, setConfirmDelete] = createSignal(false);
   const [cazariHotel, setCazariHotel] = createSignal<CazareBasic[]>([]);
+  const [montajRoti, setMontajRoti] = createSignal<MontajRota[]>([]);
+  const [montajPdfLoading, setMontajPdfLoading] = createSignal(false);
 
   createEffect(() => {
     if (!expanded()) return;
@@ -444,6 +447,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setCazariHotel(data.items ?? []); })
       .catch(() => {});
+    loadMontajRotiByReceipt(props.receipt.id).then(setMontajRoti).catch(() => {});
   });
   const [metodaDraft, setMetodaDraft] = createSignal(props.receipt.metodaPlata ?? "");
   const [partialDraft, setPartialDraft] = createSignal(
@@ -453,6 +457,25 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const [docLoading, setDocLoading] = createSignal<string | null>(null);
   const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
   const r = props.receipt;
+
+  async function handleMontajPdf() {
+    if (montajPdfLoading()) return;
+    setMontajPdfLoading(true);
+    try {
+      const [company] = await Promise.all([fetchCompanyData(), loadHotelImages()]);
+      const imgs = buildHotelImageProxyUrls();
+      const rows: MontajRotaRow[] = montajRoti().map((m) => ({
+        pozitie: m.pozitie,
+        presiune: m.presiune,
+        marcaNume: m.marcaNume,
+        dimensiuneValoare: m.dimensiuneValoare,
+        profilValoare: m.profilValoare,
+        tip: m.tip,
+        adancime: m.adancime,
+      }));
+      await generateMontajRoti(r, company, rows, imgs.montare, r.vehicol ?? null);
+    } finally { setMontajPdfLoading(false); }
+  }
 
   async function handleHotelPdf(cazareId: number, type: "checkin" | "checkout" | "combined") {
     const key = `${cazareId}-${type}`;
@@ -789,6 +812,23 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   </div>
                 );
               })()}
+            </Show>
+            <Show when={montajRoti().length > 0}>
+              <div class="rcard-extra-card">
+                <div class="rcard-extra-title">Roți Montate</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                  <span style="font-size:13px">
+                    {montajRoti().length} {montajRoti().length === 1 ? "roată" : "roți"}
+                  </span>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    disabled={montajPdfLoading()}
+                    onClick={handleMontajPdf}
+                  >
+                    {montajPdfLoading() ? "..." : "PDF Montaj"}
+                  </button>
+                </div>
+              </div>
             </Show>
           </div>
 
