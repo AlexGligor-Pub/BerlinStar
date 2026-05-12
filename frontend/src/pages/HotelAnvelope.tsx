@@ -981,14 +981,18 @@ export default function HotelAnvelope() {
       }
 
       const finalIds = Array.from(selectedAnvIds()).map((id) => tempToReal.get(id) ?? id);
+      const ctx = posHotelCtx();
+      const receiptId = ctx ? parseInt(ctx.receiptId) : null;
 
       // PATCH checkout
+      const checkoutBody: Record<string, any> = {
+        data_checkout: checkoutDate(),
+        comments: checkoutComments().trim() || null,
+      };
+      if (receiptId != null) checkoutBody.receipt_id = receiptId;
       const checkoutRes = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
         method: "PATCH",
-        body: JSON.stringify({
-          data_checkout: checkoutDate(),
-          comments: checkoutComments().trim() || null,
-        }),
+        body: JSON.stringify(checkoutBody),
       });
       if (!checkoutRes.ok) {
         const err = await checkoutRes.json().catch(() => ({}));
@@ -998,25 +1002,27 @@ export default function HotelAnvelope() {
       const updatedCheckout: Cazare = await checkoutRes.json().then((d: any) => mapCazare(d));
 
       // POST new cazare
+      const newBody: Record<string, any> = {
+        client_id: newClient()!.id,
+        employee_id: newEmpId() !== "" ? newEmpId() : null,
+        loc_cazare_id: newLocId() !== "" ? newLocId() : null,
+        data_checkin: newCheckin(),
+        comments: newComments().trim() || null,
+        anvelopa_ids: finalIds,
+        dep_anvelope: newDepAnvelope(),
+        dep_capace: newDepCapace(),
+        dep_roti_complete: newDepRotiComplete(),
+        dep_antifurturi: newDepAntifurturi(),
+        dep_prezoane: newDepPrezoane(),
+        referinta_cazare_id: c.id,
+        montate_pe_masina: newMontatePeMasina(),
+        numar_masina: null,
+        location_id: device()?.locationId ?? null,
+      };
+      if (receiptId != null) newBody.receipt_id = receiptId;
       const newCazareRes = await apiFetch("/api/cazare-anvelope", {
         method: "POST",
-        body: JSON.stringify({
-          client_id: newClient()!.id,
-          employee_id: newEmpId() !== "" ? newEmpId() : null,
-          loc_cazare_id: newLocId() !== "" ? newLocId() : null,
-          data_checkin: newCheckin(),
-          comments: newComments().trim() || null,
-          anvelopa_ids: finalIds,
-          dep_anvelope: newDepAnvelope(),
-          dep_capace: newDepCapace(),
-          dep_roti_complete: newDepRotiComplete(),
-          dep_antifurturi: newDepAntifurturi(),
-          dep_prezoane: newDepPrezoane(),
-          referinta_cazare_id: c.id,
-          montate_pe_masina: newMontatePeMasina(),
-          numar_masina: null,
-          location_id: device()?.locationId ?? null,
-        }),
+        body: JSON.stringify(newBody),
       });
       if (!newCazareRes.ok) {
         const err = await newCazareRes.json().catch(() => ({}));
