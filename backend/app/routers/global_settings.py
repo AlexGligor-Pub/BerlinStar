@@ -1,5 +1,7 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, File, UploadFile
+import httpx
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -64,3 +66,23 @@ async def upload_montare_image(
     settings.hotel_montare_image_path = url
     await db.commit()
     return {"url": url}
+
+
+@router.get("/hotel-anvelope/image/{key}")
+async def proxy_hotel_image(key: str, db: AsyncSession = Depends(get_db)):
+    """Proxy o imagine din S3 cu Content-Type corect, evitand CORS browser-side."""
+    if key not in {"cazare", "scoatere", "montare"}:
+        raise HTTPException(404, "Cheie invalida")
+    settings = await _get_or_create(db)
+    url = getattr(settings, f"hotel_{key}_image_path", None)
+    if not url:
+        raise HTTPException(404, "Imagine neconfigurata")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url)
+        if res.status_code != 200:
+            raise HTTPException(502, "Eroare la descarcare imagine")
+        content_type = res.headers.get("content-type", "image/png")
+        return Response(content=res.content, media_type=content_type, headers={"Cache-Control": "public, max-age=300"})
+    except httpx.HTTPError:
+        raise HTTPException(502, "Eroare retea la descarcare imagine")

@@ -1,6 +1,6 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import { posHotelCtx } from "../store/posHotelStore";
@@ -45,6 +45,16 @@ function fmtDate(s: string | null) {
   if (!s) return "—";
   const [y, m, d] = s.split("-");
   return `${d}.${m}.${y}`;
+}
+
+/** Construieste URL-uri same-origin pentru imaginile hotel (proxy backend), evitand CORS S3 in PDF. */
+function buildHotelImageProxyUrls() {
+  const h = hotelImages();
+  return {
+    cazare:   h.cazare   ? `${API_BASE}/api/global-settings/hotel-anvelope/image/cazare`   : null,
+    scoatere: h.scoatere ? `${API_BASE}/api/global-settings/hotel-anvelope/image/scoatere` : null,
+    montare:  h.montare  ? `${API_BASE}/api/global-settings/hotel-anvelope/image/montare`  : null,
+  };
 }
 
 interface ClientItem {
@@ -347,8 +357,13 @@ function CazareCard(props: {
   async function handlePdf(type: "checkin" | "checkout") {
     setPdfLoading(type);
     try {
-      if (type === "checkin") await generateCazareCheckin(c(), props.companyData);
-      else await generateCazareCheckout(c(), props.companyData);
+      await loadHotelImages();
+      const imgs = buildHotelImageProxyUrls();
+      if (type === "checkin") {
+        await generateCazareCheckin(c(), props.companyData, imgs);
+      } else {
+        await generateCazareCheckout(c(), props.companyData, imgs);
+      }
     } finally { setPdfLoading(null); }
   }
 
@@ -357,7 +372,7 @@ function CazareCard(props: {
     if (sucId == null || !c().dataCheckout) return;
     setPdfLoading("combined");
     try {
-      const successor = await getCazareById(sucId);
+      const [successor] = await Promise.all([getCazareById(sucId), loadHotelImages()]);
       if (!successor) return;
       await generateCazareScoatereIntroducere(
         c() as any,
@@ -365,6 +380,7 @@ function CazareCard(props: {
         props.companyData,
         c().dataCheckout!,
         c().successorMontatePeMasina ?? successor.montatePeMasina ?? false,
+        buildHotelImageProxyUrls(),
       );
     } finally { setPdfLoading(null); }
   }
@@ -448,7 +464,33 @@ export default function HotelAnvelope() {
   const [loading, setLoading] = createSignal(false);
   const [companyData, setCompanyData] = createSignal<CompanyData | null>(null);
   const [viewOnlyCazare, setViewOnlyCazare] = createSignal<Cazare | null>(null);
+  const [viewPdfLoading, setViewPdfLoading] = createSignal<"checkin" | "checkout" | "combined" | null>(null);
   const [pageSelectedClient, setPageSelectedClient] = createSignal<ClientItem | null>(null);
+
+  async function viewModalPdf(type: "checkin" | "checkout" | "combined", c: Cazare) {
+    setViewPdfLoading(type);
+    try {
+      await loadHotelImages();
+      const imgs = buildHotelImageProxyUrls();
+      if (type === "checkin") {
+        await generateCazareCheckin(c as any, companyData(), imgs);
+      } else if (type === "checkout") {
+        await generateCazareCheckout(c as any, companyData(), imgs);
+      } else {
+        if (c.successorCazareId == null || !c.dataCheckout) return;
+        const successor = await getCazareById(c.successorCazareId);
+        if (!successor) return;
+        await generateCazareScoatereIntroducere(
+          c as any,
+          successor as any,
+          companyData(),
+          c.dataCheckout,
+          c.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
+          imgs,
+        );
+      }
+    } finally { setViewPdfLoading(null); }
+  }
 
   // ── Modal Cazare Nouă ──────────────────────────────────────────────────────
   const [showNewModal, setShowNewModal] = createSignal(false);
@@ -985,12 +1027,14 @@ export default function HotelAnvelope() {
       const newCazareData: Cazare = await newCazareRes.json().then((d: any) => mapCazare(d));
 
       // Generate combined PDF
+      await loadHotelImages();
       await generateCazareScoatereIntroducere(
         updatedCheckout as any,
         newCazareData as any,
         companyData(),
         checkoutDate(),
         newMontatePeMasina(),
+        buildHotelImageProxyUrls(),
       );
 
       setCombinedCazare(null);
@@ -1120,7 +1164,8 @@ export default function HotelAnvelope() {
       if (!res.ok) return;
       const updated: Cazare = await res.json().then((d: any) => mapCazare(d));
       setCheckoutCazare(null);
-      await generateCazareCheckout(updated, companyData());
+      await loadHotelImages();
+      await generateCazareCheckout(updated, companyData(), buildHotelImageProxyUrls());
       await fetchCazari();
       if (andNew && c.clientId) {
         setClientAnvelope([]);
@@ -2402,49 +2447,52 @@ export default function HotelAnvelope() {
               </div>
               <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
 
-                {/* Client + Mașină */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
-                  <div style="display:grid;gap:5px;font-size:13px">
-                    <Show when={c().clientNume}>
-                      <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume}</strong></div>
-                    </Show>
-                    <Show when={c().clientCui}>
-                      <div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div>
-                    </Show>
-                    <Show when={c().clientTelefon}>
-                      <div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div>
-                    </Show>
-                    <Show when={c().clientAdresa}>
-                      <div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div>
-                    </Show>
-                    <Show when={c().clientReprezentant}>
-                      <div><span style="color:var(--text-muted)">Reprezentant:</span> {c().clientReprezentant}</div>
-                    </Show>
-                    <Show when={c().numarMasina}>
-                      <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
-                    </Show>
+                {/* Client + Date Cazare (pe aceeasi linie) */}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                  {/* Client + Mașină */}
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
+                    <div style="display:grid;gap:5px;font-size:13px">
+                      <Show when={c().clientNume}>
+                        <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume}</strong></div>
+                      </Show>
+                      <Show when={c().clientCui}>
+                        <div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div>
+                      </Show>
+                      <Show when={c().clientTelefon}>
+                        <div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div>
+                      </Show>
+                      <Show when={c().clientAdresa}>
+                        <div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div>
+                      </Show>
+                      <Show when={c().clientReprezentant}>
+                        <div><span style="color:var(--text-muted)">Reprezentant:</span> {c().clientReprezentant}</div>
+                      </Show>
+                      <Show when={c().numarMasina}>
+                        <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
+                      </Show>
+                    </div>
                   </div>
-                </div>
 
-                {/* Date Cazare */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Date Cazare</div>
-                  <div style="display:grid;gap:5px;font-size:13px">
-                    <div><span style="color:var(--text-muted)">Check-in:</span> <strong>{fmtDate(c().dataCheckin)}</strong></div>
-                    <Show when={c().dataCheckout}>
-                      <div><span style="color:var(--text-muted)">Check-out:</span> <strong>{fmtDate(c().dataCheckout)}</strong></div>
-                      <div style="font-weight:600;color:var(--primary)">Durată: {daysBetween(c().dataCheckin, c().dataCheckout!)} zile</div>
-                    </Show>
-                    <Show when={c().locCazareNume}>
-                      <div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div>
-                    </Show>
-                    <Show when={c().employeeName}>
-                      <div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div>
-                    </Show>
-                    <Show when={c().comments}>
-                      <div><span style="color:var(--text-muted)">Comentarii:</span> {c().comments}</div>
-                    </Show>
+                  {/* Date Cazare */}
+                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Date Cazare</div>
+                    <div style="display:grid;gap:5px;font-size:13px">
+                      <div><span style="color:var(--text-muted)">Check-in:</span> <strong>{fmtDate(c().dataCheckin)}</strong></div>
+                      <Show when={c().dataCheckout}>
+                        <div><span style="color:var(--text-muted)">Check-out:</span> <strong>{fmtDate(c().dataCheckout)}</strong></div>
+                        <div style="font-weight:600;color:var(--primary)">Durată: {daysBetween(c().dataCheckin, c().dataCheckout!)} zile</div>
+                      </Show>
+                      <Show when={c().locCazareNume}>
+                        <div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div>
+                      </Show>
+                      <Show when={c().employeeName}>
+                        <div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div>
+                      </Show>
+                      <Show when={c().comments}>
+                        <div><span style="color:var(--text-muted)">Comentarii:</span> {c().comments}</div>
+                      </Show>
+                    </div>
                   </div>
                 </div>
 
@@ -2498,7 +2546,21 @@ export default function HotelAnvelope() {
                 </Show>
 
               </div>
-              <div class="sl-modal-footer">
+              <div class="sl-modal-footer" style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkin", c())} disabled={viewPdfLoading() === "checkin"}>
+                  {viewPdfLoading() === "checkin" ? "..." : "PDF Cazare"}
+                </button>
+                <Show when={c().dataCheckout}>
+                  <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkout", c())} disabled={viewPdfLoading() === "checkout"}>
+                    {viewPdfLoading() === "checkout" ? "..." : "PDF Scoatere"}
+                  </button>
+                </Show>
+                <Show when={c().dataCheckout && c().successorCazareId != null}>
+                  <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("combined", c())} disabled={viewPdfLoading() === "combined"}>
+                    {viewPdfLoading() === "combined" ? "..." : "PDF Scoatere + Cazare"}
+                  </button>
+                </Show>
+                <div style="flex:1"></div>
                 <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>Închide</button>
               </div>
             </div>

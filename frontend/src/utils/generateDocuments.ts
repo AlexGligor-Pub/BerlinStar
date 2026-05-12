@@ -496,6 +496,55 @@ async function drawLogo(doc: any, url: string | null | undefined, y: number): Pr
   } catch { /* ignore */ }
 }
 
+/** Incarca o imagine via fetch (bypass-eaza taint-ul de canvas) si o intoarce ca dataURL + dimensiuni naturale. */
+async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const res = await fetch(url, { mode: "cors", credentials: "omit" });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(blob);
+    });
+    const dims: { w: number; h: number } = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+      img.onerror = () => resolve({ w: 1, h: 1 });
+      img.src = dataUrl;
+    });
+    return { dataUrl, w: dims.w, h: dims.h };
+  } catch {
+    return null;
+  }
+}
+
+/** Deseneaza o imagine intr-o caseta (boxW x boxH), pastrand aspect-ratio si centrand. */
+async function drawSideImage(
+  doc: any,
+  url: string | null | undefined,
+  boxX: number,
+  boxY: number,
+  boxW: number,
+  boxH: number,
+): Promise<void> {
+  if (!url || boxH <= 0 || boxW <= 0) return;
+  const loaded = await fetchImageAsDataUrl(url);
+  if (!loaded) return;
+  try {
+    const ratio = loaded.w / loaded.h;
+    let w = boxW;
+    let h = w / ratio;
+    if (h > boxH) { h = boxH; w = h * ratio; }
+    const x = boxX + (boxW - w) / 2;
+    const y = boxY + (boxH - h) / 2;
+    // Determina format-ul din mime type (JPEG vs PNG). jsPDF accepta dataURL direct.
+    const fmt = loaded.dataUrl.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+    doc.addImage(loaded.dataUrl, fmt, x, y, w, h, undefined, "FAST");
+  } catch { /* ignore */ }
+}
+
 /** Genereaza QR code ca data URL */
 async function qrDataUrl(text: string): Promise<string | null> {
   try {
@@ -1012,8 +1061,12 @@ function drawAnvelopeTable(doc: any, autoTable: any, cazare: CazareForPdf, y: nu
   return (doc as any).lastAutoTable.finalY + 3;
 }
 
-/** Bon Intrare — Hotel Anvelope */
-export async function generateCazareCheckin(cazare: CazareForPdf, company: CompanyData | null): Promise<void> {
+/** Cazare — Hotel Anvelope */
+export async function generateCazareCheckin(
+  cazare: CazareForPdf,
+  company: CompanyData | null,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
+): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -1021,7 +1074,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   if (fontB64) registerRoFont(doc, fontB64);
   const FONT = fontB64 ? "NotoSans" : "helvetica";
   const t = makeT(!!fontB64);
-  doc.setFont(FONT, "normal"); // activează fontul pentru drawHeader și funcțiile helper
+  doc.setFont(FONT, "normal");
 
   const setF = (style: "normal" | "bold", size: number) => {
     doc.setFont(FONT, style);
@@ -1031,11 +1084,12 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   await drawBackground(doc, company?.background_path);
   await drawLogo(doc, company?.logo_path, MT);
 
-  let y = drawHeader(doc, "Hotel Anvelope - Bon Intrare", "", cazare.id, fmtDate(cazare.dataCheckin), FONT);
+  let y = drawHeader(doc, "Hotel Anvelope - Cazare", "", cazare.id, fmtDate(cazare.dataCheckin), FONT);
   y += 2;
   hline(doc, y);
   y += 6;
 
+  // Company block (stanga) + Client block (dreapta)
   const bw = (CW - 8) / 2;
   const leftX = ML;
   const rightX = ML + bw + 8;
@@ -1048,24 +1102,30 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   hline(doc, y);
   y += 6;
 
-  // Detalii cazare
-  setF("bold", 8);
-  doc.setTextColor(...C.black);
-  doc.text("DETALII CAZARE", ML, y);
-  y += 4;
+  // ─── Section: CAZARE (marine green) ────────────────────────────────────────
+  const marineGreen: [number, number, number] = [5, 150, 105];
+
+  setF("bold", 10);
+  doc.setTextColor(...marineGreen);
+  doc.text("CAZARE", ML, y);
+  y += 5;
+
+  // Detalii cazare (2 coloane: locatie/angajat | data)
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
 
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (cazare.locationName) { doc.text(`Locație: ${t(cazare.locationName)}`, ML, y); y += 4.5; }
-  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
-  if (cazare.comments) {
-    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
-    doc.text(cl, ML, y);
-    y += cl.length * 4 + 1;
-  }
+  let yL = y;
+  let yR = y;
+  if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data cazare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  y = Math.max(yL, yR) + 1;
 
-  // Articole depozitate (dep_ fields)
+  // Depozitate
   const depItemsIn: string[] = [];
   if (cazare.depAnvelope)     depItemsIn.push("Anvelope");
   if (cazare.depCapace)       depItemsIn.push("Capace");
@@ -1073,22 +1133,68 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   if (cazare.depAntifurturi)  depItemsIn.push("Antifurturi");
   if (cazare.depPrezoane)     depItemsIn.push("Prezoane");
   if (depItemsIn.length > 0) {
-    setF("bold", 8.5);
+    setF("normal", 8.5);
     doc.setTextColor(...C.black);
     doc.text(`Depozitate: ${depItemsIn.join(", ")}`, ML, y);
     y += 5;
   }
 
-  y += 2;
+  // Observații
+  if (cazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
 
-  // Tabel anvelope
-  setF("bold", 8);
-  doc.setTextColor(...C.black);
-  doc.text("ANVELOPE DEPOZITATE", ML, y);
-  y += 4;
+  // Tabel anvelope cu imagine in dreapta (Cazare Roti)
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
 
-  y = drawAnvelopeTable(doc, autoTable, cazare, y, t, FONT);
-  y += 4;
+  const tireRows = cazare.items
+    .filter((item) => item.anvelopa != null)
+    .map((item, idx) => {
+      const a = item.anvelopa!;
+      return [
+        String(idx + 1),
+        t(a.marcaNume ?? "—"),
+        t(a.dimensiuneValoare ?? "—"),
+        t(a.profilValoare ?? "—"),
+        TIP_PDF_LABELS[a.tip] ?? a.tip,
+        a.adancime != null ? `${a.adancime} mm` : "—",
+      ];
+    });
+
+  if (tireRows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: tireRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: marineGreen, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+
+    await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+
+    y = tableEndY + 4;
+  }
 
   if (cazare.referintaCazareId) {
     const isMontate = !!cazare.montatePeMasina;
@@ -1149,7 +1255,7 @@ export async function generateCazareCheckin(cazare: CazareForPdf, company: Compa
   await drawFooterWithBranding(doc, company?.website);
 
   const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
-  doc.save(docFilename("bon_intrare", clientSlug));
+  doc.save(docFilename("cazare", clientSlug));
 }
 
 /** Bon Scoatere și Introducere Nouă — Hotel Anvelope */
@@ -1159,6 +1265,7 @@ export async function generateCazareScoatereIntroducere(
   company: CompanyData | null,
   checkoutDate: string,
   montatePeMasina: boolean,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
 ): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -1195,29 +1302,35 @@ export async function generateCazareScoatereIntroducere(
   hline(doc, y);
   y += 6;
 
-  // ─── Section 1: SCOATERE DIN DEPOZIT (dark navy blue) ───────────────────────
+  // ─── Section 1: SCOATERE DIN CAZARE (dark navy blue) ───────────────────────
   const navyBlue: [number, number, number] = [30, 58, 138];
 
   setF("bold", 10);
   doc.setTextColor(...navyBlue);
-  doc.text("SCOATERE DIN DEPOZIT", ML, y);
+  doc.text("SCOATERE DIN CAZARE", ML, y);
   y += 5;
 
-  // Detalii cazare — checkout
+  // Detalii cazare — checkout (2 coloane: locație/angajat | date)
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
+
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (checkoutCazare.locationName) { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, ML, y); y += 4.5; }
-  if (checkoutCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(checkoutCazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (checkoutCazare.employeeName)  { doc.text(`Angajat: ${t(checkoutCazare.employeeName)}`, ML, y); y += 4.5; }
-  doc.text(`Data intrare: ${fmtDate(checkoutCazare.dataCheckin)}`, ML, y); y += 4.5;
-  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
+  let yL = y;
+  let yR = y;
+  if (checkoutCazare.locationName)  { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (checkoutCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(checkoutCazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (checkoutCazare.employeeName)  { doc.text(`Angajat: ${t(checkoutCazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data intrare: ${fmtDate(checkoutCazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
   const zile = Math.round(
     (new Date(checkoutDate).getTime() - new Date(checkoutCazare.dataCheckin).getTime()) / 86_400_000
   );
   setF("bold", 9);
-  doc.setTextColor(...C.black);
-  doc.text(`Durată depozitare: ${zile} zile`, ML, y);
-  y += 5;
+  doc.text(`Durată depozitare: ${zile} zile`, col2X, yR);
+  yR += 5;
+  y = Math.max(yL, yR) + 1;
 
   // Dep items for checkout cazare
   const depItemsOut: string[] = [];
@@ -1254,7 +1367,11 @@ export async function generateCazareScoatereIntroducere(
   y += noteLines.length * 4 + 3;
   doc.setTextColor(...C.black);
 
-  // Tire table — checkout cazare
+  // Tire table — checkout cazare (with side image)
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
   const checkoutRows = checkoutCazare.items
     .filter((item) => item.anvelopa != null)
     .map((item, idx) => {
@@ -1270,6 +1387,7 @@ export async function generateCazareScoatereIntroducere(
     });
 
   if (checkoutRows.length > 0) {
+    const tableStartY = y;
     autoTable(doc, {
       startY: y,
       head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
@@ -1281,15 +1399,24 @@ export async function generateCazareScoatereIntroducere(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 28 },
-        3: { halign: "center", cellWidth: 16 },
-        4: { halign: "center", cellWidth: 16 },
-        5: { halign: "center", cellWidth: 20 },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
       },
-      margin: { left: ML, right: MR },
-      tableWidth: CW,
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+
+    // Side image: montare if mounted on car, otherwise scoatere (fallback to the other if missing)
+    const sideUrl = montatePeMasina
+      ? (images?.montare ?? images?.scoatere)
+      : (images?.scoatere ?? images?.montare);
+    await drawSideImage(doc, sideUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+
+    y = tableEndY + 4;
   }
 
   hline(doc, y);
@@ -1303,13 +1430,16 @@ export async function generateCazareScoatereIntroducere(
   doc.text("CAZARE NOUĂ", ML, y);
   y += 5;
 
-  // Detalii — new cazare
+  // Detalii — new cazare (2 coloane: locație/angajat | date)
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (newCazare.locationName)  { doc.text(`Locație: ${t(newCazare.locationName)}`, ML, y); y += 4.5; }
-  if (newCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(newCazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (newCazare.employeeName)  { doc.text(`Angajat: ${t(newCazare.employeeName)}`, ML, y); y += 4.5; }
-  doc.text(`Data cazare: ${fmtDate(newCazare.dataCheckin)}`, ML, y); y += 5;
+  let yL2 = y;
+  let yR2 = y;
+  if (newCazare.locationName)  { doc.text(`Locație: ${t(newCazare.locationName)}`, col1X, yL2);  yL2 += 4.5; }
+  if (newCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(newCazare.locCazareNume)}`, col1X, yL2); yL2 += 4.5; }
+  if (newCazare.employeeName)  { doc.text(`Angajat: ${t(newCazare.employeeName)}`, col1X, yL2);  yL2 += 4.5; }
+  doc.text(`Data cazare: ${fmtDate(newCazare.dataCheckin)}`, col2X, yR2); yR2 += 4.5;
+  y = Math.max(yL2, yR2) + 1;
 
   // Dep items for new cazare
   const depItemsIn: string[] = [];
@@ -1334,7 +1464,7 @@ export async function generateCazareScoatereIntroducere(
     y += cl.length * 4 + 1;
   }
 
-  // Tire table — new cazare
+  // Tire table — new cazare (with side image: cazare roti)
   const newRows = newCazare.items
     .filter((item) => item.anvelopa != null)
     .map((item, idx) => {
@@ -1350,6 +1480,7 @@ export async function generateCazareScoatereIntroducere(
     });
 
   if (newRows.length > 0) {
+    const tableStartY = y;
     autoTable(doc, {
       startY: y,
       head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
@@ -1361,15 +1492,20 @@ export async function generateCazareScoatereIntroducere(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 28 },
-        3: { halign: "center", cellWidth: 16 },
-        4: { halign: "center", cellWidth: 16 },
-        5: { halign: "center", cellWidth: 20 },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
       },
-      margin: { left: ML, right: MR },
-      tableWidth: CW,
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
     });
-    y = (doc as any).lastAutoTable.finalY + 4;
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+
+    await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+
+    y = tableEndY + 4;
   }
 
   y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
@@ -1378,8 +1514,12 @@ export async function generateCazareScoatereIntroducere(
   doc.save(docFilename("scoatere_introducere", checkoutCazare.clientNume ?? "client"));
 }
 
-/** Bon Iesire — Hotel Anvelope */
-export async function generateCazareCheckout(cazare: CazareForPdf, company: CompanyData | null): Promise<void> {
+/** Scoatere din cazare — Hotel Anvelope */
+export async function generateCazareCheckout(
+  cazare: CazareForPdf,
+  company: CompanyData | null,
+  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null = null,
+): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
@@ -1387,7 +1527,7 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   if (fontB64) registerRoFont(doc, fontB64);
   const FONT = fontB64 ? "NotoSans" : "helvetica";
   const t = makeT(!!fontB64);
-  doc.setFont(FONT, "normal"); // activează fontul pentru drawHeader și funcțiile helper
+  doc.setFont(FONT, "normal");
 
   const setF = (style: "normal" | "bold", size: number) => {
     doc.setFont(FONT, style);
@@ -1398,11 +1538,12 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   await drawLogo(doc, company?.logo_path, MT);
 
   const checkoutDate = cazare.dataCheckout ?? new Date().toISOString().slice(0, 10);
-  let y = drawHeader(doc, "Hotel Anvelope - Bon Ieșire", "", cazare.id, fmtDate(checkoutDate), FONT);
+  let y = drawHeader(doc, "Hotel Anvelope - Scoatere din cazare", "", cazare.id, fmtDate(checkoutDate), FONT);
   y += 2;
   hline(doc, y);
   y += 6;
 
+  // Company block (stanga) + Client block (dreapta)
   const bw = (CW - 8) / 2;
   const leftX = ML;
   const rightX = ML + bw + 8;
@@ -1415,38 +1556,37 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   hline(doc, y);
   y += 6;
 
-  // Detalii cazare
-  setF("bold", 8);
-  doc.setTextColor(...C.black);
-  doc.text("DETALII CAZARE", ML, y);
-  y += 4;
+  // ─── Section: SCOATERE DIN CAZARE (navy blue) ─────────────────────────────
+  const navyBlue: [number, number, number] = [30, 58, 138];
+
+  setF("bold", 10);
+  doc.setTextColor(...navyBlue);
+  doc.text("SCOATERE DIN CAZARE", ML, y);
+  y += 5;
+
+  // Detalii cazare (2 coloane: locatie/angajat | date)
+  const colW = (CW - 8) / 2;
+  const col1X = ML;
+  const col2X = ML + colW + 8;
 
   setF("normal", 8.5);
   doc.setTextColor(...C.black);
-  if (cazare.locationName) { doc.text(`Locație: ${t(cazare.locationName)}`, ML, y); y += 4.5; }
-  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, ML, y); y += 4.5; }
-  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, ML, y); y += 4.5; }
-
-  doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, ML, y); y += 4.5;
-  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, ML, y); y += 4.5;
-
+  let yL = y;
+  let yR = y;
+  if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
+  if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
+  if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
+  doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
   const zile = Math.round(
     (new Date(checkoutDate).getTime() - new Date(cazare.dataCheckin).getTime()) / 86_400_000
   );
   setF("bold", 9);
-  doc.setTextColor(...C.black);
-  doc.text(`Durată depozitare: ${zile} zile`, ML, y);
-  y += 5;
+  doc.text(`Durată depozitare: ${zile} zile`, col2X, yR);
+  yR += 5;
+  y = Math.max(yL, yR) + 1;
 
-  setF("normal", 8.5);
-  if (cazare.comments) {
-    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
-    doc.setTextColor(...C.black);
-    doc.text(cl, ML, y);
-    y += cl.length * 4 + 1;
-  }
-
-  // Articole ridicate (dep_ fields)
+  // Ridicate
   const depItemsOut: string[] = [];
   if (cazare.depAnvelope)     depItemsOut.push("Anvelope");
   if (cazare.depCapace)       depItemsOut.push("Capace");
@@ -1454,25 +1594,73 @@ export async function generateCazareCheckout(cazare: CazareForPdf, company: Comp
   if (cazare.depAntifurturi)  depItemsOut.push("Antifurturi");
   if (cazare.depPrezoane)     depItemsOut.push("Prezoane");
   if (depItemsOut.length > 0) {
-    setF("bold", 8.5);
+    setF("normal", 8.5);
     doc.setTextColor(...C.black);
     doc.text(`Ridicate: ${depItemsOut.join(", ")}`, ML, y);
     y += 5;
   }
-  y += 2;
 
-  // Tabel anvelope
-  setF("bold", 8);
-  doc.setTextColor(...C.black);
-  doc.text("ANVELOPE RIDICATE", ML, y);
-  y += 4;
+  // Observații
+  if (cazare.comments) {
+    setF("normal", 8.5);
+    doc.setTextColor(...C.black);
+    const cl: string[] = doc.splitTextToSize(`Observații: ${t(cazare.comments)}`, CW);
+    doc.text(cl, ML, y);
+    y += cl.length * 4 + 1;
+  }
 
-  y = drawAnvelopeTable(doc, autoTable, cazare, y, t, FONT);
-  y += 4;
+  // Tabel anvelope cu imagine in dreapta (Scoatere Roti)
+  const SIDE_IMG_W = 55;
+  const SIDE_GAP = 5;
+  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+
+  const checkoutRows = cazare.items
+    .filter((item) => item.anvelopa != null)
+    .map((item, idx) => {
+      const a = item.anvelopa!;
+      return [
+        String(idx + 1),
+        t(a.marcaNume ?? "—"),
+        t(a.dimensiuneValoare ?? "—"),
+        t(a.profilValoare ?? "—"),
+        TIP_PDF_LABELS[a.tip] ?? a.tip,
+        a.adancime != null ? `${a.adancime} mm` : "—",
+      ];
+    });
+
+  if (checkoutRows.length > 0) {
+    const tableStartY = y;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      body: checkoutRows,
+      theme: "grid",
+      styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
+      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2 },
+      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 8 },
+        1: { cellWidth: "auto" },
+        2: { cellWidth: 26 },
+        3: { halign: "center", cellWidth: 14 },
+        4: { halign: "center", cellWidth: 14 },
+        5: { halign: "center", cellWidth: 18 },
+      },
+      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
+      tableWidth: tableW,
+    });
+    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableH = tableEndY - tableStartY;
+
+    const sideUrl = images?.scoatere ?? images?.montare ?? null;
+    await drawSideImage(doc, sideUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
+
+    y = tableEndY + 4;
+  }
 
   y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
   await drawFooterWithBranding(doc, company?.website);
 
   const clientSlug = (cazare.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
-  doc.save(docFilename("bon_iesire", clientSlug));
+  doc.save(docFilename("scoatere_cazare", clientSlug));
 }
