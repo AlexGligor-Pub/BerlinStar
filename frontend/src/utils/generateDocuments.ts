@@ -1978,6 +1978,35 @@ export async function generateMontajRoti(
     y = tableEndY + 4;
   }
 
+  // ── Condiții tehnice de lucru ──────────────────────────────────────────────
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(...C.black);
+  doc.text(t("CONDIȚII TEHNICE DE LUCRU"), ML, y);
+  y += 3;
+
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.gray);
+  const paragrafe = [
+    "Strângerea prezoanelor de roată s-a efectuat cu cheie dinamometrică, la momentul de strângere specificat în manualul tehnic al vehiculului, conform indicațiilor producătorului autovehiculului sau conform valorilor înscrise pe eticheta situată pe stâlpul ușii șoferului.",
+    "Presiunea pneurilor a fost reglată conform valorilor recomandate de producătorul autovehiculului, indicate pe eticheta de pe stâlpul caroseriei, în manualul de utilizare sau pe capacul rezervorului de combustibil.",
+  ];
+  for (const p of paragrafe) {
+    const lines: string[] = doc.splitTextToSize(t(p), CW);
+    doc.text(lines, ML, y);
+    y += lines.length * 2.6 + 1.5;
+  }
+
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(...C.black);
+  const atentie = "Atenție: Clientul este sfătuit să verifice strângerea prezoanelor după primii 50 pana la 100 km parcurși de la montaj, la un service autorizat sau cu o cheie dinamometrică calibrată.";
+  const atLines: string[] = doc.splitTextToSize(t(atentie), CW);
+  doc.text(atLines, ML, y);
+  y += atLines.length * 2.6 + 4;
+  doc.setTextColor(...C.black);
+
   y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
   await drawFooterWithBranding(doc, company?.website);
 
