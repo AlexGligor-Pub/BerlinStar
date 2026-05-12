@@ -2,10 +2,11 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateDeviz, generateFactura, generateChitanta } from "../utils/generateDocuments";
-import type { DocContext } from "../utils/generateDocuments";
+import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere } from "../utils/generateDocuments";
+import type { DocContext, CompanyData } from "../utils/generateDocuments";
+import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
 import { setResume } from "../store/resumeStore";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 
@@ -401,6 +402,34 @@ interface CazareBasic {
   data_checkin: string;
   data_checkout: string | null;
   numar_masina: string | null;
+  successor_cazare_id: number | null;
+  successor_montate_pe_masina: boolean | null;
+}
+
+function buildHotelImageProxyUrls() {
+  const h = hotelImages();
+  return {
+    cazare:   h.cazare   ? `${API_BASE}/api/global-settings/hotel-anvelope/image/cazare`   : null,
+    scoatere: h.scoatere ? `${API_BASE}/api/global-settings/hotel-anvelope/image/scoatere` : null,
+    montare:  h.montare  ? `${API_BASE}/api/global-settings/hotel-anvelope/image/montare`  : null,
+  };
+}
+
+async function fetchCompanyData(): Promise<CompanyData | null> {
+  try {
+    const res = await apiFetch("/api/companies?limit=1");
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.items?.length) return null;
+    const co = data.items[0];
+    return {
+      name: co.name, cui: String(co.cui),
+      address: co.address ?? null, nr_reg_com: co.nr_reg_com ?? null,
+      phone: co.phone ?? null, tva_percentage: co.tva_percentage ?? null,
+      logo_path: co.logo_path ?? null, background_path: co.background_path ?? null,
+      website: co.website ?? null,
+    };
+  } catch { return null; }
 }
 
 function ReceiptCard(props: { receipt: Receipt }) {
@@ -422,7 +451,35 @@ function ReceiptCard(props: { receipt: Receipt }) {
   );
   const [saving, setSaving] = createSignal(false);
   const [docLoading, setDocLoading] = createSignal<string | null>(null);
+  const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
   const r = props.receipt;
+
+  async function handleHotelPdf(cazareId: number, type: "checkin" | "checkout" | "combined") {
+    const key = `${cazareId}-${type}`;
+    setHotelPdfLoading(key);
+    try {
+      const [full, company] = await Promise.all([getCazareById(cazareId), fetchCompanyData(), loadHotelImages()]);
+      if (!full) return;
+      const imgs = buildHotelImageProxyUrls();
+      if (type === "checkin") {
+        await generateCazareCheckin(full as any, company, imgs);
+      } else if (type === "checkout") {
+        await generateCazareCheckout(full as any, company, imgs);
+      } else {
+        if (full.successorCazareId == null || !full.dataCheckout) return;
+        const successor = await getCazareById(full.successorCazareId);
+        if (!successor) return;
+        await generateCazareScoatereIntroducere(
+          full as any,
+          successor as any,
+          company,
+          full.dataCheckout,
+          full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
+          imgs,
+        );
+      }
+    } finally { setHotelPdfLoading(null); }
+  }
 
 
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
@@ -680,18 +737,35 @@ function ReceiptCard(props: { receipt: Receipt }) {
                           ? `${diff} ${diff === 1 ? "lună" : "luni"} și ${extra} zile`
                           : `${diff} ${diff === 1 ? "lună" : "luni"}`;
                       };
+                      const pdfBtnStyle = "font-size:11px;color:var(--accent);background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;line-height:1.4";
+                      const isLoading = (type: string) => hotelPdfLoading() === `${c.id}-${type}`;
                       return (
-                        <button
-                          style="font-size:13px;color:var(--accent);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;text-align:left;line-height:1.5"
-                          onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
-                        >
-                          {c.data_checkout ? "Scoatere" : "Cazare"}
-                          <span style="font-size:11px;color:var(--text-muted);margin-left:6px;text-decoration:none">
-                            {c.data_checkout
-                              ? `${fmtDate(c.data_checkin)} → ${fmtDate(c.data_checkout)} · ${luni()}`
-                              : fmtDate(c.data_checkin)}
-                          </span>
-                        </button>
+                        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                          <button
+                            style="font-size:13px;color:var(--accent);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;text-align:left;line-height:1.5"
+                            onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
+                          >
+                            {c.data_checkout ? "Scoatere" : "Cazare"}
+                            <span style="font-size:11px;color:var(--text-muted);margin-left:6px;text-decoration:none">
+                              {c.data_checkout
+                                ? `${fmtDate(c.data_checkin)} → ${fmtDate(c.data_checkout)} · ${luni()}`
+                                : fmtDate(c.data_checkin)}
+                            </span>
+                          </button>
+                          <button style={pdfBtnStyle} disabled={isLoading("checkin")} onClick={() => handleHotelPdf(c.id, "checkin")}>
+                            {isLoading("checkin") ? "..." : "PDF Cazare"}
+                          </button>
+                          <Show when={c.data_checkout}>
+                            <button style={pdfBtnStyle} disabled={isLoading("checkout")} onClick={() => handleHotelPdf(c.id, "checkout")}>
+                              {isLoading("checkout") ? "..." : "PDF Scoatere"}
+                            </button>
+                          </Show>
+                          <Show when={c.data_checkout && c.successor_cazare_id != null}>
+                            <button style={pdfBtnStyle} disabled={isLoading("combined")} onClick={() => handleHotelPdf(c.id, "combined")}>
+                              {isLoading("combined") ? "..." : "PDF Scoatere + Cazare"}
+                            </button>
+                          </Show>
+                        </div>
                       );
                     }}
                   </For>
