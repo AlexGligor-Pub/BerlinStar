@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount, createEffect } from "solid-js";
 import { API_BASE } from "../utils/api";
+import { invalidateHotelImages } from "../store/hotelAnvelopeStore";
 import logo from "../assets/logo.png";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -303,7 +304,7 @@ function HotelAnvelopeSection() {
           title="Schimbă imaginea — Cazare Roti"
           currentUrl={images().hotel_cazare_image_path}
           endpoint="/api/global-settings/hotel-cazare-image"
-          onSaved={(url) => setImages((prev) => ({ ...prev, hotel_cazare_image_path: url + "?t=" + Date.now() }))}
+          onSaved={(url) => { setImages((prev) => ({ ...prev, hotel_cazare_image_path: url + "?t=" + Date.now() })); invalidateHotelImages(); }}
           onClose={() => setDialogType(null)}
         />
       </Show>
@@ -313,7 +314,7 @@ function HotelAnvelopeSection() {
           title="Schimbă imaginea — Scoatere Roti"
           currentUrl={images().hotel_scoatere_image_path}
           endpoint="/api/global-settings/hotel-scoatere-image"
-          onSaved={(url) => setImages((prev) => ({ ...prev, hotel_scoatere_image_path: url + "?t=" + Date.now() }))}
+          onSaved={(url) => { setImages((prev) => ({ ...prev, hotel_scoatere_image_path: url + "?t=" + Date.now() })); invalidateHotelImages(); }}
           onClose={() => setDialogType(null)}
         />
       </Show>
@@ -323,7 +324,7 @@ function HotelAnvelopeSection() {
           title="Schimbă imaginea — Montare Roti"
           currentUrl={images().hotel_montare_image_path}
           endpoint="/api/global-settings/hotel-montare-image"
-          onSaved={(url) => setImages((prev) => ({ ...prev, hotel_montare_image_path: url + "?t=" + Date.now() }))}
+          onSaved={(url) => { setImages((prev) => ({ ...prev, hotel_montare_image_path: url + "?t=" + Date.now() })); invalidateHotelImages(); }}
           onClose={() => setDialogType(null)}
         />
       </Show>

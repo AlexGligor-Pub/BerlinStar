@@ -282,3 +282,48 @@ export function invalidateDimensiuniCache() {
 export function invalidateProfilCache() {
   localStorage.removeItem(PROFIL_CACHE_KEY);
 }
+
+// ─── Hotel Anvelope Images (global cache) ─────────────────────────────────────
+
+export interface HotelAnvelopeImages {
+  cazare: string | null;
+  scoatere: string | null;
+  montare: string | null;
+}
+
+const [hotelImages, setHotelImages] = createSignal<HotelAnvelopeImages>({
+  cazare: null,
+  scoatere: null,
+  montare: null,
+});
+
+export { hotelImages };
+
+let _hotelImagesLoaded = false;
+let _hotelImagesPromise: Promise<void> | null = null;
+
+export function invalidateHotelImages(): void {
+  _hotelImagesLoaded = false;
+}
+
+export function loadHotelImages(force = false): Promise<void> {
+  if (!force && _hotelImagesLoaded) return Promise.resolve();
+  if (_hotelImagesPromise) return _hotelImagesPromise;
+  _hotelImagesPromise = (async () => {
+    try {
+      const res = await apiFetch("/api/global-settings/hotel-anvelope");
+      if (res.ok) {
+        const d = await res.json();
+        setHotelImages({
+          cazare: d.hotel_cazare_image_path ?? null,
+          scoatere: d.hotel_scoatere_image_path ?? null,
+          montare: d.hotel_montare_image_path ?? null,
+        });
+        _hotelImagesLoaded = true;
+      }
+    } catch {}
+    finally { _hotelImagesPromise = null; }
+  })();
+  return _hotelImagesPromise;
+}
+

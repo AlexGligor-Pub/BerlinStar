@@ -9,6 +9,7 @@ import {
   cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
+  hotelImages, loadHotelImages,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
 
@@ -451,7 +452,9 @@ export default function HotelAnvelope() {
   const [_newVehicolLocked, setNewVehicolLocked] = createSignal(true);
   const [saving, setSaving] = createSignal(false);
   const [saveErr, setSaveErr] = createSignal("");
-  const [cazareImageUrl, setCazareImageUrl] = createSignal<string | null>(null);
+  const cazareImageUrl = () => hotelImages().cazare;
+  const scoatereImageUrl = () => hotelImages().scoatere;
+  const montareImageUrl = () => hotelImages().montare;
 
   // ── Modal Checkout ─────────────────────────────────────────────────────────
   const [checkoutCazare, setCheckoutCazare] = createSignal<Cazare | null>(null);
@@ -541,10 +544,7 @@ export default function HotelAnvelope() {
       ]);
     } finally { setLoading(false); }
 
-    apiFetch("/api/global-settings/hotel-anvelope")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d) setCazareImageUrl(d.hotel_cazare_image_path ?? null); })
-      .catch(() => {});
+    loadHotelImages();
 
     // Dacă vine din POS cu context activ → auto-selectează clientul și încarcă cazarile
     const ctx = posHotelCtx();
@@ -2017,34 +2017,37 @@ export default function HotelAnvelope() {
                       Scoatere din depozit
                     </div>
 
-                    {/* Client info */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Client</div>
-                      <div style="display:grid;gap:4px;font-size:13px">
-                        <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c.clientNume ?? "—"}</strong></div>
-                        <Show when={c.clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c.clientCui}</div></Show>
-                        <Show when={c.clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c.clientTelefon}</div></Show>
-                        <Show when={c.numarMasina}><div><span style="color:var(--text-muted)">Mașină:</span> {c.numarMasina}</div></Show>
+                    {/* Row: Client + S-a depozitat */}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                      {/* Client info */}
+                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Client</div>
+                        <div style="display:grid;gap:4px;font-size:13px">
+                          <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c.clientNume ?? "—"}</strong></div>
+                          <Show when={c.clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c.clientCui}</div></Show>
+                          <Show when={c.clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c.clientTelefon}</div></Show>
+                          <Show when={c.numarMasina}><div><span style="color:var(--text-muted)">Mașină:</span> {c.numarMasina}</div></Show>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Dep items */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">S-a depozitat</div>
-                      <div style="display:flex;flex-wrap:wrap;gap:6px">
-                        <For each={[
-                          [c.depAnvelope, "Anvelope"],
-                          [c.depCapace, "Capace"],
-                          [c.depRotiComplete, "Roți complete"],
-                          [c.depAntifurturi, "Antifurturi"],
-                          [c.depPrezoane, "Prezoane"],
-                        ] as [boolean, string][]}>
-                          {([val, label]) => (
-                            <Show when={val}>
-                              <span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af">{label}</span>
-                            </Show>
-                          )}
-                        </For>
+                      {/* Dep items */}
+                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">S-a depozitat</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px">
+                          <For each={[
+                            [c.depAnvelope, "Anvelope"],
+                            [c.depCapace, "Capace"],
+                            [c.depRotiComplete, "Roți complete"],
+                            [c.depAntifurturi, "Antifurturi"],
+                            [c.depPrezoane, "Prezoane"],
+                          ] as [boolean, string][]}>
+                            {([val, label]) => (
+                              <Show when={val}>
+                                <span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af">{label}</span>
+                              </Show>
+                            )}
+                          </For>
+                        </div>
                       </div>
                     </div>
 
@@ -2082,37 +2085,61 @@ export default function HotelAnvelope() {
                       </Show>
                     </div>
 
-                    {/* Anvelopele scoase au fost (montate/predate) */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelopele scoase au fost</div>
-                      <div style="display:flex;flex-direction:column;gap:6px">
-                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
-                          <input type="radio" name="combined-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
+                    {/* Row: Anvelopele scoase au fost + Date scoatere */}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                      {/* Anvelopele scoase au fost (montate/predate) */}
+                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelopele scoase au fost</div>
+                        <div style="display:flex;flex-direction:column;gap:6px">
+                          <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                            <input type="radio" name="combined-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
+                            <div>
+                              <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                              <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                            </div>
+                          </label>
+                          <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                            <input type="radio" name="combined-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
+                            <div>
+                              <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                              <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Checkout date + comments */}
+                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date scoatere</div>
+                        <div style="display:grid;gap:8px">
                           <div>
-                            <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
-                            <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data scoatere</label>
+                            <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
                           </div>
-                        </label>
-                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
-                          <input type="radio" name="combined-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
-                          <div>
-                            <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
-                            <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
-                          </div>
-                        </label>
+                          <textarea class="input" rows={2} placeholder="Comentarii scoatere..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
+                        </div>
                       </div>
                     </div>
 
-                    {/* Checkout date + comments */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date scoatere</div>
-                      <div style="display:grid;gap:8px">
-                        <div>
-                          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data scoatere</label>
-                          <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
-                        </div>
-                        <textarea class="input" rows={2} placeholder="Comentarii scoatere..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
-                      </div>
+                    {/* Imagine ghidare: Montare / Scoatere roți */}
+                    <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
+                      <Show
+                        when={newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl()}
+                        fallback={
+                          <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                              <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                            </svg>
+                            <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
+                          </div>
+                        }
+                      >
+                        <img
+                          src={(newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl())!}
+                          alt={newMontatePeMasina() ? "Montare Roti" : "Scoatere Roti"}
+                          style="width:100%;height:100%;object-fit:contain;display:block"
+                        />
+                      </Show>
                     </div>
                   </div>
 
@@ -2220,6 +2247,23 @@ export default function HotelAnvelope() {
                     <Show when={combinedErr()}>
                       <p style="color:var(--danger);font-size:13px;margin:0">{combinedErr()}</p>
                     </Show>
+
+                    {/* Imagine ghidare: Cazare Roti */}
+                    <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
+                      <Show
+                        when={cazareImageUrl()}
+                        fallback={
+                          <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                              <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                            </svg>
+                            <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
+                          </div>
+                        }
+                      >
+                        <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:contain;display:block" />
+                      </Show>
+                    </div>
                   </div>
                 </div>
 
