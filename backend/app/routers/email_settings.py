@@ -5,6 +5,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import get_account_id
 from app.models.email_log import EmailLog
 from app.models.email_template import EmailTemplate
 from app.models.global_settings import GlobalSettings
@@ -17,7 +18,7 @@ from app.schemas.email_settings import (
 from app.schemas.global_settings import SmtpSettingsRead, SmtpSettingsPatch
 from app.utils.email_service import send_test_email
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_account_id)])
 
 
 async def _get_or_create_global(db: AsyncSession) -> GlobalSettings:

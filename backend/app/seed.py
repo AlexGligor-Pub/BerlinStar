@@ -4,7 +4,6 @@ Comanda: python -m app.seed
 """
 from __future__ import annotations
 import asyncio
-import base64
 from decimal import Decimal
 from sqlalchemy import select
 
@@ -214,10 +213,11 @@ async def seed() -> None:
             select(Account).where(Account.username == "admin")
         )).scalar_one_or_none()
         if not account:
+            from app.utils.security import hash_password
             account = Account(
                 name="Administrator",
                 username="admin",
-                password=base64.b64encode(b"admin").decode(),
+                password=hash_password("admin"),
             )
             db.add(account)
             await db.flush()

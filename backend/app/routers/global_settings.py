@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import get_account_id
 from app.models.global_settings import GlobalSettings
 from app.schemas.global_settings import GlobalSettingsRead
 from app.utils.storage import validate_image, upload_global_image
@@ -25,7 +26,10 @@ async def _get_or_create(db: AsyncSession) -> GlobalSettings:
 
 
 @router.get("/hotel-anvelope", response_model=GlobalSettingsRead)
-async def get_hotel_images(db: AsyncSession = Depends(get_db)):
+async def get_hotel_images(
+    db: AsyncSession = Depends(get_db),
+    _account_id: int = Depends(get_account_id),
+):
     return await _get_or_create(db)
 
 
@@ -33,6 +37,7 @@ async def get_hotel_images(db: AsyncSession = Depends(get_db)):
 async def upload_cazare_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
     url = upload_global_image("cazare", data, file.content_type)
@@ -46,6 +51,7 @@ async def upload_cazare_image(
 async def upload_scoatere_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
     url = upload_global_image("scoatere", data, file.content_type)
@@ -59,6 +65,7 @@ async def upload_scoatere_image(
 async def upload_montare_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
     url = upload_global_image("montare", data, file.content_type)
@@ -70,13 +77,21 @@ async def upload_montare_image(
 
 @router.get("/hotel-anvelope/image/{key}")
 async def proxy_hotel_image(key: str, db: AsyncSession = Depends(get_db)):
-    """Proxy o imagine din S3 cu Content-Type corect, evitand CORS browser-side."""
+    """Proxy o imagine din S3 cu Content-Type corect, evitand CORS browser-side.
+
+    Public: este consumat din <img src> in PDF-uri si UI, fara header Authorization.
+    URL-ul din DB este setat doar din endpoint-urile POST autentificate (controleaza key-ul
+    S3 catre bucket-ul cunoscut), deci nu accepta URL-uri arbitrare. Ca defense-in-depth,
+    schema este restrictionata la http/https.
+    """
     if key not in {"cazare", "scoatere", "montare"}:
         raise HTTPException(404, "Cheie invalida")
     settings = await _get_or_create(db)
     url = getattr(settings, f"hotel_{key}_image_path", None)
     if not url:
         raise HTTPException(404, "Imagine neconfigurata")
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(502, "URL imagine invalid")
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             res = await client.get(url)

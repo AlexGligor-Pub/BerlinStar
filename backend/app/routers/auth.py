@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64
+import logging
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -11,6 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
 from app.models.account import Account
+from app.utils.security import hash_password, is_legacy_hash, verify_password
+
+log = logging.getLogger("berlinstar")
 
 router = APIRouter()
 
@@ -36,9 +39,12 @@ async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple
         )
     )).scalar_one_or_none()
 
-    expected = base64.b64encode(password.encode()).decode()
-    if account is None or account.password != expected:
+    if account is None or not verify_password(password, account.password):
         raise HTTPException(401, "Username sau parola incorecta.")
+
+    if is_legacy_hash(account.password):
+        account.password = hash_password(password)
+        await db.commit()
 
     expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
     payload = {"sub": str(account.id), "name": account.name, "exp": expire}
@@ -61,7 +67,7 @@ class RegisterRequest(BaseModel):
     name: str = Field(..., max_length=200)
     username: str = Field(..., max_length=100)
     password: str = Field(..., min_length=6, max_length=255)
-    email: str = Field(..., max_length=255)
+    email: str | None = Field(None, max_length=255)
 
 
 class RegisterResponse(BaseModel):
@@ -72,17 +78,20 @@ async def _send_client_nou(account_name: str, account_email: str, account_id: in
     from app.database import AsyncSessionLocal
     from app.models.global_settings import GlobalSettings
     from app.utils.email_service import send_email
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(GlobalSettings).limit(1))
-        gs = result.scalar_one_or_none()
-        company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
-        await send_email(
-            db,
-            scenario="client_nou",
-            variables={"client_name": account_name, "company_name": company_name},
-            to_address=account_email,
-            account_id=account_id,
-        )
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(GlobalSettings).limit(1))
+            gs = result.scalar_one_or_none()
+            company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
+            await send_email(
+                db,
+                scenario="client_nou",
+                variables={"client_name": account_name, "company_name": company_name},
+                to_address=account_email,
+                account_id=account_id,
+            )
+    except Exception:
+        log.exception("Background _send_client_nou failed for account_id=%s", account_id)
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -97,14 +106,15 @@ async def register(body: RegisterRequest, background_tasks: BackgroundTasks, db:
     account = Account(
         name=body.name,
         username=body.username,
-        password=base64.b64encode(body.password.encode()).decode(),
+        password=hash_password(body.password),
         email=body.email,
         is_locked=True,
         locked_at=now,
     )
     db.add(account)
     await db.commit()
-    background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
+    if account.email:
+        background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
     return RegisterResponse(message="Contul a fost creat cu succes! Vei avea acces timp de 7 zile.")
 
 

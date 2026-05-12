@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import html
 import smtplib
 import ssl
 from email.mime.multipart import MIMEMultipart
@@ -17,6 +18,26 @@ class _SafeDict(dict):
     """Returns '{key}' for missing keys so partial substitution never raises."""
     def __missing__(self, key: str) -> str:
         return "{" + key + "}"
+
+
+def _escape_vars_for_html(variables: dict) -> dict:
+    """HTML-escape orice valoare scalara inainte de substituirea in template-uri HTML.
+
+    Previne XSS daca o variabila (ex. client_name) contine '<script>'.
+    """
+    out: dict = {}
+    for k, v in variables.items():
+        out[k] = html.escape(str(v), quote=True) if v is not None else ""
+    return out
+
+
+def _safe_error_message(exc: Exception) -> str:
+    """Strip credentials and connection details from SMTP exception messages.
+
+    smtplib/socket errors pot include host:port si/sau user. Pastram doar
+    tipul exceptiei si o forma scurta, fara argumente raw.
+    """
+    return type(exc).__name__
 
 
 def _build_msg(subject: str, from_label: str, to_address: str, body_html: str) -> MIMEMultipart:
@@ -112,7 +133,8 @@ async def send_test_email(
                    scenario=None, subject=subject, status="ok", body_html=body_html)
     except Exception as exc:
         await _log(db, account_id=account_id, to_address=to_address,
-                   scenario=None, subject=subject, status="error", error_message=str(exc), body_html=body_html)
+                   scenario=None, subject=subject, status="error",
+                   error_message=_safe_error_message(exc), body_html=body_html)
         raise
 
 
@@ -141,9 +163,9 @@ async def send_email(
     if template is None:
         return
 
-    safe_vars = _SafeDict(variables)
-    subject = template.subject.format_map(safe_vars)
-    body_html = template.body.format_map(safe_vars)
+    escaped_vars = _SafeDict(_escape_vars_for_html(variables))
+    subject = template.subject.format_map(escaped_vars)
+    body_html = template.body.format_map(escaped_vars)
     from_label = f"{settings.smtp_from_name or 'BerlinStar'} <{settings.smtp_from_address}>"
     msg = _build_msg(subject, from_label, to_address, body_html)
 
@@ -153,5 +175,6 @@ async def send_email(
                    scenario=scenario, subject=subject, status="ok", body_html=body_html)
     except Exception as exc:
         await _log(db, account_id=account_id, to_address=to_address,
-                   scenario=scenario, subject=subject, status="error", error_message=str(exc), body_html=body_html)
+                   scenario=scenario, subject=subject, status="error",
+                   error_message=_safe_error_message(exc), body_html=body_html)
         raise

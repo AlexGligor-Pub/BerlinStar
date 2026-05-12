@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount, createEffect } from "solid-js";
 import { API_BASE } from "../utils/api";
+import { auth } from "../store/authStore";
 import { invalidateHotelImages } from "../store/hotelAnvelopeStore";
 import logo from "../assets/logo.png";
 
@@ -37,14 +38,25 @@ function fmtDate(iso: string | null): string {
   );
 }
 
+let _adminToken: string | null = null;
+function setAdminToken(t: string | null) { _adminToken = t; }
+function getBearerToken(): string | null {
+  return _adminToken ?? auth.token ?? null;
+}
+
 async function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(API_BASE + url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers as Record<string, string>),
-    },
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+  const tok = getBearerToken();
+  if (tok) headers["Authorization"] = `Bearer ${tok}`;
+  return fetch(API_BASE + url, { ...options, headers });
+}
+
+function authHeaders(): Record<string, string> {
+  const tok = getBearerToken();
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
 }
 
 async function compressToPng(file: File, maxBytes = 500_000): Promise<File> {
@@ -118,7 +130,7 @@ function ImageUploadDialog(props: {
       const toUpload = props.compress ? await compressToPng(file, 500_000) : file;
       const fd = new FormData();
       fd.append("file", toUpload);
-      const res = await fetch(API_BASE + props.endpoint, { method: "POST", body: fd });
+      const res = await fetch(API_BASE + props.endpoint, { method: "POST", body: fd, headers: authHeaders() });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
         setErr((d as any).detail ?? "Eroare la upload.");
@@ -135,7 +147,7 @@ function ImageUploadDialog(props: {
   }
 
   return (
-    <div class="sl-modal-overlay" onClick={(e) => e.target === e.currentTarget && props.onClose()}>
+    <div class="sl-modal-overlay">
       <div class="sl-modal adminv2-upload-modal">
         <div class="sl-modal-header">
           <span class="sl-modal-title">{props.title}</span>
@@ -216,7 +228,7 @@ function HotelAnvelopeSection() {
 
   onMount(async () => {
     try {
-      const res = await fetch(API_BASE + "/api/global-settings/hotel-anvelope");
+      const res = await fetch(API_BASE + "/api/global-settings/hotel-anvelope", { headers: authHeaders() });
       if (res.ok) setImages(await res.json());
     } catch {}
   });
@@ -425,7 +437,7 @@ function AccountsSection() {
     setAddSaving(true); setAddErr("");
     try {
       const body: Record<string, unknown> = {
-        name: f.name.trim(), username: f.username.trim(), password: btoa(f.password),
+        name: f.name.trim(), username: f.username.trim(), password: f.password,
         email: f.email.trim() || null, description: f.description.trim() || null,
         image_url: f.image_url.trim() || null,
       };
@@ -494,7 +506,7 @@ function AccountsSection() {
         image_url: f.image_url.trim() || null,
         is_locked: f.is_locked, locked_at: f.locked_at ? new Date(f.locked_at).toISOString() : null,
       };
-      if (f.password.trim()) patch.password = btoa(f.password.trim());
+      if (f.password.trim()) patch.password = f.password.trim();
       const res = await adminFetch(`/api/accounts/${a.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       if (!res.ok) { setEditErr(((await res.json().catch(() => ({}))) as any).detail ?? "Eroare la salvare."); return; }
       closePreview();
@@ -649,7 +661,7 @@ function AccountsSection() {
       {/* Modal: Preview / Edit / Delete */}
       <Show when={previewAccount()}>
         {(a) => (
-          <div class="sl-modal-overlay" onClick={(e) => e.target === e.currentTarget && closePreview()}>
+          <div class="sl-modal-overlay">
             <div class="sl-modal">
 
               {/* ── View mode ── */}
@@ -1430,6 +1442,9 @@ export default function AdminV2() {
         setVerifyErr((d as any).detail ?? "Parole incorecte.");
         return;
       }
+      const d = await res.json().catch(() => ({} as any));
+      if (d.access_token) setAdminToken(d.access_token);
+      setPass1(""); setPass2("");
       setVerified(true);
     } catch {
       setVerifyErr("Eroare de conexiune.");

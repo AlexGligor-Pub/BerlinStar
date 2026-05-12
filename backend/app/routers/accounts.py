@@ -1,4 +1,5 @@
 from __future__ import annotations
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
@@ -10,8 +11,11 @@ from app.schemas.account import AccountCreate, AccountUpdate, AccountRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.paginate import paginate
+from app.utils.security import hash_password
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
+
+log = logging.getLogger("berlinstar")
 
 router = APIRouter()
 
@@ -45,22 +49,27 @@ async def _send_client_nou(account_name: str, account_email: str, account_id: in
     from app.database import AsyncSessionLocal
     from app.models.global_settings import GlobalSettings
     from app.utils.email_service import send_email
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(select(GlobalSettings).limit(1))
-        gs = result.scalar_one_or_none()
-        company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
-        await send_email(
-            db,
-            scenario="client_nou",
-            variables={"client_name": account_name, "company_name": company_name},
-            to_address=account_email,
-            account_id=account_id,
-        )
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(GlobalSettings).limit(1))
+            gs = result.scalar_one_or_none()
+            company_name = (gs.smtp_from_name or "BerlinStar") if gs else "BerlinStar"
+            await send_email(
+                db,
+                scenario="client_nou",
+                variables={"client_name": account_name, "company_name": company_name},
+                to_address=account_email,
+                account_id=account_id,
+            )
+    except Exception:
+        log.exception("Background _send_client_nou failed for account_id=%s", account_id)
 
 
 @router.post("", response_model=AccountRead, status_code=201)
 async def create_account(body: AccountCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    account = Account(**body.model_dump())
+    data = body.model_dump()
+    data["password"] = hash_password(data["password"])
+    account = Account(**data)
     db.add(account)
     await db.commit()
     await db.refresh(account)
@@ -82,7 +91,9 @@ async def update_account(account_id: int, body: AccountCreate, db: AsyncSession 
     account = await db.get(Account, account_id)
     if account is None or account.is_deleted:
         raise HTTPException(404, "Contul nu a fost gasit.")
-    for k, v in body.model_dump().items():
+    data = body.model_dump()
+    data["password"] = hash_password(data["password"])
+    for k, v in data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -95,7 +106,13 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
     account = await db.get(Account, account_id)
     if account is None or account.is_deleted:
         raise HTTPException(404, "Contul nu a fost gasit.")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    patch_data = body.model_dump(exclude_unset=True)
+    if "password" in patch_data:
+        if patch_data["password"]:
+            patch_data["password"] = hash_password(patch_data["password"])
+        else:
+            patch_data.pop("password")
+    for k, v in patch_data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
