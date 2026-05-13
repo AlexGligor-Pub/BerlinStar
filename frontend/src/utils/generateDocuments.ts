@@ -1873,6 +1873,7 @@ export interface MontajRotaRow {
   profilValoare: string | null;
   tip: string;
   adancime: number | null;
+  cupluStrangere: number | null;
 }
 
 const _POZITIE_LABELS_PDF: Record<string, string> = {
@@ -1946,6 +1947,7 @@ export async function generateMontajRoti(
       `${dim}\n${profil}\n${tip}`,
       r.adancime != null ? `${r.adancime} mm` : "—",
       r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
+      r.cupluStrangere != null ? `${r.cupluStrangere} Nm` : "—",
     ];
   });
 
@@ -1953,7 +1955,7 @@ export async function generateMontajRoti(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune"]],
+      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune", "Cuplu"]],
       body,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
@@ -1964,8 +1966,9 @@ export async function generateMontajRoti(
         1: { cellWidth: 24 },
         2: { cellWidth: "auto" },
         3: { halign: "center", cellWidth: 30 },
-        4: { halign: "center", cellWidth: 18 },
-        5: { halign: "center", cellWidth: 18 },
+        4: { halign: "center", cellWidth: 16 },
+        5: { halign: "center", cellWidth: 16 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
@@ -2108,6 +2111,7 @@ async function drawMontajRotiContent(
       `${dim}\n${profil}\n${tip}`,
       r.adancime != null ? `${r.adancime} mm` : "—",
       r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
+      r.cupluStrangere != null ? `${r.cupluStrangere} Nm` : "—",
     ];
   });
 
@@ -2115,7 +2119,7 @@ async function drawMontajRotiContent(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune"]],
+      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune", "Cuplu"]],
       body,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
@@ -2126,8 +2130,9 @@ async function drawMontajRotiContent(
         1: { cellWidth: 24 },
         2: { cellWidth: "auto" },
         3: { halign: "center", cellWidth: 30 },
-        4: { halign: "center", cellWidth: 18 },
-        5: { halign: "center", cellWidth: 18 },
+        4: { halign: "center", cellWidth: 16 },
+        5: { halign: "center", cellWidth: 16 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,

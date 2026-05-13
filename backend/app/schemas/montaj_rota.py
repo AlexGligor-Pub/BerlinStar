@@ -19,6 +19,7 @@ class MontajRotaCreate(BaseModel):
     profil_id: int | None = None
     tip: TipAnvelopaStr = "vara"
     adancime: float | None = None
+    cuplu_strangere: float | None = None
     comments: str | None = None
 
 
@@ -39,6 +40,7 @@ class MontajRotaRead(BaseModel):
     profil_id: int | None
     tip: TipAnvelopaStr
     adancime: float | None
+    cuplu_strangere: float | None
     comments: str | None
     # denormalizat
     marca_nume: str | None = None

@@ -472,6 +472,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         profilValoare: m.profilValoare,
         tip: m.tip,
         adancime: m.adancime,
+        cupluStrangere: m.cupluStrangere,
       }));
       await generateMontajRoti(r, company, rows, imgs.montare, r.vehicol ?? null);
     } finally { setMontajPdfLoading(false); }
@@ -553,6 +554,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       profilValoare: m.profilValoare,
       tip: m.tip,
       adancime: m.adancime,
+      cupluStrangere: m.cupluStrangere,
     }));
 
     const cazariBasice: any[] = cazariRes?.items ?? [];

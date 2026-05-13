@@ -9,7 +9,7 @@ import {
 } from "../store/hotelAnvelopeStore";
 import {
   bulkUpsertMontajRoti, defaultPozitieForIndex,
-  POZITII_ORDONATE, POZITIE_LABELS, PRESIUNE_SHORTCUTS,
+  POZITII_ORDONATE, POZITIE_LABELS, PRESIUNE_SHORTCUTS, CUPLU_SHORTCUTS,
   type MontajRotaDraft, type PozitieRoata,
 } from "../store/montajRotiStore";
 
@@ -40,6 +40,7 @@ function emptyRow(idx: number): RowDraft {
     profilId: null,
     tip: "vara",
     adancime: null,
+    cupluStrangere: null,
     comments: null,
   };
 }
@@ -125,6 +126,7 @@ export default function MontareRotiModal(props: {
         profilId: r.profilId,
         tip: r.tip,
         adancime: r.adancime,
+        cupluStrangere: r.cupluStrangere,
         comments: r.comments,
       }));
       await bulkUpsertMontajRoti(props.receiptId, items);
@@ -256,8 +258,8 @@ export default function MontareRotiModal(props: {
                     />
                   </div>
 
-                  {/* Tip — spans both columns */}
-                  <div style="grid-column:1 / -1">
+                  {/* Tip */}
+                  <div>
                     <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
                     <select
                       class="input"
@@ -270,6 +272,35 @@ export default function MontareRotiModal(props: {
                       <option value="ms">{TIP_LABELS.ms}</option>
                       <option value="altele">{TIP_LABELS.altele}</option>
                     </select>
+                  </div>
+                  {/* Cuplu strangere prezoane (cheie dinamometrica) */}
+                  <div>
+                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                    <input
+                      class="input"
+                      style="width:100%"
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={row.cupluStrangere ?? ""}
+                      onInput={(e) => {
+                        const v = e.currentTarget.value;
+                        patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                      }}
+                    />
+                    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                      <For each={CUPLU_SHORTCUTS}>
+                        {(val) => (
+                          <button
+                            type="button"
+                            style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer"
+                            onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                          >
+                            {val}
+                          </button>
+                        )}
+                      </For>
+                    </div>
                   </div>
                 </div>
               </div>

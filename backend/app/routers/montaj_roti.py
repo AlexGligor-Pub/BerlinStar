@@ -33,6 +33,7 @@ def _serialize(
         "profil_id": r.profil_id,
         "tip": r.tip.value if hasattr(r.tip, "value") else r.tip,
         "adancime": r.adancime,
+        "cuplu_strangere": r.cuplu_strangere,
         "comments": r.comments,
         "marca_nume": marci.get(r.marca_id) if r.marca_id else None,
         "dimensiune_valoare": dim.get(r.dimensiune_id) if r.dimensiune_id else None,
@@ -132,6 +133,7 @@ async def bulk_upsert(
             profil_id=item.profil_id,
             tip=item.tip,
             adancime=item.adancime,
+            cuplu_strangere=item.cuplu_strangere,
             comments=item.comments,
         )
         db.add(rec)

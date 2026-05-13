@@ -8,23 +8,69 @@
 
 ---
 
-## Backend (FastAPI)
+## Backend — doua moduri de pornire
+
+### Mod 1: Local din WSL cu autoreload (recomandat pentru dezvoltare)
+
+DB-ul ruleaza in Docker, backendul ruleaza local cu `uvicorn --reload`.
+
+**Pasi:**
 
 ```bash
-cd c:\Berlin\BerlinStar\backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload --port 4000
+# 1. Porneste doar DB-ul in Docker
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/deploy
+docker compose up -d db
+
+# 2. Activeaza venv si seteaza DATABASE_URL catre localhost
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend
+source venv/bin/activate
+export DATABASE_URL="postgresql+asyncpg://berlinstar:berlinstar_dev@localhost:5432/berlinstar"
+
+# 3. Aplica migratiile (doar daca sunt schimbari noi)
+alembic upgrade heads
+
+# 4. Porneste serverul cu autoreload pe portul 4000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 4000
 ```
 
+**Important:**
+- Comanda `uvicorn` trebuie rulata din folderul `backend/`, NU din `backend/app/`
+- `venv` trebuie activat altfel `uvicorn` nu e gasit
+- In `deploy/.env`, `DATABASE_URL` foloseste hostul `db` (intern Docker). Pentru rulare locala trebuie inlocuit cu `localhost`
+
+**Acces:**
 - Backend: http://localhost:4000
 - Swagger UI: http://localhost:4000/docs
+
+---
+
+### Mod 2: Totul in Docker
+
+```bash
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/deploy
+docker compose up -d --build backend
+```
+
+Comanda porneste automat si `db` ca dependinta.
+
+**Comenzi utile:**
+```bash
+# Vezi log-urile live
+docker compose logs -f backend
+
+# Opreste
+docker compose stop backend db
+
+# Rebuild fortat (fara cache)
+docker compose build --no-cache backend && docker compose up -d backend
+```
 
 ---
 
 ## Frontend (SolidJS)
 
 ```bash
-cd c:\Berlin\BerlinStar\frontend
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/frontend
 npm run dev
 ```
 
@@ -36,17 +82,18 @@ npm run dev
 
 ### Backend
 ```bash
-cd c:\Berlin\BerlinStar\backend
-py -m venv .venv
-.venv\Scripts\activate
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-alembic upgrade head
-py -m app.seed
+export DATABASE_URL="postgresql+asyncpg://berlinstar:berlinstar_dev@localhost:5432/berlinstar"
+alembic upgrade heads
+python -m app.seed
 ```
 
 ### Frontend
 ```bash
-cd c:\Berlin\BerlinStar\frontend
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/frontend
 npm install
 ```
 
@@ -56,14 +103,15 @@ npm install
 
 ### Genereaza o migrare noua (dupa modificari in modele)
 ```bash
-cd c:\Berlin\BerlinStar\backend
-.venv\Scripts\activate
+cd /mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend
+source venv/bin/activate
+export DATABASE_URL="postgresql+asyncpg://berlinstar:berlinstar_dev@localhost:5432/berlinstar"
 alembic revision --autogenerate -m "descriere_modificare"
 ```
 
 ### Aplica migrarile existente
 ```bash
-alembic upgrade head
+alembic upgrade heads
 ```
 
 ### Rollback o migrare
@@ -75,25 +123,6 @@ alembic downgrade -1
 ```bash
 alembic current
 alembic history
-```
-
----
-
-## Reset complet baza de date
-
-Foloseste cand schema s-a schimbat incompatibil (ex: coloane NOT NULL adaugate).
-
-> **Atentie:** Se pierd toate datele. Seed-ul le recreaza demo.
-
-```bash
-cd c:\Berlin\BerlinStar\backend
-.venv\Scripts\activate
-
-rem Opreste serverul uvicorn inainte!
-del berlinstar.db
-
-alembic upgrade head
-py -m app.seed
 ```
 
 ---

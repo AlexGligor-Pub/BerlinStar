@@ -50,6 +50,7 @@ class MontajRota(Base):
         default=TipAnvelopa.VARA,
     )
     adancime: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cuplu_strangere: Mapped[float | None] = mapped_column(Float, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

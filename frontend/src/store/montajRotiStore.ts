@@ -29,6 +29,8 @@ export const POZITIE_LABELS: Record<PozitieRoata, string> = {
 
 export const PRESIUNE_SHORTCUTS = [2.2, 2.5, 2.8, 3.0];
 
+export const CUPLU_SHORTCUTS = [90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200];
+
 export interface MontajRota {
   id: number;
   receiptId: number | null;
@@ -40,6 +42,7 @@ export interface MontajRota {
   profilId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
+  cupluStrangere: number | null;
   comments: string | null;
   marcaNume: string | null;
   dimensiuneValoare: string | null;
@@ -55,6 +58,7 @@ export interface MontajRotaDraft {
   profilId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
+  cupluStrangere: number | null;
   comments: string | null;
 }
 
@@ -70,6 +74,7 @@ function mapMontajRota(r: any): MontajRota {
     profilId: r.profil_id ?? null,
     tip: r.tip,
     adancime: r.adancime ?? null,
+    cupluStrangere: r.cuplu_strangere ?? null,
     comments: r.comments ?? null,
     marcaNume: r.marca_nume ?? null,
     dimensiuneValoare: r.dimensiune_valoare ?? null,
@@ -103,6 +108,7 @@ export async function bulkUpsertMontajRoti(
       profil_id: it.profilId,
       tip: it.tip,
       adancime: it.adancime,
+      cuplu_strangere: it.cupluStrangere,
       comments: it.comments,
     })),
   };

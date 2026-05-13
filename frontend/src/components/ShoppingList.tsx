@@ -741,6 +741,7 @@ export default function ShoppingList() {
           profilId: r.profilId,
           tip: r.tip,
           adancime: r.adancime,
+          cupluStrangere: r.cupluStrangere,
           comments: r.comments,
         }));
       } else {
@@ -762,6 +763,7 @@ export default function ShoppingList() {
                 profilId: it.anvelopa.profil_id ?? null,
                 tip: it.anvelopa.tip,
                 adancime: it.anvelopa.adancime ?? null,
+                cupluStrangere: null,
                 comments: null,
               }));
           }
