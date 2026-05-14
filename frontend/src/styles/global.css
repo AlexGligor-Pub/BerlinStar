@@ -3862,6 +3862,71 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* ===== Angajati panel grid + detail ===== */
+.angajati-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.angajat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+  color: var(--text);
+}
+.angajat-card:hover {
+  border-color: var(--accent, #5b7cfa);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.angajat-card--active {
+  border-color: var(--accent, #5b7cfa);
+  background: color-mix(in srgb, var(--accent, #5b7cfa) 8%, var(--surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #5b7cfa) 25%, transparent);
+}
+.angajat-card__name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.angajat-card__desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.angajati-detail {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 2px solid var(--accent, #5b7cfa);
+}
+.angajati-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.angajati-detail-total {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  background: color-mix(in srgb, var(--accent, #5b7cfa) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #5b7cfa) 30%, transparent);
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+
 .locatii-empty {
   text-align: center;
   padding: 24px;

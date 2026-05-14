@@ -4797,3 +4797,121 @@ DETAIL:  Key (username)=(alexgligor) already exists.
 2026-05-15T00:31:44 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=caea5789  status=200  11.7ms
 2026-05-15T00:31:46 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=7c7f94f8  ip=127.0.0.1
 2026-05-15T00:31:46 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=7c7f94f8  status=200  28.7ms
+2026-05-15T00:37:32 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=e32f225e  ip=127.0.0.1
+2026-05-15T00:37:32 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=e32f225e  status=200  160.8ms
+2026-05-15T00:38:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=ba528b3c  ip=127.0.0.1
+2026-05-15T00:38:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=ba528b3c  status=200  24.9ms
+2026-05-15T00:39:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=2c8de012  ip=127.0.0.1
+2026-05-15T00:39:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=2c8de012  status=200  19.9ms
+2026-05-15T00:40:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=b29e8dbf  ip=127.0.0.1
+2026-05-15T00:40:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=b29e8dbf  status=200  11.1ms
+2026-05-15T00:45:17 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-15T00:45:17 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-15T00:45:17 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-15T00:47:54 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T00:47:54 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T00:47:54 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T00:47:54 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T00:47:54 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-15T00:47:54 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-15T00:47:54 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-15T00:49:26 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=7870ea75  ip=127.0.0.1
+2026-05-15T00:49:27 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=7870ea75  status=200  574.2ms
+2026-05-15T00:49:47 [INFO    ] berlinstar.http: → GET /api/employees  rid=b6798f1d  ip=127.0.0.1
+2026-05-15T00:49:48 [INFO    ] berlinstar.http: ← GET /api/employees  rid=b6798f1d  status=200  322.2ms
+2026-05-15T00:49:51 [INFO    ] berlinstar.http: → GET /api/employees  rid=167b22da  ip=127.0.0.1
+2026-05-15T00:49:51 [INFO    ] berlinstar.http: ← GET /api/employees  rid=167b22da  status=200  23.9ms
+2026-05-15T00:49:57 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=d148cb49  ip=127.0.0.1
+2026-05-15T00:49:58 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=d148cb49  status=200  294.1ms
+2026-05-15T00:50:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=a5c174bb  ip=127.0.0.1
+2026-05-15T00:50:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=a5c174bb  status=200  17.3ms
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=1352f3cb  ip=127.0.0.1
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=1df8765c  ip=127.0.0.1
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=1352f3cb  status=200  93.5ms
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=1df8765c  status=200  128.8ms
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=7e3f7259  ip=127.0.0.1
+2026-05-15T00:50:27 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=7e3f7259  status=200  30.4ms
+2026-05-15T00:51:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=ddc80a39  ip=127.0.0.1
+2026-05-15T00:51:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=ddc80a39  status=200  9.9ms
+2026-05-15T00:51:33 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=6942ce8a  ip=127.0.0.1
+2026-05-15T00:51:33 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=6942ce8a  status=200  24.7ms
+2026-05-15T00:51:46 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=ef20ac0d  ip=127.0.0.1
+2026-05-15T00:51:46 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=ef20ac0d  status=200  42.8ms
+2026-05-15T00:51:58 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=77f109bb  ip=127.0.0.1
+2026-05-15T00:51:58 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=77f109bb  status=200  40.5ms
+2026-05-15T00:52:10 [INFO    ] berlinstar.http: → GET /api/reports/employees/20  rid=f52eee3a  ip=127.0.0.1
+2026-05-15T00:52:10 [INFO    ] berlinstar.http: ← GET /api/reports/employees/20  rid=f52eee3a  status=200  42.9ms
+2026-05-15T00:52:13 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=9be47cc7  ip=127.0.0.1
+2026-05-15T00:52:13 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=9be47cc7  status=200  14.7ms
+2026-05-15T00:52:23 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=81c2d076  ip=127.0.0.1
+2026-05-15T00:52:23 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=81c2d076  status=200  26.5ms
+2026-05-15T00:52:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=eee550a5  ip=127.0.0.1
+2026-05-15T00:52:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=eee550a5  status=200  6.4ms
+2026-05-15T00:52:25 [INFO    ] berlinstar.http: → GET /api/reports/employees/24  rid=72d9fce7  ip=127.0.0.1
+2026-05-15T00:52:25 [INFO    ] berlinstar.http: ← GET /api/reports/employees/24  rid=72d9fce7  status=200  15.5ms
+2026-05-15T00:52:34 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=be026e70  ip=127.0.0.1
+2026-05-15T00:52:35 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=be026e70  status=200  49.9ms
+2026-05-15T00:52:37 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=573fd280  ip=127.0.0.1
+2026-05-15T00:52:37 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=573fd280  status=200  43.9ms
+2026-05-15T00:53:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=cf6d05f1  ip=127.0.0.1
+2026-05-15T00:53:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=cf6d05f1  status=200  11.9ms
+2026-05-15T00:54:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=23d12d9e  ip=127.0.0.1
+2026-05-15T00:54:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=23d12d9e  status=200  15.5ms
+2026-05-15T00:54:38 [INFO    ] berlinstar.http: → GET /api/employees  rid=ad030b39  ip=127.0.0.1
+2026-05-15T00:54:38 [INFO    ] berlinstar.http: ← GET /api/employees  rid=ad030b39  status=200  16.8ms
+2026-05-15T00:54:58 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=99bfc41d  ip=127.0.0.1
+2026-05-15T00:54:58 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=99bfc41d  status=200  46.0ms
+2026-05-15T00:55:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=51b5a3bd  ip=127.0.0.1
+2026-05-15T00:55:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=51b5a3bd  status=200  7.3ms
+2026-05-15T00:55:30 [INFO    ] berlinstar.http: → GET /api/reports/employees/12  rid=52935f81  ip=127.0.0.1
+2026-05-15T00:55:30 [INFO    ] berlinstar.http: ← GET /api/reports/employees/12  rid=52935f81  status=200  39.8ms
+2026-05-15T00:56:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=8f317238  ip=127.0.0.1
+2026-05-15T00:56:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=8f317238  status=200  18.5ms
+2026-05-15T00:57:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=b5c4fd01  ip=127.0.0.1
+2026-05-15T00:57:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=b5c4fd01  status=200  14.2ms
+2026-05-15T00:58:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=afc5ed13  ip=127.0.0.1
+2026-05-15T00:58:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=afc5ed13  status=200  16.1ms
+2026-05-15T01:00:41 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-15T01:00:41 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-15T01:00:41 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-15T01:02:36 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T01:02:36 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T01:02:36 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T01:02:36 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T01:02:36 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-15T01:02:37 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-15T01:02:37 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-15T01:02:37 [INFO    ] berlinstar.http: → GET /api/employees  rid=46697660  ip=127.0.0.1
+2026-05-15T01:02:37 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=604933ed  ip=127.0.0.1
+2026-05-15T01:02:37 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=10d8270d  ip=127.0.0.1
+2026-05-15T01:02:37 [INFO    ] berlinstar.http: → GET /api/employees  rid=d410b724  ip=127.0.0.1
+2026-05-15T01:02:38 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=604933ed  status=200  665.3ms
+2026-05-15T01:02:38 [INFO    ] berlinstar.http: ← GET /api/employees  rid=d410b724  status=200  415.3ms
+2026-05-15T01:02:38 [INFO    ] berlinstar.http: ← GET /api/employees  rid=46697660  status=200  855.2ms
+2026-05-15T01:02:38 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=10d8270d  status=200  604.7ms
+2026-05-15T01:02:47 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=6555ace5  ip=127.0.0.1
+2026-05-15T01:02:47 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=6555ace5  status=200  65.1ms
+2026-05-15T01:02:47 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=1bfe7a70  ip=127.0.0.1
+2026-05-15T01:02:47 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=1bfe7a70  status=200  59.8ms
+2026-05-15T01:02:51 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=961aa7ca  ip=127.0.0.1
+2026-05-15T01:02:51 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=961aa7ca  status=200  85.8ms
+2026-05-15T01:02:55 [INFO    ] berlinstar.http: → GET /api/employees  rid=c93eca33  ip=127.0.0.1
+2026-05-15T01:02:55 [INFO    ] berlinstar.http: ← GET /api/employees  rid=c93eca33  status=200  31.5ms
+2026-05-15T01:02:56 [INFO    ] berlinstar.http: → GET /api/reports/employees/1  rid=b7a71b79  ip=127.0.0.1
+2026-05-15T01:02:56 [INFO    ] berlinstar.http: ← GET /api/reports/employees/1  rid=b7a71b79  status=200  106.8ms
+2026-05-15T01:03:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=e4adc513  ip=127.0.0.1
+2026-05-15T01:03:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=e4adc513  status=200  24.4ms
+2026-05-15T01:03:40 [INFO    ] berlinstar.http: → GET /api/reports/employees/24  rid=cd3ec7a6  ip=127.0.0.1
+2026-05-15T01:03:40 [INFO    ] berlinstar.http: ← GET /api/reports/employees/24  rid=cd3ec7a6  status=200  72.8ms
+2026-05-15T01:04:01 [INFO    ] berlinstar.http: → GET /api/reports/employees/6  rid=3f655eb7  ip=127.0.0.1
+2026-05-15T01:04:01 [INFO    ] berlinstar.http: ← GET /api/reports/employees/6  rid=3f655eb7  status=200  72.0ms
+2026-05-15T01:04:03 [INFO    ] berlinstar.http: → GET /api/reports/employees/3  rid=cb3ff3aa  ip=127.0.0.1
+2026-05-15T01:04:03 [INFO    ] berlinstar.http: ← GET /api/reports/employees/3  rid=cb3ff3aa  status=200  43.2ms
+2026-05-15T01:04:05 [INFO    ] berlinstar.http: → GET /api/reports/employees/6  rid=93e4db74  ip=127.0.0.1
+2026-05-15T01:04:05 [INFO    ] berlinstar.http: ← GET /api/reports/employees/6  rid=93e4db74  status=200  65.1ms
+2026-05-15T01:04:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=c0ef9823  ip=127.0.0.1
+2026-05-15T01:04:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=c0ef9823  status=200  10.6ms
+2026-05-15T01:04:52 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=30539aa6  ip=127.0.0.1
+2026-05-15T01:04:52 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=30539aa6  status=200  34.9ms
+2026-05-15T01:05:24 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=2e4be0c9  ip=127.0.0.1
+2026-05-15T01:05:24 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=2e4be0c9  status=200  25.2ms
