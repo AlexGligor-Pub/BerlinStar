@@ -1869,7 +1869,11 @@ function _montajRotaHasData(r: MontajRotaRow): boolean {
 
 /** Card cu imagine + text pentru pozitiile principale; imagineSide = "left" sau "right".
  *  Textul e aliniat catre imagine (in oglinda fata de pozitia roti in masina).
- *  Daca rotata nu are date completate, deseneaza doar imaginea. */
+ *  Daca rotata nu are date completate, deseneaza doar imaginea.
+ *
+ *  Imaginea se extinde pana la marginile exterioare ale cardului (sus, jos, si latura
+ *  catre cardul vecin) pentru ca imaginile cardurilor adiacente sa fie lipite unele de
+ *  altele, fara spatiu intre ele. Doar latura dinspre text are un mic padding. */
 async function drawMontajRotaCard(
   doc: any,
   r: MontajRotaRow,
@@ -1880,17 +1884,20 @@ async function drawMontajRotaCard(
 ): Promise<void> {
   const navyBlue: [number, number, number] = [30, 58, 138];
   const imgW = Math.min(40, w * 0.42);
-  const imgPad = 1.5;
-  const imgX = imageSide === "left" ? x + imgPad : x + w - imgW + imgPad;
-  const textX = imageSide === "left" ? x + imgW + 2 : x + 2;
-  const textW = w - imgW - 2;
+  const innerPad = 2; // spatiu intre imagine si text (in interiorul cardului)
+  // Imaginea se intinde pe lateral pana la marginea exterioara (lipita de cardul vecin)
+  // si vertical pana la marginile de sus/jos.
+  const imgX = imageSide === "left" ? x : x + w - imgW + innerPad;
+  const imgBoxW = imgW - innerPad;
+  const textX = imageSide === "left" ? x + imgW : x;
+  const textW = w - imgW;
   // Text aliniat catre imagine
   const align: "left" | "right" = imageSide === "left" ? "left" : "right";
   const anchorX = align === "right" ? textX + textW : textX;
 
   // Imagine (centrata in zona alocata, cu aspect ratio pastrat)
   if (r.imageUrl) {
-    await drawSideImage(doc, r.imageUrl, imgX, y + imgPad, imgW - 2 * imgPad, h - 2 * imgPad);
+    await drawSideImage(doc, r.imageUrl, imgX, y, imgBoxW, h);
   }
 
   // Daca rotata nu are date, randam doar imaginea (fara text)
@@ -2038,8 +2045,10 @@ export async function generateMontajRoti(
     if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
   }
 
-  const colGap = 6;
-  const rowGap = 4;
+  // Cardurile sunt lipite — fara spatii intre ele (orizontal si vertical) — pentru ca
+  // imaginile cardurilor adiacente sa fie aliniate edge-to-edge.
+  const colGap = 0;
+  const rowGap = 0;
   const cardW = (CW - colGap) / 2;
   const cardH = 42;
 
@@ -2065,13 +2074,15 @@ export async function generateMontajRoti(
 
     await drawPair("stanga_fata", "dreapta_fata");
     await drawPair("stanga_spate", "dreapta_spate");
+    // Separator vizual intre gridul cardurilor (lipite) si randurile Rezerva/Nespecificat.
+    if (byPoz.rezerva || byPoz.nespecificat) y += 4;
   }
 
   if (byPoz.rezerva) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + rowGap;
+    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + 2;
   }
   if (byPoz.nespecificat) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + rowGap;
+    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + 2;
   }
   y += 2;
 

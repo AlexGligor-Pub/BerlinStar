@@ -207,8 +207,8 @@ export default function MontareRotiModal(props: {
               {(row, idx) => {
                 const placement = () => imagePlacement(row.pozitie);
                 return (
-                  <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">
+                  <div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px">
                       <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx() + 1}</span>
                       <div style="display:flex;gap:6px">
                         <button class="btn btn-ghost btn-sm" onClick={() => copyRow(row.uid)}>Copiază</button>
@@ -216,7 +216,7 @@ export default function MontareRotiModal(props: {
                       </div>
                     </div>
 
-                    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr 1fr;align-items:start">
+                    <div style="display:grid;gap:5px;grid-template-columns:1fr 1fr 1fr;align-items:start">
                       <Show when={placement() === "left"}>
                         {renderWheelImage("left", row.pozitie)}
                       </Show>
@@ -256,7 +256,7 @@ export default function MontareRotiModal(props: {
                             patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
                           }}
                         />
-                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                        <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                           <For each={PRESIUNE_SHORTCUTS}>
                             {(val) => (
                               <button
@@ -310,37 +310,7 @@ export default function MontareRotiModal(props: {
                         />
                       </div>
 
-                      {/* Adancime */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                        <input
-                          class="input"
-                          style="width:100%"
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          value={row.adancime ?? ""}
-                          onInput={(e) => {
-                            const v = e.currentTarget.value;
-                            patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                          }}
-                        />
-                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                          <For each={ADANCIME_SHORTCUTS}>
-                            {(val) => (
-                              <button
-                                type="button"
-                                style={SHORTCUT_BTN_STYLE}
-                                onClick={() => patchRow(row.uid, { adancime: val })}
-                              >
-                                {val}
-                              </button>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-
-                      {/* Tip */}
+                      {/* Tip — mutat inaintea Adancime */}
                       <div>
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
                         <select
@@ -356,34 +326,97 @@ export default function MontareRotiModal(props: {
                         </select>
                       </div>
 
-                      {/* Cuplu strangere prezoane (cheie dinamometrica) — ascuns pentru Rezerva / Nespecificat */}
-                      <Show when={!pozitieFaraCuplu(row.pozitie)}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                          <input
-                            class="input"
-                            style="width:100%"
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={row.cupluStrangere ?? ""}
-                            onInput={(e) => {
-                              const v = e.currentTarget.value;
-                              patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                            }}
-                          />
-                          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                            <For each={CUPLU_SHORTCUTS}>
-                              {(val) => (
-                                <button
-                                  type="button"
-                                  style={SHORTCUT_BTN_STYLE}
-                                  onClick={() => patchRow(row.uid, { cupluStrangere: val })}
-                                >
-                                  {val}
-                                </button>
-                              )}
-                            </For>
+                      {/* Adancime + Cuplu — perechi cu lățimi 0.7fr / 1.3fr cand ambele sunt vizibile;
+                          cand Cuplu e ascuns (Rezerva/Nespecificat), Adancime rămâne o celulă simplă. */}
+                      <Show
+                        when={!pozitieFaraCuplu(row.pozitie)}
+                        fallback={
+                          <div>
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                            <input
+                              class="input"
+                              style="width:100%"
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={row.adancime ?? ""}
+                              onInput={(e) => {
+                                const v = e.currentTarget.value;
+                                patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                              }}
+                            />
+                            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                              <For each={ADANCIME_SHORTCUTS}>
+                                {(val) => (
+                                  <button
+                                    type="button"
+                                    style={SHORTCUT_BTN_STYLE}
+                                    onClick={() => patchRow(row.uid, { adancime: val })}
+                                  >
+                                    {val}
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                        }
+                      >
+                        <div style="grid-column:span 2;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
+                          <div>
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                            <input
+                              class="input"
+                              style="width:100%"
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              value={row.adancime ?? ""}
+                              onInput={(e) => {
+                                const v = e.currentTarget.value;
+                                patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                              }}
+                            />
+                            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                              <For each={ADANCIME_SHORTCUTS}>
+                                {(val) => (
+                                  <button
+                                    type="button"
+                                    style={SHORTCUT_BTN_STYLE}
+                                    onClick={() => patchRow(row.uid, { adancime: val })}
+                                  >
+                                    {val}
+                                  </button>
+                                )}
+                              </For>
+                            </div>
+                          </div>
+                          <div>
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                            <input
+                              class="input"
+                              style="width:100%"
+                              type="number"
+                              step="1"
+                              min="0"
+                              value={row.cupluStrangere ?? ""}
+                              onInput={(e) => {
+                                const v = e.currentTarget.value;
+                                patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                              }}
+                            />
+                            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                              <For each={CUPLU_SHORTCUTS}>
+                                {(val) => (
+                                  <button
+                                    type="button"
+                                    style={SHORTCUT_BTN_STYLE}
+                                    onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                  >
+                                    {val}
+                                  </button>
+                                )}
+                              </For>
+                            </div>
                           </div>
                         </div>
                       </Show>
