@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { device } from "../store/deviceStore";
 import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
@@ -9,6 +9,7 @@ import {
 import type { Programare, ProgramareStatus, ProgramareInput } from "../store/programariStore";
 import { triggerLoad } from "../store/resumeStore";
 import { adminVisible } from "../store/adminStore";
+import { notify } from "../store/notificationsStore";
 import { apiFetch } from "../utils/api";
 
 // ─── Calendar constants ──────────────────────────────────────────────────────
@@ -255,11 +256,13 @@ export default function Programari() {
     await loadProgramari(locId, from.toISOString(), to.toISOString());
   }
 
-  createEffect(() => { weekOffset(); void reloadAppts(); });
-  createEffect(() => {
-    const d = weekDays()[3]; // joi — luna reprezentativa a saptamanii
+  // Tracking explicit pe weekOffset() pentru a evita refetch-uri din alte semnale.
+  createEffect(on(weekOffset, () => { void reloadAppts(); }));
+  // Derive miniMonth din weekDays — derivare pura, dar setMiniMonth e signal aparte.
+  createEffect(on(weekDays, (days) => {
+    const d = days[3]; // joi — luna reprezentativa a saptamanii
     setMiniMonth({ year: d.getFullYear(), month: d.getMonth() });
-  });
+  }));
 
   const filteredProgramari = createMemo(() => {
     let list = programari();
@@ -417,8 +420,12 @@ export default function Programari() {
     setSelectedAppt(null);
   }
 
-  async function handleStartWork(appt: Programare) {
-    try { await updateProgramare(appt.id, { status: "In lucru" }); } catch {}
+  async function handleStartWork(appt: Programare): Promise<void> {
+    try {
+      await updateProgramare(appt.id, { status: "In lucru" });
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la marcare „În lucru”.", "error");
+    }
     triggerLoad({
       titlu: appt.titlu,
       descriere: "", dateTehn: "", items: [],

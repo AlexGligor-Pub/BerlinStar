@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { adminVisible } from "../store/adminStore";
+import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
@@ -203,7 +204,11 @@ function ClientSection(props: { receipt: Receipt }) {
         const d = await res.json();
         setAnafResult({ name: d.name ?? "", cui: String(d.cui ?? cui), adresa: d.address ?? "" });
       }
-    } catch {} finally { setAnafLoading(false); }
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la interogarea ANAF.", "error");
+    } finally {
+      setAnafLoading(false);
+    }
   }
 
   async function searchByNume() {
@@ -624,7 +629,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
   return (
     <div class="rcard" classList={{ "rcard--open": expanded() }}>
       {/* Header card — click pentru expand */}
-      <div class="rcard-header" onClick={() => setExpanded((v) => !v)}>
+      <div
+        class="rcard-header"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded()}
+        onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setExpanded((v) => !v))}
+      >
         <div class="rcard-info">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <span class="rcard-titlu">{r.titlu}</span>

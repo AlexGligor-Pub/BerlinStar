@@ -365,7 +365,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct:
     tableWidth: CW,
   });
 
-  return (doc as any).lastAutoTable.finalY + 3;
+  return (doc as any).lastAutoTable.finalY + 3; // jsPDF-autotable extinde doc cu lastAutoTable la runtime — neexpus in types
 }
 
 /** Sectiune totale — TVA afisat intotdeauna (0% daca nu e platitor TVA) */

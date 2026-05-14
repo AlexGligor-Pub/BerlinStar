@@ -2,6 +2,7 @@ import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, 
 import { useSearchParams } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
+import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import { posHotelCtx } from "../store/posHotelStore";
 import { device } from "../store/deviceStore";
@@ -389,7 +390,14 @@ function CazareCard(props: {
   }
 
   return (
-    <div class="rcard" style="padding:7px 12px;cursor:pointer" onClick={() => props.onView(c())}>
+    <div
+      class="rcard"
+      style="padding:7px 12px;cursor:pointer"
+      role="button"
+      tabIndex={0}
+      onClick={() => props.onView(c())}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), props.onView(c()))}
+    >
       {/* Header card */}
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
         <div style="display:flex;align-items:center;gap:10px;min-width:0">
@@ -629,7 +637,9 @@ export default function HotelAnvelope() {
           setPageSelectedClient(clientItem);
           await loadCazari({ clientId: c.id, activa: true, limit: 200 });
         }
-      } catch {}
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare client.", "error");
+      }
     } else {
       await fetchCazari();
     }
@@ -643,7 +653,9 @@ export default function HotelAnvelope() {
           const d = await res.json();
           setViewOnlyCazare(mapCazare(d));
         }
-      } catch {}
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare cazare.", "error");
+      }
     }
 
     const observer = new IntersectionObserver(
@@ -725,7 +737,9 @@ export default function HotelAnvelope() {
           website: co.website ?? null,
         });
       }
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare date companie.", "error");
+    }
   }
 
   async function fetchCazari() {
@@ -831,7 +845,9 @@ export default function HotelAnvelope() {
           setNewClientVehicole(vData);
           if (vData.length > 0) setNewSelectedVehicol(vData[0].numar_masina);
         }
-      } catch {}
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare vehicule client.", "error");
+      }
     } else {
       setClientCazariVechi([]);
     }
@@ -948,7 +964,9 @@ export default function HotelAnvelope() {
           await handleClientSelect(clientItem);
           setNewReferintaCazareId(c.id); // handleClientSelect resets it, restore
         }
-      } catch {}
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la pregătire cazare combinată.", "error");
+      }
     }
     setCombinedCazare(c);
   }
@@ -1092,7 +1110,9 @@ export default function HotelAnvelope() {
           const vData: ClientVehicol[] = await vRes.json();
           setEditClientVehicole(vData);
         }
-      } catch {}
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare cazări/vehicule.", "error");
+      }
     } else {
       setEditClientCazariVechi([]);
       setEditClientVehicole([]);

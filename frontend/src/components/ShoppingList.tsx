@@ -139,7 +139,7 @@ function PosClientSearch(props: {
           onClick={() => { if (props.value) { clear(); } }}
         />
         <Show when={props.value}>
-          <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={clear} title="Șterge client">✕</button>
+          <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={clear} title="Șterge client" aria-label="Șterge clientul selectat">✕</button>
         </Show>
         <Show when={searching()}>
           <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:11px;pointer-events:none">...</span>

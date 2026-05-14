@@ -44,7 +44,57 @@ export interface Receipt {
 
 const CACHE_KEY = "bs_receipts";
 
-function mapFromApi(r: any): Receipt {
+interface RawReceiptItem {
+  id: number;
+  name: string;
+  price: string | number;
+  qty: number;
+  unit: string;
+  employee_id?: number | null;
+  employee_name?: string | null;
+  employee_target_pct?: number | null;
+}
+
+interface RawReceiptVehicol {
+  numar_masina: string;
+  marca?: string | null;
+  model?: string | null;
+  numar_kilometrii?: number | null;
+  vin?: string | null;
+  observatii?: string | null;
+}
+
+interface RawReceipt {
+  id: number | string;
+  created_at: string;
+  titlu: string;
+  client_id?: number | null;
+  client_nume?: string | null;
+  client_cui?: string | null;
+  client_adresa?: string | null;
+  client_telefon?: string | null;
+  client_tip?: string | null;
+  client_reprezentant?: string | null;
+  client_numar_masina?: string | null;
+  descriere?: string | null;
+  date_tehn?: string | null;
+  pay_method?: string;
+  partial_pay?: string | number | null;
+  receipt_items: RawReceiptItem[];
+  total: string | number;
+  deviz_serie?: string;
+  deviz_nr?: number;
+  factura_serie?: string;
+  factura_nr?: number;
+  chitanta_serie?: string;
+  chitanta_nr?: number;
+  programare_id?: number | null;
+  location_id?: number | null;
+  vehicol?: RawReceiptVehicol | null;
+  updated_at?: string | null;
+}
+
+function mapFromApi(r: RawReceipt): Receipt {
   return {
     id: String(r.id),
     date: r.created_at,
@@ -59,20 +109,20 @@ function mapFromApi(r: any): Receipt {
     clientNumarMasina: r.client_numar_masina ?? null,
     descriere: r.descriere ?? undefined,
     dateTehn: r.date_tehn ?? undefined,
-    metodaPlata: r.pay_method !== "Neplatit" ? r.pay_method : undefined,
-    partialPay: r.partial_pay != null ? parseFloat(r.partial_pay) : undefined,
-    items: r.receipt_items.map((i: any) => ({
+    metodaPlata: r.pay_method && r.pay_method !== "Neplatit" ? r.pay_method : undefined,
+    partialPay: r.partial_pay != null ? (typeof r.partial_pay === "number" ? r.partial_pay : parseFloat(r.partial_pay)) : undefined,
+    items: r.receipt_items.map((i) => ({
       id: i.id,
       lineId: `${i.id}_${i.employee_id ?? ""}`,
       name: i.name,
-      price: parseFloat(i.price),
+      price: typeof i.price === "number" ? i.price : parseFloat(i.price),
       qty: i.qty,
       unit: i.unit,
       employeeId: i.employee_id ?? null,
       employeeName: i.employee_name ?? null,
       employeeTargetPct: i.employee_target_pct ?? null,
     })),
-    total: parseFloat(r.total),
+    total: typeof r.total === "number" ? r.total : parseFloat(r.total),
     devizSerie: r.deviz_serie ?? "",
     devizNr: r.deviz_nr ?? 0,
     facturaSerie: r.factura_serie ?? "",

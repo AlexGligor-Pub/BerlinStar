@@ -1,6 +1,10 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
 import { apiFetch } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
+import { createPagination } from "../hooks/createPagination";
+import { notify } from "../store/notificationsStore";
+import Pagination from "../components/data/Pagination";
+import ConfirmDialog from "../components/ui/ConfirmDialog";
 
 interface Client {
   id: number;
@@ -29,15 +33,16 @@ interface ClientVehicol {
 
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
-    <div class="cfg-confirm-overlay">
-      <div class="cfg-confirm-modal">
-        <p class="cfg-confirm-text">Stergi <strong>{props.label}</strong>?</p>
-        <div class="cfg-confirm-actions">
-          <button class="btn btn-sm btn-ghost" onClick={props.onCancel}>Anulează</button>
-          <button class="btn btn-sm btn-danger" disabled={props.saving} onClick={props.onConfirm}>Șterge</button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      open={true}
+      title="Confirmare ștergere"
+      message={`Ștergi ${props.label}?`}
+      confirmLabel="Șterge"
+      variant="danger"
+      loading={props.saving}
+      onConfirm={props.onConfirm}
+      onCancel={props.onCancel}
+    />
   );
 }
 
@@ -51,9 +56,11 @@ function emptyVForm() {
 
 export default function Clienti() {
   const [clienti, setClienti] = createSignal<Client[]>([]);
+  const [total, setTotal] = createSignal<number | undefined>(undefined);
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch] = createSignal("");
   const [searchMasina, setSearchMasina] = createSignal("");
+  const pagination = createPagination({ initialPageSize: 25 });
 
   const [viewId, setViewId] = createSignal<number | null>(null);
   const [editId, setEditId] = createSignal<number | null>(null);
@@ -102,17 +109,21 @@ export default function Clienti() {
     }
   }
 
-  async function load() {
+  async function load(): Promise<void> {
     setLoading(true);
     try {
+      const p = pagination.params();
       const q = search() ? `&q=${encodeURIComponent(search())}` : "";
       const qm = searchMasina() ? `&q_masina=${encodeURIComponent(searchMasina())}` : "";
-      const res = await apiFetch(`/api/clienti?limit=200${q}${qm}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
+      const res = await apiFetch(`/api/clienti?limit=${p.limit}&offset=${p.offset}${q}${qm}`);
+      if (!res.ok) throw new Error("Eroare la încărcare clienți");
+      const data = (await res.json()) as { items: Client[]; total?: number };
       setClienti(data.items ?? []);
-    } catch {
-      setError("Eroare la încărcare.");
+      if (typeof data.total === "number") setTotal(data.total);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Eroare la încărcare.";
+      setError(msg);
+      notify(msg, "error");
     } finally {
       setLoading(false);
     }
@@ -120,10 +131,21 @@ export default function Clienti() {
 
   onMount(load);
 
+  // Reload pe schimbarea paginii (după mount)
+  let _mounted = false;
+  createEffect(on([pagination.page, pagination.pageSize], () => {
+    if (!_mounted) { _mounted = true; return; }
+    void load();
+  }));
+
   let _searchDebounce: ReturnType<typeof setTimeout> | null = null;
-  function debouncedLoad() {
+  function debouncedLoad(): void {
     if (_searchDebounce) clearTimeout(_searchDebounce);
-    _searchDebounce = setTimeout(() => { _searchDebounce = null; load(); }, 250);
+    _searchDebounce = setTimeout(() => {
+      _searchDebounce = null;
+      pagination.reset();
+      void load();
+    }, 250);
   }
 
   async function loadVehicole(clientId: number) {
@@ -586,7 +608,14 @@ export default function Clienti() {
               </Show>
 
               <Show when={editId() !== c.id && viewId() !== c.id}>
-                <div class="cfg-location-info" style="cursor:pointer;flex:1" onClick={() => startView(c)}>
+                <div
+                  class="cfg-location-info"
+                  style="cursor:pointer;flex:1"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => startView(c)}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), startView(c))}
+                >
                   <span class="cfg-location-name">
                     {c.nume}
                     <span class="client-tip-badge" classList={{ "client-tip-badge--juridic": c.tip === "juridic" }}>
@@ -618,6 +647,10 @@ export default function Clienti() {
           )}
         </For>
       </div>
+
+      <Show when={!loading() && clienti().length > 0}>
+        <Pagination api={pagination} total={total()} pageSizeOptions={[10, 25, 50, 100]} />
+      </Show>
 
       <Show when={deleteTarget()}>
         <DeleteModal

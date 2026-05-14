@@ -6,6 +6,8 @@ import { deviceReady } from "./store/deviceStore";
 import NavBar from "./components/NavBar";
 import DeviceSetupModal from "./components/DeviceSetupModal";
 import Login from "./pages/Login";
+import AppErrorBoundary from "./components/layout/AppErrorBoundary";
+import Notifications from "./components/layout/Notifications";
 
 // Lazy-load route pages to enable per-route code-splitting.
 const POS = lazy(() => import("./pages/POS"));
@@ -63,26 +65,29 @@ function Protected(props: { component: () => any }) {
 
 export default function App() {
   return (
-    <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-      <Route path="/health" component={HealthCheck} />
-      <Route path="/login" component={Login} />
-      <Route path="/no-access" component={NoAccess} />
-      <Route path="/" component={() => <Protected component={POS} />} />
-      <Route path="/receptie" component={() => <Protected component={Reception} />} />
-      <Route path="/configurari" component={() => (
-        <Show when={adminVisible()} fallback={<Navigate href="/" />}>
-          <Protected component={Configurari} />
-        </Show>
-      )} />
-      <Route path="/rapoarte" component={() => (
-        <Show when={adminVisible()} fallback={<Navigate href="/" />}>
-          <Protected component={Rapoarte} />
-        </Show>
-      )} />
-      <Route path="/clienti" component={() => <Protected component={Clienti} />} />
-      <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
-      <Route path="/programari" component={() => <Protected component={Programari} />} />
-      <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
-    </Router>
+    <AppErrorBoundary>
+      <Notifications />
+      <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+        <Route path="/health" component={HealthCheck} />
+        <Route path="/login" component={Login} />
+        <Route path="/no-access" component={NoAccess} />
+        <Route path="/" component={() => <Protected component={POS} />} />
+        <Route path="/receptie" component={() => <Protected component={Reception} />} />
+        <Route path="/configurari" component={() => (
+          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+            <Protected component={Configurari} />
+          </Show>
+        )} />
+        <Route path="/rapoarte" component={() => (
+          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+            <Protected component={Rapoarte} />
+          </Show>
+        )} />
+        <Route path="/clienti" component={() => <Protected component={Clienti} />} />
+        <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
+        <Route path="/programari" component={() => <Protected component={Programari} />} />
+        <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
+      </Router>
+    </AppErrorBoundary>
   );
 }

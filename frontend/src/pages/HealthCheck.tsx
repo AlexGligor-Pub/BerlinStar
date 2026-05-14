@@ -1,11 +1,14 @@
 import { createResource } from "solid-js";
 import { API_BASE } from "../utils/api";
+import type { HealthStatus } from "../types";
 
-async function fetchHealth() {
+type HealthLabel = "OK" | "BE-Error" | "DB-Error";
+
+async function fetchHealth(): Promise<HealthLabel> {
   try {
     const res = await fetch(API_BASE + "/api/health", { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return "BE-Error";
-    const data = await res.json();
+    const data = (await res.json()) as HealthStatus;
     return data.db === "error" ? "DB-Error" : "OK";
   } catch {
     return "BE-Error";
@@ -13,7 +16,7 @@ async function fetchHealth() {
 }
 
 export default function HealthCheck() {
-  const [status] = createResource(fetchHealth);
+  const [status] = createResource<HealthLabel>(fetchHealth);
   return (
     <div style={{ display: "flex", "align-items": "center", "justify-content": "center", height: "100vh", "font-size": "2rem", "font-family": "monospace" }}>
       {status.loading ? "..." : status()}

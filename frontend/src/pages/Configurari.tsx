@@ -1,5 +1,6 @@
 import { For, Show, Switch, Match, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
 import { apiFetch, API_BASE } from "../utils/api";
+import { notify } from "../store/notificationsStore";
 import { auth } from "../store/authStore";
 import { device, updateDevice } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings, updateGeneralSettings } from "../store/generalSettingsStore";
@@ -244,10 +245,12 @@ function LocatiiPanel() {
     try {
       const res = await apiFetch("/api/disclaimers?limit=200");
       if (!res.ok) return;
-      const data = await res.json();
-      cachedDisclaimers = (data.items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text }));
+      const data = (await res.json()) as { items?: Array<{ id: number; title: string; text: string }> };
+      cachedDisclaimers = (data.items ?? []).map((d) => ({ id: d.id, title: d.title, text: d.text }));
       setAllDisclaimers(cachedDisclaimers!);
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare disclaimere.", "error");
+    }
   }
 
   async function loadRegistersCache() {
@@ -255,10 +258,12 @@ function LocatiiPanel() {
     try {
       const res = await apiFetch("/api/registers?limit=200");
       if (!res.ok) return;
-      const data = await res.json();
-      cachedRegisters = (data.items ?? []).map((r: any) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null }));
+      const data = (await res.json()) as { items?: Array<{ id: number; name: string; company_id?: number | null }> };
+      cachedRegisters = (data.items ?? []).map((r) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null }));
       setAllRegisters(cachedRegisters!);
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare registre.", "error");
+    }
   }
 
   onMount(() => { loadLocations(); loadDisclaimersCache(); loadRegistersCache(); });
@@ -1405,11 +1410,13 @@ function ProduseSiServiciiPanel() {
     try {
       const res = await apiFetch("/api/departments?limit=200");
       if (!res.ok) return;
-      const data = await res.json();
+      const data = (await res.json()) as { items?: Department[] };
       const depts: Department[] = data.items ?? [];
       setDepartments(depts);
       if (catNewDeptId() === null && depts.length > 0) setCatNewDeptId(depts[0].id);
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare departamente.", "error");
+    }
   }
 
   async function loadCategories() {

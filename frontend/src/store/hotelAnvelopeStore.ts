@@ -81,14 +81,67 @@ export interface Cazare {
 
 // ─── Mappers ─────────────────────────────────────────────────────────────────
 
-function mapAnvelopa(a: any): Anvelopa {
+interface RawAnvelopa {
+  id: number;
+  client_id?: number | null;
+  marca_id?: number | null;
+  dimensiune_id?: number | null;
+  profil_id?: number | null;
+  tip: string;
+  adancime?: number | null;
+  comments?: string | null;
+  marca_nume?: string | null;
+  dimensiune_valoare?: string | null;
+  profil_valoare?: string | null;
+}
+
+interface RawCazareItem {
+  id: number;
+  anvelopa_id?: number | null;
+  anvelopa?: RawAnvelopa | null;
+}
+
+interface RawCazare {
+  id: number;
+  client_id?: number | null;
+  employee_id?: number | null;
+  loc_cazare_id?: number | null;
+  location_id?: number | null;
+  location_name?: string | null;
+  data_checkin: string;
+  data_checkout?: string | null;
+  comments?: string | null;
+  created_at: string;
+  client_nume?: string | null;
+  client_cui?: string | null;
+  client_telefon?: string | null;
+  client_adresa?: string | null;
+  client_reprezentant?: string | null;
+  employee_name?: string | null;
+  loc_cazare_nume?: string | null;
+  numar_masina?: string | null;
+  dep_anvelope?: boolean;
+  dep_capace?: boolean;
+  dep_roti_complete?: boolean;
+  dep_antifurturi?: boolean;
+  dep_prezoane?: boolean;
+  referinta_cazare_id?: number | null;
+  montate_pe_masina?: boolean;
+  successor_cazare_id?: number | null;
+  successor_montate_pe_masina?: boolean | null;
+  referinta_cazare_data_checkin?: string | null;
+  referinta_cazare_items?: RawCazareItem[];
+  items?: RawCazareItem[];
+}
+
+function mapAnvelopa(a: RawAnvelopa): Anvelopa {
   return {
     id: a.id,
     clientId: a.client_id ?? null,
     marcaId: a.marca_id ?? null,
     dimensiuneId: a.dimensiune_id ?? null,
     profilId: a.profil_id ?? null,
-    tip: a.tip as TipAnvelopa,
+    tip: a.tip as TipAnvelopa, // server enum oglindit local
     adancime: a.adancime ?? null,
     comments: a.comments ?? null,
     marcaNume: a.marca_nume ?? null,
@@ -97,7 +150,7 @@ function mapAnvelopa(a: any): Anvelopa {
   };
 }
 
-function mapCazare(c: any): Cazare {
+function mapCazare(c: RawCazare): Cazare {
   return {
     id: c.id,
     clientId: c.client_id ?? null,
@@ -127,12 +180,12 @@ function mapCazare(c: any): Cazare {
     successorCazareId: c.successor_cazare_id ?? null,
     successorMontatePeMasina: c.successor_montate_pe_masina ?? null,
     referintaCazareDataCheckin: c.referinta_cazare_data_checkin ?? null,
-    referintaCazareItems: (c.referinta_cazare_items ?? []).map((item: any) => ({
+    referintaCazareItems: (c.referinta_cazare_items ?? []).map((item) => ({
       id: item.id,
       anvelopaId: item.anvelopa_id ?? null,
       anvelopa: item.anvelopa ? mapAnvelopa(item.anvelopa) : null,
     })),
-    items: (c.items ?? []).map((item: any) => ({
+    items: (c.items ?? []).map((item) => ({
       id: item.id,
       anvelopaId: item.anvelopa_id ?? null,
       anvelopa: item.anvelopa ? mapAnvelopa(item.anvelopa) : null,
@@ -231,7 +284,15 @@ export async function getVehiculForCazare(cazare: Pick<Cazare, "clientId" | "num
   try {
     const res = await apiFetch(`/api/clienti/${cazare.clientId}/vehicole`);
     if (!res.ok) return null;
-    const list: any[] = await res.json();
+    interface RawVehicul {
+      numar_masina?: string | null;
+      marca?: string | null;
+      model?: string | null;
+      numar_kilometrii?: number | null;
+      vin?: string | null;
+      observatii?: string | null;
+    }
+    const list = (await res.json()) as RawVehicul[];
     const wanted = _normalizePlate(cazare.numarMasina);
     const v = list.find((x) => _normalizePlate(x.numar_masina ?? "") === wanted);
     if (!v) return null;
@@ -265,55 +326,65 @@ const PROFIL_CACHE_KEY = "bs_profiluri_anvelope";
 const LOCURI_CACHE_KEY = "bs_locuri_cazare";
 const CACHE_TTL = 10 * 60 * 1000;
 
-async function loadCached<T>(
+async function loadCached<R, T>(
   cacheKey: string,
   url: string,
   setter: (items: T[]) => void,
-  mapper: (raw: any) => T,
+  mapper: (raw: R) => T,
   force: boolean,
 ): Promise<void> {
   if (!force) {
     try {
       const raw = localStorage.getItem(cacheKey);
       if (raw) {
-        const { ts, items } = JSON.parse(raw);
-        if (Date.now() - ts < CACHE_TTL) { setter(items); return; }
+        const parsed = JSON.parse(raw) as { ts: number; items: T[] };
+        if (Date.now() - parsed.ts < CACHE_TTL) { setter(parsed.items); return; }
       }
-    } catch {}
+    } catch {
+      // cache corrupt — fall through to network
+    }
   }
   try {
     const res = await apiFetch(`${url}?limit=500`);
     if (!res.ok) return;
-    const data = await res.json();
+    const data = (await res.json()) as { items: R[] };
     const items: T[] = data.items.map(mapper);
     setter(items);
-    localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items }));
-  } catch {}
+    try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items })); } catch {
+      // storage quota/disabled — keep in-memory
+    }
+  } catch {
+    // network — silent (consumers see previous cached state)
+  }
 }
 
-export function loadMarci(force = false) {
-  return loadCached<MarcaAnvelopa>(
+interface RawNamed { id: number; nume: string }
+interface RawValoare { id: number; valoare: string }
+interface RawLocCazare { id: number; nume: string; description?: string | null }
+
+export function loadMarci(force = false): Promise<void> {
+  return loadCached<RawNamed, MarcaAnvelopa>(
     MARCI_CACHE_KEY, "/api/marci-anvelope", setMarci,
     (m) => ({ id: m.id, nume: m.nume }), force,
   );
 }
 
-export function loadDimensiuni(force = false) {
-  return loadCached<DimensiuneAnvelopa>(
+export function loadDimensiuni(force = false): Promise<void> {
+  return loadCached<RawValoare, DimensiuneAnvelopa>(
     DIM_CACHE_KEY, "/api/dimensiuni-anvelope", setDimensiuni,
     (d) => ({ id: d.id, valoare: d.valoare }), force,
   );
 }
 
-export function loadLocuriCazare(force = false) {
-  return loadCached<LocCazare>(
+export function loadLocuriCazare(force = false): Promise<void> {
+  return loadCached<RawLocCazare, LocCazare>(
     LOCURI_CACHE_KEY, "/api/loc-cazare", setLocuriCazare,
     (l) => ({ id: l.id, nume: l.nume, description: l.description ?? null }), force,
   );
 }
 
-export function loadProfil(force = false) {
-  return loadCached<ProfilAnvelopa>(
+export function loadProfil(force = false): Promise<void> {
+  return loadCached<RawValoare, ProfilAnvelopa>(
     PROFIL_CACHE_KEY, "/api/profiluri-anvelope", setProfiluri,
     (p) => ({ id: p.id, valoare: p.valoare }), force,
   );

@@ -6,19 +6,24 @@ interface Props {
   product: Product;
 }
 
-export default function ProductCard({ product }: Props) {
+export default function ProductCard(props: Props) {
   return (
-    <div class="product-card" onClick={() => addToCart(product)} role="button" tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && addToCart(product)}>
-      <Show when={product.imagePath}>
-        <img src={product.imagePath!} class="product-card-img" alt={product.name} />
+    <div
+      class="product-card"
+      onClick={() => addToCart(props.product)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && addToCart(props.product)}
+    >
+      <Show when={props.product.imagePath}>
+        <img src={props.product.imagePath!} class="product-card-img" alt={props.product.name} />
       </Show>
-      <div class="product-card-name">{product.name}</div>
+      <div class="product-card-name">{props.product.name}</div>
       <div class="product-card-price">
-        {product.price.toFixed(1)} lei
-        <span class="product-card-per"> / {product.unit}</span>
+        {props.product.price.toFixed(1)} lei
+        <span class="product-card-per"> / {props.product.unit}</span>
       </div>
-      <div class="product-card-unit">{product.type}</div>
+      <div class="product-card-unit">{props.product.type}</div>
     </div>
   );
 }

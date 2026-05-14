@@ -1,5 +1,6 @@
 import { For, Show, Switch, Match, createSignal, onMount, createMemo, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { notify } from "../store/notificationsStore";
 
 interface EmployeeReport {
   id: number;
@@ -108,12 +109,26 @@ function TargetAngajatiPanel() {
   const [showZeroTarget, setShowZeroTarget] = createSignal(false);
 
   onMount(async () => {
+    // Dashboardul agregheaza target-uri client-side, deci avem nevoie de toti
+    // angajatii. Iteram cu offset pana epuizam pagina (pagina marime 200).
+    const all: EmployeeReport[] = [];
+    const PAGE = 200;
+    let offset = 0;
     try {
-      const res = await apiFetch("/api/employees?limit=200");
-      if (res.ok) {
-        const data = await res.json();
-        setEmployees(data.items ?? []);
+      while (true) {
+        const res = await apiFetch(`/api/employees?limit=${PAGE}&offset=${offset}`);
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        const data = (await res.json()) as { items: EmployeeReport[]; total?: number };
+        const items = data.items ?? [];
+        all.push(...items);
+        if (items.length < PAGE) break;
+        offset += PAGE;
+        if (offset > 5000) break; // safeguard impotriva loop-ului
       }
+      setEmployees(all);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Eroare la încărcare angajați.";
+      notify(msg, "error");
     } finally {
       setLoading(false);
     }

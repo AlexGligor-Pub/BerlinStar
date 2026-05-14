@@ -1,8 +1,9 @@
-import { For, Show, createMemo, createSignal, onMount, createEffect } from "solid-js";
+import { For, Show, createMemo, createSignal, onMount, createEffect, on } from "solid-js";
 import { API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 import { invalidateHotelImages } from "../store/hotelAnvelopeStore";
 import { invalidateMontareRotiImages } from "../store/montajRotiStore";
+import { notify } from "../store/notificationsStore";
 import logo from "../assets/logo.png";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,10 +57,13 @@ function _readPersistedAdminToken(): string | null {
       return null;
     }
     return localStorage.getItem(_ADMIN_TOKEN_KEY);
-  } catch { return null; }
+  } catch {
+    // localStorage indisponibil → tratam ca lipsa token
+    return null;
+  }
 }
 
-function setAdminToken(t: string | null) {
+function setAdminToken(t: string | null): void {
   _adminToken = t;
   try {
     if (t) {
@@ -69,7 +73,9 @@ function setAdminToken(t: string | null) {
       localStorage.removeItem(_ADMIN_TOKEN_KEY);
       localStorage.removeItem(_ADMIN_TOKEN_EXP_KEY);
     }
-  } catch {}
+  } catch {
+    // storage quota/disabled — token ramane doar in-memory
+  }
 }
 
 function getBearerToken(): string | null {
@@ -265,7 +271,10 @@ function HotelAnvelopeSection() {
     try {
       const res = await fetch(API_BASE + "/api/global-settings/hotel-anvelope", { headers: authHeaders() });
       if (res.ok) setImages(await res.json());
-    } catch {}
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Eroare la încărcare imagini hotel.";
+      notify(msg, "error");
+    }
   });
 
   return (
@@ -300,7 +309,14 @@ function HotelAnvelopeSection() {
 
       <div class="hotel-img-grid">
         {/* Cazare Roti */}
-        <div class="hotel-img-card" onClick={() => setDialogType("cazare")}>
+        <div
+          class="hotel-img-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setDialogType("cazare")}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setDialogType("cazare"))}
+          aria-label="Modifică imaginea Cazare Roți"
+        >
           <div class="hotel-img-card__title">Cazare Roti</div>
           <Show
             when={images().hotel_cazare_image_path}
@@ -323,7 +339,14 @@ function HotelAnvelopeSection() {
         </div>
 
         {/* Scoatere Roti */}
-        <div class="hotel-img-card" onClick={() => setDialogType("scoatere")}>
+        <div
+          class="hotel-img-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setDialogType("scoatere")}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setDialogType("scoatere"))}
+          aria-label="Modifică imaginea Scoatere Roți"
+        >
           <div class="hotel-img-card__title">Scoatere Roti</div>
           <Show
             when={images().hotel_scoatere_image_path}
@@ -346,7 +369,14 @@ function HotelAnvelopeSection() {
         </div>
 
         {/* Montare Roti */}
-        <div class="hotel-img-card" onClick={() => setDialogType("montare")}>
+        <div
+          class="hotel-img-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => setDialogType("montare")}
+          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setDialogType("montare"))}
+          aria-label="Modifică imaginea Montare Roți"
+        >
           <div class="hotel-img-card__title">Montare Roti</div>
           <Show
             when={images().hotel_montare_image_path}
@@ -490,7 +520,14 @@ function MontareRotiSection() {
       <div class="hotel-img-grid">
         <For each={MONTARE_POZITII}>
           {(p) => (
-            <div class="hotel-img-card" onClick={() => setDialogPozitie(p.id)}>
+            <div
+              class="hotel-img-card"
+              role="button"
+              tabIndex={0}
+              onClick={() => setDialogPozitie(p.id)}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), setDialogPozitie(p.id))}
+              aria-label={`Modifică imaginea pozitiei ${p.label}`}
+            >
               <div class="hotel-img-card__title">{p.label}</div>
               <Show
                 when={currentUrl(p.id)}
@@ -1040,7 +1077,9 @@ function EmailSection() {
     try {
       const r = await adminFetch("/api/email-settings/smtp");
       if (r.ok) setSmtp(await r.json());
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare SMTP.", "error");
+    }
     try {
       const r = await adminFetch("/api/email-settings/templates");
       if (r.ok) {
@@ -1049,14 +1088,18 @@ function EmailSection() {
         for (const t of data) edits[t.scenario] = { ...t };
         setTmplEdits(edits);
       }
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare template-uri email.", "error");
+    }
     try {
       const r = await adminFetch("/api/accounts?limit=200&sort=id");
       if (r.ok) {
         const data: { items: Account[] } = await r.json();
         setLogsAccounts(data.items);
       }
-    } catch {}
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la încărcare conturi.", "error");
+    }
     loadLogs();
   });
 
@@ -1069,10 +1112,8 @@ function EmailSection() {
     } catch {}
   }
 
-  createEffect(() => {
-    filterAccountId();
-    loadLogs();
-  });
+  // Refetch logs cand filtru cont se schimba — dependenta explicita via on().
+  createEffect(on(filterAccountId, () => { void loadLogs(); }));
 
   async function saveSmtp() {
     setSmtpSaving(true);

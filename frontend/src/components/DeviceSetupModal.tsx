@@ -103,6 +103,7 @@ export default function DeviceSetupModal() {
               <button
                 class="btn btn-sm btn-ghost device-name-edit-btn"
                 title="Editeaza numele"
+                aria-label="Editează numele dispozitivului"
                 onClick={() => setEditingName(true)}
               >✏️</button>
             </div>

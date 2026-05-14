@@ -4323,3 +4323,63 @@ body {
   animation: bs-skeleton-shimmer 1.4s ease-in-out infinite;
   border-radius: 4px;
 }
+
+/* ─── UI primitives (added by refactor) ──────────────────────────────────── */
+@keyframes bs-spin { to { transform: rotate(360deg); } }
+
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field-label { font-size: 13px; color: var(--text-muted); }
+.field-hint { font-size: 12px; color: var(--text-muted); }
+.field-error { font-size: 12px; color: var(--danger, #dc3545); }
+.field--error .input { border-color: var(--danger, #dc3545); }
+
+.input-sm { padding: 4px 8px; font-size: 13px; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1.4; }
+.badge--neutral { background: var(--bg-soft, #f0f0f0); color: var(--text-muted); }
+.badge--success { background: rgba(40, 167, 69, 0.15); color: #28a745; }
+.badge--warn    { background: rgba(255, 193, 7, 0.18); color: #b8860b; }
+.badge--danger  { background: rgba(220, 53, 69, 0.15); color: #dc3545; }
+.badge--info    { background: rgba(91, 124, 250, 0.15); color: var(--accent, #5b7cfa); }
+
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-muted); }
+.empty-state-title { margin: 0 0 6px; font-size: 15px; color: var(--text); }
+.empty-state-msg { margin: 0; font-size: 14px; }
+.empty-state-action { margin-top: 16px; }
+
+.page-wrapper { padding: 16px 24px; }
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.page-title { margin: 0; font-size: 20px; }
+.page-subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+.page-actions { display: flex; gap: 8px; }
+.page-body { display: flex; flex-direction: column; gap: 16px; }
+
+.data-table-wrap { overflow: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.data-table th, .data-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border, #e0e0e0); }
+.data-table th { background: var(--bg-soft, #f7f9fc); font-weight: 600; }
+.data-table-loading { padding: 16px; color: var(--text-muted); }
+.data-table-error { padding: 12px 16px; color: var(--danger, #dc3545); background: rgba(220, 53, 69, 0.08); border-radius: 4px; margin-bottom: 8px; }
+
+.pagination { display: flex; align-items: center; gap: 8px; padding: 8px 0; flex-wrap: wrap; }
+.pagination-controls { display: flex; align-items: center; gap: 4px; }
+.pagination-ellipsis { padding: 0 4px; color: var(--text-muted); }
+.pagination-info { font-size: 13px; color: var(--text-muted); margin: 0 8px; }
+.pagination-pagesize { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-muted); margin-left: auto; }
+.pagination-pagesize .input { padding: 4px 8px; font-size: 13px; width: auto; }
+.pagination-total { font-size: 12px; color: var(--text-muted); }
+
+.notifications-host { position: fixed; top: 16px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; max-width: 360px; pointer-events: none; }
+.notification { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; background: var(--bg, #fff); color: var(--text, #1e1e1e); border-left: 4px solid var(--accent, #5b7cfa); }
+.notification--success { border-left-color: #28a745; }
+.notification--error   { border-left-color: #dc3545; }
+.notification--warn    { border-left-color: #ffc107; }
+.notification--info    { border-left-color: var(--accent, #5b7cfa); }
+.notification-msg { flex: 1; font-size: 13px; line-height: 1.4; }
+.notification-close { background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px 6px; font-size: 14px; }
+.notification-close:hover { color: var(--text); }
+
+.app-error-fallback { padding: 32px; max-width: 480px; margin: 64px auto; text-align: center; }
+.app-error-title { margin: 0 0 12px; font-size: 18px; color: var(--danger, #dc3545); }
+.app-error-msg { margin: 0 0 20px; color: var(--text-muted); font-size: 14px; word-break: break-word; }
+.app-error-actions { display: flex; gap: 8px; justify-content: center; }

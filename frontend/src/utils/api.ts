@@ -3,10 +3,12 @@ import { auth, logout } from "../store/authStore";
 export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 /** Dispatch un eveniment global pe care App.tsx il prinde si redirectioneaza la /login. */
-function emitUnauthorized() {
+function emitUnauthorized(): void {
   try {
     window.dispatchEvent(new CustomEvent("bs:unauthorized"));
-  } catch {}
+  } catch {
+    // window may be unavailable (SSR/test); safe to ignore
+  }
 }
 
 export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
@@ -31,6 +33,12 @@ export function apiFetch(url: string, options: RequestInit = {}): Promise<Respon
   });
 }
 
+interface PydanticValidationError {
+  loc?: unknown[];
+  msg?: string;
+  message?: string;
+}
+
 /**
  * Extrage un mesaj uman-readable dintr-un raspuns FastAPI.
  * - String -> as-is
@@ -41,17 +49,18 @@ export function parseApiError(detail: unknown, fallback = "Eroare necunoscuta.")
   if (detail == null) return fallback;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
-    const parts = detail.map((e: any) => {
+    const parts = detail.map((entry) => {
+      const e = entry as PydanticValidationError;
       const loc = Array.isArray(e?.loc) ? e.loc[e.loc.length - 1] : null;
       const msg = e?.msg || e?.message || JSON.stringify(e);
-      return loc ? `${loc}: ${msg}` : String(msg);
+      return loc ? `${String(loc)}: ${msg}` : String(msg);
     });
     return parts.join("; ") || fallback;
   }
   if (typeof detail === "object") {
-    const anyD = detail as any;
-    if (anyD.detail !== undefined) return parseApiError(anyD.detail, fallback);
-    if (anyD.message) return String(anyD.message);
+    const obj = detail as { detail?: unknown; message?: unknown };
+    if (obj.detail !== undefined) return parseApiError(obj.detail, fallback);
+    if (obj.message) return String(obj.message);
   }
   return fallback;
 }

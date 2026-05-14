@@ -32,7 +32,25 @@ export interface ProgramareInput {
   status?: ProgramareStatus;
 }
 
-function mapFromApi(r: any): Programare {
+interface RawProgramare {
+  id: number | string;
+  account_id: number;
+  titlu: string;
+  notite?: string | null;
+  client_id?: number | null;
+  client_nume?: string | null;
+  location_id: number;
+  department_id?: number | null;
+  department_name?: string | null;
+  start_time: string;
+  end_time: string;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  is_deleted?: boolean;
+}
+
+function mapFromApi(r: RawProgramare): Programare {
   return {
     id: String(r.id),
     accountId: r.account_id,
@@ -45,7 +63,7 @@ function mapFromApi(r: any): Programare {
     departmentName: r.department_name ?? null,
     startTime: r.start_time,
     endTime: r.end_time,
-    status: r.status as ProgramareStatus,
+    status: r.status as ProgramareStatus, // server enum mirrored by ProgramareStatus union
     createdAt: r.created_at,
     updatedAt: r.updated_at ?? null,
     isDeleted: r.is_deleted ?? false,
@@ -75,7 +93,7 @@ export async function loadProgramari(
     if (status) qs += `&status=${encodeURIComponent(status)}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
-    const data: any[] = await res.json();
+    const data = (await res.json()) as RawProgramare[];
     setProgramari(data.map(mapFromApi));
   } catch {
     // keep existing
@@ -101,7 +119,12 @@ export async function createProgramare(input: ProgramareInput): Promise<Programa
   });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? msg; } catch {}
+    try {
+      const j = (await res.json()) as { detail?: string };
+      msg = j.detail ?? msg;
+    } catch {
+      // body not JSON — keep status-based message
+    }
     throw new Error(msg);
   }
   const created = mapFromApi(await res.json());
@@ -110,7 +133,7 @@ export async function createProgramare(input: ProgramareInput): Promise<Programa
 }
 
 export async function updateProgramare(id: string, input: Partial<ProgramareInput> & { status?: ProgramareStatus }): Promise<Programare> {
-  const body: Record<string, any> = {};
+  const body: Record<string, unknown> = {};
   if (input.titlu !== undefined) body.titlu = input.titlu;
   if (input.notite !== undefined) body.notite = input.notite;
   if (input.clientId !== undefined) body.client_id = input.clientId;
@@ -125,7 +148,12 @@ export async function updateProgramare(id: string, input: Partial<ProgramareInpu
   });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? msg; } catch {}
+    try {
+      const j = (await res.json()) as { detail?: string };
+      msg = j.detail ?? msg;
+    } catch {
+      // body not JSON — keep status-based message
+    }
     throw new Error(msg);
   }
   const updated = mapFromApi(await res.json());
