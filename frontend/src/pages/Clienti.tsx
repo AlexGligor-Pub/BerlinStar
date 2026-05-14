@@ -644,6 +644,7 @@ export default function Clienti() {
                   </Show>
                 </div>
                 <div class="cfg-location-actions">
+                  <button class="btn btn-sm btn-ghost" onClick={() => navigate(`/clienti/${c.id}`)}>Vezi detalii client</button>
                   <button class="btn btn-sm btn-ghost" onClick={() => startEdit(c)}>Editează</button>
                 </div>
               </Show>
