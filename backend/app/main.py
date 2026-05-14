@@ -22,7 +22,7 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports
 from app.services.reports import start_scheduler, stop_scheduler
 
 
@@ -116,6 +116,7 @@ app.include_router(general_settings.router, prefix="/api/general-settings",    t
 app.include_router(global_settings.router,  prefix="/api/global-settings",     tags=["global-settings"])
 app.include_router(email_settings.router,  prefix="/api/email-settings",      tags=["email-settings"])
 app.include_router(admin_reports.router,    prefix="/api/admin/reports",       tags=["admin-reports"])
+app.include_router(reports.router,          prefix="/api/reports",             tags=["reports"])
 
 
 @app.get("/api/health")

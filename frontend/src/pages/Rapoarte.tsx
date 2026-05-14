@@ -1,4 +1,5 @@
-import { For, Show, Switch, Match, createSignal, onMount, createMemo, onCleanup } from "solid-js";
+import { For, Show, Switch, Match, createSignal, onMount, createMemo, onCleanup, createEffect } from "solid-js";
+import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 
@@ -13,6 +14,8 @@ interface EmployeeReport {
 
 const SECTIONS = [
   { id: "target-angajati", label: "Target Angajați" },
+  { id: "locatii", label: "Locații" },
+  { id: "produse-servicii", label: "Produse / Servicii" },
 ] as const;
 
 type SectionId = typeof SECTIONS[number]["id"];
@@ -195,13 +198,15 @@ function TargetAngajatiPanel() {
 
   return (
     <div class="cfg-panel" style="max-width:100%">
-      <h2 class="cfg-panel-title">Target Angajați</h2>
-      <p class="cfg-hint" style="margin-bottom:8px;max-width:620px;line-height:1.6">
-        Graficul afișează acumularea curentă a targetului pentru fiecare angajat. Bara colorată
-        reprezintă valoarea vânzărilor înregistrate în perioada curentă. Linia orizontală indică
-        targetul lunar setat. Apasă pe o bară pentru detalii. Targetul se configurează din{" "}
-        <strong>Configurări → Angajați</strong>.
-      </p>
+      <PanelHeader title="Target Angajați" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:8px;max-width:620px;line-height:1.6">
+          Graficul afișează acumularea curentă a targetului pentru fiecare angajat. Bara colorată
+          reprezintă valoarea vânzărilor înregistrate în perioada curentă. Linia orizontală indică
+          targetul lunar setat. Apasă pe o bară pentru detalii. Targetul se configurează din{" "}
+          <strong>Configurări → Angajați</strong>.
+        </p>
+      </Show>
 
       {/* Sort controls + zero-target toggle */}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -338,6 +343,1024 @@ function TargetAngajatiPanel() {
   );
 }
 
+// ───── LOCAȚII PANEL ──────────────────────────────────────────────────────────
+
+interface DailyTotal {
+  report_date: string;
+  sum_total: string | number;
+  sum_paid: string | number;
+  sum_unpaid: string | number;
+  count_total: number;
+}
+
+interface PayMethods {
+  sum_card: string | number;
+  sum_cash: string | number;
+  sum_op: string | number;
+  sum_partial: string | number;
+  sum_neplatit: string | number;
+  sum_paid: string | number;
+  sum_unpaid: string | number;
+}
+
+interface LocatiiSummary {
+  daily: DailyTotal[];
+  pay_methods: PayMethods;
+  total: string | number;
+  bonuri: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+const PAY_LABELS: Record<keyof PayMethods, string> = {
+  sum_card: "Card",
+  sum_cash: "Cash",
+  sum_op: "OP",
+  sum_partial: "Parțial",
+  sum_neplatit: "Neplătit",
+  sum_paid: "",
+  sum_unpaid: "",
+};
+const PAY_COLORS = ["#5b7cfa", "#3ea96a", "#a855f7", "#f5a623", "#ef4444"];
+
+function toNumber(v: string | number): number {
+  return typeof v === "number" ? v : parseFloat(v) || 0;
+}
+
+function fmtMoney(n: number): string {
+  return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function firstOfMonthISO(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function fmtRoDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+// ───── SHARED PERIOD STATE ────────────────────────────────────────────────────
+
+const [periodFrom, setPeriodFrom] = createSignal(firstOfMonthISO());
+const [periodTo, setPeriodTo] = createSignal(todayISO());
+const [periodLabel, setPeriodLabel] = createSignal("Luna aceasta");
+const [periodVersion, setPeriodVersion] = createSignal(0);
+
+function commitPeriod(from: string, to: string, label: string) {
+  setPeriodFrom(from);
+  setPeriodTo(to);
+  setPeriodLabel(label);
+  setPeriodVersion((v) => v + 1);
+}
+
+// ───── EXPLANATIONS TOGGLE (persistat în localStorage) ────────────────────────
+
+const HIDE_EXPL_KEY = "rapoarte_hide_explanations";
+
+function _initialHideExplanations(): boolean {
+  try {
+    return localStorage.getItem(HIDE_EXPL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+const [hideExplanations, setHideExplanationsRaw] = createSignal(_initialHideExplanations());
+
+function setHideExplanations(v: boolean) {
+  setHideExplanationsRaw(v);
+  try {
+    localStorage.setItem(HIDE_EXPL_KEY, v ? "1" : "0");
+  } catch {
+    // localStorage indisponibil — păstrăm doar starea în memorie
+  }
+}
+
+function ExplanationsToggle() {
+  return (
+    <label class="explanations-toggle">
+      <input
+        type="checkbox"
+        checked={hideExplanations()}
+        onChange={(e) => setHideExplanations(e.currentTarget.checked)}
+      />
+      <span>Ascunde explicațiile</span>
+    </label>
+  );
+}
+
+function PanelHeader(props: { title: string }) {
+  return (
+    <div class="panel-header-row">
+      <h2 class="cfg-panel-title" style="margin:0">{props.title}</h2>
+      <ExplanationsToggle />
+    </div>
+  );
+}
+
+// ───── PERIOD SLICER ──────────────────────────────────────────────────────────
+
+type QuickKey = "today" | "7d" | "30d" | "mtd" | "qtd" | "ytd" | "12m";
+
+function PeriodSlicer() {
+  const [activeQuick, setActiveQuick] = createSignal<QuickKey | null>("mtd");
+  const [draftFrom, setDraftFrom] = createSignal(periodFrom());
+  const [draftTo, setDraftTo] = createSignal(periodTo());
+
+  // Slider range = anul curent (1 ian – 31 dec)
+  const year = new Date().getFullYear();
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  const totalDays = Math.round((yearEnd.getTime() - yearStart.getTime()) / 86400000);
+
+  function pctOf(iso: string): number {
+    const d = new Date(iso);
+    const diff = Math.round((d.getTime() - yearStart.getTime()) / 86400000);
+    return Math.max(0, Math.min(100, Math.round((diff / totalDays) * 100)));
+  }
+  function dateFromPct(pct: number): string {
+    const d = new Date(yearStart);
+    d.setDate(d.getDate() + Math.round((pct / 100) * totalDays));
+    return d.toISOString().slice(0, 10);
+  }
+
+  const [sliderMin, setSliderMin] = createSignal(pctOf(draftFrom()));
+  const [sliderMax, setSliderMax] = createSignal(pctOf(draftTo()));
+
+  function applyQuick(key: QuickKey) {
+    const now = new Date();
+    let from = new Date(now);
+    const to = new Date(now);
+    let label = "";
+    if (key === "today") { label = "Azi"; }
+    else if (key === "7d") { from.setDate(from.getDate() - 6); label = "Ultimele 7 zile"; }
+    else if (key === "30d") { from.setDate(from.getDate() - 29); label = "Ultimele 30 zile"; }
+    else if (key === "mtd") { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "Luna aceasta"; }
+    else if (key === "qtd") {
+      const q = Math.floor(now.getMonth() / 3);
+      from = new Date(now.getFullYear(), q * 3, 1); label = "Trim. curent";
+    }
+    else if (key === "ytd") { from = new Date(now.getFullYear(), 0, 1); label = "An curent"; }
+    else if (key === "12m") { from.setFullYear(from.getFullYear() - 1); label = "12 luni"; }
+    const f = from.toISOString().slice(0, 10);
+    const t = to.toISOString().slice(0, 10);
+    setDraftFrom(f); setDraftTo(t);
+    setSliderMin(pctOf(f)); setSliderMax(pctOf(t));
+    setActiveQuick(key);
+    commitPeriod(f, t, label);
+  }
+
+  function applyCustom() {
+    if (!draftFrom() || !draftTo()) {
+      notify("Selectează ambele date.", "error");
+      return;
+    }
+    if (draftFrom() > draftTo()) {
+      notify("Data de început trebuie să fie înainte de data de sfârșit.", "error");
+      return;
+    }
+    const label = `${fmtRoDate(draftFrom())} – ${fmtRoDate(draftTo())}`;
+    setActiveQuick(null);
+    commitPeriod(draftFrom(), draftTo(), label);
+  }
+
+  function resetPeriod() {
+    applyQuick("mtd");
+  }
+
+  function onSliderInput(which: "min" | "max", value: number) {
+    let lo = sliderMin();
+    let hi = sliderMax();
+    if (which === "min") {
+      lo = Math.min(value, hi - 1);
+      setSliderMin(lo);
+    } else {
+      hi = Math.max(value, lo + 1);
+      setSliderMax(hi);
+    }
+    const f = dateFromPct(lo);
+    const t = dateFromPct(hi);
+    setDraftFrom(f); setDraftTo(t);
+    setActiveQuick(null);
+  }
+
+  return (
+    <div class="slicer-bar">
+      <span class="slicer-title">Perioadă</span>
+      <div class="slicer-quick-btns">
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "today" }} onClick={() => applyQuick("today")}>Azi</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "7d" }} onClick={() => applyQuick("7d")}>7 zile</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "30d" }} onClick={() => applyQuick("30d")}>30 zile</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "mtd" }} onClick={() => applyQuick("mtd")}>Luna aceasta</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "qtd" }} onClick={() => applyQuick("qtd")}>Trim. curent</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "ytd" }} onClick={() => applyQuick("ytd")}>An curent</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "12m" }} onClick={() => applyQuick("12m")}>12 luni</button>
+      </div>
+      <div class="slicer-sep" />
+      <div class="slicer-range-inputs">
+        <input type="date" value={draftFrom()} onInput={(e) => { setDraftFrom(e.currentTarget.value); setSliderMin(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
+        <span class="slicer-dash">→</span>
+        <input type="date" value={draftTo()} onInput={(e) => { setDraftTo(e.currentTarget.value); setSliderMax(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
+      </div>
+      <div class="slicer-sep" />
+      <div class="slicer-slider-wrap">
+        <div class="slicer-slider-track">
+          <div class="slicer-slider-range" style={`left:${sliderMin()}%;width:${sliderMax() - sliderMin()}%`} />
+          <input
+            type="range" min="0" max="100" value={sliderMin()}
+            onInput={(e) => onSliderInput("min", parseInt(e.currentTarget.value))}
+          />
+          <input
+            type="range" min="0" max="100" value={sliderMax()}
+            onInput={(e) => onSliderInput("max", parseInt(e.currentTarget.value))}
+          />
+        </div>
+        <div class="slicer-slider-labels">
+          <span>{fmtRoDate(dateFromPct(sliderMin()))}</span>
+          <span>{fmtRoDate(dateFromPct(sliderMax()))}</span>
+        </div>
+      </div>
+      <div class="slicer-sep" />
+      <div class="slicer-active-wrap">
+        <span class="slicer-active-label">{periodLabel()}</span>
+        <button class="slicer-apply-btn" onClick={applyCustom}>Aplică</button>
+        <button class="slicer-reset-btn" onClick={resetPeriod}>Reset</button>
+      </div>
+    </div>
+  );
+}
+
+function LocatiiPanel() {
+  const [data, setData] = createSignal<LocatiiSummary | null>(null);
+  const [loading, setLoading] = createSignal(true);
+
+  let lineRef: HTMLDivElement | undefined;
+  let donutRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      const res = await apiFetch(`/api/reports/locatii?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch (e: unknown) {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Reîncarcă la fiecare schimbare de perioadă
+  createEffect(() => { periodVersion(); void load(); });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !lineRef) return;
+    drawLine(lineRef, d.daily);
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !donutRef) return;
+    const items: DonutItem[] = [
+      { label: "Card", value: toNumber(d.pay_methods.sum_card), color: PAY_COLORS[0] },
+      { label: "Cash", value: toNumber(d.pay_methods.sum_cash), color: PAY_COLORS[1] },
+      { label: "OP", value: toNumber(d.pay_methods.sum_op), color: PAY_COLORS[2] },
+      { label: "Parțial", value: toNumber(d.pay_methods.sum_partial), color: PAY_COLORS[3] },
+      { label: "Neplătit", value: toNumber(d.pay_methods.sum_neplatit), color: PAY_COLORS[4] },
+    ].filter((i) => i.value > 0);
+    drawDonut(donutRef, items, "lei total");
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Locații" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Această secțiune afișează venitul agregat pentru perioada selectată. Datele sunt
+          precalculate noaptea de un proces automat și re-validate săptămânal pentru
+          eventualele modificări retroactive. Folosește slicer-ul de mai jos pentru a alege
+          intervalul de timp.
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+
+      {/* KPI rezumat */}
+      <Show when={data()}>
+        {(d) => (
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0">
+            <div class="locatii-kpi"><span class="locatii-kpi__label">Venit total</span><span class="locatii-kpi__value">{fmtMoney(toNumber(d().total))} lei</span></div>
+            <div class="locatii-kpi"><span class="locatii-kpi__label">Bonuri</span><span class="locatii-kpi__value">{d().bonuri}</span></div>
+            <div class="locatii-kpi"><span class="locatii-kpi__label">Plătit</span><span class="locatii-kpi__value">{fmtMoney(toNumber(d().pay_methods.sum_paid))} lei</span></div>
+            <div class="locatii-kpi"><span class="locatii-kpi__label">Neplătit</span><span class="locatii-kpi__value" style="color:var(--danger,#ef4444)">{fmtMoney(toNumber(d().pay_methods.sum_unpaid))} lei</span></div>
+          </div>
+        )}
+      </Show>
+
+      {/* Charts */}
+      <div class="locatii-charts">
+        <div class="locatii-chart-card" style="flex:2;min-width:0">
+          <div class="locatii-chart-title">Venituri totale</div>
+          <div class="locatii-chart-subtitle">Sumă zilnică din toate bonurile (lei) — neșterse, indiferent de status plată</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Linia arată cum a evoluat <strong>încasarea facturată zilnic</strong> pe parcursul
+              perioadei. Aria umbrită sub linie are doar rol vizual. Trecând cu mouse-ul peste linie
+              poți vedea suma exactă pentru ziua respectivă. Sunt incluse toate bonurile (plătite,
+              parțiale și neplătite) — pentru cashflow real folosește KPI-ul „Plătit".
+            </p>
+          </Show>
+          <div ref={lineRef} style="margin-top:8px" />
+          <Show when={data() && data()!.daily.length === 0}>
+            <div style="text-align:center;padding:32px;color:var(--text-muted);font-size:0.85rem">
+              Niciun receipt în perioada selectată.
+            </div>
+          </Show>
+        </div>
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Mix metode de plată</div>
+          <div class="locatii-chart-subtitle">Procent din venit per metodă</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Fiecare felie reprezintă o metodă de plată. Pentru bonurile parțiale e luată doar
+              suma efectiv încasată. Treci cu mouse-ul peste felie pentru detalii. Util pentru a
+              vedea ce procent din vânzări vine prin fiecare metodă.
+            </p>
+          </Show>
+          <div ref={donutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───── PRODUSE/SERVICII PANEL ─────────────────────────────────────────────────
+
+interface DepartmentTotal {
+  department_id: number | null;
+  department_name: string;
+  total: string | number;
+}
+interface CategoryTotal {
+  category_id: number | null;
+  category_name: string;
+  department_id: number | null;
+  department_name: string;
+  total: string | number;
+}
+interface EmployeeTotal {
+  employee_id: number | null;
+  employee_name: string;
+  total: string | number;
+}
+interface ProduseServiciiSummary {
+  departments: DepartmentTotal[];
+  categories: CategoryTotal[];
+  employees: EmployeeTotal[];
+  period_start: string;
+  period_end: string;
+}
+
+const PALETTE = [
+  "#5b7cfa", "#3ea96a", "#f5a623", "#a855f7", "#ef4444",
+  "#06b6d4", "#e8441a", "#8b5cf6", "#10b981", "#ec4899",
+  "#f59e0b", "#3b82f6",
+];
+
+function colorByIndex(i: number): string {
+  return PALETTE[i % PALETTE.length];
+}
+
+function ProduseServiciiPanel() {
+  const [data, setData] = createSignal<ProduseServiciiSummary | null>(null);
+  const [loading, setLoading] = createSignal(true);
+
+  let deptBarRef: HTMLDivElement | undefined;
+  let deptDonutRef: HTMLDivElement | undefined;
+  let catBarRef: HTMLDivElement | undefined;
+  let catDonutRef: HTMLDivElement | undefined;
+  let empBarRef: HTMLDivElement | undefined;
+  let empDonutRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      const res = await apiFetch(`/api/reports/produse-servicii?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch (e: unknown) {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  createEffect(() => { periodVersion(); void load(); });
+
+  // Departments
+  createEffect(() => {
+    const d = data();
+    if (!d || !deptBarRef || !deptDonutRef) return;
+    // Map fiecare departament la o culoare consistentă între bar & donut
+    const colorMap = new Map<string, string>();
+    d.departments.forEach((dp, i) => colorMap.set(dp.department_name, colorByIndex(i)));
+    const barItems: BarItem[] = d.departments.map((dp) => ({
+      label: dp.department_name,
+      value: toNumber(dp.total),
+      color: colorMap.get(dp.department_name)!,
+    }));
+    drawBar(deptBarRef, barItems);
+    const donutItems: DonutItem[] = d.departments.map((dp) => ({
+      label: dp.department_name,
+      value: toNumber(dp.total),
+      color: colorMap.get(dp.department_name)!,
+    }));
+    drawDonut(deptDonutRef, donutItems, "lei total");
+  });
+
+  // Categories grouped by department (colored by parent department)
+  createEffect(() => {
+    const d = data();
+    if (!d || !catBarRef || !catDonutRef) return;
+    // Build department color map (consistent cu chartul de departamente)
+    const colorMap = new Map<string, string>();
+    const uniqueDepts: string[] = [];
+    d.departments.forEach((dp, i) => {
+      colorMap.set(dp.department_name, colorByIndex(i));
+      uniqueDepts.push(dp.department_name);
+    });
+    // Sortează categoriile pe departament (grupate), apoi descrescător după total
+    const sorted = [...d.categories].sort((a, b) => {
+      const da = uniqueDepts.indexOf(a.department_name);
+      const db = uniqueDepts.indexOf(b.department_name);
+      if (da !== db) return (da === -1 ? 999 : da) - (db === -1 ? 999 : db);
+      return toNumber(b.total) - toNumber(a.total);
+    });
+    const barItems: BarItem[] = sorted.map((c) => ({
+      label: `${c.category_name} · ${c.department_name}`,
+      value: toNumber(c.total),
+      color: colorMap.get(c.department_name) || PALETTE[0],
+    }));
+    drawBar(catBarRef, barItems);
+    // Donut-ul arată distribuția pe categorii (felie per categorie)
+    const donutItems: DonutItem[] = sorted.map((c, i) => ({
+      label: c.category_name,
+      value: toNumber(c.total),
+      color: colorByIndex(i),
+    }));
+    drawDonut(catDonutRef, donutItems, "lei total");
+  });
+
+  // Employees
+  createEffect(() => {
+    const d = data();
+    if (!d || !empBarRef || !empDonutRef) return;
+    const barItems: BarItem[] = d.employees.map((e, i) => ({
+      label: e.employee_name,
+      value: toNumber(e.total),
+      color: colorByIndex(i),
+    }));
+    drawBar(empBarRef, barItems);
+    const donutItems: DonutItem[] = d.employees.map((e, i) => ({
+      label: e.employee_name,
+      value: toNumber(e.total),
+      color: colorByIndex(i),
+    }));
+    drawDonut(empDonutRef, donutItems, "lei total");
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Produse / Servicii" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:820px;line-height:1.6">
+          Analiză a vânzărilor pe <strong>departamente</strong>, <strong>tipuri de
+          servicii</strong> și <strong>angajați</strong>. Datele acoperă perioada selectată în
+          slicer-ul de mai jos. Itemii introduși manual din POS (fără legătură cu catalogul) apar
+          etichetați separat ca „Introducere Manuala".
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+
+      <Show when={loading()}>
+        <p class="cfg-hint" style="margin-top:14px">Se încarcă...</p>
+      </Show>
+
+      <Show when={data()}>
+        {(d) => (
+          <>
+            {/* Row 1: Departments */}
+            <h3 class="locatii-section-title">1. Venituri pe departament</h3>
+            <Show when={!hideExplanations()}>
+              <p class="chart-explanation" style="max-width:820px">
+                Cât a generat fiecare departament în perioada selectată. Barele orizontale sunt
+                sortate descrescător — primul e cel care a adus cele mai multe încasări. Donut-ul
+                din dreapta arată același lucru sub formă de procent din total.
+              </p>
+            </Show>
+            <Show when={d().departments.length === 0}>
+              <div class="locatii-empty">Niciun departament cu venituri în perioada selectată.</div>
+            </Show>
+            <div class="locatii-charts" style="margin-bottom:24px">
+              <div class="locatii-chart-card" style="flex:2;min-width:0">
+                <div class="locatii-chart-title">Sumă per departament</div>
+                <div class="locatii-chart-subtitle">RON · sortat descrescător</div>
+                <div ref={deptBarRef} style="margin-top:8px" />
+              </div>
+              <div class="locatii-chart-card" style="flex:1;min-width:260px">
+                <div class="locatii-chart-title">Procent din total</div>
+                <div class="locatii-chart-subtitle">contribuția fiecărui departament</div>
+                <div ref={deptDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+              </div>
+            </div>
+
+            {/* Row 2: Categories grouped by Department */}
+            <h3 class="locatii-section-title">2. Venituri pe tip de serviciu (grupate pe departament)</h3>
+            <Show when={!hideExplanations()}>
+              <p class="chart-explanation" style="max-width:820px">
+                Fiecare bară reprezintă o <strong>categorie</strong> de servicii. Culoarea barei
+                indică departamentul părinte — astfel poți vedea rapid din ce departament face parte
+                fiecare categorie. Categoriile sunt grupate pe departament și sortate descrescător
+                în interiorul fiecărui grup. Donut-ul din dreapta arată ponderea fiecărei categorii
+                în veniturile totale.
+              </p>
+            </Show>
+            <Show when={d().categories.length === 0}>
+              <div class="locatii-empty">Nicio categorie cu venituri în perioada selectată.</div>
+            </Show>
+            <div class="locatii-charts" style="margin-bottom:24px">
+              <div class="locatii-chart-card" style="flex:2;min-width:0">
+                <div class="locatii-chart-title">Sumă per categorie</div>
+                <div class="locatii-chart-subtitle">RON · culoare = departament părinte</div>
+                <div ref={catBarRef} style="margin-top:8px" />
+              </div>
+              <div class="locatii-chart-card" style="flex:1;min-width:260px">
+                <div class="locatii-chart-title">Procent din total</div>
+                <div class="locatii-chart-subtitle">contribuția fiecărei categorii</div>
+                <div ref={catDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+              </div>
+            </div>
+
+            {/* Row 3: Employees */}
+            <h3 class="locatii-section-title">3. Venituri generate de fiecare angajat</h3>
+            <Show when={!hideExplanations()}>
+              <p class="chart-explanation" style="max-width:820px">
+                Suma totală a serviciilor sau produselor atribuite fiecărui angajat (din bonurile
+                la care a fost setat ca executant). <strong>Important:</strong> aici sunt incluse
+                doar bonurile plătite — consistent cu logica de calcul al targetului lunar.
+                Donut-ul arată ce procent din venitul total a fost generat de fiecare angajat.
+              </p>
+            </Show>
+            <Show when={d().employees.length === 0}>
+              <div class="locatii-empty">Niciun angajat cu venituri (plătite) în perioada selectată.</div>
+            </Show>
+            <div class="locatii-charts">
+              <div class="locatii-chart-card" style="flex:2;min-width:0">
+                <div class="locatii-chart-title">Sumă per angajat</div>
+                <div class="locatii-chart-subtitle">RON · sortat descrescător</div>
+                <div ref={empBarRef} style="margin-top:8px" />
+              </div>
+              <div class="locatii-chart-card" style="flex:1;min-width:260px">
+                <div class="locatii-chart-title">Procent din total</div>
+                <div class="locatii-chart-subtitle">contribuția fiecărui angajat</div>
+                <div ref={empDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+              </div>
+            </div>
+          </>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+function drawLine(container: HTMLDivElement, daily: DailyTotal[]) {
+  d3.select(container).selectAll("*").remove();
+  if (daily.length === 0) return;
+
+  const w = container.clientWidth || 600;
+  const h = 240;
+  const margin = { top: 12, right: 20, bottom: 32, left: 60 };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("width", "100%")
+    .attr("height", h);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const parseDate = d3.timeParse("%Y-%m-%d");
+  const points = daily.map((d) => ({
+    date: parseDate(d.report_date)!,
+    total: toNumber(d.sum_total),
+  }));
+
+  const x = d3.scaleTime()
+    .domain(d3.extent(points, (d) => d.date) as [Date, Date])
+    .range([0, iw]);
+
+  const yMax = d3.max(points, (d) => d.total) || 100;
+  const y = d3.scaleLinear()
+    .domain([0, yMax * 1.1])
+    .range([ih, 0])
+    .nice();
+
+  // Gridlines
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickSize(-iw).tickFormat(() => ""))
+    .selectAll("line")
+    .attr("stroke", "var(--border, #2a3045)")
+    .attr("stroke-opacity", 0.4);
+  g.selectAll(".domain").remove();
+
+  // X axis
+  const tickCount = Math.min(8, points.length);
+  g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(tickCount).tickFormat(d3.timeFormat("%d.%m") as any))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+  g.selectAll(".domain").attr("stroke", "var(--border, #2a3045)");
+
+  // Y axis
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat((v) => {
+      const n = +v;
+      if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+      return String(n);
+    }))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+
+  // Area
+  const area = d3.area<typeof points[0]>()
+    .x((d) => x(d.date))
+    .y0(ih)
+    .y1((d) => y(d.total))
+    .curve(d3.curveCatmullRom);
+
+  const line = d3.line<typeof points[0]>()
+    .x((d) => x(d.date))
+    .y((d) => y(d.total))
+    .curve(d3.curveCatmullRom);
+
+  g.append("path")
+    .datum(points)
+    .attr("fill", "var(--accent, #5b7cfa)")
+    .attr("fill-opacity", 0.12)
+    .attr("d", area);
+
+  const path = g.append("path")
+    .datum(points)
+    .attr("fill", "none")
+    .attr("stroke", "var(--accent, #5b7cfa)")
+    .attr("stroke-width", 2.5)
+    .attr("d", line);
+
+  const totalLen = (path.node() as SVGPathElement).getTotalLength();
+  path.attr("stroke-dasharray", totalLen)
+    .attr("stroke-dashoffset", totalLen)
+    .transition().duration(900).ease(d3.easeLinear).attr("stroke-dashoffset", 0);
+
+  // Hover dot + tooltip
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "6px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("transition", "opacity 0.12s");
+
+  d3.select(container).style("position", "relative");
+
+  const hoverDot = g.append("circle")
+    .attr("r", 5)
+    .attr("fill", "var(--accent, #5b7cfa)")
+    .attr("stroke", "var(--surface, #1e2330)")
+    .attr("stroke-width", 2)
+    .style("opacity", 0);
+
+  svg.append("rect")
+    .attr("x", margin.left)
+    .attr("y", margin.top)
+    .attr("width", iw)
+    .attr("height", ih)
+    .attr("fill", "transparent")
+    .on("mousemove", function (event) {
+      const [mx] = d3.pointer(event, this);
+      const xp = mx - margin.left;
+      const xDate = x.invert(xp);
+      const bisect = d3.bisector<typeof points[0], Date>((d) => d.date).left;
+      const i = Math.min(points.length - 1, Math.max(0, bisect(points, xDate)));
+      const p = points[i];
+      hoverDot.style("opacity", 1).attr("cx", x(p.date)).attr("cy", y(p.total));
+      const rect = container.getBoundingClientRect();
+      tooltip
+        .style("opacity", 1)
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px")
+        .html(`<strong style="display:block;color:var(--accent,#5b7cfa)">${d3.timeFormat("%d %b %Y")(p.date)}</strong>${fmtMoney(p.total)} lei`);
+    })
+    .on("mouseout", () => {
+      hoverDot.style("opacity", 0);
+      tooltip.style("opacity", 0);
+    });
+}
+
+interface DonutItem {
+  label: string;
+  value: number;
+  color: string;
+}
+
+interface BarItem {
+  label: string;
+  value: number;
+  color: string;
+}
+
+function drawDonut(container: HTMLDivElement, items: DonutItem[], centerLabelText: string = "lei total") {
+  d3.select(container).selectAll("*").remove();
+
+  const filtered = items.filter((d) => d.value > 0);
+  const total = filtered.reduce((s, d) => s + d.value, 0);
+  if (total === 0) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const w = 260;
+  const h = 240;
+  const r = Math.min(w, h) / 2 - 18;
+
+  d3.select(container).style("position", "relative");
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("width", "100%")
+    .style("max-width", w + "px")
+    .attr("height", h);
+
+  const g = svg.append("g").attr("transform", `translate(${w / 2},${h / 2 - 10})`);
+
+  const pie = d3.pie<DonutItem>().value((d) => d.value).sort(null);
+  const arc = d3.arc<d3.PieArcDatum<DonutItem>>()
+    .innerRadius(r * 0.58)
+    .outerRadius(r);
+  const arcHover = d3.arc<d3.PieArcDatum<DonutItem>>()
+    .innerRadius(r * 0.55)
+    .outerRadius(r + 6);
+
+  // Center label
+  const centerLabel = g.append("text")
+    .attr("text-anchor", "middle")
+    .attr("pointer-events", "none");
+  centerLabel.append("tspan")
+    .attr("class", "donut-center-value")
+    .attr("x", 0)
+    .attr("dy", "-0.2em")
+    .attr("font-size", "20px")
+    .attr("font-weight", 700)
+    .attr("fill", "var(--text, #e8eaf0)")
+    .text(fmtMoney(total));
+  centerLabel.append("tspan")
+    .attr("class", "donut-center-label")
+    .attr("x", 0)
+    .attr("dy", "1.4em")
+    .attr("font-size", "10px")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .text(centerLabelText);
+
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "6px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("transition", "opacity 0.12s");
+
+  g.selectAll("path")
+    .data(pie(filtered))
+    .join("path")
+    .attr("fill", (d) => d.data.color)
+    .attr("stroke", "var(--surface, #1e2330)")
+    .attr("stroke-width", 2)
+    .attr("d", arc as any)
+    .style("cursor", "pointer")
+    .on("mouseover", function (event, d) {
+      d3.select(this).transition().duration(120).attr("d", arcHover as any);
+      const pct = ((d.data.value / total) * 100).toFixed(1);
+      centerLabel.select(".donut-center-value")
+        .attr("fill", d.data.color)
+        .text(pct + "%");
+      centerLabel.select(".donut-center-label").text(d.data.label);
+    })
+    .on("mousemove", function (event, d) {
+      const rect = container.getBoundingClientRect();
+      const pct = ((d.data.value / total) * 100).toFixed(1);
+      tooltip
+        .style("opacity", 1)
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px")
+        .html(`<strong style="display:block;color:${d.data.color}">${d.data.label}</strong>${fmtMoney(d.data.value)} lei (${pct}%)`);
+    })
+    .on("mouseout", function () {
+      d3.select(this).transition().duration(120).attr("d", arc as any);
+      centerLabel.select(".donut-center-value")
+        .attr("fill", "var(--text, #e8eaf0)")
+        .text(fmtMoney(total));
+      centerLabel.select(".donut-center-label").text(centerLabelText);
+      tooltip.style("opacity", 0);
+    });
+
+  // Legend (limitat la primele 8 pentru claritate)
+  const legend = d3.select(container)
+    .append("div")
+    .style("display", "flex")
+    .style("flex-wrap", "wrap")
+    .style("gap", "8px")
+    .style("justify-content", "center")
+    .style("margin-top", "8px")
+    .style("max-width", "260px");
+
+  filtered.slice(0, 8).forEach((item) => {
+    const pct = ((item.value / total) * 100).toFixed(1);
+    const entry = legend.append("div")
+      .style("display", "flex")
+      .style("align-items", "center")
+      .style("gap", "5px")
+      .style("font-size", "11px")
+      .style("color", "var(--text-muted, #8b90a0)");
+    entry.append("span")
+      .style("width", "10px")
+      .style("height", "10px")
+      .style("border-radius", "2px")
+      .style("background", item.color);
+    entry.append("span").text(`${item.label} ${pct}%`);
+  });
+  if (filtered.length > 8) {
+    legend.append("div")
+      .style("font-size", "11px")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .text(`+ ${filtered.length - 8} mai puține`);
+  }
+}
+
+// ───── BAR CHART (horizontal) ─────────────────────────────────────────────────
+
+function drawBar(container: HTMLDivElement, items: BarItem[]) {
+  d3.select(container).selectAll("*").remove();
+  const filtered = items.filter((d) => d.value > 0);
+  if (filtered.length === 0) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const w = container.clientWidth || 600;
+  const barH = 26;
+  const gap = 4;
+  const margin = { top: 8, right: 60, bottom: 12, left: 180 };
+  const ih = filtered.length * (barH + gap);
+  const h = ih + margin.top + margin.bottom;
+  const iw = w - margin.left - margin.right;
+
+  d3.select(container).style("position", "relative");
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("width", "100%")
+    .attr("height", h);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const xMax = d3.max(filtered, (d) => d.value) || 1;
+  const x = d3.scaleLinear().domain([0, xMax * 1.05]).range([0, iw]);
+  const y = d3.scaleBand<string>().domain(filtered.map((d, i) => `${i}_${d.label}`)).range([0, ih]).padding(0.15);
+
+  // Y axis (label-uri)
+  g.append("g")
+    .call(d3.axisLeft(y).tickFormat((id) => {
+      const label = filtered[parseInt(String(id).split("_")[0])].label;
+      return label.length > 26 ? label.slice(0, 25) + "…" : label;
+    }))
+    .selectAll("text")
+    .attr("fill", "var(--text, #e8eaf0)")
+    .style("font-size", "12px");
+  g.selectAll(".domain, .tick line").attr("stroke", "var(--border, #2a3045)").attr("stroke-opacity", 0.4);
+
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "6px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("transition", "opacity 0.12s");
+
+  const total = filtered.reduce((s, d) => s + d.value, 0);
+
+  g.selectAll("rect")
+    .data(filtered)
+    .join("rect")
+    .attr("x", 0)
+    .attr("y", (_d, i) => y(`${i}_${filtered[i].label}`) || 0)
+    .attr("height", y.bandwidth())
+    .attr("width", 0)
+    .attr("fill", (d) => d.color)
+    .attr("rx", 3)
+    .style("cursor", "pointer")
+    .on("mouseover", function (event, d) {
+      d3.select(this).attr("fill-opacity", 0.85);
+      const pct = total > 0 ? ((d.value / total) * 100).toFixed(1) : "0";
+      const rect = container.getBoundingClientRect();
+      tooltip
+        .style("opacity", 1)
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px")
+        .html(`<strong style="display:block;color:${d.color}">${d.label}</strong>${fmtMoney(d.value)} lei (${pct}%)`);
+    })
+    .on("mousemove", function (event) {
+      const rect = container.getBoundingClientRect();
+      tooltip
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px");
+    })
+    .on("mouseout", function () {
+      d3.select(this).attr("fill-opacity", 1);
+      tooltip.style("opacity", 0);
+    })
+    .transition()
+    .duration(700)
+    .attr("width", (d) => x(d.value));
+
+  // Etichete de valoare la capătul barei
+  g.selectAll("text.bar-value")
+    .data(filtered)
+    .join("text")
+    .attr("class", "bar-value")
+    .attr("x", (d) => x(d.value) + 6)
+    .attr("y", (_d, i) => (y(`${i}_${filtered[i].label}`) || 0) + y.bandwidth() / 2 + 4)
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px")
+    .style("font-weight", 500)
+    .style("opacity", 0)
+    .text((d) => fmtMoney(d.value))
+    .transition()
+    .delay(700)
+    .duration(300)
+    .style("opacity", 1);
+}
+
+// ───── ROOT ───────────────────────────────────────────────────────────────────
+
 export default function Rapoarte() {
   const [active, setActive] = createSignal<SectionId>("target-angajati");
 
@@ -358,6 +1381,8 @@ export default function Rapoarte() {
       <main class="cfg-content">
         <Switch>
           <Match when={active() === "target-angajati"}><TargetAngajatiPanel /></Match>
+          <Match when={active() === "locatii"}><LocatiiPanel /></Match>
+          <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
         </Switch>
       </main>
     </div>

@@ -3629,6 +3629,298 @@ body {
   padding-bottom: 8px;
 }
 
+/* ===== Slicer bar (Rapoarte) ===== */
+.slicer-bar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.slicer-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.slicer-quick-btns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.slicer-qbtn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 5px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.slicer-qbtn:hover {
+  border-color: var(--accent, #5b7cfa);
+  color: var(--accent, #5b7cfa);
+}
+.slicer-qbtn--active {
+  background: var(--accent, #5b7cfa);
+  border-color: var(--accent, #5b7cfa);
+  color: #fff;
+}
+.slicer-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.slicer-range-inputs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slicer-range-inputs input[type="date"] {
+  background: var(--bg, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  color: var(--text);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.slicer-range-inputs input[type="date"]:focus {
+  outline: none;
+  border-color: var(--accent, #5b7cfa);
+}
+.slicer-dash {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.slicer-slider-wrap {
+  flex: 1;
+  min-width: 200px;
+  padding: 0 8px;
+}
+.slicer-slider-track {
+  position: relative;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 14px 0 6px;
+}
+.slicer-slider-range {
+  position: absolute;
+  height: 100%;
+  background: var(--accent, #5b7cfa);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.slicer-slider-track input[type="range"] {
+  position: absolute;
+  width: 100%;
+  height: 4px;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: none;
+  top: 0;
+  left: 0;
+  margin: 0;
+}
+.slicer-slider-track input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #5b7cfa);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+  pointer-events: all;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.slicer-slider-track input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #5b7cfa) 25%, transparent);
+}
+.slicer-slider-track input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent, #5b7cfa);
+  border: 2px solid var(--surface);
+  cursor: pointer;
+  pointer-events: all;
+}
+.slicer-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.slicer-active-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.slicer-active-label {
+  font-size: 0.78rem;
+  color: var(--accent, #5b7cfa);
+  font-weight: 700;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--accent, #5b7cfa) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #5b7cfa) 30%, transparent);
+  border-radius: 5px;
+  padding: 5px 10px;
+}
+.slicer-apply-btn {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  border-radius: 6px;
+  background: var(--accent, #5b7cfa);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  transition: filter 0.15s;
+}
+.slicer-apply-btn:hover { filter: brightness(1.08); }
+.slicer-reset-btn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.slicer-reset-btn:hover {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+/* ===== Panel header + Ascunde explicațiile toggle ===== */
+.panel-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.explanations-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  user-select: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.explanations-toggle:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.explanations-toggle input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent, #5b7cfa);
+}
+
+/* ===== Chart explanation block ===== */
+.chart-explanation {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--accent, #5b7cfa) 5%, transparent);
+  border-left: 3px solid var(--accent, #5b7cfa);
+  border-radius: 0 6px 6px 0;
+  padding: 10px 14px;
+  margin: 8px 0 14px;
+}
+.chart-explanation strong { color: var(--text); }
+
+.locatii-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 28px 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.locatii-empty {
+  text-align: center;
+  padding: 24px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  margin: 8px 0 18px;
+}
+
+/* ===== Locații panel ===== */
+.locatii-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.locatii-kpi__label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.locatii-kpi__value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.locatii-charts {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.locatii-chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  position: relative;
+}
+.locatii-chart-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.locatii-chart-subtitle {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+@media (max-width: 700px) {
+  .locatii-charts { flex-direction: column; }
+}
+
 .rapoarte-bars {
   display: inline-flex;
   align-items: flex-end;
