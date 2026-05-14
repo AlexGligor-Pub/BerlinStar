@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
 import type { TipAnvelopa } from "./hotelAnvelopeStore";
 
 export type PozitieRoata =
@@ -152,6 +152,19 @@ let _montareRotiImagesPromise: Promise<void> | null = null;
 
 export function invalidateMontareRotiImages(): void {
   _montareRotiImagesLoaded = false;
+}
+
+/** Construieste URL-urile prin proxy-ul BE pentru fiecare pozitie care are imagine configurata. */
+export function buildMontareRotiProxyUrls(): MontareRotiImages {
+  const imgs = montareRotiImages();
+  const out: MontareRotiImages = {
+    stanga_fata: null, dreapta_fata: null, stanga_spate: null,
+    dreapta_spate: null, rezerva: null, nespecificat: null,
+  };
+  (Object.keys(out) as PozitieRoata[]).forEach((p) => {
+    out[p] = imgs[p] ? `${API_BASE}/api/global-settings/montare-roti/image/${p}` : null;
+  });
+  return out;
 }
 
 export function loadMontareRotiImages(force = false): Promise<void> {

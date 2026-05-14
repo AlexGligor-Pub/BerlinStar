@@ -173,52 +173,59 @@ export default function POS() {
         {/* ── Panel 1: POS ── */}
         <div class="pos-panel">
           <div class="pos-panel-inner">
-            <div class="pos-toolbar">
-              <input
-                class="input pos-search"
-                type="search"
-                placeholder="Cauta..."
-                value={search()}
-                onInput={(e) => setSearch(e.currentTarget.value)}
-              />
-              <button class="btn btn-sm btn-ghost type-cycle-btn" onClick={cycleType}>
-                {typeFilter()}
-              </button>
-              <div class="filter-divider" />
-              <div class="pos-toolbar-cats">
-                <For each={categories()}>
-                  {(cat) => (
-                    <button
-                      class={`btn btn-sm ${category() === cat ? "btn-primary" : "btn-ghost"}`}
-                      onClick={() => setCategory(cat)}
-                    >
-                      {cat}
-                    </button>
-                  )}
-                </For>
-              </div>
-              <button
-                class="btn btn-sm pos-panel-slide-btn"
-                classList={{
-                  "btn-primary": selectedDepartmentId() !== null,
-                  "btn-ghost": selectedDepartmentId() === null,
-                }}
-                onClick={() => setPanel(1)}
-              >
-                {activeDepartmentName() ?? "Departament"} ▶
-              </button>
-              <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
-                Deviz existent
-              </button>
-            </div>
-
             <div class="pos-layout">
-              <div class="product-grid">
-                <For each={filtered()}>
-                  {(product) => <ProductCard product={product} />}
-                </For>
+              <div class="pos-left-col">
+                <div class="pos-toolbar">
+                  <input
+                    class="input pos-search"
+                    type="search"
+                    placeholder="Cauta..."
+                    value={search()}
+                    onInput={(e) => setSearch(e.currentTarget.value)}
+                  />
+                  <button class="btn btn-sm btn-ghost type-cycle-btn" onClick={cycleType}>
+                    {typeFilter()}
+                  </button>
+                  <div class="filter-divider" />
+                  <div class="pos-toolbar-cats">
+                    <For each={categories()}>
+                      {(cat) => (
+                        <button
+                          class={`btn btn-sm ${category() === cat ? "btn-primary" : "btn-ghost"}`}
+                          onClick={() => setCategory(cat)}
+                        >
+                          {cat}
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </div>
+
+                <div class="product-grid">
+                  <For each={filtered()}>
+                    {(product) => <ProductCard product={product} />}
+                  </For>
+                </div>
               </div>
-              <ShoppingList />
+
+              <div class="pos-right-col">
+                <div class="pos-right-actions">
+                  <button
+                    class="btn btn-sm pos-panel-slide-btn"
+                    classList={{
+                      "btn-primary": selectedDepartmentId() !== null,
+                      "btn-ghost": selectedDepartmentId() === null,
+                    }}
+                    onClick={() => setPanel(1)}
+                  >
+                    {activeDepartmentName() ?? "Departament"} ▶
+                  </button>
+                  <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
+                    Deviz existent
+                  </button>
+                </div>
+                <ShoppingList />
+              </div>
             </div>
           </div>
         </div>

@@ -672,6 +672,32 @@ body {
   overflow: hidden;
 }
 
+.pos-left-col,
+.pos-right-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.pos-right-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.pos-right-actions > button {
+  flex: 1;
+  white-space: nowrap;
+  margin-left: 0; /* override .pos-panel-slide-btn auto margin */
+}
+
+.pos-right-col .shopping-list {
+  height: auto;
+  flex: 1 1 auto;
+}
+
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));

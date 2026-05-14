@@ -1845,6 +1845,8 @@ export interface MontajRotaRow {
   tip: string;
   adancime: number | null;
   cupluStrangere: number | null;
+  /** URL pentru imaginea specifica acestei pozitii (folosit in cardul din PDF). */
+  imageUrl?: string | null;
 }
 
 const _POZITIE_LABELS_PDF: Record<string, string> = {
@@ -1856,16 +1858,143 @@ const _POZITIE_LABELS_PDF: Record<string, string> = {
   nespecificat: "Nespecificat",
 };
 
+/** Are macar un camp principal completat de utilizator (marca / dimensiune / profil)? */
+function _montajRotaHasData(r: MontajRotaRow): boolean {
+  return (
+    (r.marcaNume != null && r.marcaNume !== "") ||
+    (r.dimensiuneValoare != null && r.dimensiuneValoare !== "") ||
+    (r.profilValoare != null && r.profilValoare !== "")
+  );
+}
+
+/** Card cu imagine + text pentru pozitiile principale; imagineSide = "left" sau "right".
+ *  Textul e aliniat catre imagine (in oglinda fata de pozitia roti in masina).
+ *  Daca rotata nu are date completate, deseneaza doar imaginea. */
+async function drawMontajRotaCard(
+  doc: any,
+  r: MontajRotaRow,
+  x: number, y: number, w: number, h: number,
+  imageSide: "left" | "right",
+  t: (s: string | null | undefined) => string,
+  FONT: string,
+): Promise<void> {
+  const navyBlue: [number, number, number] = [30, 58, 138];
+  const imgW = Math.min(40, w * 0.42);
+  const imgPad = 1.5;
+  const imgX = imageSide === "left" ? x + imgPad : x + w - imgW + imgPad;
+  const textX = imageSide === "left" ? x + imgW + 2 : x + 2;
+  const textW = w - imgW - 2;
+  // Text aliniat catre imagine
+  const align: "left" | "right" = imageSide === "left" ? "left" : "right";
+  const anchorX = align === "right" ? textX + textW : textX;
+
+  // Imagine (centrata in zona alocata, cu aspect ratio pastrat)
+  if (r.imageUrl) {
+    await drawSideImage(doc, r.imageUrl, imgX, y + imgPad, imgW - 2 * imgPad, h - 2 * imgPad);
+  }
+
+  // Daca rotata nu are date, randam doar imaginea (fara text)
+  if (!_montajRotaHasData(r)) return;
+
+  let ty = y + 4.5;
+
+  // Titlu pozitie
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...navyBlue);
+  doc.text(t(_POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie), anchorX, ty, { align });
+  ty += 5;
+
+  // Marca (bold)
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.black);
+  doc.text(doc.splitTextToSize(t(r.marcaNume ?? "—"), textW) as string[], anchorX, ty, { align });
+  ty += 4.2;
+
+  // Dimensiune · Profil
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(7.5);
+  doc.setTextColor(...C.gray);
+  const dim = t(r.dimensiuneValoare ?? "—");
+  const profil = t(r.profilValoare ?? "—");
+  doc.text(`${dim}  ·  ${profil}`, anchorX, ty, { align });
+  ty += 3.6;
+
+  // Tip
+  doc.text(`Tip: ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`, anchorX, ty, { align });
+  ty += 4.5;
+
+  // Adancime / Presiune / Cuplu — label bold + valoare normal, aliniate catre imagine
+  doc.setTextColor(...C.black);
+  const drawKV = (label: string, value: string) => {
+    doc.setFontSize(7.5);
+    const lblText = `${label}: `;
+    doc.setFont(FONT, "bold");
+    const lblW = doc.getTextWidth(lblText);
+    doc.setFont(FONT, "normal");
+    const valW = doc.getTextWidth(value);
+    const startX = align === "right" ? anchorX - lblW - valW : textX;
+    doc.setFont(FONT, "bold");
+    doc.text(lblText, startX, ty);
+    doc.setFont(FONT, "normal");
+    doc.text(value, startX + lblW, ty);
+    ty += 3.8;
+  };
+  drawKV(t("Adâncime"), r.adancime != null ? `${r.adancime} mm` : "—");
+  drawKV("Presiune", r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—");
+  drawKV("Cuplu", r.cupluStrangere != null ? `${r.cupluStrangere} Nm` : "—");
+}
+
+/** Rand text-only pentru Rezerva / Nespecificat: titlu bold + detalii in propozitie
+ *  cu virgula (fara imagine, full-width). */
+function drawMontajRotaRowTextOnly(
+  doc: any,
+  r: MontajRotaRow,
+  x: number, y: number, w: number,
+  t: (s: string | null | undefined) => string,
+  FONT: string,
+): number {
+  const navyBlue: [number, number, number] = [30, 58, 138];
+  const pad = 2;
+  const lineY = y + 5;
+  // Titlu pozitie (bold, navy)
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...navyBlue);
+  const title = `${t(_POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie)}:`;
+  doc.text(title, x + pad, lineY);
+  const titleW = doc.getTextWidth(title);
+
+  // Detalii ca propozitie cu virgula
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.black);
+  const parts: string[] = [];
+  if (r.marcaNume) parts.push(t(r.marcaNume));
+  if (r.dimensiuneValoare) parts.push(`dimensiune ${t(r.dimensiuneValoare)}`);
+  if (r.profilValoare) parts.push(`profil ${t(r.profilValoare)}`);
+  parts.push(`tip ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`);
+  if (r.adancime != null) parts.push(`${t("adâncime")} ${r.adancime} mm`);
+  if (r.presiune != null) parts.push(`presiune ${r.presiune.toFixed(1)} bar`);
+  const sentence = parts.length > 0 ? parts.join(", ") + "." : "—";
+
+  const dx = x + pad + titleW + 2;
+  const maxW = w - (dx - x) - pad;
+  const lines = doc.splitTextToSize(sentence, maxW) as string[];
+  doc.text(lines, dx, lineY);
+  return lineY + (lines.length - 1) * 3.6 + 5;
+}
+
 /** PDF — Montare Roți */
 export async function generateMontajRoti(
   receipt: Receipt,
   company: CompanyData | null,
   rows: MontajRotaRow[],
-  montareImageUrl: string | null,
   vehicle: VehiculForPdf | null = null,
   append?: AppendOptions,
 ): Promise<void> {
-  const { jsPDF, autoTable } = await loadPdf();
+  const { jsPDF } = await loadPdf();
   const doc = append ? append.doc : new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   if (append && !append.isFirst) doc.addPage();
 
@@ -1902,57 +2031,49 @@ export async function generateMontajRoti(
   hline(doc, y);
   y += 6;
 
-  // Tabel roți cu imagine în dreapta
-  const SIDE_IMG_W = 55;
-  const SIDE_GAP = 5;
-  const tableW = CW - SIDE_IMG_W - SIDE_GAP;
+  // Card grid (2 coloane x 2 randuri principale + Rezerva / Nespecificat full-width)
+  // — fara borduri vizibile, doar layout-ul de spacing.
+  const byPoz: Partial<Record<string, MontajRotaRow>> = {};
+  for (const row of rows) {
+    if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
+  }
 
-  const navyBlue: [number, number, number] = [30, 58, 138];
+  const colGap = 6;
+  const rowGap = 4;
+  const cardW = (CW - colGap) / 2;
+  const cardH = 42;
 
-  const body = rows.map((r, idx) => {
-    const dim = t(r.dimensiuneValoare ?? "—");
-    const profil = t(r.profilValoare ?? "—");
-    const tip = TIP_PDF_LABELS[r.tip] ?? r.tip;
-    const pozitie = _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie;
-    const marca = t(r.marcaNume ?? "—");
-    return [
-      String(idx + 1),
-      `${pozitie}\n${marca}`,
-      `${dim}\n${profil}\n${tip}`,
-      r.adancime != null ? `${r.adancime} mm` : "—",
-      r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
-      r.cupluStrangere != null ? `${r.cupluStrangere} Nm` : "—",
-    ];
+  // Daca nici una din cele 4 pozitii principale nu are date, sarim peste grid-ul de carduri
+  // (nu afisam nici macar imaginile).
+  const _MAIN_POZITII = ["stanga_fata", "dreapta_fata", "stanga_spate", "dreapta_spate"];
+  const anyMainHasData = _MAIN_POZITII.some((p) => {
+    const row = byPoz[p];
+    return row != null && _montajRotaHasData(row);
   });
 
-  if (body.length > 0) {
-    const tableStartY = y;
-    autoTable(doc, {
-      startY: y,
-      head: [["#", "Poziție / Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune", "Cuplu"]],
-      body,
-      theme: "grid",
-      styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
-      headStyles: { fillColor: navyBlue, textColor: [255, 255, 255], fontSize: 7, fontStyle: "bold", cellPadding: 2, halign: "center" },
-      bodyStyles: { fontSize: 7.5, cellPadding: 2 },
-      columnStyles: {
-        0: { halign: "center", cellWidth: 8 },
-        1: { cellWidth: "auto" },
-        2: { halign: "center", cellWidth: 30 },
-        3: { halign: "center", cellWidth: 16 },
-        4: { halign: "center", cellWidth: 16 },
-        5: { halign: "center", cellWidth: 16 },
-      },
-      margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
-      tableWidth: tableW,
-    });
-    const tableEndY = (doc as any).lastAutoTable.finalY;
-    const tableH = tableEndY - tableStartY;
+  if (anyMainHasData) {
+    const drawPair = async (leftKey: string, rightKey: string) => {
+      const left = byPoz[leftKey];
+      const right = byPoz[rightKey];
+      if (!left && !right) return;
+      // Stanga (coloana 1) → imaginea spre interior (dreapta cardului).
+      // Dreapta (coloana 2) → imaginea spre interior (stanga cardului).
+      if (left)  await drawMontajRotaCard(doc, left,  ML,                  y, cardW, cardH, "right", t, FONT);
+      if (right) await drawMontajRotaCard(doc, right, ML + cardW + colGap, y, cardW, cardH, "left",  t, FONT);
+      y += cardH + rowGap;
+    };
 
-    await drawSideImage(doc, montareImageUrl, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
-
-    y = tableEndY + 4;
+    await drawPair("stanga_fata", "dreapta_fata");
+    await drawPair("stanga_spate", "dreapta_spate");
   }
+
+  if (byPoz.rezerva) {
+    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + rowGap;
+  }
+  if (byPoz.nespecificat) {
+    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + rowGap;
+  }
+  y += 2;
 
   // ── Condiții tehnice de lucru ──────────────────────────────────────────────
   doc.setFont(FONT, "bold");
@@ -1983,7 +2104,6 @@ export async function generateMontajRoti(
   y += atLines.length * 2.6 + 4;
   doc.setTextColor(...C.black);
 
-  y = drawSignatures(doc, "Semnătură Prestator", "Semnătură Client", y);
   await drawFooterWithBranding(doc, company?.website);
 
   const clientSlug = (receipt.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
@@ -2025,7 +2145,7 @@ export async function generateDevizPlusOperatii(
   await generateDeviz(r, ctx, showTehnician, append());
 
   if (montajRoti.length > 0) {
-    await generateMontajRoti(r, ctx.company ?? null, montajRoti, images?.montare ?? null, vehicle, append());
+    await generateMontajRoti(r, ctx.company ?? null, montajRoti, vehicle, append());
   }
 
   for (const section of cazariSections) {

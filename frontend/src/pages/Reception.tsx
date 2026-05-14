@@ -5,7 +5,10 @@ import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadi
 import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow, CazareSection } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
-import { loadMontajRotiByReceipt, type MontajRota } from "../store/montajRotiStore";
+import {
+  loadMontajRotiByReceipt, loadMontareRotiImages, buildMontareRotiProxyUrls,
+  type MontajRota, type PozitieRoata,
+} from "../store/montajRotiStore";
 import { setResume } from "../store/resumeStore";
 import { apiFetch, API_BASE } from "../utils/api";
 import { device } from "../store/deviceStore";
@@ -462,8 +465,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
     if (montajPdfLoading()) return;
     setMontajPdfLoading(true);
     try {
-      const [company] = await Promise.all([fetchCompanyData(), loadHotelImages()]);
-      const imgs = buildHotelImageProxyUrls();
+      const [company] = await Promise.all([fetchCompanyData(), loadMontareRotiImages()]);
+      const montareImgs = buildMontareRotiProxyUrls();
       const rows: MontajRotaRow[] = montajRoti().map((m) => ({
         pozitie: m.pozitie,
         presiune: m.presiune,
@@ -473,8 +476,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
         tip: m.tip,
         adancime: m.adancime,
         cupluStrangere: m.cupluStrangere,
+        imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
       }));
-      await generateMontajRoti(r, company, rows, imgs.montare, r.vehicol ?? null);
+      await generateMontajRoti(r, company, rows, r.vehicol ?? null);
     } finally { setMontajPdfLoading(false); }
   }
 
@@ -536,8 +540,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
   }
 
   async function handleDevizPlusOperatii(ctx: DocContext) {
-    await loadHotelImages();
+    await Promise.all([loadHotelImages(), loadMontareRotiImages()]);
     const imgs = buildHotelImageProxyUrls();
+    const montareImgs = buildMontareRotiProxyUrls();
     const vehicle = r.vehicol ?? null;
 
     // Fetch montaj roti + cazări în paralel
@@ -555,6 +560,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       tip: m.tip,
       adancime: m.adancime,
       cupluStrangere: m.cupluStrangere,
+      imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
     }));
 
     const cazariBasice: any[] = cazariRes?.items ?? [];
