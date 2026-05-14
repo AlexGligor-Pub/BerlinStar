@@ -69,14 +69,17 @@ export default function NavBar() {
     }
   }
 
-  // Inchide dropdown-ul cand se face click in afara
-  function onOutsideClick(e: MouseEvent) {
+  // Inchide dropdown-ul cand se face pointerdown in afara.
+  // Folosim pointerdown (nu click) ca sa reducem latency-ul pe touch si gate
+  // pe `open()` pentru a evita procesarea cand dropdown-ul e inchis.
+  function onOutsidePointerDown(e: PointerEvent) {
+    if (!open()) return;
     const target = e.target as HTMLElement;
     if (!target.closest(".logo-menu")) setOpen(false);
   }
 
-  document.addEventListener("click", onOutsideClick);
-  onCleanup(() => document.removeEventListener("click", onOutsideClick));
+  document.addEventListener("pointerdown", onOutsidePointerDown);
+  onCleanup(() => document.removeEventListener("pointerdown", onOutsidePointerDown));
 
   return (
     <>

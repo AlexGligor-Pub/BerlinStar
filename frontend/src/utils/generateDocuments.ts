@@ -50,13 +50,46 @@ const PAGE_H = 297;
 // jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1.
 // Folosim NotoSans-Regular.ttf de pe jsDelivr (cu cache localStorage) pentru suport complet.
 
+// Flag module-level: cand un generator a inregistrat NotoSans pe doc si l-a
+// alias-at peste "helvetica", lasam diacriticele neschimbate.
+let _keepDiacritics = false;
+
 function ro(s: string | null | undefined): string {
   if (!s) return "";
+  if (_keepDiacritics) return s;
   // fallback pentru Helvetica: inlocuieste diacriticele care nu sunt in Latin-1
   return s
     .replace(/ă/g, "a").replace(/Ă/g, "A")
     .replace(/[șşȘŞ]/g, (c) => /[A-Z]/.test(c) ? "S" : "s")
     .replace(/[țţȚŢ]/g, (c) => /[A-Z]/.test(c) ? "T" : "t");
+}
+
+/**
+ * Activeaza fontul NotoSans pe `doc` si redirecteaza apelurile setFont("helvetica", ...)
+ * catre "NotoSans". Returneaza un cleanup ce trebuie apelat la final pentru a
+ * restaura starea (in caz de append intr-un doc partajat).
+ */
+async function enableRomanianFont(doc: any): Promise<() => void> {
+  const b64 = await loadRoFontBase64();
+  if (!b64) return () => {};
+  registerRoFont(doc, b64);
+  // Alias "helvetica" -> NotoSans astfel incat tot codul existent care apeleaza
+  // doc.setFont("helvetica", "bold|normal|italic") sa foloseasca glyph-urile cu
+  // diacritice. "italic" cade pe "normal" cand nu exista variants italic.
+  const orig = doc.setFont.bind(doc);
+  doc.setFont = function (family: string, style?: string) {
+    if (family === "helvetica") {
+      const s = style === "italic" ? "normal" : (style ?? "normal");
+      return orig("NotoSans", s);
+    }
+    return orig(family, style);
+  };
+  const prev = _keepDiacritics;
+  _keepDiacritics = true;
+  return () => {
+    _keepDiacritics = prev;
+    // nu restaurez doc.setFont — documentul este de obicei descarcat imediat dupa
+  };
 }
 
 // ─── Romanian font loader ─────────────────────────────────────────────────────
@@ -591,6 +624,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   const { jsPDF, autoTable } = await loadPdf();
   const doc = append ? append.doc : new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   if (append && !append.isFirst) doc.addPage();
+  await enableRomanianFont(doc);
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
 
@@ -711,6 +745,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  await enableRomanianFont(doc);
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
 
@@ -760,6 +795,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<void> {
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  await enableRomanianFont(doc);
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const totalFinal = r.total;
   const totalNet = totalFinal / (1 + tvaPct / 100);

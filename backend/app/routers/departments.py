@@ -122,12 +122,12 @@ async def upload_department_image(
         raise HTTPException(404, "Departamentul nu a fost găsit.")
     data = await validate_image(file)
     old_url = department.image_path
-    url = upload_image(account_id, "departments", data, file.content_type)
+    url = await upload_image(account_id, "departments", data, file.content_type)
     department.image_path = url
     await db.commit()
     await db.refresh(department)
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     return department
 
 

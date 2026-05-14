@@ -10,4 +10,15 @@ export default defineConfig({
       '/api': 'http://localhost:4000',
     },
   },
+  build: {
+    sourcemap: false,
+    chunkSizeWarningLimit: 300,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'solid-vendor': ['solid-js', '@solidjs/router'],
+        },
+      },
+    },
+  },
 })

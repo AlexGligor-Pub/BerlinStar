@@ -97,12 +97,12 @@ async def upload_image(
         raise HTTPException(404, "Angajatul nu a fost găsit.")
     data = await validate_image(file)
     old_url = employee.image_path
-    url = storage_upload_image(account_id, "employees", data, file.content_type)
+    url = await storage_upload_image(account_id, "employees", data, file.content_type)
     employee.image_path = url
     await db.commit()
     await db.refresh(employee)
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     return employee
 
 

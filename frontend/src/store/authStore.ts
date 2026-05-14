@@ -1,4 +1,3 @@
-import { createEffect } from "solid-js";
 import { createStore } from "solid-js/store";
 import { setAdminVisible } from "./adminStore";
 
@@ -11,6 +10,18 @@ interface AuthState {
 
 const STORAGE_KEY = "bs_auth";
 
+// Cheile localStorage care contin date utilizator legate de cont si trebuie
+// curatate la logout. NU le sterge cu localStorage.clear() — pastram theme,
+// device setup, etc.
+const ACCOUNT_SCOPED_KEYS = [
+  STORAGE_KEY,
+  "bs_products_cache_v2",
+  "bs_cart",
+  "bs_emp_view_mode",
+  "bs_resume",
+  "bs_admin_token",
+];
+
 function loadAuth(): AuthState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -21,24 +32,26 @@ function loadAuth(): AuthState {
 
 const [auth, setAuth] = createStore<AuthState>(loadAuth());
 
-// Sincronizare automata cu localStorage
-createEffect(() => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    user: auth.user,
-    token: auth.token,
-    isLocked: auth.isLocked,
-    lockedAt: auth.lockedAt,
-  }));
-});
+function persist(state: AuthState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
 
 export function login(user: string, token: string, isLocked = false, lockedAt: string | null = null) {
-  setAuth({ user, token, isLocked, lockedAt });
+  const next: AuthState = { user, token, isLocked, lockedAt };
+  setAuth(next);
+  persist(next);
 }
 
 export function logout() {
   setAdminVisible(false);
-  setAuth({ user: null, token: null, isLocked: false, lockedAt: null });
-  localStorage.clear();
+  const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null };
+  setAuth(next);
+  // Sterge doar cheile legate de cont, nu intregul localStorage.
+  for (const k of ACCOUNT_SCOPED_KEYS) {
+    try { localStorage.removeItem(k); } catch {}
+  }
 }
 
 export const TRIAL_DAYS = 7;

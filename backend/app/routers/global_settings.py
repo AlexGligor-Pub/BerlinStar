@@ -43,7 +43,7 @@ async def upload_cazare_image(
     _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
-    url = upload_global_image("cazare", data, file.content_type)
+    url = await upload_global_image("cazare", data, file.content_type)
     settings = await _get_or_create(db)
     settings.hotel_cazare_image_path = url
     await db.commit()
@@ -57,7 +57,7 @@ async def upload_scoatere_image(
     _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
-    url = upload_global_image("scoatere", data, file.content_type)
+    url = await upload_global_image("scoatere", data, file.content_type)
     settings = await _get_or_create(db)
     settings.hotel_scoatere_image_path = url
     await db.commit()
@@ -71,7 +71,7 @@ async def upload_montare_image(
     _account_id: int = Depends(get_account_id),
 ):
     data = await validate_image(file)
-    url = upload_global_image("montare", data, file.content_type)
+    url = await upload_global_image("montare", data, file.content_type)
     settings = await _get_or_create(db)
     settings.hotel_montare_image_path = url
     await db.commit()
@@ -96,7 +96,7 @@ async def upload_montare_roti_image(
     if pozitie not in _MONTARE_POZITII:
         raise HTTPException(400, "Pozitie invalida")
     data = await validate_image(file)
-    url = upload_global_image(pozitie, data, file.content_type, folder="montare_roti")
+    url = await upload_global_image(pozitie, data, file.content_type, folder="montare_roti")
     settings = await _get_or_create(db)
     setattr(settings, f"montare_{pozitie}_image_path", url)
     await db.commit()

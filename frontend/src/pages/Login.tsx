@@ -1,12 +1,23 @@
 import { createSignal, Show } from "solid-js";
-import { useNavigate } from "@solidjs/router";
+import { useNavigate, useSearchParams } from "@solidjs/router";
 import { login } from "../store/authStore";
-import { API_BASE } from "../utils/api";
+import { API_BASE, readApiError } from "../utils/api";
 import ThemeToggle from "../components/ThemeToggle";
 import logo from "../assets/logo.png";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  function redirectAfterLogin() {
+    const raw = searchParams.from;
+    const from = Array.isArray(raw) ? raw[0] : raw;
+    let target = "/";
+    if (typeof from === "string" && from.startsWith("/") && !from.startsWith("//")) {
+      try { target = decodeURIComponent(from); } catch { target = from; }
+    }
+    navigate(target, { replace: true });
+  }
 
   // login
   const [username, setUsername] = createSignal("");
@@ -44,9 +55,16 @@ export default function Login() {
       if (res.ok) {
         const data = await res.json();
         login(username().trim(), data.access_token, data.is_locked ?? false, data.locked_at ?? null);
-        navigate("/");
-      } else {
+        redirectAfterLogin();
+      } else if (res.status === 401 || res.status === 403) {
         setError("Utilizator sau parola incorecta.");
+      } else if (res.status === 429) {
+        setError("Prea multe incercari. Reincearca in cateva minute.");
+      } else if (res.status >= 500) {
+        setError("Server indisponibil. Incearca din nou.");
+      } else {
+        const msg = await readApiError(res, "Eroare la autentificare.");
+        setError(msg);
       }
     } catch {
       setError("Serverul nu raspunde. Incearca din nou.");
@@ -67,6 +85,10 @@ export default function Login() {
       setError("Parolele nu coincid.");
       return;
     }
+    if (regPassword().length < 10) {
+      setError("Parola trebuie sa aiba minim 10 caractere.");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/auth/register`, {
@@ -79,13 +101,15 @@ export default function Login() {
           password: regPassword(),
         }),
       });
-      const data = await res.json();
       if (res.ok) {
-        setRegSuccess("Contul a fost creat cu succes! Vei avea acces timp de 7 zile. Vei fi redirectionat la login...");
+        setRegSuccess("Daca informatiile sunt corecte vei primi un email cu detalii de acces. Vei fi redirectionat la login...");
         setRegName(""); setRegUsername(""); setRegEmail(""); setRegPassword(""); setRegPassword2("");
         setTimeout(() => switchMode("login"), 3000);
+      } else if (res.status === 429) {
+        setError("Prea multe incercari. Reincearca in cateva minute.");
       } else {
-        setError(data.detail ?? "Eroare la creare cont.");
+        const msg = await readApiError(res, "Eroare la creare cont.");
+        setError(msg);
       }
     } catch {
       setError("Serverul nu raspunde. Incearca din nou.");
@@ -192,7 +216,7 @@ export default function Login() {
                 id="reg-password"
                 class="input"
                 type="password"
-                placeholder="minim 6 caractere"
+                placeholder="minim 10 caractere"
                 value={regPassword()}
                 onInput={(e) => setRegPassword(e.currentTarget.value)}
                 required

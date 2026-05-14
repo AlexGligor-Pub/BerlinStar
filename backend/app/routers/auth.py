@@ -2,15 +2,16 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 import jwt
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
 from app.models.account import Account
+from app.rate_limit import limiter
 from app.utils.security import hash_password, is_legacy_hash, verify_password
 
 log = logging.getLogger("berlinstar")
@@ -53,7 +54,8 @@ async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     token, account = await _authenticate(body.username, body.password, db)
     return TokenResponse(
         access_token=token,
@@ -66,8 +68,16 @@ async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
 class RegisterRequest(BaseModel):
     name: str = Field(..., max_length=200)
     username: str = Field(..., max_length=100)
-    password: str = Field(..., min_length=6, max_length=255)
-    email: str | None = Field(None, max_length=255)
+    password: str = Field(..., min_length=10, max_length=255)
+    email: EmailStr | None = Field(None, max_length=255)
+
+    @field_validator("email")
+    @classmethod
+    def _no_crlf_in_email(cls, v: str | None) -> str | None:
+        # EmailStr nu admite CRLF, dar adaugam check defensiv pt SMTP injection
+        if v and ("\r" in v or "\n" in v):
+            raise ValueError("Email invalid.")
+        return v
 
 
 class RegisterResponse(BaseModel):
@@ -95,12 +105,19 @@ async def _send_client_nou(account_name: str, account_email: str, account_id: in
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
-async def register(body: RegisterRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/hour")
+async def register(request: Request, body: RegisterRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
+    # Raspuns generic identic indiferent daca username-ul exista (no user enumeration)
+    GENERIC_OK = RegisterResponse(
+        message="Daca informatiile sunt corecte, vei primi un email cu detalii de acces."
+    )
+
     existing = (await db.execute(
         select(Account).where(Account.username == body.username, Account.is_deleted == False)
     )).scalar_one_or_none()
     if existing is not None:
-        raise HTTPException(409, "Acest nume de utilizator este deja folosit.")
+        log.info("Register: username already exists (%s)", body.username)
+        return GENERIC_OK
 
     now = datetime.now(timezone.utc)
     account = Account(
@@ -115,11 +132,13 @@ async def register(body: RegisterRequest, background_tasks: BackgroundTasks, db:
     await db.commit()
     if account.email:
         background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
-    return RegisterResponse(message="Contul a fost creat cu succes! Vei avea acces timp de 7 zile.")
+    return GENERIC_OK
 
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
+@limiter.limit("5/minute")
 async def token_oauth2(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):

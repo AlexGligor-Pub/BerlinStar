@@ -4,11 +4,20 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Dev fallback: SQLite. În producție setează DATABASE_URL în .env la postgresql+asyncpg://...
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./berlinstar.db")
+# DATABASE_URL este obligatoriu. Pentru dev local SQLite, seteaza
+# BERLINSTAR_DEV_SQLITE=1 explicit; altfel pornirea esueaza.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    if os.getenv("BERLINSTAR_DEV_SQLITE") == "1":
+        DATABASE_URL = "sqlite+aiosqlite:///./berlinstar.db"
+    else:
+        raise RuntimeError(
+            "DATABASE_URL este obligatoriu. Seteaza postgresql+asyncpg://... "
+            "sau BERLINSTAR_DEV_SQLITE=1 pentru fallback la SQLite in dev."
+        )
 
 _pool_kwargs = (
-    dict(pool_size=10, max_overflow=20, pool_pre_ping=True, pool_recycle=3600)
+    dict(pool_size=10, max_overflow=10, pool_pre_ping=True, pool_recycle=3600, pool_timeout=30)
     if DATABASE_URL.startswith("postgresql")
     else {}
 )

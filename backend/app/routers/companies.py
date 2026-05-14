@@ -136,12 +136,12 @@ async def upload_logo(
         raise HTTPException(404, "Compania nu a fost găsită.")
     data = await validate_image(file)
     old_url = company.logo_path
-    url = upload_image(account_id, "companies/logos", data, file.content_type)
+    url = await upload_image(account_id, "companies/logos", data, file.content_type)
     company.logo_path = url
     company.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     await db.refresh(company)
     return company
 
@@ -158,12 +158,12 @@ async def upload_background(
         raise HTTPException(404, "Compania nu a fost găsită.")
     data = await validate_image(file, max_mb=1)
     old_url = company.background_path
-    url = upload_image(account_id, "companies/backgrounds", data, file.content_type)
+    url = await upload_image(account_id, "companies/backgrounds", data, file.content_type)
     company.background_path = url
     company.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     await db.refresh(company)
     return company
 

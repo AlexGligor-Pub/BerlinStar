@@ -1,24 +1,35 @@
-import { Router, Route, useNavigate, Navigate } from "@solidjs/router";
-import { Show, createEffect } from "solid-js";
+import { Router, Route, useNavigate, useLocation, Navigate } from "@solidjs/router";
+import { Show, Suspense, lazy, createEffect, onCleanup, onMount } from "solid-js";
 import { auth, trialExpired } from "./store/authStore";
 import { adminVisible } from "./store/adminStore";
 import { deviceReady } from "./store/deviceStore";
 import NavBar from "./components/NavBar";
 import DeviceSetupModal from "./components/DeviceSetupModal";
 import Login from "./pages/Login";
-import POS from "./pages/POS";
-import Reception from "./pages/Reception";
-import Configurari from "./pages/Configurari";
-import Rapoarte from "./pages/Rapoarte";
-import Clienti from "./pages/Clienti";
-import HotelAnvelope from "./pages/HotelAnvelope";
-import Programari from "./pages/Programari";
-import NoAccess from "./pages/NoAccess";
-import AdminV2 from "./pages/AdminV2";
-import HealthCheck from "./pages/HealthCheck";
+
+// Lazy-load route pages to enable per-route code-splitting.
+const POS = lazy(() => import("./pages/POS"));
+const Reception = lazy(() => import("./pages/Reception"));
+const Configurari = lazy(() => import("./pages/Configurari"));
+const Rapoarte = lazy(() => import("./pages/Rapoarte"));
+const Clienti = lazy(() => import("./pages/Clienti"));
+const HotelAnvelope = lazy(() => import("./pages/HotelAnvelope"));
+const Programari = lazy(() => import("./pages/Programari"));
+const NoAccess = lazy(() => import("./pages/NoAccess"));
+const AdminV2 = lazy(() => import("./pages/AdminV2"));
+const HealthCheck = lazy(() => import("./pages/HealthCheck"));
+
+function PageSuspense(props: { children: any }) {
+  return (
+    <Suspense fallback={<div class="page-content" style="padding:24px"><div class="skeleton" style="height:24px;width:160px;margin-bottom:12px" /><div class="skeleton" style="height:120px" /></div>}>
+      {props.children}
+    </Suspense>
+  );
+}
 
 function Protected(props: { component: () => any }) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   createEffect(() => {
     if (auth.token && trialExpired()) {
@@ -26,11 +37,22 @@ function Protected(props: { component: () => any }) {
     }
   });
 
+  onMount(() => {
+    const handler = () => {
+      const from = encodeURIComponent(location.pathname + location.search);
+      navigate(`/login?from=${from}`, { replace: true });
+    };
+    window.addEventListener("bs:unauthorized", handler);
+    onCleanup(() => window.removeEventListener("bs:unauthorized", handler));
+  });
+
   return (
     <Show when={auth.token} fallback={<Login />}>
       <div class="app-shell">
         <NavBar />
-        {props.component()}
+        <PageSuspense>
+          {props.component()}
+        </PageSuspense>
         <Show when={!deviceReady()}>
           <DeviceSetupModal />
         </Show>
@@ -60,7 +82,7 @@ export default function App() {
       <Route path="/clienti" component={() => <Protected component={Clienti} />} />
       <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
       <Route path="/programari" component={() => <Protected component={Programari} />} />
-      <Route path="/adminv2" component={AdminV2} />
+      <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
     </Router>
   );
 }

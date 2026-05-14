@@ -1,8 +1,15 @@
 import os
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+import httpx
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from sqlalchemy.exc import IntegrityError, OperationalError
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -10,6 +17,7 @@ load_dotenv()
 from app.logging_config import setup_logging
 from app.middleware import RequestLoggingMiddleware
 from app.database import engine
+from app.rate_limit import limiter
 
 setup_logging()
 log = logging.getLogger("berlinstar")
@@ -17,11 +25,18 @@ log = logging.getLogger("berlinstar")
 from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings
 
 
+# Shared httpx client reused across requests — saves one TCP handshake per call
+http_client: httpx.AsyncClient | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global http_client
+    http_client = httpx.AsyncClient(timeout=15.0)
     log.info("BerlinStar POS API starting up")
     yield
     log.info("BerlinStar POS API shutting down")
+    await http_client.aclose()
     await engine.dispose()
 
 
@@ -30,15 +45,47 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+def _parse_csv_env(name: str, default: str) -> list[str]:
+    raw = os.getenv(name, default)
+    items = [v.strip() for v in raw.split(",") if v.strip()]
+    return items
+
+
+_cors_origins = _parse_csv_env("CORS_ORIGINS", "http://localhost:2000")
+if "*" in _cors_origins:
+    raise RuntimeError("CORS_ORIGINS='*' is not allowed with allow_credentials=True. Set explicit origins.")
+
+_allowed_hosts = _parse_csv_env("ALLOWED_HOSTS", "*")
 
 app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
-    CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:2000").split(","),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    TrustedHostMiddleware,
+    allowed_hosts=_allowed_hosts,
 )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+)
+
+
+@app.exception_handler(IntegrityError)
+async def _integrity_handler(_req: Request, exc: IntegrityError):
+    log.warning("IntegrityError: %s", exc.orig if hasattr(exc, "orig") else exc)
+    return JSONResponse(status_code=409, content={"detail": "Conflict de date."})
+
+
+@app.exception_handler(OperationalError)
+async def _operational_handler(_req: Request, exc: OperationalError):
+    log.error("OperationalError: %s", exc, exc_info=True)
+    return JSONResponse(status_code=503, content={"detail": "Serviciu temporar indisponibil."})
+
 
 app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
 app.include_router(accounts.router,   prefix="/api/accounts",   tags=["accounts"])

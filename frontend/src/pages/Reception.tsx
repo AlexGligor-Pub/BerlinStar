@@ -10,7 +10,7 @@ import {
   type MontajRota, type PozitieRoata,
 } from "../store/montajRotiStore";
 import { setResume } from "../store/resumeStore";
-import { apiFetch, API_BASE } from "../utils/api";
+import { apiFetch, API_BASE, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 
@@ -458,6 +458,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
   );
   const [saving, setSaving] = createSignal(false);
   const [docLoading, setDocLoading] = createSignal<string | null>(null);
+  const [docError, setDocError] = createSignal<string | null>(null);
   const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
   const r = props.receipt;
 
@@ -513,8 +514,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
 
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta" | "deviz_operatii") {
+    setDocError(null);
     const locationId = device()?.locationId;
-    if (!locationId) { alert("Dispozitivul nu are o locație configurată."); return; }
+    if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);
     try {
       const apiDocType = docType === "deviz_operatii" ? "deviz" : docType;
@@ -523,8 +525,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
         body: JSON.stringify({ doc_type: apiDocType, location_id: locationId }),
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        alert(j.detail ?? "Eroare la generarea documentului.");
+        const msg = await readApiError(res, "Eroare la generarea documentului.");
+        setDocError(msg);
         return;
       }
       const ctx: DocContext = await res.json();
@@ -533,7 +535,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       else if (docType === "chitanta") await generateChitanta(r, ctx);
       else await handleDevizPlusOperatii(ctx);
     } catch (e: any) {
-      alert(e?.message ?? "Eroare necunoscută.");
+      setDocError(e?.message ?? "Eroare necunoscută.");
     } finally {
       setDocLoading(null);
     }
@@ -736,6 +738,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </button>
               </Show>
             </div>
+            <Show when={docError()}>
+              <p class="cfg-error" role="alert" style="margin-top:6px">{docError()}</p>
+            </Show>
 
           </div>
 

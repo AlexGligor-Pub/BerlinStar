@@ -4356,3 +4356,5 @@ DETAIL:  Key (username)=(alexgligor) already exists.
 2026-05-14T12:47:10 [INFO    ] berlinstar.http: ← GET /api/items  rid=c5e5fdea  status=200  22.5ms
 2026-05-14T12:47:13 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=90fb0447  ip=127.0.0.1
 2026-05-14T12:47:13 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=90fb0447  status=200  6.3ms
+2026-05-14T13:28:56 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-14T14:37:11 [INFO    ] berlinstar: BerlinStar POS API starting up

@@ -142,11 +142,11 @@ async def upload_item_image(
         raise HTTPException(404, "Item-ul nu a fost gasit.")
     data = await validate_image(file)
     old_url = item.image_path
-    url = upload_image(account_id, "items", data, file.content_type)
+    url = await upload_image(account_id, "items", data, file.content_type)
     item.image_path = url
     await db.commit()
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     result = await db.execute(
         select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
     )

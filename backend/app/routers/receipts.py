@@ -219,7 +219,7 @@ async def create_receipt(
         .where(Receipt.id == receipt.id)
     )).scalar_one()
 
-    await broadcaster.notify(account_id)
+    broadcaster.notify(account_id)
     return _serialize(result)
 
 
@@ -232,7 +232,7 @@ async def receipt_events(
 ):
     if client_type == "pos":
         broadcaster.pos_connect(account_id)
-        await broadcaster.notify_pos_count(account_id)
+        broadcaster.notify_pos_count(account_id)
 
         async def pos_stream():
             try:
@@ -244,7 +244,7 @@ async def receipt_events(
                     yield ": keepalive\n\n"
             finally:
                 broadcaster.pos_disconnect(account_id)
-                await broadcaster.notify_pos_count(account_id)
+                broadcaster.notify_pos_count(account_id)
 
         return StreamingResponse(
             pos_stream(),
@@ -331,7 +331,7 @@ async def patch_receipt(
         .where(Receipt.id == receipt_id)
     )).scalar_one()
 
-    await broadcaster.notify(account_id)
+    broadcaster.notify(account_id)
     return _serialize(result)
 
 
@@ -389,7 +389,7 @@ async def patch_receipt_content(
         .where(Receipt.id == receipt_id)
     )).scalar_one()
 
-    await broadcaster.notify(account_id)
+    broadcaster.notify(account_id)
     return _serialize(result)
 
 
@@ -539,7 +539,7 @@ async def upsert_vehicol(
             await _ensure_client_vehicol(db, account_id, receipt.client_id, existing)
         await db.commit()
         await db.refresh(existing)
-        await broadcaster.notify(account_id)
+        broadcaster.notify(account_id)
         return existing
     else:
         vehicol = Vehicol(
@@ -552,7 +552,7 @@ async def upsert_vehicol(
             await _ensure_client_vehicol(db, account_id, receipt.client_id, vehicol)
         await db.commit()
         await db.refresh(vehicol)
-        await broadcaster.notify(account_id)
+        broadcaster.notify(account_id)
         return vehicol
 
 
@@ -574,4 +574,4 @@ async def delete_receipt(
     await soft_delete(db, Receipt, receipt_id)
     await _refresh_accumulations(db, account_id, emp_ids)
     await db.commit()
-    await broadcaster.notify(account_id)
+    broadcaster.notify(account_id)

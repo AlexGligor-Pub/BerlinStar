@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -45,6 +46,7 @@ async def list_anvelope(
     limit = min(limit, 500)
     stmt = (
         select(Anvelopa)
+        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
         .where(Anvelopa.account_id == account_id, Anvelopa.is_deleted == False)
     )
     if client_id is not None:
@@ -53,20 +55,6 @@ async def list_anvelope(
         stmt = stmt.where(Anvelopa.id > last_id)
     stmt = stmt.order_by(Anvelopa.id).limit(limit + 1)
     rows = (await db.execute(stmt)).scalars().all()
-
-    # eager load marca/dimensiune
-    from sqlalchemy.orm import selectinload
-    stmt2 = (
-        select(Anvelopa)
-        .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
-        .where(Anvelopa.account_id == account_id, Anvelopa.is_deleted == False)
-    )
-    if client_id is not None:
-        stmt2 = stmt2.where(Anvelopa.client_id == client_id)
-    if last_id is not None:
-        stmt2 = stmt2.where(Anvelopa.id > last_id)
-    stmt2 = stmt2.order_by(Anvelopa.id).limit(limit + 1)
-    rows = (await db.execute(stmt2)).scalars().all()
 
     has_more = len(rows) > limit
     page = rows[:limit]
@@ -79,7 +67,6 @@ async def create_anvelopa(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    from sqlalchemy.orm import selectinload
     anv = Anvelopa(**body.model_dump(), account_id=account_id)
     db.add(anv)
     await db.commit()
@@ -99,7 +86,6 @@ async def get_anvelopa(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(Anvelopa)
         .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil))
@@ -118,7 +104,6 @@ async def update_anvelopa(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    from sqlalchemy.orm import selectinload
     anv = await db.get(Anvelopa, anvelopa_id)
     if anv is None or anv.account_id != account_id or anv.is_deleted:
         raise HTTPException(404, "Anvelopa nu a fost găsită.")

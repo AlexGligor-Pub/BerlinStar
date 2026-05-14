@@ -136,12 +136,12 @@ async def upload_location_image(
         raise HTTPException(404, "Locația nu a fost găsită.")
     data = await validate_image(file)
     old_url = location.image_path
-    url = storage_upload_image(account_id, "locations", data, file.content_type)
+    url = await storage_upload_image(account_id, "locations", data, file.content_type)
     location.image_path = url
     await db.commit()
     await db.refresh(location)
     if old_url:
-        delete_image_by_url(old_url)
+        await delete_image_by_url(old_url)
     return location
 
 

@@ -120,6 +120,12 @@ export default function Clienti() {
 
   onMount(load);
 
+  let _searchDebounce: ReturnType<typeof setTimeout> | null = null;
+  function debouncedLoad() {
+    if (_searchDebounce) clearTimeout(_searchDebounce);
+    _searchDebounce = setTimeout(() => { _searchDebounce = null; load(); }, 250);
+  }
+
   async function loadVehicole(clientId: number) {
     if (vehicoleMap()[clientId] !== undefined) return;
     setVLoadingId(clientId);
@@ -324,18 +330,19 @@ export default function Clienti() {
         <input
           class="input"
           placeholder="Număr mașină *"
+          aria-label="Număr mașină"
           value={props.f.numar_masina}
           onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })}
         />
         <div style="display:flex;gap:6px">
-          <input class="input" placeholder="Marcă" style="flex:1" value={props.f.marca} onInput={(e) => props.setF({ ...props.f, marca: e.currentTarget.value })} />
-          <input class="input" placeholder="Model" style="flex:1" value={props.f.model} onInput={(e) => props.setF({ ...props.f, model: e.currentTarget.value })} />
+          <input class="input" placeholder="Marcă" aria-label="Marcă" style="flex:1" value={props.f.marca} onInput={(e) => props.setF({ ...props.f, marca: e.currentTarget.value })} />
+          <input class="input" placeholder="Model" aria-label="Model" style="flex:1" value={props.f.model} onInput={(e) => props.setF({ ...props.f, model: e.currentTarget.value })} />
         </div>
         <div style="display:flex;gap:6px">
-          <input class="input" placeholder="Km" type="number" style="flex:1" value={props.f.numar_kilometrii} onInput={(e) => props.setF({ ...props.f, numar_kilometrii: e.currentTarget.value })} />
-          <input class="input" placeholder="VIN" style="flex:2" value={props.f.vin} onInput={(e) => props.setF({ ...props.f, vin: e.currentTarget.value.toUpperCase() })} />
+          <input class="input" placeholder="Km" aria-label="Kilometraj" type="number" style="flex:1" value={props.f.numar_kilometrii} onInput={(e) => props.setF({ ...props.f, numar_kilometrii: e.currentTarget.value })} />
+          <input class="input" placeholder="VIN" aria-label="VIN" style="flex:2" value={props.f.vin} onInput={(e) => props.setF({ ...props.f, vin: e.currentTarget.value.toUpperCase() })} />
         </div>
-        <input class="input" placeholder="Observații" value={props.f.observatii} onInput={(e) => props.setF({ ...props.f, observatii: e.currentTarget.value })} />
+        <input class="input" placeholder="Observații" aria-label="Observații" value={props.f.observatii} onInput={(e) => props.setF({ ...props.f, observatii: e.currentTarget.value })} />
       </div>
     );
   }
@@ -354,7 +361,7 @@ export default function Clienti() {
           >Persoană juridică</button>
         </div>
         <Show when={props.f.tip === "fizic"}>
-          <input class="input" placeholder="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
+          <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
         </Show>
         <Show when={props.f.tip === "juridic"}>
           <div style="display:flex;flex-direction:column;gap:4px">
@@ -377,17 +384,17 @@ export default function Clienti() {
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
           </div>
-          <input class="input" placeholder="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
+          <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
         </Show>
-        <input class="input" placeholder="Nume *" value={props.f.nume} onInput={(e) => props.setF({ ...props.f, nume: e.currentTarget.value })} />
-        <input class="input" placeholder="Descriere" value={props.f.description} onInput={(e) => props.setF({ ...props.f, description: e.currentTarget.value })} />
+        <input class="input" placeholder="Nume *" aria-label="Nume" value={props.f.nume} onInput={(e) => props.setF({ ...props.f, nume: e.currentTarget.value })} />
+        <input class="input" placeholder="Descriere" aria-label="Descriere" value={props.f.description} onInput={(e) => props.setF({ ...props.f, description: e.currentTarget.value })} />
         <Show when={props.f.tip === "juridic"}>
-          <input class="input" placeholder="Reprezentant" value={props.f.reprezentant} onInput={(e) => props.setF({ ...props.f, reprezentant: e.currentTarget.value })} />
+          <input class="input" placeholder="Reprezentant" aria-label="Reprezentant" value={props.f.reprezentant} onInput={(e) => props.setF({ ...props.f, reprezentant: e.currentTarget.value })} />
         </Show>
-        <input class="input" placeholder="Telefon" value={props.f.telefon} onInput={(e) => props.setF({ ...props.f, telefon: e.currentTarget.value })} />
-        <input class="input" placeholder="Email" value={props.f.email} onInput={(e) => props.setF({ ...props.f, email: e.currentTarget.value })} />
-        <input class="input" placeholder="Adresă" value={props.f.adresa} onInput={(e) => props.setF({ ...props.f, adresa: e.currentTarget.value })} />
-        <textarea class="input" placeholder="Comentarii" rows={3} style="resize:vertical" value={props.f.comments} onInput={(e) => props.setF({ ...props.f, comments: e.currentTarget.value })} />
+        <input class="input" placeholder="Telefon" aria-label="Telefon" value={props.f.telefon} onInput={(e) => props.setF({ ...props.f, telefon: e.currentTarget.value })} />
+        <input class="input" placeholder="Email" aria-label="Email" value={props.f.email} onInput={(e) => props.setF({ ...props.f, email: e.currentTarget.value })} />
+        <input class="input" placeholder="Adresă" aria-label="Adresă" value={props.f.adresa} onInput={(e) => props.setF({ ...props.f, adresa: e.currentTarget.value })} />
+        <textarea class="input" placeholder="Comentarii" aria-label="Comentarii" rows={3} style="resize:vertical" value={props.f.comments} onInput={(e) => props.setF({ ...props.f, comments: e.currentTarget.value })} />
       </div>
     );
   }
@@ -397,19 +404,25 @@ export default function Clienti() {
       <div class="page-header">
         <h1 class="page-title">Clienți</h1>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label class="sr-only" for="cli-search-nume">Caută după nume</label>
           <input
+            id="cli-search-nume"
             class="input reception-search"
             type="search"
             placeholder="Caută după nume..."
+            aria-label="Caută client după nume"
             value={search()}
-            onInput={(e) => { setSearch(e.currentTarget.value); load(); }}
+            onInput={(e) => { setSearch(e.currentTarget.value); debouncedLoad(); }}
           />
+          <label class="sr-only" for="cli-search-masina">Caută după nr. mașină</label>
           <input
+            id="cli-search-masina"
             class="input reception-search"
             type="search"
             placeholder="Caută după nr. mașină..."
+            aria-label="Caută client după număr de înmatriculare"
             value={searchMasina()}
-            onInput={(e) => { setSearchMasina(e.currentTarget.value); load(); }}
+            onInput={(e) => { setSearchMasina(e.currentTarget.value); debouncedLoad(); }}
           />
           <button class="btn btn-primary btn-sm" onClick={startAdd}>+ Adaugă client</button>
         </div>

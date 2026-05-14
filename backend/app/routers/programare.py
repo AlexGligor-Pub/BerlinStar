@@ -1,12 +1,13 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_account_id
+from app.models.client import Client
 from app.models.programare import Programare, ProgramareStatus
 from app.schemas.programare import ProgramareCreate, ProgramarePatch, ProgramareRead
 from app.utils.soft_delete import soft_delete
@@ -99,18 +100,17 @@ async def list_programari(
         stmt = stmt.where(Programare.department_id == department_id)
     if status:
         stmt = stmt.where(Programare.status == status)
+    if q:
+        pattern = f"%{q}%"
+        stmt = stmt.where(
+            or_(
+                Programare.titlu.ilike(pattern),
+                Programare.client.has(Client.nume.ilike(pattern)),
+            )
+        )
     stmt = stmt.order_by(Programare.start_time)
 
     rows = list((await db.execute(stmt)).scalars().all())
-
-    if q:
-        q_lower = q.lower()
-        rows = [
-            p for p in rows
-            if q_lower in p.titlu.lower()
-            or (p.client and q_lower in p.client.nume.lower())
-        ]
-
     return [_serialize(p) for p in rows]
 
 

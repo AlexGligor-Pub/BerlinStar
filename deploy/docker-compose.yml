@@ -10,7 +10,15 @@ services:
       - "${FRONTEND_PORT:-8080}:80"
     networks:
       - web
+    depends_on:
+      backend:
+        condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   backend:
     build:
@@ -30,6 +38,14 @@ services:
         limits:
           cpus: "4"
           memory: 4G
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health',timeout=3).status==200 else 1)\""
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   db:
     image: postgres:16-alpine
@@ -37,8 +53,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
-    ports:
-      - "5432:5432"
+    # Portul 5432 NU este publicat catre host (B-05).
+    # Pentru acces ad-hoc: `docker compose exec db psql -U $POSTGRES_USER`.
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -54,6 +70,8 @@ services:
       -c checkpoint_completion_target=0.9
       -c wal_buffers=64MB
       -c random_page_cost=1.1
+      -c max_wal_size=2GB
+      -c min_wal_size=512MB
     deploy:
       resources:
         limits:

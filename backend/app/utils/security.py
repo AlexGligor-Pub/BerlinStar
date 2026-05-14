@@ -3,9 +3,12 @@ import base64
 import bcrypt
 
 
+BCRYPT_ROUNDS = 12
+
+
 def hash_password(plain: str) -> str:
     """Return a bcrypt hash (utf-8 string) for the given plaintext password."""
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def _looks_like_bcrypt(stored: str) -> bool:

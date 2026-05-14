@@ -309,13 +309,22 @@ export { posCount };
 let _es: EventSource | null = null;
 let _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let _reloadTimer: ReturnType<typeof setTimeout> | undefined;
+let _esAttempts = 0;
 
 function scheduleReload() {
   clearTimeout(_reloadTimer);
   _reloadTimer = setTimeout(() => loadReceipts(), 300);
 }
 
+// Exponential backoff cu jitter pentru reconectare SSE (max 60s).
+function _backoffDelay(attempt: number): number {
+  const base = Math.min(60_000, 1000 * Math.pow(2, attempt));
+  return base + Math.floor(Math.random() * 1000);
+}
+
 let _posEs: EventSource | null = null;
+let _posReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let _posAttempts = 0;
 
 export function connectPosSSE(): void {
   if (_posEs) return;
@@ -323,17 +332,21 @@ export function connectPosSSE(): void {
   if (!token) return;
   const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}&client_type=pos`);
   _posEs = es;
+  es.onopen = () => { _posAttempts = 0; };
   es.onerror = () => {
     if (es.readyState === EventSource.CLOSED) {
       es.close();
       _posEs = null;
-      setTimeout(() => connectPosSSE(), 5000);
+      const delay = _backoffDelay(_posAttempts++);
+      _posReconnectTimer = setTimeout(() => { _posReconnectTimer = null; connectPosSSE(); }, delay);
     }
   };
 }
 
 export function disconnectPosSSE(): void {
+  if (_posReconnectTimer) { clearTimeout(_posReconnectTimer); _posReconnectTimer = null; }
   if (_posEs) { _posEs.close(); _posEs = null; }
+  _posAttempts = 0;
 }
 
 export function connectSSE(): void {
@@ -344,6 +357,7 @@ export function connectSSE(): void {
 export function disconnectSSE(): void {
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
   if (_es) { _es.close(); _es = null; }
+  _esAttempts = 0;
   setSseStatus("disconnected");
 }
 
@@ -353,7 +367,7 @@ function _openSSE(): void {
   setSseStatus("connecting");
   const es = new EventSource(`${API_BASE}/api/receipts/events?token=${encodeURIComponent(token)}&client_type=reception`);
   _es = es;
-  es.onopen = () => setSseStatus("connected");
+  es.onopen = () => { _esAttempts = 0; setSseStatus("connected"); };
   es.onmessage = (e) => {
     try {
       const data = JSON.parse(e.data);
@@ -367,7 +381,8 @@ function _openSSE(): void {
     if (es.readyState === EventSource.CLOSED) {
       es.close();
       _es = null;
-      _reconnectTimer = setTimeout(() => { _reconnectTimer = null; _openSSE(); }, 5000);
+      const delay = _backoffDelay(_esAttempts++);
+      _reconnectTimer = setTimeout(() => { _reconnectTimer = null; _openSSE(); }, delay);
     }
   };
 }
