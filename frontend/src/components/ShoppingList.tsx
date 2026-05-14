@@ -1083,6 +1083,24 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-footer">
+        <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
+          <div class="sl-square-actions">
+            <button
+              class="sl-square-btn"
+              disabled={goingToHotel()}
+              onClick={handleGoToHotel}
+            >
+              {goingToHotel() ? "..." : "Cazare Anvelope"}
+            </button>
+            <button
+              class="sl-square-btn"
+              disabled={openingMontareRoti()}
+              onClick={handleMontareRoti}
+            >
+              {openingMontareRoti() ? "..." : "Montare Roți"}
+            </button>
+          </div>
+        </Show>
         <div class="total-row">
           <span>Total</span>
           <span class="text-accent">{cartTotal().toFixed(2)} lei</span>
@@ -1094,24 +1112,6 @@ export default function ShoppingList() {
         >
           {finalizing() ? "Se salvează..." : "Finalizeaza"}
         </button>
-        <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
-          <button
-            class="btn btn-ghost btn-sm w-full"
-            style="margin-top:4px"
-            disabled={goingToHotel()}
-            onClick={handleGoToHotel}
-          >
-            {goingToHotel() ? "Se salvează..." : "Cazare Anvelope"}
-          </button>
-          <button
-            class="btn btn-ghost btn-sm w-full"
-            style="margin-top:4px"
-            disabled={openingMontareRoti()}
-            onClick={handleMontareRoti}
-          >
-            {openingMontareRoti() ? "Se salvează..." : "Montare Roți"}
-          </button>
-        </Show>
       </div>
 
       <Show when={montareRotiOpen() && montareRotiReceiptId() !== null}>

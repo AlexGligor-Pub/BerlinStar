@@ -1879,6 +1879,7 @@ async function drawMontajRotaCard(
   r: MontajRotaRow,
   x: number, y: number, w: number, h: number,
   imageSide: "left" | "right",
+  gridRow: "top" | "bottom",
   t: (s: string | null | undefined) => string,
   FONT: string,
 ): Promise<void> {
@@ -1895,9 +1896,32 @@ async function drawMontajRotaCard(
   const align: "left" | "right" = imageSide === "left" ? "left" : "right";
   const anchorX = align === "right" ? textX + textW : textX;
 
-  // Imagine (centrata in zona alocata, cu aspect ratio pastrat)
+  // Imagine — aspect ratio pastrat, aliniata catre coltul interior al cardului (spre
+  // cardul vecin pe orizontala si verticala). Asta face ca imaginile cardurilor adiacente
+  // sa fie lipite fara distorsionare; eventualul "whitespace" din aspect-ratio ajunge
+  // pe partea exterioara (lipita de marginea paginii sau de zona de text), nu intre carduri.
   if (r.imageUrl) {
-    await drawSideImage(doc, r.imageUrl, imgX, y, imgBoxW, h);
+    const loaded = await fetchImageAsDataUrl(r.imageUrl);
+    if (loaded) {
+      const fmt = loaded.dataUrl.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
+      const boxW = imgBoxW;
+      const boxH = h;
+      const ratio = loaded.w / loaded.h;
+      let iw = boxW;
+      let ih = iw / ratio;
+      if (ih > boxH) { ih = boxH; iw = ih * ratio; }
+      // Aliniere orizontala: imaginea spre interior (cardul vecin de pe acelasi rand)
+      const px = imageSide === "right"
+        ? imgX + (boxW - iw)   // align right (catre dreapta cardului)
+        : imgX;                 // align left (catre stanga cardului)
+      // Aliniere verticala: imaginea spre interior (cardul vecin de pe celalalt rand)
+      const py = gridRow === "top"
+        ? y + (boxH - ih)       // randul de sus → imagine la baza casetei
+        : y;                    // randul de jos → imagine in partea de sus a casetei
+      try {
+        doc.addImage(loaded.dataUrl, fmt, px, py, iw, ih, undefined, "FAST");
+      } catch { /* ignore */ }
+    }
   }
 
   // Daca rotata nu are date, randam doar imaginea (fara text)
@@ -2061,19 +2085,22 @@ export async function generateMontajRoti(
   });
 
   if (anyMainHasData) {
-    const drawPair = async (leftKey: string, rightKey: string) => {
+    const drawPair = async (leftKey: string, rightKey: string, gridRow: "top" | "bottom") => {
       const left = byPoz[leftKey];
       const right = byPoz[rightKey];
       if (!left && !right) return;
       // Stanga (coloana 1) → imaginea spre interior (dreapta cardului).
       // Dreapta (coloana 2) → imaginea spre interior (stanga cardului).
-      if (left)  await drawMontajRotaCard(doc, left,  ML,                  y, cardW, cardH, "right", t, FONT);
-      if (right) await drawMontajRotaCard(doc, right, ML + cardW + colGap, y, cardW, cardH, "left",  t, FONT);
+      // gridRow controleaza partea verticala a cardului catre care e aliniata imaginea.
+      if (left)  await drawMontajRotaCard(doc, left,  ML,                  y, cardW, cardH, "right", gridRow, t, FONT);
+      if (right) await drawMontajRotaCard(doc, right, ML + cardW + colGap, y, cardW, cardH, "left",  gridRow, t, FONT);
       y += cardH + rowGap;
     };
 
-    await drawPair("stanga_fata", "dreapta_fata");
-    await drawPair("stanga_spate", "dreapta_spate");
+    // Randul 1 (Fata) e in partea de sus a gridului → imaginea aliniata spre vecinul de jos
+    await drawPair("stanga_fata", "dreapta_fata", "top");
+    // Randul 2 (Spate) e in partea de jos a gridului → imaginea aliniata spre vecinul de sus
+    await drawPair("stanga_spate", "dreapta_spate", "bottom");
     // Separator vizual intre gridul cardurilor (lipite) si randurile Rezerva/Nespecificat.
     if (byPoz.rezerva || byPoz.nespecificat) y += 4;
   }

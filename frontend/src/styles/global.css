@@ -1290,6 +1290,45 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* Cele 2 butoane patrate (Cazare Anvelope + Montare Roti) deasupra totalului */
+.sl-square-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.sl-square-btn {
+  width: 84px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.15;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: normal;
+}
+
+.sl-square-btn:hover:not(:disabled) {
+  background: var(--surface2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sl-square-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .metoda-plata-row {
   display: flex;
   gap: 4px;
