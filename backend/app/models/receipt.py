@@ -5,6 +5,7 @@ from decimal import Decimal
 from sqlalchemy import Integer, String, Text, Boolean, DateTime, Numeric, ForeignKey, Index, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
+from .item import ItemType
 
 
 class PayMethod(str, enum.Enum):
@@ -77,6 +78,13 @@ class ReceiptItem(Base):
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
     )
+    item_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("items.id", ondelete="SET NULL"), nullable=True
+    )
+    item_type: Mapped["ItemType | None"] = mapped_column(
+        SAEnum(ItemType, name="item_type", create_type=False),
+        nullable=True,
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -84,9 +92,11 @@ class ReceiptItem(Base):
 
     receipt: Mapped[Receipt] = relationship("Receipt", back_populates="receipt_items")
     employee: Mapped[Employee | None] = relationship("Employee", back_populates="receipt_items")
+    item: Mapped["Item | None"] = relationship("Item")
 
 
 from app.models.employee import Employee  # noqa: E402
 from app.models.client import Client  # noqa: E402
 from app.models.vehicol import Vehicol  # noqa: E402
 from app.models.cazare_anvelope import CazareAnvelope  # noqa: E402
+from app.models.item import Item  # noqa: E402

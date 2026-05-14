@@ -3,6 +3,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.receipt import PayMethod
+from app.models.item import ItemType
 from app.schemas.vehicol import VehicolRead
 
 
@@ -20,6 +21,8 @@ class ReceiptItemCreate(BaseModel):
     qty: int = Field(..., ge=1)
     unit: str = Field(..., max_length=50)
     employee_id: int | None = None
+    item_id: int | None = None
+    item_type: ItemType | None = None
 
 
 class ReceiptCreate(BaseModel):
@@ -52,6 +55,8 @@ class ReceiptItemRead(BaseModel):
     employee_id: int | None
     employee_name: str | None = None
     employee_target_pct: float | None = None
+    item_id: int | None = None
+    item_type: ItemType | None = None
 
     @classmethod
     def from_orm_item(cls, item: object) -> "ReceiptItemRead":
@@ -69,6 +74,8 @@ class ReceiptItemRead(BaseModel):
             "employee_id": item.employee_id,  # type: ignore[attr-defined]
             "employee_name": emp.name if emp else None,
             "employee_target_pct": pct,
+            "item_id": getattr(item, "item_id", None),
+            "item_type": getattr(item, "item_type", None),
         })
 
 

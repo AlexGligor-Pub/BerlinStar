@@ -16,6 +16,7 @@ from app.models.employee import Employee
 from app.models.receipt import Receipt, ReceiptItem, PayMethod
 from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptContentPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
 from app.models.client import Client
+from app.models.item import Item, ItemType
 from app.models.location import Location
 from app.models.register import Register
 from app.models.company import Company
@@ -30,6 +31,29 @@ from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
 router = APIRouter()
+
+
+async def _resolve_item_link(
+    db: AsyncSession,
+    account_id: int,
+    name: str,
+    item_id: int | None,
+    item_type: ItemType | None,
+) -> tuple[int | None, ItemType | None]:
+    """Completează item_id și item_type din catalog dacă lipsesc din payload."""
+    if item_id is not None and item_type is not None:
+        return item_id, item_type
+    row = (await db.execute(
+        select(Item.id, Item.type).where(
+            Item.account_id == account_id,
+            Item.name == name,
+            Item.is_deleted == False,
+        ).limit(1)
+    )).first()
+    if row is None:
+        return item_id, item_type
+    return (item_id if item_id is not None else row.id,
+            item_type if item_type is not None else row.type)
 
 
 async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids: set[int]) -> None:
@@ -200,6 +224,9 @@ async def create_receipt(
     await db.flush()
 
     for it in body.items:
+        item_id, item_type = await _resolve_item_link(
+            db, account_id, it.name, it.item_id, it.item_type
+        )
         db.add(ReceiptItem(
             receipt_id=receipt.id,
             account_id=account_id,
@@ -208,6 +235,8 @@ async def create_receipt(
             qty=it.qty,
             unit=it.unit,
             employee_id=it.employee_id,
+            item_id=item_id,
+            item_type=item_type,
         ))
 
     await db.commit()
@@ -366,6 +395,9 @@ async def patch_receipt_content(
 
     new_emp_ids: set[int] = set()
     for item in body.items:
+        item_id, item_type = await _resolve_item_link(
+            db, account_id, item.name, item.item_id, item.item_type
+        )
         db.add(ReceiptItem(
             account_id=account_id,
             receipt_id=receipt_id,
@@ -374,6 +406,8 @@ async def patch_receipt_content(
             qty=item.qty,
             unit=item.unit,
             employee_id=item.employee_id,
+            item_id=item_id,
+            item_type=item_type,
         ))
         if item.employee_id:
             new_emp_ids.add(item.employee_id)

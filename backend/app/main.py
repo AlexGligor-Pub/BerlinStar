@@ -22,7 +22,8 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports
+from app.services.reports import start_scheduler, stop_scheduler
 
 
 # Shared httpx client reused across requests — saves one TCP handshake per call
@@ -33,9 +34,11 @@ http_client: httpx.AsyncClient | None = None
 async def lifespan(app: FastAPI):
     global http_client
     http_client = httpx.AsyncClient(timeout=15.0)
+    await start_scheduler()
     log.info("BerlinStar POS API starting up")
     yield
     log.info("BerlinStar POS API shutting down")
+    await stop_scheduler()
     await http_client.aclose()
     await engine.dispose()
 
@@ -112,6 +115,7 @@ app.include_router(programare.router,      prefix="/api/programari",           t
 app.include_router(general_settings.router, prefix="/api/general-settings",    tags=["general-settings"])
 app.include_router(global_settings.router,  prefix="/api/global-settings",     tags=["global-settings"])
 app.include_router(email_settings.router,  prefix="/api/email-settings",      tags=["email-settings"])
+app.include_router(admin_reports.router,    prefix="/api/admin/reports",       tags=["admin-reports"])
 
 
 @app.get("/api/health")

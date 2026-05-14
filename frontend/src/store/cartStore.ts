@@ -3,7 +3,7 @@ import { createStore } from "solid-js/store";
 import { selectedEmployeeId, selectedEmployeeName } from "./employeesStore";
 
 export interface CartItem {
-  id: number;           // product catalog id
+  id: number;           // product catalog id (sau negativ pentru itemi manuali)
   lineId: string;       // unique per line: `${id}_${employeeId ?? ''}`
   name: string;
   price: number;
@@ -12,6 +12,8 @@ export interface CartItem {
   employeeId: number | null;
   employeeName: string | null;
   employeeTargetPct: number | null;
+  itemId: number | null;        // FK către items.id în backend (null pentru itemi manuali)
+  itemType: string | null;      // "Produs" | "Service" — snapshot din POS pentru rapoarte
 }
 
 interface CartState {
@@ -34,7 +36,7 @@ createEffect(() => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ items: cart.items }));
 });
 
-export function addToCart(product: Pick<CartItem, "id" | "name" | "price" | "unit">) {
+export function addToCart(product: Pick<CartItem, "id" | "name" | "price" | "unit"> & { type?: string | null }) {
   const empId = selectedEmployeeId();
   const empName = selectedEmployeeName();
   const lineId = `${product.id}_${empId ?? ""}`;
@@ -44,7 +46,19 @@ export function addToCart(product: Pick<CartItem, "id" | "name" | "price" | "uni
   } else {
     setCart("items", (items) => [
       ...items,
-      { ...product, lineId, qty: 1, employeeId: empId, employeeName: empName, employeeTargetPct: null },
+      {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        unit: product.unit,
+        lineId,
+        qty: 1,
+        employeeId: empId,
+        employeeName: empName,
+        employeeTargetPct: null,
+        itemId: product.id > 0 ? product.id : null,
+        itemType: product.type ?? null,
+      },
     ]);
   }
 }
@@ -92,7 +106,7 @@ export function addManualItem(name: string, qty: number, price: number, unit: st
   const lineId = `manual_${uniqueId}_${empId ?? ""}`;
   setCart("items", (items) => [
     ...items,
-    { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null },
+    { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null, itemId: null, itemType: null },
   ]);
 }
 

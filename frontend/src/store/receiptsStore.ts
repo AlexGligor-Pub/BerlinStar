@@ -53,6 +53,8 @@ interface RawReceiptItem {
   employee_id?: number | null;
   employee_name?: string | null;
   employee_target_pct?: number | null;
+  item_id?: number | null;
+  item_type?: string | null;
 }
 
 interface RawReceiptVehicol {
@@ -121,6 +123,8 @@ function mapFromApi(r: RawReceipt): Receipt {
       employeeId: i.employee_id ?? null,
       employeeName: i.employee_name ?? null,
       employeeTargetPct: i.employee_target_pct ?? null,
+      itemId: i.item_id ?? null,
+      itemType: i.item_type ?? null,
     })),
     total: typeof r.total === "number" ? r.total : parseFloat(r.total),
     devizSerie: r.deviz_serie ?? "",
@@ -230,6 +234,8 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
       qty: i.qty,
       unit: i.unit,
       employee_id: i.employeeId ?? null,
+      item_id: i.itemId ?? null,
+      item_type: i.itemType ?? null,
     })),
     total: receipt.total.toFixed(2),
   };
@@ -261,6 +267,8 @@ export async function updateReceiptContent(id: string, receipt: Omit<Receipt, "i
       qty: i.qty,
       unit: i.unit,
       employee_id: i.employeeId ?? null,
+      item_id: i.itemId ?? null,
+      item_type: i.itemType ?? null,
     })),
     total: receipt.total.toFixed(2),
   };
