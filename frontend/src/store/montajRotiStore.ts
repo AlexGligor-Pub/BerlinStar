@@ -1,3 +1,4 @@
+import { createSignal } from "solid-js";
 import { apiFetch } from "../utils/api";
 import type { TipAnvelopa } from "./hotelAnvelopeStore";
 
@@ -10,10 +11,10 @@ export type PozitieRoata =
   | "nespecificat";
 
 export const POZITII_ORDONATE: PozitieRoata[] = [
-  "dreapta_fata",
   "stanga_fata",
-  "dreapta_spate",
+  "dreapta_fata",
   "stanga_spate",
+  "dreapta_spate",
   "rezerva",
   "nespecificat",
 ];
@@ -30,6 +31,9 @@ export const POZITIE_LABELS: Record<PozitieRoata, string> = {
 export const PRESIUNE_SHORTCUTS = [2.2, 2.5, 2.8, 3.0];
 
 export const CUPLU_SHORTCUTS = [90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200];
+
+export const ADANCIME_SHORTCUTS = [2, 3, 4, 5, 6];
+export const ADANCIME_DEFAULT = 5;
 
 export interface MontajRota {
   id: number;
@@ -126,4 +130,50 @@ export async function bulkUpsertMontajRoti(
 
 export function defaultPozitieForIndex(idx: number): PozitieRoata {
   return POZITII_ORDONATE[Math.min(idx, POZITII_ORDONATE.length - 1)];
+}
+
+// ─── Montare Roti Images (global cache) ──────────────────────────────────────
+
+export type MontareRotiImages = Record<PozitieRoata, string | null>;
+
+const [montareRotiImages, setMontareRotiImages] = createSignal<MontareRotiImages>({
+  stanga_fata: null,
+  dreapta_fata: null,
+  stanga_spate: null,
+  dreapta_spate: null,
+  rezerva: null,
+  nespecificat: null,
+});
+
+export { montareRotiImages };
+
+let _montareRotiImagesLoaded = false;
+let _montareRotiImagesPromise: Promise<void> | null = null;
+
+export function invalidateMontareRotiImages(): void {
+  _montareRotiImagesLoaded = false;
+}
+
+export function loadMontareRotiImages(force = false): Promise<void> {
+  if (!force && _montareRotiImagesLoaded) return Promise.resolve();
+  if (_montareRotiImagesPromise) return _montareRotiImagesPromise;
+  _montareRotiImagesPromise = (async () => {
+    try {
+      const res = await apiFetch("/api/global-settings/montare-roti");
+      if (res.ok) {
+        const d = await res.json();
+        setMontareRotiImages({
+          stanga_fata: d.montare_stanga_fata_image_path ?? null,
+          dreapta_fata: d.montare_dreapta_fata_image_path ?? null,
+          stanga_spate: d.montare_stanga_spate_image_path ?? null,
+          dreapta_spate: d.montare_dreapta_spate_image_path ?? null,
+          rezerva: d.montare_rezerva_image_path ?? null,
+          nespecificat: d.montare_nespecificat_image_path ?? null,
+        });
+        _montareRotiImagesLoaded = true;
+      }
+    } catch {}
+    finally { _montareRotiImagesPromise = null; }
+  })();
+  return _montareRotiImagesPromise;
 }

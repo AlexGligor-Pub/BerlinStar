@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, API_BASE } from "../utils/api";
 import SearchableSelect from "./SearchableSelect";
 import {
   marci, dimensiuni, profiluri,
@@ -9,7 +9,9 @@ import {
 } from "../store/hotelAnvelopeStore";
 import {
   bulkUpsertMontajRoti, defaultPozitieForIndex,
-  POZITII_ORDONATE, POZITIE_LABELS, PRESIUNE_SHORTCUTS, CUPLU_SHORTCUTS,
+  POZITII_ORDONATE, POZITIE_LABELS,
+  PRESIUNE_SHORTCUTS, CUPLU_SHORTCUTS, ADANCIME_SHORTCUTS, ADANCIME_DEFAULT,
+  montareRotiImages, loadMontareRotiImages,
   type MontajRotaDraft, type PozitieRoata,
 } from "../store/montajRotiStore";
 
@@ -39,11 +41,13 @@ function emptyRow(idx: number): RowDraft {
     dimensiuneId: null,
     profilId: null,
     tip: "vara",
-    adancime: null,
+    adancime: ADANCIME_DEFAULT,
     cupluStrangere: null,
     comments: null,
   };
 }
+
+const SHORTCUT_BTN_STYLE = "font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer";
 
 export default function MontareRotiModal(props: {
   receiptId: number;
@@ -59,10 +63,17 @@ export default function MontareRotiModal(props: {
   const [saving, setSaving] = createSignal(false);
   const [err, setErr] = createSignal("");
 
+  function imageUrlForPozitie(pozitie: PozitieRoata): string | null {
+    return montareRotiImages()[pozitie]
+      ? `${API_BASE}/api/global-settings/montare-roti/image/${pozitie}`
+      : null;
+  }
+
   onMount(() => {
     loadMarci();
     loadDimensiuni();
     loadProfil();
+    loadMontareRotiImages();
   });
 
   function patchRow(uid: number, patch: Partial<RowDraft>) {
@@ -138,6 +149,45 @@ export default function MontareRotiModal(props: {
     }
   }
 
+  function imagePlacement(pozitie: PozitieRoata): "left" | "right" | "bottom" {
+    if (pozitie === "stanga_fata" || pozitie === "stanga_spate") return "right";
+    if (pozitie === "dreapta_fata" || pozitie === "dreapta_spate") return "left";
+    return "bottom";
+  }
+
+  function renderWheelImage(placement: "left" | "right" | "bottom", pozitie: PozitieRoata) {
+    const placementStyle =
+      placement === "left"
+        ? "grid-column:1;grid-row:1 / span 4;align-self:stretch"
+        : placement === "right"
+        ? "grid-column:3;grid-row:1 / span 4;align-self:stretch"
+        : "grid-column:1 / -1";
+    const url = imageUrlForPozitie(pozitie);
+    return (
+      <div
+        style={`${placementStyle};min-height:120px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:#fff`}
+      >
+        <Show
+          when={url}
+          fallback={
+            <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:8px;min-height:120px">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                <rect x="2" y="3" width="20" height="18" rx="2" /><path d="M4 16l4-4 4 4 4-6 4 6" />
+              </svg>
+              <span style="font-size:11px;color:var(--text-muted);text-align:center">Nicio imagine configurată pentru această poziție</span>
+            </div>
+          }
+        >
+          <img
+            src={url!}
+            alt={POZITIE_LABELS[pozitie]}
+            style="width:100%;height:100%;object-fit:contain;display:block"
+          />
+        </Show>
+      </div>
+    );
+  }
+
   return (
     <div class="sl-modal-overlay">
       <div class="sl-modal" style="width:min(1100px,96vw);max-height:92vh;display:flex;flex-direction:column">
@@ -149,162 +199,193 @@ export default function MontareRotiModal(props: {
         <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
           <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;align-items:start">
             <For each={rows()}>
-              {(row, idx) => (
-                <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">
-                  <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx() + 1}</span>
-                  <div style="display:flex;gap:6px">
-                    <button class="btn btn-ghost btn-sm" onClick={() => copyRow(row.uid)}>Copiază</button>
-                    <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onClick={() => deleteRow(row.uid)}>✕</button>
-                  </div>
-                </div>
+              {(row, idx) => {
+                const placement = () => imagePlacement(row.pozitie);
+                return (
+                  <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px">
+                      <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx() + 1}</span>
+                      <div style="display:flex;gap:6px">
+                        <button class="btn btn-ghost btn-sm" onClick={() => copyRow(row.uid)}>Copiază</button>
+                        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onClick={() => deleteRow(row.uid)}>✕</button>
+                      </div>
+                    </div>
 
-                <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr">
-                  {/* Pozitie */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Poziție</label>
-                    <select
-                      class="input"
-                      style="width:100%"
-                      value={row.pozitie}
-                      onChange={(e) => patchRow(row.uid, { pozitie: e.currentTarget.value as PozitieRoata })}
-                    >
-                      <For each={POZITII_ORDONATE}>
-                        {(p) => <option value={p}>{POZITIE_LABELS[p]}</option>}
-                      </For>
-                    </select>
-                  </div>
-                  {/* Presiune */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Presiune (bar)</label>
-                    <input
-                      class="input"
-                      style="width:100%"
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      value={row.presiune ?? ""}
-                      onInput={(e) => {
-                        const v = e.currentTarget.value;
-                        patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
-                      }}
-                    />
-                    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                      <For each={PRESIUNE_SHORTCUTS}>
-                        {(val) => (
-                          <button
-                            type="button"
-                            style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer"
-                            onClick={() => patchRow(row.uid, { presiune: val })}
-                          >
-                            {val.toFixed(1)}
-                          </button>
-                        )}
-                      </For>
+                    <div style="display:grid;gap:8px;grid-template-columns:1fr 1fr 1fr;align-items:start">
+                      <Show when={placement() === "left"}>
+                        {renderWheelImage("left", row.pozitie)}
+                      </Show>
+
+                      {/* Pozitie */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Poziție</label>
+                        <select
+                          class="input"
+                          style="width:100%"
+                          value={row.pozitie}
+                          onChange={(e) => patchRow(row.uid, { pozitie: e.currentTarget.value as PozitieRoata })}
+                        >
+                          <For each={POZITII_ORDONATE}>
+                            {(p) => <option value={p}>{POZITIE_LABELS[p]}</option>}
+                          </For>
+                        </select>
+                      </div>
+
+                      {/* Presiune */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Presiune (bar)</label>
+                        <input
+                          class="input"
+                          style="width:100%"
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          value={row.presiune ?? ""}
+                          onInput={(e) => {
+                            const v = e.currentTarget.value;
+                            patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
+                          }}
+                        />
+                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                          <For each={PRESIUNE_SHORTCUTS}>
+                            {(val) => (
+                              <button
+                                type="button"
+                                style={SHORTCUT_BTN_STYLE}
+                                onClick={() => patchRow(row.uid, { presiune: val })}
+                              >
+                                {val.toFixed(1)}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+
+                      {/* Marca */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
+                        <SearchableSelect
+                          items={marci()}
+                          value={row.marcaId ?? ""}
+                          onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
+                          getLabel={(m) => m.nume}
+                          placeholder="Marcă"
+                          onAddNew={addMarca}
+                        />
+                      </div>
+
+                      {/* Profil */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
+                        <SearchableSelect
+                          items={profiluri()}
+                          value={row.profilId ?? ""}
+                          onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
+                          getLabel={(p) => p.valoare}
+                          placeholder="Profil"
+                          onAddNew={addProfil}
+                        />
+                      </div>
+
+                      {/* Dimensiune */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
+                        <SearchableSelect
+                          items={dimensiuni()}
+                          value={row.dimensiuneId ?? ""}
+                          onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
+                          getLabel={(d) => d.valoare}
+                          placeholder="Dimensiune"
+                          onAddNew={addDim}
+                        />
+                      </div>
+
+                      {/* Adancime */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                        <input
+                          class="input"
+                          style="width:100%"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          value={row.adancime ?? ""}
+                          onInput={(e) => {
+                            const v = e.currentTarget.value;
+                            patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                          }}
+                        />
+                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                          <For each={ADANCIME_SHORTCUTS}>
+                            {(val) => (
+                              <button
+                                type="button"
+                                style={SHORTCUT_BTN_STYLE}
+                                onClick={() => patchRow(row.uid, { adancime: val })}
+                              >
+                                {val}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+
+                      {/* Tip */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
+                        <select
+                          class="input"
+                          style="width:100%"
+                          value={row.tip}
+                          onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
+                        >
+                          <option value="iarna">{TIP_LABELS.iarna}</option>
+                          <option value="vara">{TIP_LABELS.vara}</option>
+                          <option value="ms">{TIP_LABELS.ms}</option>
+                          <option value="altele">{TIP_LABELS.altele}</option>
+                        </select>
+                      </div>
+
+                      {/* Cuplu strangere prezoane (cheie dinamometrica) */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                        <input
+                          class="input"
+                          style="width:100%"
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={row.cupluStrangere ?? ""}
+                          onInput={(e) => {
+                            const v = e.currentTarget.value;
+                            patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                          }}
+                        />
+                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                          <For each={CUPLU_SHORTCUTS}>
+                            {(val) => (
+                              <button
+                                type="button"
+                                style={SHORTCUT_BTN_STYLE}
+                                onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                              >
+                                {val}
+                              </button>
+                            )}
+                          </For>
+                        </div>
+                      </div>
+
+                      <Show when={placement() === "right"}>
+                        {renderWheelImage("right", row.pozitie)}
+                      </Show>
+                      <Show when={placement() === "bottom"}>
+                        {renderWheelImage("bottom", row.pozitie)}
+                      </Show>
                     </div>
                   </div>
-
-                  {/* Marca */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
-                    <SearchableSelect
-                      items={marci()}
-                      value={row.marcaId ?? ""}
-                      onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
-                      getLabel={(m) => m.nume}
-                      placeholder="Marcă"
-                      onAddNew={addMarca}
-                    />
-                  </div>
-                  {/* Profil */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
-                    <SearchableSelect
-                      items={profiluri()}
-                      value={row.profilId ?? ""}
-                      onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
-                      getLabel={(p) => p.valoare}
-                      placeholder="Profil"
-                      onAddNew={addProfil}
-                    />
-                  </div>
-
-                  {/* Dimensiune */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
-                    <SearchableSelect
-                      items={dimensiuni()}
-                      value={row.dimensiuneId ?? ""}
-                      onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
-                      getLabel={(d) => d.valoare}
-                      placeholder="Dimensiune"
-                      onAddNew={addDim}
-                    />
-                  </div>
-                  {/* Adancime */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                    <input
-                      class="input"
-                      style="width:100%"
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      value={row.adancime ?? ""}
-                      onInput={(e) => {
-                        const v = e.currentTarget.value;
-                        patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                      }}
-                    />
-                  </div>
-
-                  {/* Tip */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
-                    <select
-                      class="input"
-                      style="width:100%"
-                      value={row.tip}
-                      onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
-                    >
-                      <option value="iarna">{TIP_LABELS.iarna}</option>
-                      <option value="vara">{TIP_LABELS.vara}</option>
-                      <option value="ms">{TIP_LABELS.ms}</option>
-                      <option value="altele">{TIP_LABELS.altele}</option>
-                    </select>
-                  </div>
-                  {/* Cuplu strangere prezoane (cheie dinamometrica) */}
-                  <div>
-                    <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                    <input
-                      class="input"
-                      style="width:100%"
-                      type="number"
-                      step="1"
-                      min="0"
-                      value={row.cupluStrangere ?? ""}
-                      onInput={(e) => {
-                        const v = e.currentTarget.value;
-                        patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                      }}
-                    />
-                    <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                      <For each={CUPLU_SHORTCUTS}>
-                        {(val) => (
-                          <button
-                            type="button"
-                            style="font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer"
-                            onClick={() => patchRow(row.uid, { cupluStrangere: val })}
-                          >
-                            {val}
-                          </button>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              )}
+                );
+              }}
             </For>
           </div>
 

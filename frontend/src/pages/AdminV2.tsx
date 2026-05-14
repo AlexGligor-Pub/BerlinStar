@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal, onMount, createEffect } from "soli
 import { API_BASE } from "../utils/api";
 import { auth } from "../store/authStore";
 import { invalidateHotelImages } from "../store/hotelAnvelopeStore";
+import { invalidateMontareRotiImages } from "../store/montajRotiStore";
 import logo from "../assets/logo.png";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -38,9 +39,43 @@ function fmtDate(iso: string | null): string {
   );
 }
 
+// Token de admin persistat in localStorage, valabil 24h.
+// Folosim o cheie + un timestamp de expirare ca sa nu mai cerem parolele la fiecare refresh.
+const _ADMIN_TOKEN_KEY = "adminv2_token";
+const _ADMIN_TOKEN_EXP_KEY = "adminv2_token_exp";
+const _ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
 let _adminToken: string | null = null;
-function setAdminToken(t: string | null) { _adminToken = t; }
+
+function _readPersistedAdminToken(): string | null {
+  try {
+    const exp = Number(localStorage.getItem(_ADMIN_TOKEN_EXP_KEY) ?? 0);
+    if (!exp || Date.now() >= exp) {
+      localStorage.removeItem(_ADMIN_TOKEN_KEY);
+      localStorage.removeItem(_ADMIN_TOKEN_EXP_KEY);
+      return null;
+    }
+    return localStorage.getItem(_ADMIN_TOKEN_KEY);
+  } catch { return null; }
+}
+
+function setAdminToken(t: string | null) {
+  _adminToken = t;
+  try {
+    if (t) {
+      localStorage.setItem(_ADMIN_TOKEN_KEY, t);
+      localStorage.setItem(_ADMIN_TOKEN_EXP_KEY, String(Date.now() + _ADMIN_TOKEN_TTL_MS));
+    } else {
+      localStorage.removeItem(_ADMIN_TOKEN_KEY);
+      localStorage.removeItem(_ADMIN_TOKEN_EXP_KEY);
+    }
+  } catch {}
+}
+
 function getBearerToken(): string | null {
+  if (_adminToken) return _adminToken;
+  const persisted = _readPersistedAdminToken();
+  if (persisted) _adminToken = persisted;
   return _adminToken ?? auth.token ?? null;
 }
 
@@ -235,8 +270,32 @@ function HotelAnvelopeSection() {
 
   return (
     <div>
-      <div class="page-header" style="margin-bottom:24px">
+      <div class="page-header" style="margin-bottom:16px">
         <h2 class="page-title" style="font-size:1.25rem">Hotel Anvelope — Imagini</h2>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:13px;line-height:1.55;color:var(--text)">
+        <p style="margin:0 0 8px;font-weight:600">Cele 3 imagini se afișează pe ecranele și PDF-urile din fluxul <strong>Hotel Anvelope</strong>:</p>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+          <li>
+            <strong>Cazare Roți</strong> — vizibilă în pagina <em>Hotel Anvelope</em> pe cardul de cazare nouă (checkin),
+            în modalul de cazare a setului de anvelope, și ca imagine laterală în PDF-ul <em>Hotel Anvelope — Cazare</em>
+            generat din pagina Hotel Anvelope și inclus în PDF-ul combinat <em>Deviz + Operații</em> de la Recepție.
+          </li>
+          <li>
+            <strong>Scoatere Roți</strong> — vizibilă în pagina <em>Hotel Anvelope</em> când se procesează scoaterea unui set
+            de anvelope (checkout), în modalul de scoatere, și ca imagine laterală în PDF-urile
+            <em>Hotel Anvelope — Scoatere</em> și <em>Scoatere și Cazare Nouă</em> (când roțile NU sunt remontate pe mașină).
+          </li>
+          <li>
+            <strong>Montare Roți</strong> — vizibilă în pagina <em>Hotel Anvelope</em> la modalul de
+            <em>Scoatere și Introducere nouă</em> când roțile sunt remontate pe mașină, și ca imagine laterală în PDF-urile
+            <em>Montare Roți</em> (de la Recepție) și <em>Scoatere și Cazare Nouă</em> (când roțile sunt montate pe mașină).
+          </li>
+        </ul>
+        <p style="margin:10px 0 0;color:var(--text-muted);font-size:12px">
+          Apasă pe o imagine pentru a o înlocui. Imaginile sunt comune pentru toți utilizatorii și se aplică imediat în întreaga aplicație.
+        </p>
       </div>
 
       <div class="hotel-img-grid">
@@ -338,6 +397,131 @@ function HotelAnvelopeSection() {
           endpoint="/api/global-settings/hotel-montare-image"
           onSaved={(url) => { setImages((prev) => ({ ...prev, hotel_montare_image_path: url + "?t=" + Date.now() })); invalidateHotelImages(); }}
           onClose={() => setDialogType(null)}
+        />
+      </Show>
+    </div>
+  );
+}
+
+// ── Montare Roti Section ──────────────────────────────────────────────────────
+
+type MontarePozitie =
+  | "stanga_fata"
+  | "dreapta_fata"
+  | "stanga_spate"
+  | "dreapta_spate"
+  | "rezerva"
+  | "nespecificat";
+
+interface MontareRotiImagesAdmin {
+  montare_stanga_fata_image_path: string | null;
+  montare_dreapta_fata_image_path: string | null;
+  montare_stanga_spate_image_path: string | null;
+  montare_dreapta_spate_image_path: string | null;
+  montare_rezerva_image_path: string | null;
+  montare_nespecificat_image_path: string | null;
+}
+
+const MONTARE_POZITII: { id: MontarePozitie; label: string }[] = [
+  { id: "stanga_fata", label: "Stânga Față" },
+  { id: "dreapta_fata", label: "Dreapta Față" },
+  { id: "stanga_spate", label: "Stânga Spate" },
+  { id: "dreapta_spate", label: "Dreapta Spate" },
+  { id: "rezerva", label: "Rezervă" },
+  { id: "nespecificat", label: "Nespecificat" },
+];
+
+function MontareRotiSection() {
+  const [images, setImages] = createSignal<MontareRotiImagesAdmin>({
+    montare_stanga_fata_image_path: null,
+    montare_dreapta_fata_image_path: null,
+    montare_stanga_spate_image_path: null,
+    montare_dreapta_spate_image_path: null,
+    montare_rezerva_image_path: null,
+    montare_nespecificat_image_path: null,
+  });
+  const [dialogPozitie, setDialogPozitie] = createSignal<MontarePozitie | null>(null);
+
+  onMount(async () => {
+    try {
+      const res = await fetch(API_BASE + "/api/global-settings/montare-roti", { headers: authHeaders() });
+      if (res.ok) setImages(await res.json());
+    } catch {}
+  });
+
+  function currentUrl(pozitie: MontarePozitie): string | null {
+    return images()[`montare_${pozitie}_image_path` as keyof MontareRotiImagesAdmin];
+  }
+
+  function onSavedFor(pozitie: MontarePozitie) {
+    return (url: string) => {
+      setImages((prev) => ({
+        ...prev,
+        [`montare_${pozitie}_image_path`]: url + "?t=" + Date.now(),
+      }));
+      invalidateMontareRotiImages();
+    };
+  }
+
+  return (
+    <div>
+      <div class="page-header" style="margin-bottom:16px">
+        <h2 class="page-title" style="font-size:1.25rem">Montare Roți — Imagini per poziție</h2>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:13px;line-height:1.55;color:var(--text)">
+        <p style="margin:0 0 8px;font-weight:600">Aceste 6 imagini se folosesc în modalul „Montare Roți" din POS / Recepție:</p>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+          <li>În <em>Pagina POS</em> (Listă de cumpărături), butonul <strong>Montare Roți</strong> deschide un modal cu un card pentru fiecare roată.</li>
+          <li>De asemenea, modalul poate fi deschis și din <em>Pagina Recepție</em> pentru o comandă existentă.</li>
+        </ul>
+        <p style="margin:10px 0 6px;font-weight:600">Cum se afișează imaginea în card:</p>
+        <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px">
+          <li><strong>Dreapta Față / Dreapta Spate</strong> → imaginea apare în <em>coloana 1</em> (stânga cardului).</li>
+          <li><strong>Stânga Față / Stânga Spate</strong> → imaginea apare în <em>coloana 3</em> (dreapta cardului).</li>
+          <li><strong>Rezervă / Nespecificat</strong> → imaginea apare <em>sub cele 3 coloane</em>, pe toată lățimea cardului.</li>
+        </ul>
+        <p style="margin:10px 0 0;color:var(--text-muted);font-size:12px">
+          Imaginea afișată se schimbă automat când utilizatorul modifică <em>Poziția</em> roții în modal.
+          Pozițiile fără imagine configurată afișează un placeholder. Imaginile sunt comune pentru toți utilizatorii.
+        </p>
+      </div>
+
+      <div class="hotel-img-grid">
+        <For each={MONTARE_POZITII}>
+          {(p) => (
+            <div class="hotel-img-card" onClick={() => setDialogPozitie(p.id)}>
+              <div class="hotel-img-card__title">{p.label}</div>
+              <Show
+                when={currentUrl(p.id)}
+                fallback={
+                  <div class="hotel-img-card__placeholder">
+                    <span>Nicio imagine</span>
+                    <span class="text-muted" style="font-size:12px">Apasă pentru a adăuga</span>
+                  </div>
+                }
+              >
+                <img
+                  src={currentUrl(p.id)!}
+                  class="hotel-img-card__img"
+                  alt={p.label}
+                />
+              </Show>
+              <div class="hotel-img-card__overlay">
+                <span>Schimbă imaginea</span>
+              </div>
+            </div>
+          )}
+        </For>
+      </div>
+
+      <Show when={dialogPozitie() !== null}>
+        <ImageUploadDialog
+          title={`Schimbă imaginea — ${MONTARE_POZITII.find((p) => p.id === dialogPozitie())?.label}`}
+          currentUrl={currentUrl(dialogPozitie()!)}
+          endpoint={`/api/global-settings/montare-roti-image/${dialogPozitie()}`}
+          onSaved={onSavedFor(dialogPozitie()!)}
+          onClose={() => setDialogPozitie(null)}
         />
       </Show>
     </div>
@@ -1412,21 +1596,29 @@ function EmailSection() {
 
 // ── Main AdminV2 Page ─────────────────────────────────────────────────────────
 
-type Section = "conturi" | "hotel" | "email";
+type Section = "conturi" | "hotel" | "montare" | "email";
 
 const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: "conturi", label: "Conturi", icon: "👥" },
   { id: "hotel", label: "Hotel Anvelope", icon: "🔧" },
+  { id: "montare", label: "Montare Roți", icon: "🛞" },
   { id: "email", label: "Email", icon: "✉️" },
 ];
 
 export default function AdminV2() {
   // ── Auth gate ────────────────────────────────────────────────────────────
-  const [verified, setVerified] = createSignal(false);
+  // Daca avem un token persistat in localStorage si e in interval (<24h),
+  // sarim direct peste ecranul de logare.
+  const [verified, setVerified] = createSignal(_readPersistedAdminToken() !== null);
   const [pass1, setPass1] = createSignal("");
   const [pass2, setPass2] = createSignal("");
   const [verifyErr, setVerifyErr] = createSignal("");
   const [verifying, setVerifying] = createSignal(false);
+
+  function doLogout() {
+    setAdminToken(null);
+    setVerified(false);
+  }
 
   async function doVerify(e: Event) {
     e.preventDefault();
@@ -1533,7 +1725,7 @@ export default function AdminV2() {
           </Show>
 
           {/* Sidebar */}
-          <aside class="adminv2-sidebar" classList={{ "adminv2-sidebar--open": sidebarOpen() }}>
+          <aside class="adminv2-sidebar adminv2-sidebar--with-logout" classList={{ "adminv2-sidebar--open": sidebarOpen() }}>
             <div class="adminv2-sidebar-header">
               <span class="adminv2-sidebar-title">BerlinStar Admin</span>
             </div>
@@ -1551,6 +1743,12 @@ export default function AdminV2() {
                 )}
               </For>
             </nav>
+            <div class="adminv2-sidebar-footer">
+              <button class="adminv2-nav-item adminv2-nav-item--logout" onClick={doLogout}>
+                <span class="adminv2-nav-item__icon">⎋</span>
+                <span>Logout</span>
+              </button>
+            </div>
           </aside>
 
           {/* Main content */}
@@ -1560,6 +1758,9 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "hotel"}>
               <HotelAnvelopeSection />
+            </Show>
+            <Show when={section() === "montare"}>
+              <MontareRotiSection />
             </Show>
             <Show when={section() === "email"}>
               <EmailSection />

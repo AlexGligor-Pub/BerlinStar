@@ -10,6 +10,17 @@ class GlobalSettingsRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MontareRotiImagesRead(BaseModel):
+    montare_stanga_fata_image_path: str | None
+    montare_dreapta_fata_image_path: str | None
+    montare_stanga_spate_image_path: str | None
+    montare_dreapta_spate_image_path: str | None
+    montare_rezerva_image_path: str | None
+    montare_nespecificat_image_path: str | None
+
+    model_config = {"from_attributes": True}
+
+
 class SmtpSettingsRead(BaseModel):
     smtp_host: str | None
     smtp_port: int | None

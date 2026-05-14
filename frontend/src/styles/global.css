@@ -3873,6 +3873,25 @@ body {
   line-height: 1;
 }
 
+.adminv2-sidebar--with-logout .adminv2-nav {
+  flex: 1 1 auto;
+}
+
+.adminv2-sidebar-footer {
+  border-top: 1px solid var(--border);
+  padding: 8px 0;
+  margin-top: auto;
+}
+
+.adminv2-nav-item--logout {
+  color: var(--danger);
+}
+
+.adminv2-nav-item--logout:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
 /* Content area */
 .adminv2-content {
   flex: 1;
