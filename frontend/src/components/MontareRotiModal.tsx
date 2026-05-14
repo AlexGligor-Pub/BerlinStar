@@ -31,10 +31,15 @@ function newUid(): number { return ++_uidSeq; }
 
 const DEFAULT_PRESIUNE = 2.3;
 
+function pozitieFaraCuplu(pozitie: PozitieRoata): boolean {
+  return pozitie === "rezerva" || pozitie === "nespecificat";
+}
+
 function emptyRow(idx: number): RowDraft {
+  const pozitie = defaultPozitieForIndex(idx);
   return {
     uid: newUid(),
-    pozitie: defaultPozitieForIndex(idx),
+    pozitie,
     presiune: DEFAULT_PRESIUNE,
     ordine: idx,
     marcaId: null,
@@ -42,7 +47,7 @@ function emptyRow(idx: number): RowDraft {
     profilId: null,
     tip: "vara",
     adancime: ADANCIME_DEFAULT,
-    cupluStrangere: null,
+    cupluStrangere: pozitieFaraCuplu(pozitie) ? 0 : null,
     comments: null,
   };
 }
@@ -190,7 +195,7 @@ export default function MontareRotiModal(props: {
 
   return (
     <div class="sl-modal-overlay">
-      <div class="sl-modal" style="width:min(1100px,96vw);max-height:92vh;display:flex;flex-direction:column">
+      <div class="sl-modal" style="width:min(1500px,98vw);max-height:92vh;display:flex;flex-direction:column">
         <div class="sl-modal-header">
           <span class="sl-modal-title">Montare Roți</span>
           <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
@@ -223,7 +228,12 @@ export default function MontareRotiModal(props: {
                           class="input"
                           style="width:100%"
                           value={row.pozitie}
-                          onChange={(e) => patchRow(row.uid, { pozitie: e.currentTarget.value as PozitieRoata })}
+                          onChange={(e) => {
+                            const newPoz = e.currentTarget.value as PozitieRoata;
+                            const patch: Partial<RowDraft> = { pozitie: newPoz };
+                            if (pozitieFaraCuplu(newPoz)) patch.cupluStrangere = 0;
+                            patchRow(row.uid, patch);
+                          }}
                         >
                           <For each={POZITII_ORDONATE}>
                             {(p) => <option value={p}>{POZITIE_LABELS[p]}</option>}
@@ -346,35 +356,37 @@ export default function MontareRotiModal(props: {
                         </select>
                       </div>
 
-                      {/* Cuplu strangere prezoane (cheie dinamometrica) */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                        <input
-                          class="input"
-                          style="width:100%"
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={row.cupluStrangere ?? ""}
-                          onInput={(e) => {
-                            const v = e.currentTarget.value;
-                            patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                          }}
-                        />
-                        <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
-                          <For each={CUPLU_SHORTCUTS}>
-                            {(val) => (
-                              <button
-                                type="button"
-                                style={SHORTCUT_BTN_STYLE}
-                                onClick={() => patchRow(row.uid, { cupluStrangere: val })}
-                              >
-                                {val}
-                              </button>
-                            )}
-                          </For>
+                      {/* Cuplu strangere prezoane (cheie dinamometrica) — ascuns pentru Rezerva / Nespecificat */}
+                      <Show when={!pozitieFaraCuplu(row.pozitie)}>
+                        <div>
+                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                          <input
+                            class="input"
+                            style="width:100%"
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={row.cupluStrangere ?? ""}
+                            onInput={(e) => {
+                              const v = e.currentTarget.value;
+                              patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                            }}
+                          />
+                          <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">
+                            <For each={CUPLU_SHORTCUTS}>
+                              {(val) => (
+                                <button
+                                  type="button"
+                                  style={SHORTCUT_BTN_STYLE}
+                                  onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                >
+                                  {val}
+                                </button>
+                              )}
+                            </For>
+                          </div>
                         </div>
-                      </div>
+                      </Show>
 
                       <Show when={placement() === "right"}>
                         {renderWheelImage("right", row.pozitie)}

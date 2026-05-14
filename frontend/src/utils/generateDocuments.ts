@@ -1913,10 +1913,11 @@ export async function generateMontajRoti(
     const dim = t(r.dimensiuneValoare ?? "—");
     const profil = t(r.profilValoare ?? "—");
     const tip = TIP_PDF_LABELS[r.tip] ?? r.tip;
+    const pozitie = _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie;
+    const marca = t(r.marcaNume ?? "—");
     return [
       String(idx + 1),
-      _POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie,
-      t(r.marcaNume ?? "—"),
+      `${pozitie}\n${marca}`,
       `${dim}\n${profil}\n${tip}`,
       r.adancime != null ? `${r.adancime} mm` : "—",
       r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—",
@@ -1928,7 +1929,7 @@ export async function generateMontajRoti(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Poziție", "Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune", "Cuplu"]],
+      head: [["#", "Poziție / Marcă", "Dimensiune / Profil / Tip", "Adâncime", "Presiune", "Cuplu"]],
       body,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2, valign: "middle" },
@@ -1936,12 +1937,11 @@ export async function generateMontajRoti(
       bodyStyles: { fontSize: 7.5, cellPadding: 2 },
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
-        1: { cellWidth: 24 },
-        2: { cellWidth: "auto" },
-        3: { halign: "center", cellWidth: 30 },
+        1: { cellWidth: "auto" },
+        2: { halign: "center", cellWidth: 30 },
+        3: { halign: "center", cellWidth: 16 },
         4: { halign: "center", cellWidth: 16 },
         5: { halign: "center", cellWidth: 16 },
-        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
