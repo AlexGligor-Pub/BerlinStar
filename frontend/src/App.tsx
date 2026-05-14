@@ -15,6 +15,7 @@ const Reception = lazy(() => import("./pages/Reception"));
 const Configurari = lazy(() => import("./pages/Configurari"));
 const Rapoarte = lazy(() => import("./pages/Rapoarte"));
 const Clienti = lazy(() => import("./pages/Clienti"));
+const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const HotelAnvelope = lazy(() => import("./pages/HotelAnvelope"));
 const Programari = lazy(() => import("./pages/Programari"));
 const NoAccess = lazy(() => import("./pages/NoAccess"));
@@ -84,6 +85,7 @@ export default function App() {
           </Show>
         )} />
         <Route path="/clienti" component={() => <Protected component={Clienti} />} />
+        <Route path="/clienti/:id" component={() => <Protected component={ClientDetail} />} />
         <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
         <Route path="/programari" component={() => <Protected component={Programari} />} />
         <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />

@@ -124,6 +124,7 @@ async def list_receipts(
     date_to: date | None = None,
     unpaid_days: int | None = None,
     location_id: int | None = None,
+    client_id: int | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -142,6 +143,8 @@ async def list_receipts(
         stmt = stmt.where(Receipt.id < last_id)
     if q:
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
+    if client_id is not None:
+        stmt = stmt.where(Receipt.client_id == client_id)
 
     # Filtru dupa data cu OR pentru neplatite recente
     date_conditions = []

@@ -1,4 +1,5 @@
 import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { apiFetch } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
 import { createPagination } from "../hooks/createPagination";
@@ -55,6 +56,7 @@ function emptyVForm() {
 }
 
 export default function Clienti() {
+  const navigate = useNavigate();
   const [clienti, setClienti] = createSignal<Client[]>([]);
   const [total, setTotal] = createSignal<number | undefined>(undefined);
   const [loading, setLoading] = createSignal(true);
@@ -614,7 +616,9 @@ export default function Clienti() {
                   role="button"
                   tabIndex={0}
                   onClick={() => startView(c)}
+                  onDblClick={() => navigate(`/clienti/${c.id}`)}
                   onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), startView(c))}
+                  title="Dublu-click pentru detalii și devize"
                 >
                   <span class="cfg-location-name">
                     {c.nume}

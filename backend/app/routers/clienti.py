@@ -8,6 +8,8 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.client import Client
 from app.models.client_vehicol import ClientVehicol
+from app.models.receipt import Receipt
+from app.models.vehicol import Vehicol
 from app.schemas.client import ClientCreate, ClientRead
 from app.schemas.client_vehicol import ClientVehicolCreate, ClientVehicolRead, ClientVehicolWithClientRead, ClientShort
 from app.schemas.common import Page
@@ -144,6 +146,62 @@ async def delete_client(
     if client is None or client.account_id != account_id:
         raise HTTPException(404, "Clientul nu a fost găsit.")
     await soft_delete(db, Client, client_id)
+
+
+@router.get("/{client_id}/receipts-summary")
+async def client_receipts_summary(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Statistici devize pentru un client: count total, suma, lista mașini distincte folosite în devize."""
+    client = await db.get(Client, client_id)
+    if client is None or client.account_id != account_id or client.is_deleted:
+        raise HTTPException(404, "Clientul nu a fost găsit.")
+
+    # Count + sum pentru devize ale clientului
+    agg_row = (await db.execute(
+        select(func.count(Receipt.id), func.coalesce(func.sum(Receipt.total), 0))
+        .where(
+            Receipt.account_id == account_id,
+            Receipt.client_id == client_id,
+            Receipt.is_deleted == False,
+        )
+    )).one()
+    count, total = agg_row
+
+    # Plăci de înmatriculare distincte din vehicole asociate devizelor clientului
+    plates_rows = (await db.execute(
+        select(Vehicol.numar_masina, func.count(Vehicol.id))
+        .join(Receipt, Receipt.id == Vehicol.receipt_id)
+        .where(
+            Receipt.account_id == account_id,
+            Receipt.client_id == client_id,
+            Receipt.is_deleted == False,
+            Vehicol.is_deleted == False,
+        )
+        .group_by(Vehicol.numar_masina)
+    )).all()
+    plates_used = [{"numar_masina": p, "count": c} for p, c in plates_rows]
+
+    # Câte devize NU au vehicol asociat
+    no_vehicol_count = (await db.execute(
+        select(func.count(Receipt.id))
+        .outerjoin(Vehicol, (Vehicol.receipt_id == Receipt.id) & (Vehicol.is_deleted == False))
+        .where(
+            Receipt.account_id == account_id,
+            Receipt.client_id == client_id,
+            Receipt.is_deleted == False,
+            Vehicol.id.is_(None),
+        )
+    )).scalar_one()
+
+    return {
+        "count": int(count or 0),
+        "total": float(total or 0),
+        "plates_used": plates_used,
+        "no_vehicol_count": int(no_vehicol_count or 0),
+    }
 
 
 # ── Vehicole per client ────────────────────────────────────────────────────────

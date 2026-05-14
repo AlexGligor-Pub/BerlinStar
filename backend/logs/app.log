@@ -4452,3 +4452,5 @@ DETAIL:  Key (username)=(alexgligor) already exists.
 2026-05-14T17:10:54 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=a8dc76ca  status=200  14.2ms
 2026-05-14T17:10:57 [INFO    ] berlinstar.http: → GET /api/clienti  rid=1a3bb24b  ip=127.0.0.1
 2026-05-14T17:10:57 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=1a3bb24b  status=200  11.2ms
+2026-05-14T17:14:55 [INFO    ] berlinstar.http: → GET /api/clienti/11/vehicole  rid=f6c019c9  ip=127.0.0.1
+2026-05-14T17:14:56 [INFO    ] berlinstar.http: ← GET /api/clienti/11/vehicole  rid=f6c019c9  status=200  7.5ms
