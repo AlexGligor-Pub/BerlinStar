@@ -681,6 +681,8 @@ export default function HotelAnvelope() {
       depPrezoane: d.dep_prezoane ?? false,
       referintaCazareId: d.referinta_cazare_id ?? null,
       montatePeMasina: d.montate_pe_masina ?? false,
+      successorCazareId: d.successor_cazare_id ?? null,
+      successorMontatePeMasina: d.successor_montate_pe_masina ?? null,
       referintaCazareDataCheckin: d.referinta_cazare_data_checkin ?? null,
       referintaCazareItems: (d.referinta_cazare_items ?? []).map((item: any) => ({
         id: item.id, anvelopaId: item.anvelopa_id ?? null,

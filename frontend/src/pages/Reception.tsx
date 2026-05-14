@@ -447,7 +447,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       .then(res => res.ok ? res.json() : null)
       .then(data => { if (data) setCazariHotel(data.items ?? []); })
       .catch(() => {});
-    loadMontajRotiByReceipt(props.receipt.id).then(setMontajRoti).catch(() => {});
+    loadMontajRotiByReceipt(Number(props.receipt.id)).then(setMontajRoti).catch(() => {});
   });
   const [metodaDraft, setMetodaDraft] = createSignal(props.receipt.metodaPlata ?? "");
   const [partialDraft, setPartialDraft] = createSignal(
@@ -542,7 +542,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
     // Fetch montaj roti + cazări în paralel
     const [montajList, cazariRes] = await Promise.all([
-      loadMontajRotiByReceipt(r.id),
+      loadMontajRotiByReceipt(Number(r.id)),
       apiFetch(`/api/cazare-anvelope?receipt_id=${r.id}&limit=20`).then((res) => res.ok ? res.json() : null).catch(() => null),
     ]);
 
