@@ -1,0 +1,13 @@
+INFO:     Will watch for changes in these directories: ['/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [302746] using WatchFiles
+INFO:     Started server process [302886]
+INFO:     Waiting for application startup.
+2026-05-11T21:24:08 [INFO    ] berlinstar: BerlinStar POS API starting up
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+2026-05-11T21:27:04 [INFO    ] berlinstar: BerlinStar POS API shutting down
+INFO:     Application shutdown complete.
+INFO:     Finished server process [302886]
+INFO:     Stopping reloader process [302746]
