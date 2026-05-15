@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,14 +10,12 @@ from app.dependencies import get_account_id
 from app.models.company import Company
 from app.schemas.company import CompanyCreate, CompanyUpdate, CompanyRead
 from app.schemas.common import Page
+from app.utils.anaf import fetch_anaf_raw, parse_anaf_entry, ANAF_DEFAULT_TIMEOUT
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 from app.utils.storage import upload_image, delete_image_by_url, validate_image
 
 router = APIRouter()
-
-ANAF_URL = "https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva"
-ANAF_TIMEOUT = 15.0
 
 
 @router.get("", response_model=Page[CompanyRead])
@@ -62,36 +60,17 @@ async def anaf_lookup(
     cui: int,
     account_id: int = Depends(get_account_id),
 ):
-    today = date.today().strftime("%Y-%m-%d")
-    payload = [{"cui": cui, "data": today}]
     try:
-        async with httpx.AsyncClient(timeout=ANAF_TIMEOUT) as client:
-            resp = await client.post(ANAF_URL, json=payload)
-            resp.raise_for_status()
-            data = resp.json()
+        found = await fetch_anaf_raw(cui, timeout=ANAF_DEFAULT_TIMEOUT)
     except httpx.TimeoutException:
         raise HTTPException(504, "Timeout la serviciul ANAF.")
     except Exception:
         raise HTTPException(502, "Eroare la comunicarea cu ANAF.")
 
-    found = data.get("found", [])
     if not found:
         raise HTTPException(404, "CUI-ul nu a fost găsit în ANAF.")
 
-    entry = found[0]
-    dg = entry.get("date_generale", {})
-    tva = entry.get("inregistrare_scop_Tva", {})
-
-    return {
-        "cui": dg.get("cui"),
-        "name": dg.get("denumire", ""),
-        "address": dg.get("adresa"),
-        "nr_reg_com": dg.get("nrRegCom"),
-        "phone": dg.get("telefon") or None,
-        "postal_code": dg.get("codPostal") or None,
-        "is_vat_payer": tva.get("scpTVA"),
-        "registration_status": dg.get("stare_inregistrare"),
-    }
+    return parse_anaf_entry(found[0])
 
 
 @router.get("/{company_id}", response_model=CompanyRead)

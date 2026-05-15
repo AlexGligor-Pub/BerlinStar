@@ -444,7 +444,11 @@ async function fetchCompanyData(): Promise<CompanyData | null> {
 function ReceiptCard(props: { receipt: Receipt }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = createSignal(false);
-  const [confirmDelete, setConfirmDelete] = createSignal(false);
+  type DeleteStage = "closed" | "select" | "final";
+  const [deleteStage, setDeleteStage] = createSignal<DeleteStage>("closed");
+  const [deletePending, setDeletePending] = createSignal(false);
+  const [cazariSelected, setCazariSelected] = createSignal<Set<number>>(new Set());
+  const [montajeSelected, setMontajeSelected] = createSignal<Set<number>>(new Set());
   const [cazariHotel, setCazariHotel] = createSignal<CazareBasic[]>([]);
   const [montajRoti, setMontajRoti] = createSignal<MontajRota[]>([]);
   const [montajPdfLoading, setMontajPdfLoading] = createSignal(false);
@@ -486,6 +490,68 @@ function ReceiptCard(props: { receipt: Receipt }) {
       }));
       await generateMontajRoti(r, company, rows, r.vehicol ?? null);
     } finally { setMontajPdfLoading(false); }
+  }
+
+  // Pasul 1 al ștergerii: încarcă cazările și montajele legate (poate cardul
+  // nu a fost extins niciodată), bifează tot implicit și deschide modalul
+  // potrivit. Dacă nu există nimic legat, sare direct la confirmarea finală.
+  async function handleDeleteClick() {
+    try {
+      const [cazariRes, montaje] = await Promise.all([
+        apiFetch(`/api/cazare-anvelope?receipt_id=${r.id}&limit=10`)
+          .then((res) => (res.ok ? res.json() : { items: [] })),
+        loadMontajRotiByReceipt(Number(r.id)),
+      ]);
+      setCazariHotel(cazariRes.items ?? []);
+      setMontajRoti(montaje);
+    } catch {
+      // Continuă chiar și la eroare — utilizatorul poate șterge bonul orfan.
+    }
+    setCazariSelected(new Set(cazariHotel().map((c) => c.id)));
+    setMontajeSelected(new Set(montajRoti().map((m) => m.id)));
+    setDeleteStage(cazariHotel().length === 0 && montajRoti().length === 0 ? "final" : "select");
+  }
+
+  function toggleCazareSelected(id: number) {
+    const s = new Set(cazariSelected());
+    if (s.has(id)) s.delete(id); else s.add(id);
+    setCazariSelected(s);
+  }
+  function toggleMontajSelected(id: number) {
+    const s = new Set(montajeSelected());
+    if (s.has(id)) s.delete(id); else s.add(id);
+    setMontajeSelected(s);
+  }
+
+  // Pasul final: șterge cazările bifate, apoi montajele bifate, apoi bonul.
+  // Continuă chiar dacă unele cereri eșuează — la final raportează erorile.
+  async function handleConfirmDelete() {
+    if (deletePending()) return;
+    setDeletePending(true);
+    let failed = 0;
+    try {
+      for (const id of cazariSelected()) {
+        try {
+          const res = await apiFetch(`/api/cazare-anvelope/${id}`, { method: "DELETE" });
+          if (!res.ok) failed++;
+        } catch { failed++; }
+      }
+      for (const id of montajeSelected()) {
+        try {
+          const res = await apiFetch(`/api/montaj-roti/${id}`, { method: "DELETE" });
+          if (!res.ok) failed++;
+        } catch { failed++; }
+      }
+      await deleteReceipt(r.id);
+      if (failed > 0) {
+        notify(`Bonul a fost șters, dar ${failed} element(e) legate nu au putut fi șterse.`, "error");
+      }
+      setDeleteStage("closed");
+    } catch (e) {
+      notify(`Eroare la ștergere: ${e instanceof Error ? e.message : "necunoscută"}`, "error");
+    } finally {
+      setDeletePending(false);
+    }
   }
 
   async function handleHotelPdf(cazareId: number, type: "checkin" | "checkout" | "combined") {
@@ -731,7 +797,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
             <div class="receipt-actions">
               <Show when={adminVisible()}>
-                <button class="btn btn-danger btn-sm" onClick={() => setConfirmDelete(true)}>
+                <button class="btn btn-danger btn-sm" onClick={handleDeleteClick}>
                   Sterge
                 </button>
               </Show>
@@ -924,20 +990,102 @@ function ReceiptCard(props: { receipt: Receipt }) {
         </div>
       </Show>
 
-      {/* Modal confirmare stergere */}
-      <Show when={confirmDelete()}>
+      {/* Modal pasul 1: selectează elementele legate (cazări + montaje) */}
+      <Show when={deleteStage() === "select"}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:520px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Sterge bon — elemente legate</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>✕</button>
+            </div>
+            <div style="padding:0 16px 8px">
+              <p style="font-size:0.88rem;margin-bottom:10px">
+                Bonul <strong>{r.titlu}</strong> are elemente legate. Bifează ce vrei să se șteargă împreună cu bonul (debifează ce vrei să păstrezi):
+              </p>
+
+              <Show when={cazariHotel().length > 0}>
+                <div style="margin-bottom:12px">
+                  <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Cazări Hotel Anvelope</div>
+                  <For each={cazariHotel()}>{(c) => (
+                    <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
+                      <input
+                        type="checkbox"
+                        checked={cazariSelected().has(c.id)}
+                        onChange={() => toggleCazareSelected(c.id)}
+                      />
+                      <span>
+                        {c.numar_masina ?? "fără număr"} · check-in {c.data_checkin}
+                        {c.data_checkout ? ` · check-out ${c.data_checkout}` : " · încă în hotel"}
+                      </span>
+                    </label>
+                  )}</For>
+                </div>
+              </Show>
+
+              <Show when={montajRoti().length > 0}>
+                <div style="margin-bottom:12px">
+                  <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Montaje roți</div>
+                  <For each={montajRoti()}>{(m) => (
+                    <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
+                      <input
+                        type="checkbox"
+                        checked={montajeSelected().has(m.id)}
+                        onChange={() => toggleMontajSelected(m.id)}
+                      />
+                      <span>
+                        Poziție {m.pozitie}
+                        {m.marcaNume ? ` · ${m.marcaNume}` : ""}
+                        {m.dimensiuneValoare ? ` · ${m.dimensiuneValoare}` : ""}
+                        {m.profilValoare ? ` ${m.profilValoare}` : ""}
+                      </span>
+                    </label>
+                  )}</For>
+                </div>
+              </Show>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>Anuleaza</button>
+              <button class="btn btn-primary btn-sm" onClick={() => setDeleteStage("final")}>Continuă</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal pasul 2: confirmare finală */}
+      <Show when={deleteStage() === "final"}>
         <div class="sl-modal-overlay">
           <div class="sl-modal">
             <div class="sl-modal-header">
-              <span class="sl-modal-title">Sterge bon</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>✕</button>
+              <span class="sl-modal-title">Confirmare ștergere</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>✕</button>
             </div>
-            <p style="font-size:0.88rem">
-              Esti sigur ca vrei sa stergi bonul <strong>{r.titlu}</strong>? Actiunea este ireversibila.
-            </p>
+            <div style="padding:0 16px 8px;font-size:0.88rem">
+              <p style="margin-bottom:8px">Vei șterge definitiv:</p>
+              <ul style="margin:0 0 8px 16px;padding:0">
+                <li><strong>Bonul {r.titlu}</strong></li>
+                <Show when={cazariSelected().size > 0}>
+                  <li><strong>{cazariSelected().size}</strong> cazare(i) Hotel Anvelope</li>
+                </Show>
+                <Show when={montajeSelected().size > 0}>
+                  <li><strong>{montajeSelected().size}</strong> montaj(e) roți</li>
+                </Show>
+              </ul>
+              <p style="color:var(--text-muted)">Acțiunea este ireversibilă.</p>
+            </div>
             <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setConfirmDelete(false)}>Anuleaza</button>
-              <button class="btn btn-danger btn-sm" onClick={() => deleteReceipt(r.id)}>Sterge definitiv</button>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={deletePending()}
+                onClick={() => {
+                  if (cazariHotel().length > 0 || montajRoti().length > 0) setDeleteStage("select");
+                  else setDeleteStage("closed");
+                }}
+              >Înapoi</button>
+              <button
+                class="btn btn-danger btn-sm"
+                disabled={deletePending()}
+                onClick={handleConfirmDelete}
+              >{deletePending() ? "Se șterge..." : "Sterge definitiv"}</button>
             </div>
           </div>
         </div>

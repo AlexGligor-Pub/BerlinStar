@@ -114,8 +114,8 @@ export default function NavBar() {
 
   return (
     <>
-      <div class="offline-banner" classList={{ "offline-banner--online": !isOffline() }} />
       <nav class="navbar">
+        <div class="offline-banner" classList={{ "offline-banner--online": !isOffline() }} />
         <div class="logo-menu" style="position:relative">
           <button
             class="btn-icon"
@@ -123,7 +123,7 @@ export default function NavBar() {
             onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
             aria-label="Meniu"
           >
-            <img src={logo} alt="Logo" style="height:36px;display:block" />
+            <img src={logo} alt="Logo" style="height:40px;display:block" />
           </button>
 
           <Show when={open()}>

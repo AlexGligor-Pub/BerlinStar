@@ -1,7 +1,7 @@
 """add report_clients_daily
 
 Revision ID: mr04clients001
-Revises: zz9ii0jj1kk2
+Revises: mr03cazari001
 Create Date: 2026-05-15
 
 Tabel agregat pentru rapoartele CRM (secțiunea „Clienți"): un rând per
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 
 
 revision = "mr04clients001"
-down_revision = "zz9ii0jj1kk2"
+down_revision = "mr03cazari001"
 branch_labels = None
 depends_on = None
 

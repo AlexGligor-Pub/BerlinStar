@@ -14,6 +14,15 @@
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --radius: 8px;
   --radius-sm: 4px;
+
+  /* Aliases pentru variabile folosite în pagina Programări (și alte locuri).
+     Fac trimitere la variabilele temei active prin var() — deci se actualizează
+     automat la schimbarea temei (light/dark/gray/apple/...) fără reguli
+     suplimentare per temă. */
+  --bg-card: var(--surface);
+  --bg-page: var(--bg);
+  --bg-hover: var(--surface2);
+  --primary: var(--accent);
 }
 
 [data-theme="dark"] {
@@ -108,7 +117,10 @@ body {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding: 0 16px;
-  height: 56px;
+  /* 56 − 3 (înălțimea offline-banner-ului absolut din interior). Logo-ul
+     (36px) rămâne centrat vertical; dacă spațiul nu ajunge se va suprapune
+     ușor peste banner — comportament acceptat. */
+  height: 53px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,9 +133,9 @@ body {
 
 .navbar-fullscreen-btn {
   position: absolute;
-  left: 50%;
+  right: 16px;
   top: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateY(-50%);
   width: 36px;
   height: 36px;
   display: inline-flex;
@@ -2226,10 +2238,18 @@ body {
 }
 
 /* ===== OFFLINE BANNER ===== */
+/* Strip subțire în partea de sus a navbar-ului (poziționat absolut ca să nu
+   intre în flex-row-ul navbar-ului). Roșu = offline, verde = online. */
 .offline-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 3px;
   background: var(--danger);
   transition: background 0.4s;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .offline-banner--online {
@@ -3292,11 +3312,43 @@ body {
 
 /* ─── Programari calendar ──────────────────────────────────────────────────── */
 
+/* Wrapper: pe desktop = row (sidebar mini-cal | pagina principală).
+   Pe mobil sidebar-ul e ascuns și butonul „📅 Calendar" deschide modalul. */
+.prgm-page-wrap {
+  display: flex;
+  flex-direction: row;
+  height: calc(100vh - 48px);
+  overflow: hidden;
+}
+
+.prgm-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
 .prgm-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 48px);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   overflow: hidden;
+}
+
+/* Pe ecrane înguste: ascunde sidebar-ul; butonul Calendar redevine vizibil
+   ca să deschidă modalul. */
+@media (max-width: 767px) {
+  .prgm-sidebar { display: none; }
+}
+@media (min-width: 768px) {
+  .prgm-calendar-btn { display: none; }
 }
 
 /* Modal Calendar — mini cal + Azi */
@@ -4225,6 +4277,51 @@ body {
 }
 @media (max-width: 700px) {
   .locatii-charts { flex-direction: column; }
+}
+
+/* ===== Clienți / Programări — mobile tweaks ================================
+   KPI mai dens, tabele cu scroll orizontal forțat și celule fără wrap pe
+   identificatori (nume/telefon/mașină) ca să nu se rupă urât pe ecrane mici.
+   ============================================================================ */
+.rapoarte-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.rapoarte-table-scroll {
+  overflow-x: auto;
+  margin-top: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.rapoarte-table-scroll > table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 520px;
+}
+.rapoarte-table-scroll th,
+.rapoarte-table-scroll td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border, #2a2f3a);
+}
+.rapoarte-table-scroll .nowrap { white-space: nowrap; }
+.rapoarte-table-scroll .muted   { color: var(--text-muted, #8b90a0); }
+.rapoarte-table-scroll .num     { text-align: right; font-variant-numeric: tabular-nums; }
+.rapoarte-table-scroll .bold    { font-weight: 600; }
+
+@media (max-width: 640px) {
+  .rapoarte-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+  }
+  .rapoarte-table-scroll > table { font-size: 0.78rem; min-width: 0; }
+  .rapoarte-table-scroll th,
+  .rapoarte-table-scroll td { padding: 5px 6px; }
+  .rapoarte-table-scroll .hide-mobile { display: none; }
+  .locatii-chart-card { padding: 12px 12px; }
+  .locatii-kpi { padding: 8px 10px; }
+  .locatii-kpi__value { font-size: 0.98rem; }
 }
 
 .rapoarte-bars {

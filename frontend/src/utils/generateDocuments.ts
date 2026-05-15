@@ -1976,21 +1976,26 @@ async function drawMontajRotaCard(
   doc.setFont(FONT, "bold");
   doc.setFontSize(8);
   doc.setTextColor(...C.black);
-  doc.text(doc.splitTextToSize(t(r.marcaNume ?? "—"), textW) as string[], anchorX, ty, { align });
-  ty += 4.2;
+  const marcaLines = doc.splitTextToSize(t(r.marcaNume ?? "—"), textW) as string[];
+  doc.text(marcaLines, anchorX, ty, { align });
+  ty += Math.max(1, marcaLines.length) * 4.2;
 
-  // Dimensiune · Profil
+  // Dimensiune · Profil — folosim splitTextToSize ca să forțăm încadrarea în
+  // lățimea de text (`textW`) și să nu „iasă" în stânga celorlalte rânduri
+  // când dimensiunea + profilul ar fi mai late decât slotul disponibil.
   doc.setFont(FONT, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.gray);
   const dim = t(r.dimensiuneValoare ?? "—");
   const profil = t(r.profilValoare ?? "—");
-  doc.text(`${dim}  ·  ${profil}`, anchorX, ty, { align });
-  ty += 3.6;
+  const dimLines = doc.splitTextToSize(`${dim}  ·  ${profil}`, textW) as string[];
+  doc.text(dimLines, anchorX, ty, { align });
+  ty += Math.max(1, dimLines.length) * 3.6;
 
   // Tip
-  doc.text(`Tip: ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`, anchorX, ty, { align });
-  ty += 4.5;
+  const tipLines = doc.splitTextToSize(`Tip: ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`, textW) as string[];
+  doc.text(tipLines, anchorX, ty, { align });
+  ty += Math.max(1, tipLines.length) * 4.5;
 
   // Adancime / Presiune / Cuplu — label bold + valoare normal, aliniate catre imagine
   doc.setTextColor(...C.black);

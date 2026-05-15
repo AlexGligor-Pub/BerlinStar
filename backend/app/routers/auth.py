@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
 from app.models.account import Account
+from app.models.company import Company
 from app.rate_limit import limiter
+from app.services.account_seeder import seed_new_account
 from app.utils.security import hash_password, is_legacy_hash, verify_password
 
 log = logging.getLogger("berlinstar")
@@ -70,6 +72,8 @@ class RegisterRequest(BaseModel):
     username: str = Field(..., max_length=100)
     password: str = Field(..., min_length=10, max_length=255)
     email: EmailStr | None = Field(None, max_length=255)
+    cui_firma: int = Field(..., gt=0)
+    phone: str = Field(..., min_length=1, max_length=50)
 
     @field_validator("email")
     @classmethod
@@ -77,6 +81,14 @@ class RegisterRequest(BaseModel):
         # EmailStr nu admite CRLF, dar adaugam check defensiv pt SMTP injection
         if v and ("\r" in v or "\n" in v):
             raise ValueError("Email invalid.")
+        return v
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_not_empty(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Numarul de telefon este obligatoriu.")
         return v
 
 
@@ -129,7 +141,25 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         locked_at=now,
     )
     db.add(account)
+    await db.flush()
+
+    company = Company(
+        account_id=account.id,
+        cui=body.cui_firma,
+        name=body.name,
+        phone=body.phone,
+    )
+    db.add(company)
     await db.commit()
+
+    background_tasks.add_task(
+        seed_new_account,
+        account_id=account.id,
+        company_id=company.id,
+        cui=body.cui_firma,
+        fallback_name=body.name,
+        fallback_phone=body.phone,
+    )
     if account.email:
         background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
     return GENERIC_OK

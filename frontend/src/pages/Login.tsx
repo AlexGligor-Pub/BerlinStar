@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "@solidjs/router";
 import { login } from "../store/authStore";
 import { API_BASE, readApiError } from "../utils/api";
 import ThemeToggle from "../components/ThemeToggle";
+import Modal from "../components/ui/Modal";
 import logo from "../assets/logo.png";
 
 export default function Login() {
@@ -30,14 +31,30 @@ export default function Login() {
   const [regName, setRegName] = createSignal("");
   const [regUsername, setRegUsername] = createSignal("");
   const [regEmail, setRegEmail] = createSignal("");
+  const [regCui, setRegCui] = createSignal("");
+  const [regPhone, setRegPhone] = createSignal("");
   const [regPassword, setRegPassword] = createSignal("");
   const [regPassword2, setRegPassword2] = createSignal("");
   const [regSuccess, setRegSuccess] = createSignal("");
+
+  // success modal
+  const [showSuccessModal, setShowSuccessModal] = createSignal(false);
+  const [successUsername, setSuccessUsername] = createSignal("");
+  const [successPassword, setSuccessPassword] = createSignal("");
+  const [showSuccessPassword, setShowSuccessPassword] = createSignal(false);
 
   function switchMode(m: "login" | "register") {
     setError("");
     setRegSuccess("");
     setMode(m);
+  }
+
+  function goToLoginFromSuccess() {
+    setShowSuccessModal(false);
+    setSuccessUsername("");
+    setSuccessPassword("");
+    setShowSuccessPassword(false);
+    switchMode("login");
   }
 
   async function handleSubmit(e: Event) {
@@ -81,6 +98,15 @@ export default function Login() {
       setError("Emailul este obligatoriu.");
       return;
     }
+    const cuiDigits = regCui().replace(/\D/g, "");
+    if (!cuiDigits) {
+      setError("CUI Firma este obligatoriu.");
+      return;
+    }
+    if (!regPhone().trim()) {
+      setError("Numarul de telefon este obligatoriu.");
+      return;
+    }
     if (regPassword() !== regPassword2()) {
       setError("Parolele nu coincid.");
       return;
@@ -99,12 +125,16 @@ export default function Login() {
           username: regUsername().trim(),
           email: regEmail().trim(),
           password: regPassword(),
+          cui_firma: parseInt(cuiDigits, 10),
+          phone: regPhone().trim(),
         }),
       });
       if (res.ok) {
-        setRegSuccess("Daca informatiile sunt corecte vei primi un email cu detalii de acces. Vei fi redirectionat la login...");
-        setRegName(""); setRegUsername(""); setRegEmail(""); setRegPassword(""); setRegPassword2("");
-        setTimeout(() => switchMode("login"), 3000);
+        setSuccessUsername(regUsername().trim());
+        setSuccessPassword(regPassword());
+        setShowSuccessPassword(false);
+        setShowSuccessModal(true);
+        setRegName(""); setRegUsername(""); setRegEmail(""); setRegCui(""); setRegPhone(""); setRegPassword(""); setRegPassword2("");
       } else if (res.status === 429) {
         setError("Prea multe incercari. Reincearca in cateva minute.");
       } else {
@@ -213,6 +243,31 @@ export default function Login() {
               />
             </div>
             <div class="form-group">
+              <label class="form-label" for="reg-cui">CUI Firma</label>
+              <input
+                id="reg-cui"
+                class="input"
+                type="text"
+                inputmode="numeric"
+                placeholder="ex: 12345678"
+                value={regCui()}
+                onInput={(e) => setRegCui(e.currentTarget.value)}
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="reg-phone">Numar de telefon</label>
+              <input
+                id="reg-phone"
+                class="input"
+                type="tel"
+                placeholder="ex: 0712345678"
+                value={regPhone()}
+                onInput={(e) => setRegPhone(e.currentTarget.value)}
+                required
+              />
+            </div>
+            <div class="form-group">
               <label class="form-label" for="reg-password">Parola</label>
               <input
                 id="reg-password"
@@ -245,6 +300,43 @@ export default function Login() {
           </button>
         </Show>
       </div>
+
+      <Modal open={showSuccessModal()} closeOnEscape={false} ariaLabel="Cont creat cu succes">
+        <div style="text-align:center;display:flex;flex-direction:column;gap:12px">
+          <div style="font-size:2.4rem;line-height:1">🎉</div>
+          <div style="font-weight:600;font-size:1.1rem">Felicitari, contul a fost creat!</div>
+          <div style="font-size:0.9rem;color:var(--text-muted)">
+            Te poti autentifica folosind credentialele de mai jos. Pastreaza-le intr-un loc sigur.
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Utilizator</div>
+              <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.95rem;word-break:break-all">{successUsername()}</div>
+            </div>
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Parola</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.95rem;word-break:break-all;flex:1">
+                  {showSuccessPassword() ? successPassword() : "•".repeat(Math.max(8, successPassword().length))}
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  style="padding:4px 10px;font-size:0.8rem"
+                  onClick={() => setShowSuccessPassword(v => !v)}
+                >
+                  {showSuccessPassword() ? "Ascunde" : "Arata"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn btn-primary w-full mt-4" type="button" onClick={goToLoginFromSuccess}>
+            Mergi la autentificare
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -576,11 +576,43 @@ export default function Programari() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  // Mini calendar (folosit atât în sidebar pe desktop cât și în modal pe mobil)
+  const renderMiniCal = (opts: { closeOnPick?: boolean } = {}) => (
+    <div class="prgm-mini-cal">
+      <div class="prgm-mini-cal-header">
+        <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={prevMiniMonth}>‹</button>
+        <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
+        <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={nextMiniMonth}>›</button>
+      </div>
+      <div class="prgm-mini-cal-grid">
+        <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
+        <For each={miniCalDays()}>{(day) =>
+          <div
+            class={[
+              "prgm-mini-day",
+              isInSelectedWeek(day) ? "prgm-mini-day-sel" : "",
+              isSameDay(day, new Date()) ? "prgm-mini-day-today" : "",
+              day.getMonth() !== miniMonth().month ? "prgm-mini-day-other" : "",
+            ].filter(Boolean).join(" ")}
+            onClick={() => { selectWeekContaining(day); if (opts.closeOnPick) setCalendarOpen(false); }}
+          >{day.getDate()}</div>
+        }</For>
+      </div>
+    </div>
+  );
+
   return (
+    <div class="prgm-page-wrap">
+      {/* ── Sidebar (doar pe desktop) ──────────────────────────────────── */}
+      <aside class="prgm-sidebar">
+        <button class="btn btn-ghost btn-sm w-full" onClick={() => { setWeekOffset(0); scrollToNow(); }}>Azi</button>
+        {renderMiniCal()}
+      </aside>
+
     <div class="prgm-page">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div class="prgm-header">
-        <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(true)}>📅 Calendar</button>
+        <button class="btn btn-ghost btn-sm prgm-calendar-btn" onClick={() => setCalendarOpen(true)}>📅 Calendar</button>
         <button class="btn btn-ghost btn-sm" onClick={() => { setWeekOffset(0); scrollToNow(); }}>Azi</button>
         <button class="btn btn-primary btn-sm" onClick={openCreateModal}>+ Programare nouă</button>
         <input
@@ -764,7 +796,7 @@ export default function Programari() {
         )}
       </Show>
 
-      {/* ── Calendar modal ──────────────────────────────────────────────── */}
+      {/* ── Calendar modal (doar pe mobil; pe desktop e în sidebar) ───── */}
       <Show when={calendarOpen()}>
         <div class="sl-modal-overlay" onClick={() => setCalendarOpen(false)}>
           <div class="sl-modal prgm-cal-modal" onClick={(e) => e.stopPropagation()}>
@@ -774,27 +806,7 @@ export default function Programari() {
             </div>
             <div class="sl-modal-body" style="display:flex;flex-direction:column;gap:10px">
               <button class="btn btn-ghost btn-sm w-full" onClick={() => { setWeekOffset(0); setCalendarOpen(false); }}>Azi</button>
-              <div class="prgm-mini-cal">
-                <div class="prgm-mini-cal-header">
-                  <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={prevMiniMonth}>‹</button>
-                  <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
-                  <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={nextMiniMonth}>›</button>
-                </div>
-                <div class="prgm-mini-cal-grid">
-                  <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
-                  <For each={miniCalDays()}>{(day) =>
-                    <div
-                      class={[
-                        "prgm-mini-day",
-                        isInSelectedWeek(day) ? "prgm-mini-day-sel" : "",
-                        isSameDay(day, new Date()) ? "prgm-mini-day-today" : "",
-                        day.getMonth() !== miniMonth().month ? "prgm-mini-day-other" : "",
-                      ].filter(Boolean).join(" ")}
-                      onClick={() => { selectWeekContaining(day); setCalendarOpen(false); }}
-                    >{day.getDate()}</div>
-                  }</For>
-                </div>
-              </div>
+              {renderMiniCal({ closeOnPick: true })}
             </div>
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(false)}>Închide</button>
@@ -998,6 +1010,7 @@ export default function Programari() {
           </div>
         </div>
       </Show>
+    </div>
     </div>
   );
 }

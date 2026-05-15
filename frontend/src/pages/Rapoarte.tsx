@@ -2,6 +2,7 @@ import { For, Show, Switch, Match, createSignal, onMount, createMemo, createEffe
 import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
+import { generalSettings } from "../store/generalSettingsStore";
 
 interface EmployeeReport {
   id: number;
@@ -2746,16 +2747,852 @@ function HotelAnvelopePanel() {
   );
 }
 
+// ───── MONTHLY MULTI-SERIES BARS ──────────────────────────────────────────────
+// Generic helper pentru bare grupate lunar cu N serii (folosit de Clienți și
+// Programări). Spre deosebire de drawMonthlyDualBars (hardcodat pe 2 serii cu
+// label „Intrări/Scoateri"), aici fiecare serie își aduce label-ul și culoarea.
+
+interface MonthlySeriesItem {
+  month: string; // "YYYY-MM"
+  series: { key: string; label: string; value: number; color: string }[];
+}
+
+function drawMonthlySeriesBars(container: HTMLDivElement, items: MonthlySeriesItem[]) {
+  d3.select(container).selectAll("*").remove();
+  if (items.length === 0 || items.every((it) => it.series.every((s) => s.value === 0))) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const keys = items[0].series.map((s) => s.key);
+  const labelsByKey = new Map(items[0].series.map((s) => [s.key, s.label]));
+  const colorsByKey = new Map(items[0].series.map((s) => [s.key, s.color]));
+
+  const w = container.clientWidth || 600;
+  const isNarrow = w < 480;
+  // Rotim etichetele X dacă sunt multe luni sau e ecran îngust — altfel
+  // se suprapun.
+  const rotateX = isNarrow || items.length > 4;
+  const h = rotateX ? 260 : 240;
+  const margin = {
+    top: 18,
+    right: isNarrow ? 8 : 16,
+    bottom: rotateX ? 56 : 36,
+    left: 36,
+  };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("width", w)
+    .attr("height", h)
+    .attr("viewBox", `0 0 ${w} ${h}`);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x0 = d3.scaleBand<string>().domain(items.map((d) => d.month)).range([0, iw]).padding(0.18);
+  const x1 = d3.scaleBand<string>().domain(keys).range([0, x0.bandwidth()]).padding(0.08);
+
+  const maxY = Math.max(
+    1,
+    d3.max(items, (d) => d3.max(d.series, (s) => s.value)) ?? 1,
+  );
+  const y = d3.scaleLinear().domain([0, maxY * 1.1]).range([ih, 0]);
+
+  const xAxis = g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x0).tickFormat((m) => fmtMonth(m)));
+  xAxis.selectAll("text")
+    .style("font-size", isNarrow ? "9px" : "10px")
+    .style("fill", "var(--text-muted, #8b90a0)")
+    .attr("transform", rotateX ? "rotate(-30) translate(-6, 0)" : null)
+    .style("text-anchor", rotateX ? "end" : "middle");
+
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d")))
+    .selectAll("text")
+    .style("font-size", "10px")
+    .style("fill", "var(--text-muted, #8b90a0)");
+
+  for (const it of items) {
+    const xb = x0(it.month) ?? 0;
+    for (const s of it.series) {
+      const xs = xb + (x1(s.key) ?? 0);
+      g.append("rect")
+        .attr("x", xs)
+        .attr("y", y(s.value))
+        .attr("width", x1.bandwidth())
+        .attr("height", ih - y(s.value))
+        .attr("fill", s.color)
+        .attr("rx", 3);
+      if (s.value > 0) {
+        g.append("text")
+          .attr("x", xs + x1.bandwidth() / 2)
+          .attr("y", y(s.value) - 4)
+          .attr("text-anchor", "middle")
+          .style("font-size", "10px")
+          .style("fill", "var(--text-muted, #8b90a0)")
+          .text(s.value);
+      }
+    }
+  }
+
+  const legend = d3.select(container)
+    .append("div")
+    .style("display", "flex")
+    .style("gap", "12px")
+    .style("flex-wrap", "wrap")
+    .style("margin-top", "8px")
+    .style("font-size", "0.8rem");
+  for (const k of keys) {
+    legend.append("div").html(
+      `<span style="display:inline-block;width:10px;height:10px;background:${colorsByKey.get(k)};border-radius:2px;margin-right:6px"></span>${labelsByKey.get(k)}`,
+    );
+  }
+}
+
+// ───── CLIENȚI (CRM) PANEL ────────────────────────────────────────────────────
+
+interface ClientiKpi {
+  clienti_unici: number;
+  clienti_noi: number;
+  clienti_recurenti: number;
+  sum_paid_total: string | number;
+  ltv_mediu: string | number;
+}
+
+interface ClientiBucket {
+  label: string;
+  count_clients: number;
+  sum_paid: string | number;
+  pct: number;      // % din total clienți
+  pct_sum: number;  // % din totalul de bani (contribuție bucket)
+}
+
+interface ClientiTop {
+  client_id: number;
+  nume: string;
+  telefon: string | null;
+  numar_masina: string | null;
+  sum_paid: string | number;
+  count_receipts: number;
+}
+
+interface ClientiNewVsReturning {
+  month: string;
+  count_new: number;
+  count_returning: number;
+}
+
+interface ClientiInactiv {
+  client_id: number;
+  nume: string;
+  telefon: string | null;
+  numar_masina: string | null;
+  last_visit: string;
+  sum_paid_total: string | number;
+  count_receipts_total: number;
+}
+
+interface ClientiSummary {
+  kpi: ClientiKpi;
+  spending_buckets: ClientiBucket[];
+  visit_freq_buckets: ClientiBucket[];
+  top_clients: ClientiTop[];
+  new_vs_returning: ClientiNewVsReturning[];
+  inactivi: ClientiInactiv[];
+  period_start: string;
+  period_end: string;
+}
+
+function ClientiPanel() {
+  const [data, setData] = createSignal<ClientiSummary | null>(null);
+  const [, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>(
+    "rapoarte_clienti_loc_ids",
+    [],
+  );
+
+  let spendingDonutRef: HTMLDivElement | undefined;
+  let freqDonutRef: HTMLDivElement | undefined;
+  let nvrBarRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await apiFetch(`/api/reports/clienti?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(ensureLocationsLoaded);
+  createEffect(() => {
+    periodVersion();
+    selectedLocIds();
+    void load();
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !spendingDonutRef) return;
+    const items: DonutItem[] = d.spending_buckets.map((b, i) => ({
+      label: b.label,
+      value: b.count_clients,
+      color: colorByIndex(i),
+    }));
+    drawDonut(spendingDonutRef, items, "clienți");
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !freqDonutRef) return;
+    const items: DonutItem[] = d.visit_freq_buckets.map((b, i) => ({
+      label: b.label,
+      value: b.count_clients,
+      color: colorByIndex(i + 3),
+    }));
+    drawDonut(freqDonutRef, items, "clienți");
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !nvrBarRef) return;
+    const items: MonthlySeriesItem[] = d.new_vs_returning.map((m) => ({
+      month: m.month,
+      series: [
+        { key: "new", label: "Noi",       value: m.count_new,       color: "#3ea96a" },
+        { key: "ret", label: "Recurenți", value: m.count_returning, color: "#5b7cfa" },
+      ],
+    }));
+    drawMonthlySeriesBars(nvrBarRef, items);
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Clienți" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Analiză CRM a portofoliului de clienți pentru perioada și locațiile selectate.
+          „Recurent" = client cu 2+ vizite în perioadă; „Nou" = client cu o singură vizită
+          (deci pe perioadă mai mare, recurenții cresc cumulativ). Mai jos: profilul de
+          cheltuieli, top clienți după valoare și listă de clienți inactivi peste 12 luni
+          — utilă pentru campanii de win-back.
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
+
+      <Show when={data()}>
+        {(d) => (
+          <div class="rapoarte-kpi-grid">
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Clienți unici</span>
+              <span class="locatii-kpi__value">{d().kpi.clienti_unici}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Clienți noi</span>
+              <span class="locatii-kpi__value">{d().kpi.clienti_noi}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Recurenți</span>
+              <span class="locatii-kpi__value">{d().kpi.clienti_recurenti}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">LTV mediu</span>
+              <span class="locatii-kpi__value">{fmtMoney(toNumber(d().kpi.ltv_mediu))}</span>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <div class="locatii-charts">
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Profil cheltuieli (buckete)</div>
+          <div class="locatii-chart-subtitle">Câți clienți cad în fiecare interval de plată</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Donut-ul împarte clienții în grupe după <strong>cât a plătit fiecare în
+              perioada selectată</strong> (suma totală a bonurilor lor). Util pentru a
+              vedea structura portofoliului: câți sunt clienți „mici" (montaj sezonier),
+              câți „medii" și câți „valoroși" (seturi premium, servicii multiple).
+            </p>
+          </Show>
+          <div ref={spendingDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+          <Show when={data()}>
+            {(d) => (
+              <div class="rapoarte-table-scroll" style="margin-top:10px">
+                <table style="min-width:0">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left">Interval</th>
+                      <th class="num">Clienți</th>
+                      <th class="num">% clienți</th>
+                      <th class="num">Total</th>
+                      <th class="num">% bani</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={d().spending_buckets}>
+                      {(b) => (
+                        <tr>
+                          <td class="nowrap">{b.label}</td>
+                          <td class="num">{b.count_clients}</td>
+                          <td class="num">{b.pct.toFixed(1)}%</td>
+                          <td class="num">{fmtMoney(toNumber(b.sum_paid))}</td>
+                          <td class="num bold">{b.pct_sum.toFixed(1)}%</td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Show>
+        </div>
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Frecvență vizite</div>
+          <div class="locatii-chart-subtitle">Câte bonuri are fiecare client în perioadă</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Câți clienți au revenit de mai multe ori în perioadă. O proporție mare de
+              clienți cu o singură vizită indică oportunitate de campanii de retenție.
+            </p>
+          </Show>
+          <div ref={freqDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Clienți noi vs recurenți, pe lună</div>
+          <div class="locatii-chart-subtitle">
+            <span style="color:#3ea96a">■ Noi</span> &nbsp;
+            <span style="color:#5b7cfa">■ Recurenți</span>
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Pentru fiecare lună din perioadă: câți clienți au avut o singură vizită
+              acea lună (verde) vs câți au revenit de 2+ ori (albastru). Bara albastră
+              care crește constant = retenție bună.
+            </p>
+          </Show>
+          <div ref={nvrBarRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Top 20 clienți după valoare</div>
+          <div class="locatii-chart-subtitle">Sortat după suma plătită în perioada selectată</div>
+          <Show when={data()}>
+            {(d) => (
+              <Show
+                when={d().top_clients.length > 0}
+                fallback={
+                  <div style="padding:24px;text-align:center;color:var(--text-muted,#8b90a0);font-size:0.85rem">
+                    Niciun client cu vânzări în perioadă.
+                  </div>
+                }
+              >
+                <div class="rapoarte-table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="text-align:left">#</th>
+                        <th style="text-align:left">Client</th>
+                        <th class="hide-mobile" style="text-align:left">Telefon</th>
+                        <th class="hide-mobile" style="text-align:left">Mașină</th>
+                        <th class="num">Bonuri</th>
+                        <th class="num">Total plătit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={d().top_clients}>
+                        {(c, i) => (
+                          <tr>
+                            <td class="muted">{i() + 1}</td>
+                            <td class="nowrap">{c.nume}</td>
+                            <td class="hide-mobile muted nowrap">{c.telefon ?? "—"}</td>
+                            <td class="hide-mobile muted nowrap">{c.numar_masina ?? "—"}</td>
+                            <td class="num">{c.count_receipts}</td>
+                            <td class="num bold nowrap">{fmtMoney(toNumber(c.sum_paid))}</td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
+            )}
+          </Show>
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Clienți inactivi (peste 12 luni fără vizită)</div>
+          <div class="locatii-chart-subtitle">Top 50, sortați descendent după valoarea istorică</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Lista clienților cu vânzări istorice dar care nu au revenit în ultimele
+              12 luni. Filtrul de locație și perioadă <em>nu</em> se aplică aici (e o
+              listă de cont). Țintă pentru campanii de win-back.
+            </p>
+          </Show>
+          <Show when={data()}>
+            {(d) => (
+              <Show
+                when={d().inactivi.length > 0}
+                fallback={
+                  <div style="padding:24px;text-align:center;color:var(--text-muted,#8b90a0);font-size:0.85rem">
+                    Niciun client inactiv.
+                  </div>
+                }
+              >
+                <div class="rapoarte-table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="text-align:left">Client</th>
+                        <th class="hide-mobile" style="text-align:left">Telefon</th>
+                        <th class="hide-mobile" style="text-align:left">Mașină</th>
+                        <th style="text-align:left">Ultima vizită</th>
+                        <th class="num">Bonuri</th>
+                        <th class="num">Total istoric</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={d().inactivi}>
+                        {(c) => (
+                          <tr>
+                            <td class="nowrap">{c.nume}</td>
+                            <td class="hide-mobile muted nowrap">{c.telefon ?? "—"}</td>
+                            <td class="hide-mobile muted nowrap">{c.numar_masina ?? "—"}</td>
+                            <td class="nowrap">{fmtRoDate(c.last_visit)}</td>
+                            <td class="num">{c.count_receipts_total}</td>
+                            <td class="num bold nowrap">{fmtMoney(toNumber(c.sum_paid_total))}</td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
+            )}
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───── PROGRAMĂRI (Ops) PANEL ─────────────────────────────────────────────────
+
+interface ProgramariKpi {
+  total_programari: number;
+  count_programat: number;
+  count_in_lucru: number;
+  count_executat: number;
+  count_anulat: number;
+  count_with_receipt: number;
+  rata_anulare_pct: number;
+  conversie_executat_to_bon_pct: number;
+  lead_time_mediu_zile: number;
+}
+
+interface ProgramariHeatmapCell {
+  day_of_week: number;
+  hour: number;
+  count: number;
+}
+
+interface ProgramariMonthly {
+  month: string;
+  count_total: number;
+  count_executat: number;
+  count_anulat: number;
+}
+
+interface ProgramariFunnel {
+  status: string;
+  count: number;
+  pct: number;
+}
+
+interface ProgramariPeakSlot {
+  day_of_week: number;
+  hour: number;
+  count: number;
+}
+
+interface ProgramariSummary {
+  kpi: ProgramariKpi;
+  heatmap: ProgramariHeatmapCell[];
+  monthly: ProgramariMonthly[];
+  funnel: ProgramariFunnel[];
+  peak_slots: ProgramariPeakSlot[];
+  period_start: string;
+  period_end: string;
+}
+
+const RO_DOW = ["Duminică", "Luni", "Marți", "Miercuri", "Joi", "Vineri", "Sâmbătă"];
+const RO_DOW_SHORT = ["Dum", "Lun", "Mar", "Mie", "Joi", "Vin", "Sâm"];
+
+function drawHeatmap(container: HTMLDivElement, cells: ProgramariHeatmapCell[]) {
+  d3.select(container).selectAll("*").remove();
+  if (cells.length === 0) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted,#8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio programare în perioada selectată.");
+    return;
+  }
+
+  const maxV = d3.max(cells, (c) => c.count) ?? 1;
+  const cellMap = new Map<string, number>();
+  for (const c of cells) cellMap.set(`${c.day_of_week}-${c.hour}`, c.count);
+
+  const observedMinHour = d3.min(cells, (c) => c.hour) ?? 7;
+  const observedMaxHour = d3.max(cells, (c) => c.hour) ?? 20;
+  const minHour = Math.min(7, observedMinHour);
+  const maxHour = Math.max(20, observedMaxHour);
+  const hours: number[] = [];
+  for (let h = minHour; h <= maxHour; h++) hours.push(h);
+
+  const width = container.clientWidth || 720;
+  const isNarrow = width < 480;
+  const margin = {
+    top: 24,
+    right: 8,
+    bottom: 16,
+    left: isNarrow ? 36 : 64,
+  };
+  const cellW = Math.max(isNarrow ? 22 : 18, Math.floor((width - margin.left - margin.right) / hours.length));
+  const cellH = isNarrow ? 26 : 28;
+  const innerW = cellW * hours.length;
+  const height = margin.top + margin.bottom + cellH * 7;
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${margin.left + innerW + margin.right} ${height}`)
+    .attr("preserveAspectRatio", "xMinYMin meet")
+    .style("width", "100%");
+
+  const color = d3.scaleSequential(d3.interpolateBlues).domain([0, maxV]);
+
+  svg.append("g")
+    .selectAll("text")
+    .data(hours)
+    .enter()
+    .append("text")
+    .attr("x", (_h, i) => margin.left + i * cellW + cellW / 2)
+    .attr("y", margin.top - 8)
+    .attr("text-anchor", "middle")
+    .attr("font-size", 10)
+    .attr("fill", "var(--text-muted,#8b90a0)")
+    .text((h) => `${h}`);
+
+  // DOW Postgres: 0=Duminică, 1=Luni, ..., 6=Sâmbătă. Afișăm Luni → Duminică.
+  const dowOrder = [1, 2, 3, 4, 5, 6, 0];
+  // Pe ecrane înguste folosim doar prima literă a zilei ca să încapă în
+  // margin.left redusă.
+  const dowLabel = (d: number) => isNarrow ? RO_DOW_SHORT[d].charAt(0) : RO_DOW_SHORT[d];
+  svg.append("g")
+    .selectAll("text")
+    .data(dowOrder)
+    .enter()
+    .append("text")
+    .attr("x", margin.left - 6)
+    .attr("y", (_d, i) => margin.top + i * cellH + cellH / 2 + 4)
+    .attr("text-anchor", "end")
+    .attr("font-size", isNarrow ? 10 : 11)
+    .attr("fill", "var(--text-muted,#8b90a0)")
+    .text((d) => dowLabel(d));
+
+  const g = svg.append("g");
+  for (let row = 0; row < dowOrder.length; row++) {
+    const dow = dowOrder[row];
+    for (let col = 0; col < hours.length; col++) {
+      const hour = hours[col];
+      const v = cellMap.get(`${dow}-${hour}`) ?? 0;
+      const x = margin.left + col * cellW;
+      const y = margin.top + row * cellH;
+      g.append("rect")
+        .attr("x", x + 1)
+        .attr("y", y + 1)
+        .attr("width", cellW - 2)
+        .attr("height", cellH - 2)
+        .attr("rx", 3)
+        .attr("fill", v === 0 ? "rgba(255,255,255,0.04)" : color(v))
+        .append("title")
+        .text(`${RO_DOW[dow]} ora ${hour}:00 — ${v} programări`);
+      if (v > 0) {
+        g.append("text")
+          .attr("x", x + cellW / 2)
+          .attr("y", y + cellH / 2 + 4)
+          .attr("text-anchor", "middle")
+          .attr("font-size", 10)
+          .attr("font-weight", 600)
+          .attr("fill", v > maxV * 0.55 ? "#fff" : "var(--text,#dbe0ea)")
+          .style("pointer-events", "none")
+          .text(v);
+      }
+    }
+  }
+}
+
+function ProgramariPanel() {
+  const [data, setData] = createSignal<ProgramariSummary | null>(null);
+  const [, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>(
+    "rapoarte_programari_loc_ids",
+    [],
+  );
+
+  let heatmapRef: HTMLDivElement | undefined;
+  let funnelDonutRef: HTMLDivElement | undefined;
+  let monthlyRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await apiFetch(`/api/reports/programari?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(ensureLocationsLoaded);
+  createEffect(() => {
+    periodVersion();
+    selectedLocIds();
+    void load();
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !heatmapRef) return;
+    drawHeatmap(heatmapRef, d.heatmap);
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !funnelDonutRef) return;
+    const colors: Record<string, string> = {
+      "Programat": "#5b7cfa",
+      "In lucru":  "#f5a623",
+      "Executat":  "#3ea96a",
+      "Anulat":    "#ef4444",
+    };
+    const items: DonutItem[] = d.funnel.map((f) => ({
+      label: f.status,
+      value: f.count,
+      color: colors[f.status] ?? "#8b90a0",
+    }));
+    drawDonut(funnelDonutRef, items, "programări");
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !monthlyRef) return;
+    const items: MonthlySeriesItem[] = d.monthly.map((m) => ({
+      month: m.month,
+      series: [
+        { key: "total", label: "Total",    value: m.count_total,    color: "#5b7cfa" },
+        { key: "exec",  label: "Executat", value: m.count_executat, color: "#3ea96a" },
+        { key: "anul",  label: "Anulat",   value: m.count_anulat,   color: "#ef4444" },
+      ],
+    }));
+    drawMonthlySeriesBars(monthlyRef, items);
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Programări" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Analiza operațională a programărilor: când sunt sloturile peak (heatmap zi×oră),
+          ce procent se anulează, ce procent ajung la bon emis (conversia operațională)
+          și care e lead-time-ul mediu între programare și execuție. Datele sunt poziționate
+          pe data programării (start_time), nu pe data creării.
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
+
+      <Show when={data()}>
+        {(d) => (
+          <div class="rapoarte-kpi-grid">
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Total programări</span>
+              <span class="locatii-kpi__value">{d().kpi.total_programari}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Executate</span>
+              <span class="locatii-kpi__value">{d().kpi.count_executat}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Anulate</span>
+              <span class="locatii-kpi__value">{d().kpi.count_anulat}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Rata anulare</span>
+              <span class="locatii-kpi__value">{d().kpi.rata_anulare_pct.toFixed(1)}%</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Lead time mediu</span>
+              <span class="locatii-kpi__value">{d().kpi.lead_time_mediu_zile.toFixed(1)} zile</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Conversie la bon</span>
+              <span class="locatii-kpi__value">{d().kpi.conversie_executat_to_bon_pct.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <div class="locatii-charts">
+        <div class="locatii-chart-card" style="flex:2;min-width:0">
+          <div class="locatii-chart-title">Heatmap programări — zi × oră</div>
+          <div class="locatii-chart-subtitle">Albastru mai intens = mai multe programări</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Grila arată câte programări sunt în fiecare combinație zi a săptămânii × oră
+              de start. Util pentru a vedea sloturile peak (overbooking) și sloturile goale
+              (oportunități de promoție).
+            </p>
+          </Show>
+          <div ref={heatmapRef} style="margin-top:8px" />
+        </div>
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Distribuție pe status</div>
+          <div class="locatii-chart-subtitle">Funnel-ul programărilor</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Cum se distribuie programările pe status: programat (în viitor), în lucru,
+              executat sau anulat. Util pentru a vedea sănătatea operațională.
+            </p>
+          </Show>
+          <div ref={funnelDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Evoluție lunară</div>
+          <div class="locatii-chart-subtitle">
+            <span style="color:#5b7cfa">■ Total</span> &nbsp;
+            <span style="color:#3ea96a">■ Executat</span> &nbsp;
+            <span style="color:#ef4444">■ Anulat</span>
+          </div>
+          <div ref={monthlyRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Top 5 sloturi peak</div>
+          <div class="locatii-chart-subtitle">Cele mai aglomerate combinații zi × oră</div>
+          <Show when={data()}>
+            {(d) => (
+              <Show
+                when={d().peak_slots.length > 0}
+                fallback={
+                  <div style="padding:24px;text-align:center;color:var(--text-muted,#8b90a0);font-size:0.85rem">
+                    Niciun slot cu programări.
+                  </div>
+                }
+              >
+                <div class="rapoarte-table-scroll">
+                  <table style="min-width:0">
+                    <thead>
+                      <tr>
+                        <th style="text-align:left">#</th>
+                        <th style="text-align:left">Zi</th>
+                        <th style="text-align:left">Oră</th>
+                        <th class="num">Programări</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={d().peak_slots}>
+                        {(s, i) => (
+                          <tr>
+                            <td class="muted">{i() + 1}</td>
+                            <td class="nowrap">{RO_DOW[s.day_of_week]}</td>
+                            <td class="nowrap">{s.hour}:00</td>
+                            <td class="num bold">{s.count}</td>
+                          </tr>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
+            )}
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ───── ROOT ───────────────────────────────────────────────────────────────────
 
 export default function Rapoarte() {
   const [active, setActive] = persistedSignal<SectionId>("rapoarte_active_section", "target-angajati");
 
+  // Filtrare secțiuni vizibile: ascunde „Hotel Anvelope" când feature-ul e
+  // dezactivat din Setări Generale. Dacă utilizatorul avea secțiunea activă
+  // salvată în localStorage și acum e ascunsă, comutăm pe prima disponibilă.
+  const visibleSections = createMemo(() =>
+    SECTIONS.filter((s) =>
+      !(s.id === "hotel-anvelope" && generalSettings()?.dezactiveazaHotelAnvelope),
+    ),
+  );
+  createEffect(() => {
+    const vis = visibleSections();
+    if (!vis.some((s) => s.id === active())) {
+      setActive(vis[0].id);
+    }
+  });
+
+  const isHotelHidden = () => !!generalSettings()?.dezactiveazaHotelAnvelope;
+
   return (
     <div class="cfg-layout">
       <aside class="cfg-sidebar">
         <div class="cfg-sidebar-title">Rapoarte</div>
-        <For each={SECTIONS}>
+        <For each={visibleSections()}>
           {(s) => (
             <button
               class="cfg-sidebar-item"
@@ -2771,7 +3608,7 @@ export default function Rapoarte() {
           <Match when={active() === "locatii"}><LocatiiPanel /></Match>
           <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
           <Match when={active() === "angajati"}><AngajatiPanel /></Match>
-          <Match when={active() === "hotel-anvelope"}><HotelAnvelopePanel /></Match>
+          <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
           <Match when={active() === "clienti"}><ClientiPanel /></Match>
           <Match when={active() === "programari"}><ProgramariPanel /></Match>
         </Switch>

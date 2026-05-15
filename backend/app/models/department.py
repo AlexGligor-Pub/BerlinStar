@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -10,11 +10,12 @@ class Department(Base):
     __table_args__ = (
         Index("ix_departments_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
         Index("ix_departments_is_deleted_id", "is_deleted", "id"),
+        UniqueConstraint("account_id", "name", name="uq_departments_account_id_name"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id"), nullable=False)
-    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

@@ -1093,7 +1093,8 @@ class ClientiBucket(BaseModel):
     label: str
     count_clients: int
     sum_paid: Decimal
-    pct: float  # procent din total clienți (pentru donut)
+    pct: float       # procent din total clienți (pentru donut)
+    pct_sum: float   # procent din totalul de bani (contribuția bucket-ului)
 
 
 class ClientiTop(BaseModel):
@@ -1185,8 +1186,12 @@ async def reports_clienti(
     )).all()
 
     clienti_unici = len(per_client_rows)
-    clienti_noi = sum(1 for r in per_client_rows if r.has_first_visit)
-    clienti_recurenti = clienti_unici - clienti_noi
+    # Definiție cumulativă (matching user's intuition): un client e „recurent"
+    # dacă are 2+ bonuri în perioadă. Pe perioadă mai mare, recurenții cresc
+    # monoton — invers față de definiția „prima vizită ever în perioadă" care
+    # producea 0 pe perioade largi în DB-uri proaspăt restaurate.
+    clienti_recurenti = sum(1 for r in per_client_rows if int(r.count_receipts or 0) >= 2)
+    clienti_noi = clienti_unici - clienti_recurenti
     sum_paid_total = sum((Decimal(r.sum_paid or 0) for r in per_client_rows), Decimal(0))
     ltv_mediu = (sum_paid_total / clienti_unici) if clienti_unici > 0 else Decimal(0)
 
@@ -1201,11 +1206,13 @@ async def reports_clienti(
         cnt = len(bucket_clients)
         bucket_sum = sum((Decimal(r.sum_paid or 0) for r in bucket_clients), Decimal(0))
         pct = (cnt / clienti_unici * 100.0) if clienti_unici > 0 else 0.0
+        pct_sum = (float(bucket_sum) / float(sum_paid_total) * 100.0) if sum_paid_total > 0 else 0.0
         spending_buckets.append(ClientiBucket(
             label=label,
             count_clients=cnt,
             sum_paid=bucket_sum,
             pct=round(pct, 2),
+            pct_sum=round(pct_sum, 2),
         ))
 
     # Buckete frecvență vizite
@@ -1219,11 +1226,13 @@ async def reports_clienti(
         cnt = len(bucket_clients)
         bucket_sum = sum((Decimal(r.sum_paid or 0) for r in bucket_clients), Decimal(0))
         pct = (cnt / clienti_unici * 100.0) if clienti_unici > 0 else 0.0
+        pct_sum = (float(bucket_sum) / float(sum_paid_total) * 100.0) if sum_paid_total > 0 else 0.0
         visit_freq_buckets.append(ClientiBucket(
             label=label,
             count_clients=cnt,
             sum_paid=bucket_sum,
             pct=round(pct, 2),
+            pct_sum=round(pct_sum, 2),
         ))
 
     # Top 20 clienți după sum_paid în perioadă
@@ -1260,19 +1269,26 @@ async def reports_clienti(
         for r in top_rows
     ]
 
-    # New vs Returning per lună
+    # New vs Returning per lună — același criteriu ca KPI:
+    # client cu 1 vizită în lună = nou, cu 2+ vizite = recurent.
     nvr_rows = (await db.execute(
         text(f"""
-            SELECT to_char(date_trunc('month', report_date), 'YYYY-MM') AS month,
-                   COUNT(DISTINCT CASE WHEN is_first_visit THEN client_id END)        AS count_new,
-                   COUNT(DISTINCT CASE WHEN NOT is_first_visit THEN client_id END)    AS count_returning
-            FROM report_clients_daily
-            WHERE account_id = :acc
-              AND report_date BETWEEN :d1 AND :d2
-              AND client_id IS NOT NULL
-              {loc_filter}
-            GROUP BY date_trunc('month', report_date)
-            ORDER BY date_trunc('month', report_date)
+            SELECT month,
+                   COUNT(*) FILTER (WHERE visits = 1)  AS count_new,
+                   COUNT(*) FILTER (WHERE visits >= 2) AS count_returning
+            FROM (
+                SELECT to_char(date_trunc('month', report_date), 'YYYY-MM') AS month,
+                       client_id,
+                       SUM(count_receipts) AS visits
+                FROM report_clients_daily
+                WHERE account_id = :acc
+                  AND report_date BETWEEN :d1 AND :d2
+                  AND client_id IS NOT NULL
+                  {loc_filter}
+                GROUP BY 1, client_id
+            ) per_client_month
+            GROUP BY month
+            ORDER BY month
         """),
         params,
     )).all()
