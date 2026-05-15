@@ -1,4 +1,4 @@
-import { For, Show, Switch, Match, createSignal, onMount, createMemo, onCleanup, createEffect } from "solid-js";
+import { For, Show, Switch, Match, createSignal, onMount, createMemo, createEffect } from "solid-js";
 import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
@@ -36,313 +36,8 @@ function Avatar(props: { name: string; imagePath: string | null; size?: number }
   );
 }
 
-function daysElapsedThisMonth(): number {
-  const now = new Date();
-  return now.getDate(); // day of month = days elapsed since start (inclusive)
-}
-
-function EmployeePopup(props: {
-  employee: EmployeeReport;
-  onClose: () => void;
-}) {
-  const e = props.employee;
-  const acc = parseFloat(e.current_target_accumulation);
-  const tgt = parseFloat(e.target);
-  const progressPct = tgt > 0 ? (acc / tgt) * 100 : 0;
-  const days = daysElapsedThisMonth();
-
-  const fmt = (v: number) =>
-    v.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  const barColor = progressPct >= 100 ? "var(--success,#3ea96a)" : "var(--accent,#5b7cfa)";
-
-  let timer: ReturnType<typeof setTimeout>;
-  onMount(() => {
-    timer = setTimeout(props.onClose, 5000);
-  });
-  onCleanup(() => clearTimeout(timer));
-
-  return (
-    <div class="emp-popup-overlay" onClick={props.onClose}>
-      <div class="emp-popup" onClick={(ev) => ev.stopPropagation()}>
-        <button class="emp-popup__close" onClick={props.onClose} aria-label="Închide">✕</button>
-        <div class="emp-popup__avatar">
-          <Avatar name={e.name} imagePath={e.image_path} size={72} />
-        </div>
-        <div class="emp-popup__name">{e.name}</div>
-
-        <div class="emp-popup__stats">
-          <div class="emp-popup__stat">
-            <span class="emp-popup__stat-label">Acumulare</span>
-            <span class="emp-popup__stat-value">{fmt(acc)} lei</span>
-          </div>
-          <div class="emp-popup__stat">
-            <span class="emp-popup__stat-label">Target lunar</span>
-            <span class="emp-popup__stat-value">{fmt(tgt)} lei</span>
-          </div>
-          <div class="emp-popup__stat">
-            <span class="emp-popup__stat-label">Progres</span>
-            <span class="emp-popup__stat-value" style={`color:${barColor};font-weight:700`}>
-              {Math.round(progressPct)}%
-            </span>
-          </div>
-          <div class="emp-popup__stat">
-            <span class="emp-popup__stat-label">Zile scurse din lună</span>
-            <span class="emp-popup__stat-value">{days} zile</span>
-          </div>
-        </div>
-
-        {/* Mini progress bar */}
-        <div style="margin-top:14px;background:var(--border,#e5e7eb);border-radius:4px;height:8px;overflow:hidden">
-          <div style={`height:100%;width:${Math.min(progressPct, 100)}%;background:${barColor};border-radius:4px;transition:width 0.4s ease`} />
-        </div>
-        <p style="font-size:0.72rem;color:var(--text-muted);margin:6px 0 0;text-align:right">
-          Se închide automat în 5 s
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function TargetAngajatiPanel() {
-  const [employees, setEmployees] = createSignal<EmployeeReport[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [sortBy, setSortBy] = createSignal<"target" | "name">("target");
-  const [popup, setPopup] = createSignal<EmployeeReport | null>(null);
-  const [selectedDescs, setSelectedDescs] = createSignal<Set<string>>(new Set());
-  const [showZeroTarget, setShowZeroTarget] = createSignal(false);
-
-  onMount(async () => {
-    // Dashboardul agregheaza target-uri client-side, deci avem nevoie de toti
-    // angajatii. Iteram cu offset pana epuizam pagina (pagina marime 200).
-    const all: EmployeeReport[] = [];
-    const PAGE = 200;
-    let offset = 0;
-    try {
-      while (true) {
-        const res = await apiFetch(`/api/employees?limit=${PAGE}&offset=${offset}`);
-        if (!res.ok) throw new Error(`Status ${res.status}`);
-        const data = (await res.json()) as { items: EmployeeReport[]; total?: number };
-        const items = data.items ?? [];
-        all.push(...items);
-        if (items.length < PAGE) break;
-        offset += PAGE;
-        if (offset > 5000) break; // safeguard impotriva loop-ului
-      }
-      setEmployees(all);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Eroare la încărcare angajați.";
-      notify(msg, "error");
-    } finally {
-      setLoading(false);
-    }
-  });
-
-  // Employees with progress >= 1% (base pool, respects showZeroTarget toggle)
-  const withTarget = createMemo(() =>
-    showZeroTarget()
-      ? employees()
-      : employees().filter(e => {
-          const tgt = parseFloat(e.target);
-          const acc = parseFloat(e.current_target_accumulation);
-          const pct = tgt > 0 ? (acc / tgt) * 100 : 0;
-          return pct >= 1;
-        })
-  );
-
-  // Unique descriptions only from the base pool (so chips reflect visible employees)
-  const uniqueDescs = createMemo(() => {
-    const set = new Set<string>();
-    for (const e of withTarget()) {
-      if (e.description?.trim()) set.add(e.description.trim());
-    }
-    return [...set].sort((a, b) => a.localeCompare(b, "ro"));
-  });
-
-  function toggleDesc(desc: string) {
-    setSelectedDescs(prev => {
-      const next = new Set(prev);
-      if (next.has(desc)) next.delete(desc);
-      else next.add(desc);
-      return next;
-    });
-  }
-
-  const filtered = createMemo(() => {
-    const sel = selectedDescs();
-    if (sel.size === 0) return withTarget();
-    return withTarget().filter(e => e.description?.trim() && sel.has(e.description.trim()));
-  });
-
-  const sorted = createMemo(() => {
-    const list = [...filtered()];
-    if (sortBy() === "name") {
-      return list.sort((a, b) => a.name.localeCompare(b.name, "ro"));
-    }
-    return list.sort(
-      (a, b) =>
-        parseFloat(b.current_target_accumulation) - parseFloat(a.current_target_accumulation)
-    );
-  });
-
-  const maxValue = createMemo(() => {
-    const vals = sorted().map(e =>
-      Math.max(parseFloat(e.current_target_accumulation), parseFloat(e.target))
-    );
-    return Math.max(...vals, 1);
-  });
-
-  const fmt = (v: string | number) => {
-    const n = typeof v === "string" ? parseFloat(v) : v;
-    return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  return (
-    <div class="cfg-panel" style="max-width:100%">
-      <PanelHeader title="Target Angajați" />
-      <Show when={!hideExplanations()}>
-        <p class="cfg-hint" style="margin-bottom:8px;max-width:620px;line-height:1.6">
-          Graficul afișează acumularea curentă a targetului pentru fiecare angajat. Bara colorată
-          reprezintă valoarea vânzărilor înregistrate în perioada curentă. Linia orizontală indică
-          targetul lunar setat. Apasă pe o bară pentru detalii. Targetul se configurează din{" "}
-          <strong>Configurări → Angajați</strong>.
-        </p>
-      </Show>
-
-      {/* Sort controls + zero-target toggle */}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-        <button
-          class="btn btn-sm"
-          classList={{ "btn-primary": sortBy() === "target", "btn-ghost": sortBy() !== "target" }}
-          onClick={() => setSortBy("target")}
-        >
-          După target
-        </button>
-        <button
-          class="btn btn-sm"
-          classList={{ "btn-primary": sortBy() === "name", "btn-ghost": sortBy() !== "name" }}
-          onClick={() => setSortBy("name")}
-        >
-          După nume
-        </button>
-        <button
-          class="btn btn-sm"
-          classList={{ "btn-primary": showZeroTarget(), "btn-ghost": !showZeroTarget() }}
-          onClick={() => { setShowZeroTarget(v => !v); setSelectedDescs(new Set<string>()); }}
-          style="margin-left:auto"
-        >
-          {showZeroTarget() ? "Ascunde fără target" : "Arată fără target"}
-        </button>
-      </div>
-
-      {/* Description filter chips */}
-      <Show when={uniqueDescs().length > 0}>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <span style="font-size:0.78rem;color:var(--text-muted);flex-shrink:0">Filtrează:</span>
-          <For each={uniqueDescs()}>
-            {(desc) => (
-              <button
-                class="desc-chip"
-                classList={{ "desc-chip--active": selectedDescs().has(desc) }}
-                onClick={() => toggleDesc(desc)}
-              >
-                {desc}
-              </button>
-            )}
-          </For>
-          <Show when={selectedDescs().size > 0}>
-            <button
-              class="desc-chip desc-chip--clear"
-              onClick={() => setSelectedDescs(new Set())}
-            >
-              ✕ Resetează
-            </button>
-          </Show>
-        </div>
-      </Show>
-
-      {/* Legend */}
-      <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
-          <div style="width:14px;height:14px;border-radius:3px;background:var(--accent,#5b7cfa)" />
-          Acumulare curentă
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--text-muted)">
-          <div style="width:20px;height:2px;background:#FFD700;opacity:0.9;border-radius:1px" />
-          Target lunar
-        </div>
-      </div>
-
-      <Show when={loading()}>
-        <p class="cfg-hint">Se încarcă...</p>
-      </Show>
-
-      <Show when={!loading() && sorted().length === 0}>
-        <p class="cfg-hint">Nu există angajați înregistrați.</p>
-      </Show>
-
-      <Show when={!loading() && sorted().length > 0}>
-        <div class="rapoarte-chart-wrap">
-          <div class="rapoarte-bars">
-            <For each={sorted()}>
-              {(e) => {
-                const acc = parseFloat(e.current_target_accumulation);
-                const tgt = parseFloat(e.target);
-                const mv = maxValue();
-                const accPct = Math.min((acc / mv) * 100, 100);
-                const tgtPct = tgt > 0 ? Math.min((tgt / mv) * 100, 100) : 0;
-                const progressPct = tgt > 0 ? (acc / tgt) * 100 : 0;
-                const barColor = progressPct >= 100
-                  ? "var(--success,#3ea96a)"
-                  : "var(--accent,#5b7cfa)";
-                const showPct = progressPct > 0.05;
-
-                return (
-                  <div
-                    class="rapoarte-col"
-                    onClick={() => setPopup(e)}
-                    style="cursor:pointer"
-                  >
-                    <div class="rapoarte-col__bar-area">
-                      {/* Percentage label above bar */}
-                      <Show when={showPct}>
-                        <div
-                          class="rapoarte-col__pct"
-                          style={`bottom:calc(${accPct}% + 4px)`}
-                        >
-                          {Math.round(progressPct)}%
-                        </div>
-                      </Show>
-                      <div
-                        class="rapoarte-col__bar"
-                        style={`height:${accPct}%;background:${barColor}`}
-                      />
-                      <Show when={tgtPct > 0}>
-                        <div
-                          class="rapoarte-col__target"
-                          style={`bottom:${tgtPct}%`}
-                          title={`Target: ${fmt(e.target)} lei`}
-                        />
-                      </Show>
-                    </div>
-                    <Avatar name={e.name} imagePath={e.image_path} size={28} />
-                    <div class="rapoarte-col__name-wrap">
-                      <span class="rapoarte-col__name">{e.name}</span>
-                    </div>
-                  </div>
-                );
-              }}
-            </For>
-          </div>
-        </div>
-      </Show>
-
-      <Show when={popup() !== null}>
-        <EmployeePopup employee={popup()!} onClose={() => setPopup(null)} />
-      </Show>
-    </div>
-  );
-}
+// TargetAngajatiPanel (donut + month selector) este definit mai jos, după
+// helper-ele D3 (drawDonut, PALETTE, fmtMoney). Vezi `function TargetAngajatiPanel()`.
 
 // ───── LOCAȚII PANEL ──────────────────────────────────────────────────────────
 
@@ -386,15 +81,6 @@ interface LocatiiSummary {
   period_end: string | null;
 }
 
-const PAY_LABELS: Record<keyof PayMethods, string> = {
-  sum_card: "Card",
-  sum_cash: "Cash",
-  sum_op: "OP",
-  sum_partial: "Parțial",
-  sum_neplatit: "Neplătit",
-  sum_paid: "",
-  sum_unpaid: "",
-};
 const PAY_COLORS = ["#5b7cfa", "#3ea96a", "#a855f7", "#f5a623", "#ef4444"];
 
 function toNumber(v: string | number): number {
@@ -612,7 +298,7 @@ function PeriodSlicer() {
 
 function LocatiiPanel() {
   const [data, setData] = createSignal<LocatiiSummary | null>(null);
-  const [loading, setLoading] = createSignal(true);
+  const [, setLoading] = createSignal(true);
 
   let lineRef: HTMLDivElement | undefined;
   let donutRef: HTMLDivElement | undefined;
@@ -1645,7 +1331,7 @@ function drawDonut(container: HTMLDivElement, items: DonutItem[], centerLabelTex
     .attr("stroke-width", 2)
     .attr("d", arc as any)
     .style("cursor", "pointer")
-    .on("mouseover", function (event, d) {
+    .on("mouseover", function (_event, d) {
       d3.select(this).transition().duration(120).attr("d", arcHover as any);
       const pct = ((d.data.value / total) * 100).toFixed(1);
       centerLabel.select(".donut-center-value")
@@ -2129,6 +1815,199 @@ function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
     .style("opacity", 0)
     .text((d) => fmtMoney(d.total))
     .transition().delay(700).duration(300).style("opacity", (d) => (ih - y(d.total) > 20 ? 1 : 0));
+}
+
+// ───── TARGET ANGAJAȚI PANEL (donut contribuție pe ultimele 3 luni) ──────────
+
+interface EmpContrib {
+  employee_id: number | null;
+  employee_name: string;
+  image_path: string | null;
+  target: string | number;
+  sum_amount: string | number;
+  count_items: number;
+  contribution_pct: number;
+  target_progress_pct: number;
+}
+
+interface MonthContrib {
+  month: string;
+  period_start: string;
+  period_end: string;
+  total: string | number;
+  employees: EmpContrib[];
+}
+
+interface ContributiiAngajatiSummary {
+  months: MonthContrib[];
+}
+
+function fmtMonthLabel(month: string, idx: number): { prefix: string; name: string } {
+  const [y, m] = month.split("-").map((s) => parseInt(s, 10));
+  const monthName = new Date(y, (m || 1) - 1, 1)
+    .toLocaleDateString("ro-RO", { month: "long" });
+  const niceName = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+  const prefix = idx === 0 ? "Luna curentă" : idx === 1 ? "Luna trecută" : "Acum 2 luni";
+  return { prefix, name: `${niceName} ${y}` };
+}
+
+function TargetAngajatiPanel() {
+  const [data, setData] = createSignal<ContributiiAngajatiSummary | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [monthIdx, setMonthIdx] = createSignal(0);
+  let donutRef: HTMLDivElement | undefined;
+
+  onMount(async () => {
+    try {
+      const res = await apiFetch("/api/reports/contributii-angajati");
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      notify("Eroare de conexiune la raportul de contribuție.", "error");
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  const currentMonth = createMemo<MonthContrib | null>(() => {
+    const d = data();
+    if (!d) return null;
+    return d.months[monthIdx()] ?? null;
+  });
+
+  createEffect(() => {
+    const m = currentMonth();
+    if (!donutRef) return;
+    if (!m) {
+      d3.select(donutRef).selectAll("*").remove();
+      return;
+    }
+    const items: DonutItem[] = m.employees.map((e, i) => ({
+      label: e.employee_name,
+      value: toNumber(e.sum_amount),
+      color: colorByIndex(i),
+    }));
+    drawDonut(donutRef, items, "lei total lună");
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Target Angajați" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:8px;max-width:680px;line-height:1.6">
+          Donutul arată cât a contribuit fiecare angajat din totalul lunii (suma sliceurilor = 100%).
+          Datele includ doar încasări <strong>plătite</strong> (exclude bonurile neplătite).
+          Targetul afișat pe fiecare card este valoarea curentă din fișa angajatului, iar procentul
+          arată gradul de atingere al lui pentru luna selectată.
+        </p>
+      </Show>
+
+      {/* Selector lună — tab-uri grid responsive */}
+      <div class="ta-month-tabs">
+        <For each={data()?.months ?? []}>
+          {(m, i) => {
+            const lbl = fmtMonthLabel(m.month, i());
+            return (
+              <button
+                class="ta-month-tab"
+                classList={{ "ta-month-tab--active": monthIdx() === i() }}
+                onClick={() => setMonthIdx(i())}
+                aria-pressed={monthIdx() === i()}
+              >
+                <span class="ta-month-tab__label">{lbl.prefix}</span>
+                <span class="ta-month-tab__name">{lbl.name}</span>
+              </button>
+            );
+          }}
+        </For>
+      </div>
+
+      <Show when={loading()}>
+        <p class="cfg-hint">Se încarcă...</p>
+      </Show>
+
+      <Show when={!loading() && (data()?.months?.length ?? 0) === 0}>
+        <p class="cfg-hint">Nu există date pentru ultimele 3 luni.</p>
+      </Show>
+
+      <Show when={!loading() && currentMonth() !== null}>
+        {(() => {
+          const m = currentMonth()!;
+          const total = toNumber(m.total);
+          return (
+            <div class="ta-layout">
+              <div class="ta-card">
+                <div class="ta-card__title">Contribuție angajați</div>
+                <div class="ta-card__subtitle">
+                  Total lună: <strong>{fmtMoney(total)} lei</strong>
+                  <Show when={m.employees.length > 0}>
+                    {" • "}{m.employees.length} angajați activi
+                  </Show>
+                </div>
+                <div class="ta-donut-wrap" ref={donutRef} />
+              </div>
+
+              <div class="ta-card">
+                <div class="ta-card__title">Detalii angajați</div>
+                <div class="ta-card__subtitle">Sortat descrescător după contribuție</div>
+                <Show when={m.employees.length === 0}>
+                  <div class="locatii-empty">Nicio activitate înregistrată în această lună.</div>
+                </Show>
+                <div class="ta-emp-list">
+                  <For each={m.employees}>
+                    {(e, i) => {
+                      const color = colorByIndex(i());
+                      const target = toNumber(e.target);
+                      const sum = toNumber(e.sum_amount);
+                      const tgtPct = e.target_progress_pct;
+                      const tgtPctClamped = Math.min(tgtPct, 100);
+                      const tgtColor = tgtPct >= 100 ? "var(--success)" : "var(--accent)";
+                      return (
+                        <div class="ta-emp-row">
+                          <Avatar name={e.employee_name} imagePath={e.image_path} size={48} />
+                          <div class="ta-emp-main">
+                            <div class="ta-emp-name">{e.employee_name}</div>
+                            <div class="ta-emp-meta">
+                              {fmtMoney(sum)} lei
+                              <Show when={e.count_items > 0}>
+                                {" • "}{e.count_items} itemi
+                              </Show>
+                            </div>
+                            <Show when={target > 0}>
+                              <div class="ta-target-bar">
+                                <div class="ta-target-bar__fill" style={`width:${tgtPctClamped}%;background:${tgtColor}`} />
+                              </div>
+                              <div class="ta-target-line">
+                                <span>Target: {fmtMoney(target)} lei</span>
+                                <span class="ta-target-line__pct" style={`color:${tgtColor}`}>{tgtPct.toFixed(0)}%</span>
+                              </div>
+                            </Show>
+                            <Show when={target === 0}>
+                              <div class="ta-emp-meta--no-target">Fără target setat</div>
+                            </Show>
+                          </div>
+                          <div
+                            class="ta-contrib-badge"
+                            style={`background:${color}22;border-color:${color};color:${color}`}
+                            title="% contribuție din totalul lunii"
+                          >
+                            {e.contribution_pct.toFixed(1)}%
+                          </div>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </Show>
+    </div>
+  );
 }
 
 // ───── ROOT ───────────────────────────────────────────────────────────────────

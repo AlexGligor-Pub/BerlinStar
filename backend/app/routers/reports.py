@@ -4,8 +4,10 @@ Citesc datele agregate din tabelele report_* care sunt populate de worker-ul
 programat (vezi app/services/reports/).
 """
 from __future__ import annotations
-from datetime import date, timedelta
+from calendar import monthrange
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -217,6 +219,29 @@ class EmployeeTotal(BaseModel):
     employee_id: int | None
     employee_name: str
     total: Decimal
+
+
+class EmployeeMonthContribution(BaseModel):
+    employee_id: int | None
+    employee_name: str
+    image_path: str | None
+    target: Decimal
+    sum_amount: Decimal
+    count_items: int
+    contribution_pct: float
+    target_progress_pct: float
+
+
+class MonthContribution(BaseModel):
+    month: str  # "YYYY-MM"
+    period_start: date
+    period_end: date
+    total: Decimal
+    employees: list[EmployeeMonthContribution]
+
+
+class ContributiiAngajatiSummary(BaseModel):
+    months: list[MonthContribution]  # [0]=curent, [1]=-1, [2]=-2
 
 
 class ProduseServiciiSummary(BaseModel):
@@ -603,3 +628,96 @@ async def reports_employee_detail(
         departments_by_type=departments_by_type,
         monthly=monthly,
     )
+
+
+# ───── Contribuție angajați (ultimele 3 luni) ────────────────────────────────
+
+def _last_three_months_bucharest() -> list[tuple[str, date, date]]:
+    """Întoarce [(month_label, period_start, period_end), ...] pentru luna
+    curentă, luna trecută și acum 2 luni, în Europe/Bucharest.
+
+    month_label e "YYYY-MM"; period_start = ziua 1, period_end = ultima zi.
+    """
+    today = datetime.now(ZoneInfo("Europe/Bucharest")).date()
+    months: list[tuple[str, date, date]] = []
+    y, m = today.year, today.month
+    for _ in range(3):
+        start = date(y, m, 1)
+        end = date(y, m, monthrange(y, m)[1])
+        months.append((f"{y:04d}-{m:02d}", start, end))
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    return months
+
+
+@router.get("/contributii-angajati", response_model=ContributiiAngajatiSummary)
+async def reports_contributii_angajati(
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Contribuția per angajat pe ultimele 3 luni (curentă, -1, -2) în
+    Europe/Bucharest.
+
+    Sursa: report_employee_daily — exclude receipts NEPLATIT (vezi builder).
+    Targetul afișat este valoarea curentă din employees.target (nu istoric).
+    Angajații fără activitate într-o lună nu apar pentru acea lună.
+    """
+    months_def = _last_three_months_bucharest()
+    overall_start = months_def[-1][1]
+    overall_end = months_def[0][2]
+
+    rows = (await db.execute(
+        text("""
+            SELECT to_char(date_trunc('month', r.report_date), 'YYYY-MM') AS month,
+                   r.employee_id AS employee_id,
+                   COALESCE(e.name, 'Fără angajat') AS employee_name,
+                   e.image_path AS image_path,
+                   COALESCE(e.target, 0) AS target,
+                   SUM(r.sum_amount) AS sum_amount,
+                   SUM(r.count_items) AS count_items
+            FROM report_employee_daily r
+            LEFT JOIN employees e ON e.id = r.employee_id
+            WHERE r.account_id = :acc
+              AND r.report_date BETWEEN :d1 AND :d2
+            GROUP BY 1, r.employee_id, e.name, e.image_path, e.target
+        """),
+        {"acc": account_id, "d1": overall_start, "d2": overall_end},
+    )).all()
+
+    by_month: dict[str, list] = {label: [] for label, _, _ in months_def}
+    for r in rows:
+        if r.month in by_month:
+            by_month[r.month].append(r)
+
+    months_out: list[MonthContribution] = []
+    for label, start, end in months_def:
+        rs = by_month.get(label, [])
+        total = sum((r.sum_amount or Decimal("0") for r in rs), Decimal("0"))
+        emps: list[EmployeeMonthContribution] = []
+        for r in rs:
+            amt = r.sum_amount or Decimal("0")
+            tgt = r.target or Decimal("0")
+            contribution_pct = float(amt / total * 100) if total > 0 else 0.0
+            target_progress_pct = float(amt / tgt * 100) if tgt > 0 else 0.0
+            emps.append(EmployeeMonthContribution(
+                employee_id=r.employee_id,
+                employee_name=r.employee_name,
+                image_path=r.image_path,
+                target=tgt,
+                sum_amount=amt,
+                count_items=int(r.count_items or 0),
+                contribution_pct=contribution_pct,
+                target_progress_pct=target_progress_pct,
+            ))
+        emps.sort(key=lambda x: x.sum_amount, reverse=True)
+        months_out.append(MonthContribution(
+            month=label,
+            period_start=start,
+            period_end=end,
+            total=total,
+            employees=emps,
+        ))
+
+    return ContributiiAngajatiSummary(months=months_out)
