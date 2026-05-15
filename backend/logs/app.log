@@ -1009,3 +1009,141 @@ smtp_password
 2026-05-15T22:41:31 [INFO    ] berlinstar.http: ← PATCH /api/general-settings  rid=de3c3312  status=200  25.7ms
 2026-05-15T22:41:32 [INFO    ] berlinstar.http: → PATCH /api/general-settings  rid=97cb81cf  ip=127.0.0.1
 2026-05-15T22:41:33 [INFO    ] berlinstar.http: ← PATCH /api/general-settings  rid=97cb81cf  status=200  19.5ms
+2026-05-15T22:55:14 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-15T22:55:14 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-15T22:55:14 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-15T22:57:18 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T22:57:18 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-15T22:57:18 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T22:57:18 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-15T22:57:18 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-15T22:57:18 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-15T22:57:18 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-15T22:57:18 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=a21015b7  ip=127.0.0.1
+2026-05-15T22:57:19 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=a21015b7  status=200  186.8ms
+2026-05-15T22:57:58 [INFO    ] berlinstar.http: → POST /api/auth/register  rid=276bac24  ip=127.0.0.1
+2026-05-15T22:57:58 [INFO    ] berlinstar.http: ← POST /api/auth/register  rid=276bac24  status=201  630.6ms
+2026-05-15T22:57:59 [INFO    ] httpx: HTTP Request: POST https://webservicesp.anaf.ro/api/PlatitorTvaRest/v9/tva "HTTP/1.1 200 "
+2026-05-15T22:57:59 [ERROR   ] berlinstar: Seed new account failed account_id=6
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._rows = deque(await prepared_stmt.fetch(*parameters))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 177, in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 268, in __bind_execute
+    data, status, _ = await self.__do_execute(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 257, in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 205, in bind_execute
+asyncpg.exceptions.UniqueViolationError: duplicate key value violates unique constraint "uq_themes_name"
+DETAIL:  Key (name)=(Geometrie) already exists.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+    self._adapt_connection.await_(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.IntegrityError: <class 'asyncpg.exceptions.UniqueViolationError'>: duplicate key value violates unique constraint "uq_themes_name"
+DETAIL:  Key (name)=(Geometrie) already exists.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/account_seeder.py", line 150, in seed_new_account
+    await db.flush()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 787, in flush
+    await greenlet_spawn(self.sync_session.flush, objects=objects)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4331, in flush
+    self._flush(objects)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4466, in _flush
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 4427, in _flush
+    flush_context.execute()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py", line 466, in execute
+    rec.execute(self)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/unitofwork.py", line 642, in execute
+    util.preloaded.orm_persistence.save_obj(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 93, in save_obj
+    _emit_insert_statements(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 1233, in _emit_insert_statements
+    result = connection.execute(
+             ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+    self._adapt_connection.await_(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.IntegrityError: (sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.UniqueViolationError'>: duplicate key value violates unique constraint "uq_themes_name"
+DETAIL:  Key (name)=(Geometrie) already exists.
+[SQL: INSERT INTO departments (account_id, name, description, image_path, created_at, updated_at, is_deleted, deleted_at) VALUES ($1::INTEGER, $2::VARCHAR, $3::VARCHAR, $4::VARCHAR, $5::TIMESTAMP WITH TIME ZONE, $6::TIMESTAMP WITH TIME ZONE, $7::BOOLEAN, $8::TIMESTAMP WITH TIME ZONE) RETURNING departments.id]
+[parameters: (6, 'Geometrie', None, None, datetime.datetime(2026, 5, 15, 19, 57, 59, 534184, tzinfo=datetime.timezone.utc), None, False, None)]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+2026-05-15T22:58:47 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=b69d4b59  ip=127.0.0.1
+2026-05-15T22:58:47 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=b69d4b59  status=200  348.4ms
+2026-05-15T22:58:50 [INFO    ] berlinstar.http: → GET /api/items  rid=670f238d  ip=127.0.0.1
+2026-05-15T22:58:50 [INFO    ] berlinstar.http: → GET /api/departments  rid=e66def45  ip=127.0.0.1
+2026-05-15T22:58:50 [INFO    ] berlinstar.http: → GET /api/employees  rid=f6dccec2  ip=127.0.0.1
+2026-05-15T22:58:51 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=0a22e57c  ip=127.0.0.1
+2026-05-15T22:58:51 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=0a22e57c  status=200  1.3ms
+2026-05-15T22:58:51 [INFO    ] berlinstar.http: ← GET /api/items  rid=670f238d  status=200  621.3ms
+2026-05-15T22:58:51 [INFO    ] berlinstar.http: ← GET /api/employees  rid=f6dccec2  status=200  456.9ms
+2026-05-15T22:58:51 [INFO    ] berlinstar.http: ← GET /api/departments  rid=e66def45  status=200  466.1ms
+2026-05-15T22:59:17 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=cea6535e  ip=127.0.0.1
+2026-05-15T22:59:17 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=cea6535e  status=200  235.3ms
+2026-05-15T22:59:17 [INFO    ] berlinstar.http: → GET /api/receipts  rid=a1efa4d0  ip=127.0.0.1
+2026-05-15T22:59:17 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=4751e9a5  ip=127.0.0.1
+2026-05-15T22:59:17 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=4751e9a5  status=200  2.5ms

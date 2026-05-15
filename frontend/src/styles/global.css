@@ -131,13 +131,21 @@ body {
   box-shadow: var(--shadow);
 }
 
-.navbar-fullscreen-btn {
+.navbar-right {
   position: absolute;
   right: 16px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 80px);
+}
+
+.navbar-fullscreen-btn {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;

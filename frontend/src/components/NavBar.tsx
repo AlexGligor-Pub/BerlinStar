@@ -234,36 +234,38 @@ export default function NavBar() {
           )}
         </Show>
 
-        <button
-          type="button"
-          class="navbar-fullscreen-btn"
-          onClick={toggleFullscreen}
-          aria-label={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
-          title={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
-        >
-          <Show
-            when={isFullscreen()}
-            fallback={
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 9V3h6"/>
-                <path d="M21 9V3h-6"/>
-                <path d="M3 15v6h6"/>
-                <path d="M21 15v6h-6"/>
-              </svg>
-            }
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 3v6H3"/>
-              <path d="M15 3v6h6"/>
-              <path d="M9 21v-6H3"/>
-              <path d="M15 21v-6h6"/>
-            </svg>
+        <div class="navbar-right">
+          <Show when={trialBanner()}>
+            <span class="navbar-trial-badge">{trialBanner()}</span>
           </Show>
-        </button>
 
-        <Show when={trialBanner()}>
-          <span class="navbar-trial-badge">{trialBanner()}</span>
-        </Show>
+          <button
+            type="button"
+            class="navbar-fullscreen-btn"
+            onClick={toggleFullscreen}
+            aria-label={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
+            title={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
+          >
+            <Show
+              when={isFullscreen()}
+              fallback={
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 9V3h6"/>
+                  <path d="M21 9V3h-6"/>
+                  <path d="M3 15v6h6"/>
+                  <path d="M21 15v6h-6"/>
+                </svg>
+              }
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 3v6H3"/>
+                <path d="M15 3v6h6"/>
+                <path d="M9 21v-6H3"/>
+                <path d="M15 21v-6h6"/>
+              </svg>
+            </Show>
+          </button>
+        </div>
       </nav>
 
       <Show when={showAdminModal()}>
