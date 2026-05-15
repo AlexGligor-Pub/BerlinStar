@@ -105,11 +105,32 @@ function fmtRoDate(iso: string): string {
   return d.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+// ───── PERSISTED SIGNAL HELPER ────────────────────────────────────────────────
+// Wrapper peste createSignal care persistă valoarea în localStorage. Suportă
+// atât set(newVal) cât și set(prev => newVal) — folosim returnul lui set, care
+// e mereu valoarea finală.
+function persistedSignal<T>(key: string, initial: T): ReturnType<typeof createSignal<T>> {
+  let initialValue = initial;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) initialValue = JSON.parse(raw) as T;
+  } catch {
+    // localStorage indisponibil sau JSON invalid — folosim valoarea inițială
+  }
+  const [get, set] = createSignal<T>(initialValue);
+  const wrappedSet: any = (v: any) => {
+    const newVal = (set as any)(v);
+    try { localStorage.setItem(key, JSON.stringify(newVal)); } catch {}
+    return newVal;
+  };
+  return [get, wrappedSet];
+}
+
 // ───── SHARED PERIOD STATE ────────────────────────────────────────────────────
 
-const [periodFrom, setPeriodFrom] = createSignal(firstOfMonthISO());
-const [periodTo, setPeriodTo] = createSignal(todayISO());
-const [periodLabel, setPeriodLabel] = createSignal("Luna aceasta");
+const [periodFrom, setPeriodFrom] = persistedSignal<string>("rapoarte_period_from", firstOfMonthISO());
+const [periodTo, setPeriodTo] = persistedSignal<string>("rapoarte_period_to", todayISO());
+const [periodLabel, setPeriodLabel] = persistedSignal<string>("rapoarte_period_label", "Luna aceasta");
 const [periodVersion, setPeriodVersion] = createSignal(0);
 
 function commitPeriod(from: string, to: string, label: string) {
@@ -169,15 +190,16 @@ function PanelHeader(props: { title: string }) {
 type QuickKey = "today" | "7d" | "30d" | "mtd" | "qtd" | "ytd" | "12m";
 
 function PeriodSlicer() {
-  const [activeQuick, setActiveQuick] = createSignal<QuickKey | null>("mtd");
+  const [activeQuick, setActiveQuick] = persistedSignal<QuickKey | null>("rapoarte_quick_key", "mtd");
   const [draftFrom, setDraftFrom] = createSignal(periodFrom());
   const [draftTo, setDraftTo] = createSignal(periodTo());
+  const [advancedOpen, setAdvancedOpen] = createSignal(false);
 
-  // Slider range = anul curent (1 ian – 31 dec)
-  const year = new Date().getFullYear();
-  const yearStart = new Date(year, 0, 1);
-  const yearEnd = new Date(year, 11, 31);
-  const totalDays = Math.round((yearEnd.getTime() - yearStart.getTime()) / 86400000);
+  // Slider range = 1 ian anul curent → azi (fără viitor — nu există date)
+  const today = new Date();
+  const yearStart = new Date(today.getFullYear(), 0, 1);
+  const yearEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const totalDays = Math.max(1, Math.round((yearEnd.getTime() - yearStart.getTime()) / 86400000));
 
   function pctOf(iso: string): number {
     const d = new Date(iso);
@@ -199,7 +221,13 @@ function PeriodSlicer() {
     const to = new Date(now);
     let label = "";
     if (key === "today") { label = "Azi"; }
-    else if (key === "7d") { from.setDate(from.getDate() - 6); label = "Ultimele 7 zile"; }
+    else if (key === "7d") {
+      // Săptămâna curentă: de luni până azi (luni=1 ... duminică=0)
+      const dow = now.getDay();
+      const daysFromMonday = (dow + 6) % 7;
+      from.setDate(from.getDate() - daysFromMonday);
+      label = "Săptămâna curentă";
+    }
     else if (key === "30d") { from.setDate(from.getDate() - 29); label = "Ultimele 30 zile"; }
     else if (key === "mtd") { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "Luna aceasta"; }
     else if (key === "qtd") {
@@ -255,50 +283,120 @@ function PeriodSlicer() {
       <span class="slicer-title">Perioadă</span>
       <div class="slicer-quick-btns">
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "today" }} onClick={() => applyQuick("today")}>Azi</button>
-        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "7d" }} onClick={() => applyQuick("7d")}>7 zile</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "7d" }} onClick={() => applyQuick("7d")}>Săptămâna curentă</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "30d" }} onClick={() => applyQuick("30d")}>30 zile</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "mtd" }} onClick={() => applyQuick("mtd")}>Luna aceasta</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "qtd" }} onClick={() => applyQuick("qtd")}>Trim. curent</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "ytd" }} onClick={() => applyQuick("ytd")}>An curent</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "12m" }} onClick={() => applyQuick("12m")}>12 luni</button>
       </div>
-      <div class="slicer-sep" />
-      <div class="slicer-range-inputs">
-        <input type="date" value={draftFrom()} onInput={(e) => { setDraftFrom(e.currentTarget.value); setSliderMin(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
-        <span class="slicer-dash">→</span>
-        <input type="date" value={draftTo()} onInput={(e) => { setDraftTo(e.currentTarget.value); setSliderMax(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
+      <div class="slicer-active-summary">
+        <span class="slicer-active-summary__label">
+          {periodLabel()}: <strong>{fmtRoDate(periodFrom())} → {fmtRoDate(periodTo())}</strong>
+        </span>
+        <button
+          type="button"
+          class="slicer-advanced-toggle"
+          aria-expanded={advancedOpen()}
+          onClick={() => setAdvancedOpen((v) => !v)}
+        >
+          <span class={`slicer-advanced-caret ${advancedOpen() ? "is-open" : ""}`}>▸</span>
+          Filtrare avansată
+        </button>
       </div>
-      <div class="slicer-sep" />
-      <div class="slicer-slider-wrap">
-        <div class="slicer-slider-track">
-          <div class="slicer-slider-range" style={`left:${sliderMin()}%;width:${sliderMax() - sliderMin()}%`} />
-          <input
-            type="range" min="0" max="100" value={sliderMin()}
-            onInput={(e) => onSliderInput("min", parseInt(e.currentTarget.value))}
-          />
-          <input
-            type="range" min="0" max="100" value={sliderMax()}
-            onInput={(e) => onSliderInput("max", parseInt(e.currentTarget.value))}
-          />
+      <Show when={advancedOpen()}>
+        <div class="slicer-advanced">
+          <div class="slicer-range-inputs">
+            <input type="date" max={todayISO()} value={draftFrom()} onInput={(e) => { setDraftFrom(e.currentTarget.value); setSliderMin(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
+            <span class="slicer-dash">→</span>
+            <input type="date" max={todayISO()} value={draftTo()} onInput={(e) => { setDraftTo(e.currentTarget.value); setSliderMax(pctOf(e.currentTarget.value)); setActiveQuick(null); }} />
+          </div>
+          <div class="slicer-slider-wrap">
+            <div class="slicer-slider-track">
+              <div class="slicer-slider-range" style={`left:${sliderMin()}%;width:${sliderMax() - sliderMin()}%`} />
+              <input
+                type="range" min="0" max="100" value={sliderMin()}
+                onInput={(e) => onSliderInput("min", parseInt(e.currentTarget.value))}
+              />
+              <input
+                type="range" min="0" max="100" value={sliderMax()}
+                onInput={(e) => onSliderInput("max", parseInt(e.currentTarget.value))}
+              />
+            </div>
+            <div class="slicer-slider-labels">
+              <span>{fmtRoDate(dateFromPct(sliderMin()))}</span>
+              <span>{fmtRoDate(dateFromPct(sliderMax()))}</span>
+            </div>
+          </div>
+          <div class="slicer-active-wrap">
+            <button class="slicer-apply-btn" onClick={applyCustom}>Aplică</button>
+            <button class="slicer-reset-btn" onClick={resetPeriod}>Reset</button>
+          </div>
         </div>
-        <div class="slicer-slider-labels">
-          <span>{fmtRoDate(dateFromPct(sliderMin()))}</span>
-          <span>{fmtRoDate(dateFromPct(sliderMax()))}</span>
-        </div>
-      </div>
-      <div class="slicer-sep" />
-      <div class="slicer-active-wrap">
-        <span class="slicer-active-label">{periodLabel()}</span>
-        <button class="slicer-apply-btn" onClick={applyCustom}>Aplică</button>
-        <button class="slicer-reset-btn" onClick={resetPeriod}>Reset</button>
-      </div>
+      </Show>
     </div>
+  );
+}
+
+interface LocationOption { id: number; name: string }
+
+// Lista locațiilor — fetch-uită o singură dată și partajată între panel-uri.
+const [locationsList, setLocationsList] = createSignal<LocationOption[]>([]);
+let locationsFetched = false;
+
+async function ensureLocationsLoaded() {
+  if (locationsFetched) return;
+  locationsFetched = true;
+  try {
+    const res = await apiFetch("/api/locations?limit=200");
+    if (!res.ok) return;
+    const json = await res.json() as { items: LocationOption[] };
+    setLocationsList((json.items ?? []).map((l) => ({ id: l.id, name: l.name })));
+  } catch {
+    locationsFetched = false; // permitem retry data viitoare
+  }
+}
+
+function LocationFilter(props: {
+  selected: () => number[];
+  setSelected: (v: number[]) => void;
+}) {
+  function toggle(id: number) {
+    const cur = props.selected();
+    props.setSelected(cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
+  }
+  function selectAll() { props.setSelected([]); }
+  return (
+    <Show when={locationsList().length > 0}>
+      <div class="loc-filter">
+        <span class="loc-filter__title">Locații</span>
+        <div class="loc-filter__chips">
+          <button
+            type="button"
+            class="loc-chip"
+            classList={{ "loc-chip--active": props.selected().length === 0 }}
+            onClick={selectAll}
+          >Toate</button>
+          <For each={locationsList()}>
+            {(loc) => (
+              <button
+                type="button"
+                class="loc-chip"
+                classList={{ "loc-chip--active": props.selected().includes(loc.id) }}
+                onClick={() => toggle(loc.id)}
+              >{loc.name}</button>
+            )}
+          </For>
+        </div>
+      </div>
+    </Show>
   );
 }
 
 function LocatiiPanel() {
   const [data, setData] = createSignal<LocatiiSummary | null>(null);
   const [, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>("rapoarte_locatii_ids", []);
 
   let lineRef: HTMLDivElement | undefined;
   let donutRef: HTMLDivElement | undefined;
@@ -309,6 +407,7 @@ function LocatiiPanel() {
     setLoading(true);
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
       const res = await apiFetch(`/api/reports/locatii?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
@@ -322,8 +421,10 @@ function LocatiiPanel() {
     }
   }
 
-  // Reîncarcă la fiecare schimbare de perioadă
-  createEffect(() => { periodVersion(); void load(); });
+  onMount(ensureLocationsLoaded);
+
+  // Reîncarcă la schimbare de perioadă SAU de selecție locații
+  createEffect(() => { periodVersion(); selectedLocIds(); void load(); });
 
   createEffect(() => {
     const d = data();
@@ -378,6 +479,8 @@ function LocatiiPanel() {
       </Show>
 
       <PeriodSlicer />
+
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
 
       {/* KPI rezumat */}
       <Show when={data()}>
@@ -506,6 +609,7 @@ function colorByIndex(i: number): string {
 function ProduseServiciiPanel() {
   const [data, setData] = createSignal<ProduseServiciiSummary | null>(null);
   const [loading, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>("rapoarte_ps_loc_ids", []);
 
   let deptBarRef: HTMLDivElement | undefined;
   let deptDonutRef: HTMLDivElement | undefined;
@@ -518,6 +622,7 @@ function ProduseServiciiPanel() {
     setLoading(true);
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
       const res = await apiFetch(`/api/reports/produse-servicii?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
@@ -531,7 +636,8 @@ function ProduseServiciiPanel() {
     }
   }
 
-  createEffect(() => { periodVersion(); void load(); });
+  onMount(ensureLocationsLoaded);
+  createEffect(() => { periodVersion(); selectedLocIds(); void load(); });
 
   // Departments
   createEffect(() => {
@@ -618,6 +724,8 @@ function ProduseServiciiPanel() {
       </Show>
 
       <PeriodSlicer />
+
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
 
       <Show when={loading()}>
         <p class="cfg-hint" style="margin-top:14px">Se încarcă...</p>
@@ -723,15 +831,16 @@ interface EmpDetail {
   item_types: { produse: string; servicii: string; count_produse: number; count_servicii: number };
   departments_by_type: { department_name: string; produse_sum: string; servicii_sum: string; produse_count: number; servicii_count: number }[];
   monthly: { month: string; total: string; delta_pct: number | null }[];
+  locations: { location_id: number | null; location_name: string; total: string }[];
 }
 
 function AngajatiPanel() {
   const [employees, setEmployees] = createSignal<EmployeeReport[]>([]);
-  const [selectedId, setSelectedId] = createSignal<number | null>(null);
+  const [selectedId, setSelectedId] = persistedSignal<number | null>("rapoarte_angajat_selected", null);
   const [detail, setDetail] = createSignal<EmpDetail | null>(null);
   const [loadingList, setLoadingList] = createSignal(true);
   const [loadingDetail, setLoadingDetail] = createSignal(false);
-  const [search, setSearch] = createSignal("");
+  const [search, setSearch] = persistedSignal<string>("rapoarte_angajat_search", "");
 
   let lineRef: HTMLDivElement | undefined;
   let deptBarRef: HTMLDivElement | undefined;
@@ -742,6 +851,7 @@ function AngajatiPanel() {
   let typesDonutRef: HTMLDivElement | undefined;
   let deptTypeRef: HTMLDivElement | undefined;
   let monthlyRef: HTMLDivElement | undefined;
+  let locDonutRef: HTMLDivElement | undefined;
 
   async function loadEmployees() {
     setLoadingList(true);
@@ -882,6 +992,16 @@ function AngajatiPanel() {
         }));
         drawMonthlyBars(monthlyRef, items);
       }
+
+      // Locations donut
+      if (locDonutRef) {
+        const items: DonutItem[] = (d.locations ?? []).map((l, i) => ({
+          label: l.location_name,
+          value: toNumber(l.total),
+          color: colorByIndex(i),
+        }));
+        drawDonut(locDonutRef, items, "lei total");
+      }
     });
   });
 
@@ -926,7 +1046,7 @@ function AngajatiPanel() {
       </Show>
 
       <Show when={!loadingList()}>
-        <div class="angajati-grid">
+        <div class="angajati-strip">
           <For each={filteredEmployees()}>
             {(e) => (
               <button
@@ -942,10 +1062,18 @@ function AngajatiPanel() {
               </button>
             )}
           </For>
+          <Show when={filteredEmployees().length === 0}>
+            <div class="cfg-hint" style="padding:14px">Niciun angajat.</div>
+          </Show>
         </div>
-      </Show>
 
-      <Show when={selectedId() !== null}>
+        <Show when={selectedId() === null}>
+          <div class="angajati-mdl__placeholder" style="margin-top:14px">
+            Apasă pe un angajat din listă pentru a vedea analiza detaliată.
+          </div>
+        </Show>
+
+        <Show when={selectedId() !== null}>
         <div class="angajati-detail">
           <Show when={selectedEmployee()}>
             {(e) => (
@@ -1081,16 +1209,27 @@ function AngajatiPanel() {
                 <div class="locatii-chart-card">
                   <div ref={monthlyRef} style="margin-top:8px" />
                 </div>
+
+                {/* 7. Contribuție per locație */}
+                <h3 class="locatii-section-title" style="margin-top:24px">7. Contribuție per locație</h3>
+                <Show when={!hideExplanations()}>
+                  <p class="chart-explanation" style="max-width:820px">
+                    Donut-ul arată cât a generat angajatul în fiecare locație. Dacă apare „Fără locație"
+                    înseamnă date vechi de dinainte de migrarea care a adăugat coloana — un
+                    <strong> refresh lunar</strong> al raportului <code>employee_daily</code> din AdminV2 le repopulează.
+                  </p>
+                </Show>
+                <Show when={(d().locations?.length ?? 0) === 0}>
+                  <div class="locatii-empty">Nicio activitate înregistrată per locație.</div>
+                </Show>
+                <div class="locatii-chart-card">
+                  <div ref={locDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+                </div>
               </>
             )}
           </Show>
         </div>
-      </Show>
-
-      <Show when={selectedId() === null && !loadingList()}>
-        <div class="locatii-empty" style="margin-top:20px">
-          Apasă pe un angajat din grilă pentru a vedea analiza detaliată.
-        </div>
+        </Show>
       </Show>
     </div>
   );
@@ -1679,9 +1818,10 @@ function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
     return;
   }
 
-  const w = container.clientWidth || 600;
-  const h = 260;
-  const margin = { top: 30, right: 20, bottom: 50, left: 60 };
+  // viewBox fix → SVG perfect responsive (width=100%, height auto pe baza aspect ratio)
+  const w = 720;
+  const h = 320;
+  const margin = { top: 40, right: 24, bottom: 60, left: 70 };
   const iw = w - margin.left - margin.right;
   const ih = h - margin.top - margin.bottom;
 
@@ -1690,8 +1830,11 @@ function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
   const svg = d3.select(container)
     .append("svg")
     .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("preserveAspectRatio", "xMidYMid meet")
     .attr("width", "100%")
-    .attr("height", h);
+    .style("display", "block")
+    .style("height", "auto")
+    .style("max-width", "100%");
 
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
@@ -1854,8 +1997,8 @@ function fmtMonthLabel(month: string, idx: number): { prefix: string; name: stri
 function TargetAngajatiPanel() {
   const [data, setData] = createSignal<ContributiiAngajatiSummary | null>(null);
   const [loading, setLoading] = createSignal(true);
-  const [monthIdx, setMonthIdx] = createSignal(0);
-  let donutRef: HTMLDivElement | undefined;
+  const [monthIdx, setMonthIdx] = persistedSignal<number>("rapoarte_ta_month_idx", 0);
+  const [donutRef, setDonutRef] = createSignal<HTMLDivElement | null>(null);
 
   onMount(async () => {
     try {
@@ -1880,9 +2023,10 @@ function TargetAngajatiPanel() {
 
   createEffect(() => {
     const m = currentMonth();
-    if (!donutRef) return;
+    const ref = donutRef();
+    if (!ref) return;
     if (!m) {
-      d3.select(donutRef).selectAll("*").remove();
+      d3.select(ref).selectAll("*").remove();
       return;
     }
     const items: DonutItem[] = m.employees.map((e, i) => ({
@@ -1890,7 +2034,7 @@ function TargetAngajatiPanel() {
       value: toNumber(e.sum_amount),
       color: colorByIndex(i),
     }));
-    drawDonut(donutRef, items, "lei total lună");
+    drawDonut(ref, items, "lei total lună");
   });
 
   return (
@@ -1947,7 +2091,7 @@ function TargetAngajatiPanel() {
                     {" • "}{m.employees.length} angajați activi
                   </Show>
                 </div>
-                <div class="ta-donut-wrap" ref={donutRef} />
+                <div class="ta-donut-wrap" ref={setDonutRef} />
               </div>
 
               <div class="ta-card">
@@ -2013,7 +2157,7 @@ function TargetAngajatiPanel() {
 // ───── ROOT ───────────────────────────────────────────────────────────────────
 
 export default function Rapoarte() {
-  const [active, setActive] = createSignal<SectionId>("target-angajati");
+  const [active, setActive] = persistedSignal<SectionId>("rapoarte_active_section", "target-angajati");
 
   return (
     <div class="cfg-layout">

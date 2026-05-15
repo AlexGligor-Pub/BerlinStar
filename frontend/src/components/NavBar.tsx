@@ -5,7 +5,7 @@ import { theme, toggleTheme } from "../store/themeStore";
 import { adminVisible, setAdminVisible } from "../store/adminStore";
 import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
-import { Show, createSignal, onCleanup, createMemo } from "solid-js";
+import { Show, createSignal, onCleanup, onMount, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
 import { API_BASE } from "../utils/api";
 
@@ -68,6 +68,37 @@ export default function NavBar() {
       setAdminLoading(false);
     }
   }
+
+  // ───── Fullscreen ─────────────────────────────────────────────────────────
+  const [isFullscreen, setIsFullscreen] = createSignal(!!document.fullscreenElement);
+
+  function onFullscreenChange() {
+    setIsFullscreen(!!document.fullscreenElement);
+  }
+
+  async function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch {
+      // Browser-ul a refuzat (de obicei lipsa de user gesture la auto-trigger).
+    }
+  }
+
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+  onCleanup(() => document.removeEventListener("fullscreenchange", onFullscreenChange));
+
+  // Best-effort: încercăm fullscreen automat la mount. Browser-ele moderne
+  // necesită user gesture, deci de regulă va eșua tăcut — butonul rămâne pentru
+  // a permite utilizatorului să-l activeze manual.
+  onMount(() => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => { /* no gesture */ });
+    }
+  });
 
   // Inchide dropdown-ul cand se face pointerdown in afara.
   // Folosim pointerdown (nu click) ca sa reducem latency-ul pe touch si gate
@@ -202,6 +233,33 @@ export default function NavBar() {
             </div>
           )}
         </Show>
+
+        <button
+          type="button"
+          class="navbar-fullscreen-btn"
+          onClick={toggleFullscreen}
+          aria-label={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
+          title={isFullscreen() ? "Ieși din ecran complet" : "Activează ecran complet"}
+        >
+          <Show
+            when={isFullscreen()}
+            fallback={
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9V3h6"/>
+                <path d="M21 9V3h-6"/>
+                <path d="M3 15v6h6"/>
+                <path d="M21 15v6h-6"/>
+              </svg>
+            }
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 3v6H3"/>
+              <path d="M15 3v6h6"/>
+              <path d="M9 21v-6H3"/>
+              <path d="M15 21v-6h6"/>
+            </svg>
+          </Show>
+        </button>
 
         <Show when={trialBanner()}>
           <span class="navbar-trial-badge">{trialBanner()}</span>

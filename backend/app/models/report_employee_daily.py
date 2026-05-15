@@ -11,12 +11,16 @@ class ReportEmployeeDaily(Base):
     __table_args__ = (
         Index("ix_report_employee_daily_account_date", "account_id", "report_date"),
         Index("ix_report_employee_daily_employee_date", "employee_id", "report_date"),
+        Index("ix_report_employee_daily_employee_location", "employee_id", "location_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     report_date: Mapped[date] = mapped_column(Date, nullable=False)
     account_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    location_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
     employee_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True

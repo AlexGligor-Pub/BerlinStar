@@ -11,6 +11,10 @@ venv/
 *.sqlite
 *.sqlite3
 
+# Backup-uri SQL (dump-uri de baze de date — NU intră în git)
+*.sql
+backup_*.sql
+
 # Alembic artefacte accidentale
 backend/=*
 

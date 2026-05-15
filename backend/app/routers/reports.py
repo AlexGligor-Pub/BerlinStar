@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,6 +69,7 @@ async def reports_locatii(
     date_from: date | None = None,
     date_to: date | None = None,
     location_id: int | None = None,
+    location_ids: list[int] | None = Query(None),
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -77,18 +78,24 @@ async def reports_locatii(
 
     Parametri:
     - date_from / date_to: filtre opționale (Europe/Bucharest). Default = luna curentă.
-    - location_id: filtru opțional. Lipsa = toate locațiile.
+    - location_ids: listă de id-uri (`?location_ids=1&location_ids=2`).
+      Lipsa = toate locațiile. `location_id` (singular) este păstrat pentru compat.
     """
     if date_from is None or date_to is None:
         d1, d2 = _default_period()
         date_from = date_from or d1
         date_to = date_to or d2
 
-    params = {"acc": account_id, "d1": date_from, "d2": date_to}
+    # Unim location_id (singular, compat) + location_ids (multi)
+    loc_list: list[int] = list(location_ids) if location_ids else []
+    if location_id is not None and location_id not in loc_list:
+        loc_list.append(location_id)
+
+    params: dict = {"acc": account_id, "d1": date_from, "d2": date_to}
     loc_filter = ""
-    if location_id is not None:
-        params["loc"] = location_id
-        loc_filter = "AND location_id = :loc"
+    if loc_list:
+        params["loc_ids"] = loc_list
+        loc_filter = "AND location_id = ANY(:loc_ids)"
 
     daily_rows = (await db.execute(
         text(f"""
@@ -257,6 +264,7 @@ async def reports_produse_servicii(
     date_from: date | None = None,
     date_to: date | None = None,
     location_id: int | None = None,
+    location_ids: list[int] | None = Query(None),
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -268,17 +276,24 @@ async def reports_produse_servicii(
     - categories: report_receipts_breakdown_daily (dimension_type='category')
       + JOIN cu items/categories/departments pentru a recupera departamentul părinte
     - employees: report_employee_daily (DOAR receipts plătite — pay_method != NEPLATIT)
+
+    Notă: filtrul `location_ids` se aplică doar la departments + categories
+    (tabela report_employee_daily nu are coloana location_id).
     """
     if date_from is None or date_to is None:
         d1, d2 = _default_period()
         date_from = date_from or d1
         date_to = date_to or d2
 
-    params = {"acc": account_id, "d1": date_from, "d2": date_to}
+    loc_list: list[int] = list(location_ids) if location_ids else []
+    if location_id is not None and location_id not in loc_list:
+        loc_list.append(location_id)
+
+    params: dict = {"acc": account_id, "d1": date_from, "d2": date_to}
     loc_filter = ""
-    if location_id is not None:
-        params["loc"] = location_id
-        loc_filter = "AND location_id = :loc"
+    if loc_list:
+        params["loc_ids"] = loc_list
+        loc_filter = "AND location_id = ANY(:loc_ids)"
 
     # Departments (incluzând "Introducere Manuala" cu dimension_id NULL)
     dept_rows = (await db.execute(
@@ -320,9 +335,15 @@ async def reports_produse_servicii(
         params,
     )).all()
 
-    # Employees (din report_employee_daily — doar plătite)
+    # Employees (din report_employee_daily — doar plătite). Filtrul de locații
+    # se aplică acum și aici, după migrarea care adaugă location_id pe tabel.
+    emp_params: dict = {"acc": account_id, "d1": date_from, "d2": date_to}
+    emp_loc_filter = ""
+    if loc_list:
+        emp_params["loc_ids"] = loc_list
+        emp_loc_filter = "AND r.location_id = ANY(:loc_ids)"
     emp_rows = (await db.execute(
-        text("""
+        text(f"""
             SELECT r.employee_id,
                    COALESCE(e.name, 'Fără angajat') AS employee_name,
                    SUM(r.sum_amount) AS total
@@ -330,11 +351,12 @@ async def reports_produse_servicii(
             LEFT JOIN employees e ON e.id = r.employee_id
             WHERE r.account_id = :acc
               AND r.report_date BETWEEN :d1 AND :d2
+              {emp_loc_filter}
             GROUP BY r.employee_id, e.name
             HAVING SUM(r.sum_amount) > 0
             ORDER BY total DESC
         """),
-        {"acc": account_id, "d1": date_from, "d2": date_to},
+        emp_params,
     )).all()
 
     return ProduseServiciiSummary(
@@ -418,6 +440,12 @@ class EmployeeInfo(BaseModel):
     current_target_accumulation: Decimal
 
 
+class EmpLocationTotal(BaseModel):
+    location_id: int | None
+    location_name: str
+    total: Decimal
+
+
 class EmployeeReportDetail(BaseModel):
     employee: EmployeeInfo
     period_start: date
@@ -429,6 +457,7 @@ class EmployeeReportDetail(BaseModel):
     item_types: EmpItemTypes
     departments_by_type: list[EmpDeptByType]
     monthly: list[EmpMonthly]
+    locations: list[EmpLocationTotal]
 
 
 @router.get("/employees/{employee_id}", response_model=EmployeeReportDetail)
@@ -588,6 +617,32 @@ async def reports_employee_detail(
         monthly.append(EmpMonthly(month=r.month, total=cur, delta_pct=delta))
         prev = cur
 
+    # Per locație (donut contribuție). Datele rămân NULL pentru rândurile vechi
+    # până la weekly_refresh al raportului employee_daily.
+    loc_rows = (await db.execute(
+        text("""
+            SELECT r.location_id,
+                   COALESCE(l.name, 'Fără locație') AS location_name,
+                   SUM(r.sum_amount) AS total
+            FROM report_employee_daily r
+            LEFT JOIN locations l ON l.id = r.location_id
+            WHERE r.account_id = :acc AND r.employee_id = :eid
+              AND r.report_date BETWEEN :d1 AND :d2
+            GROUP BY r.location_id, l.name
+            HAVING SUM(r.sum_amount) > 0
+            ORDER BY total DESC
+        """),
+        params,
+    )).all()
+    locations = [
+        EmpLocationTotal(
+            location_id=r.location_id,
+            location_name=r.location_name,
+            total=r.total or Decimal("0"),
+        )
+        for r in loc_rows
+    ]
+
     total = sum((r.total or Decimal("0") for r in daily_rows), Decimal("0"))
 
     return EmployeeReportDetail(
@@ -627,6 +682,7 @@ async def reports_employee_detail(
         ),
         departments_by_type=departments_by_type,
         monthly=monthly,
+        locations=locations,
     )
 
 

@@ -168,7 +168,7 @@ async def build_employee_daily(
 
     sql = text(f"""
         INSERT INTO report_employee_daily (
-            report_date, account_id, employee_id, item_type,
+            report_date, account_id, location_id, employee_id, item_type,
             category_id, category_name,
             department_id, department_name,
             sum_amount, count_items, created_at, updated_at
@@ -176,6 +176,7 @@ async def build_employee_daily(
         SELECT
             (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date AS report_date,
             r.account_id,
+            r.location_id,
             ri.employee_id,
             COALESCE(ri.item_type::text, 'SERVICE') AS item_type,
             c.id AS category_id,
@@ -193,7 +194,7 @@ async def build_employee_daily(
         WHERE r.is_deleted = false
           AND r.pay_method::text <> 'NEPLATIT'
           AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
-        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+        GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
     """)
     result = await db.execute(sql, {"s": period_start, "e": period_end})
     inserted = result.rowcount or 0
