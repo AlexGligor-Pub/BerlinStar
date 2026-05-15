@@ -1083,8 +1083,8 @@ export default function ShoppingList() {
       </div>
 
       <div class="shopping-list-footer">
-        <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
-          <div class="sl-square-actions">
+        <div class="sl-square-actions">
+          <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
             <button
               class="sl-square-btn"
               disabled={goingToHotel()}
@@ -1092,15 +1092,15 @@ export default function ShoppingList() {
             >
               {goingToHotel() ? "..." : "Cazare Anvelope"}
             </button>
-            <button
-              class="sl-square-btn"
-              disabled={openingMontareRoti()}
-              onClick={handleMontareRoti}
-            >
-              {openingMontareRoti() ? "..." : "Montare Roți"}
-            </button>
-          </div>
-        </Show>
+          </Show>
+          <button
+            class="sl-square-btn"
+            disabled={openingMontareRoti()}
+            onClick={handleMontareRoti}
+          >
+            {openingMontareRoti() ? "..." : "Montare Roți"}
+          </button>
+        </div>
         <div class="total-row">
           <span>Total</span>
           <span class="text-accent">{cartTotal().toFixed(2)} lei</span>

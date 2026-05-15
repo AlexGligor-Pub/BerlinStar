@@ -20,13 +20,15 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # constraint-ul auto-generat poate veni din vremea tabelului `themes`
+    # Constraint-ul mostenit poate veni cu mai multe denumiri in functie de
+    # cum a fost generat (themes_name_key auto-PG, departments_name_key, sau
+    # uq_themes_name din convenita uq_<table>_<col> de pe `themes`).
     op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS themes_name_key")
     op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_name_key")
-    op.create_unique_constraint(
-        "uq_departments_account_id_name",
-        "departments",
-        ["account_id", "name"],
+    op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS uq_themes_name")
+    op.execute(
+        "ALTER TABLE departments ADD CONSTRAINT uq_departments_account_id_name "
+        "UNIQUE (account_id, name)"
     )
 
 

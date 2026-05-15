@@ -2050,6 +2050,7 @@ body {
 
 .receipt-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 4px;
