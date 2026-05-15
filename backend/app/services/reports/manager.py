@@ -16,7 +16,13 @@ from .builder import BUILDERS, BUCHAREST_TZ
 log = logging.getLogger("berlinstar.reports")
 
 COOLDOWN_SECONDS = 300  # 5 minute
-SUPPORTED_REPORTS = ("receipts_daily", "employee_daily")
+SUPPORTED_REPORTS = (
+    "receipts_daily",
+    "employee_daily",
+    "cazari_daily",
+    "clients_daily",
+    "programari_daily",
+)
 RunMode = Literal["incremental", "weekly_refresh"]
 
 _BUCHAREST = ZoneInfo(BUCHAREST_TZ)
@@ -42,7 +48,7 @@ def _bucharest_today() -> date:
 def _compute_period(
     mode: RunMode,
     last_period_end: date | None,
-    oldest_receipt_date: date | None,
+    oldest_source_date: date | None,
 ) -> tuple[date, date] | None:
     """Returnează (period_start, period_end) sau None dacă nu e nimic de procesat."""
     today_buc = _bucharest_today()
@@ -56,9 +62,9 @@ def _compute_period(
 
     # incremental
     if last_period_end is None:
-        if oldest_receipt_date is None:
+        if oldest_source_date is None:
             return None
-        return oldest_receipt_date, yesterday_buc
+        return oldest_source_date, yesterday_buc
 
     start = last_period_end + timedelta(days=1)
     if start > yesterday_buc:
@@ -66,11 +72,30 @@ def _compute_period(
     return start, yesterday_buc
 
 
-async def _get_oldest_receipt_date(db: AsyncSession) -> date | None:
-    row = (await db.execute(text(
-        f"SELECT MIN((created_at AT TIME ZONE '{BUCHAREST_TZ}')::date) FROM receipts"
-    ))).scalar_one_or_none()
-    return row
+async def _get_oldest_source_date(db: AsyncSession, report_type: str) -> date | None:
+    """Cea mai veche dată de sursă pentru un report_type — folosită doar la
+    primul run (când last_period_end e NULL) pentru a determina de unde
+    începe backfill-ul.
+    """
+    if report_type in ("receipts_daily", "employee_daily", "clients_daily"):
+        query = text(
+            f"SELECT MIN((created_at AT TIME ZONE '{BUCHAREST_TZ}')::date) FROM receipts"
+        )
+    elif report_type == "cazari_daily":
+        # Cea mai veche zi de eveniment (check-in sau check-out). data_checkin
+        # e Date deja, fără timezone — nu necesită conversie.
+        query = text(
+            "SELECT LEAST(MIN(data_checkin), MIN(data_checkout)) FROM cazari_anvelope "
+            "WHERE is_deleted = false"
+        )
+    elif report_type == "programari_daily":
+        query = text(
+            f"SELECT MIN((start_time AT TIME ZONE '{BUCHAREST_TZ}')::date) FROM programari "
+            "WHERE is_deleted = false"
+        )
+    else:
+        return None
+    return (await db.execute(query)).scalar_one_or_none()
 
 
 async def list_reports(db: AsyncSession) -> list[ReportStatus]:
@@ -146,7 +171,7 @@ async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
             log.warning("Raportul %s e deja în rulare — skip.", report_type)
             return {"skipped": True, "reason": "already_running"}
 
-        oldest = await _get_oldest_receipt_date(db)
+        oldest = await _get_oldest_source_date(db, report_type)
         period = _compute_period(mode, run.last_period_end, oldest)
         if period is None:
             log.info("Raportul %s nu are perioadă de procesat (mode=%s).", report_type, mode)

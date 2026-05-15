@@ -1454,7 +1454,6 @@ function ProduseSiServiciiPanel() {
   function switchTab(tab: "categorii" | "produse") {
     setActiveTab(tab);
     if (tab === "categorii") loadCategories();
-    if (tab === "produse") loadItems();
   }
 
   onMount(() => { loadDepartments(); loadCategories(); });
@@ -1464,6 +1463,15 @@ function ProduseSiServiciiPanel() {
     filterDeptId();
     setItemFilterCatId(null);
     loadCategories();
+  });
+
+  // Auto-load items cand filtrele se schimba (doar pe tab produse)
+  createEffect(() => {
+    const tab = activeTab();
+    filterDeptId();
+    itemFilterType();
+    itemFilterCatId();
+    if (tab === "produse") loadItems();
   });
 
   // ── categories CRUD ──
@@ -1655,9 +1663,6 @@ function ProduseSiServiciiPanel() {
             </For>
           </div>
         </Show>
-        <Show when={activeTab() === "produse"}>
-          <div><button class="btn btn-sm btn-primary" onClick={loadItems}>Caută</button></div>
-        </Show>
       </div>
 
       {/* ── Tabs ── */}
@@ -1742,7 +1747,7 @@ function ProduseSiServiciiPanel() {
         </Show>
         <Show when={itemsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
         <Show when={!itemsLoading() && items().length === 0}>
-          <p class="cfg-hint">Apasă "Caută" pentru a încărca produsele și serviciile.</p>
+          <p class="cfg-hint">Niciun produs sau serviciu pentru filtrele selectate.</p>
         </Show>
         <div class="cfg-location-list">
           <For each={items()}>

@@ -3294,39 +3294,41 @@ body {
 
 .prgm-page {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   height: calc(100vh - 48px);
   overflow: hidden;
 }
 
-.prgm-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg-card, #fff);
-  overflow-y: auto;
-  padding: 10px 8px;
-  display: flex;
-  flex-direction: column;
+/* Modal Calendar — mini cal + Azi */
+.prgm-cal-modal {
+  max-width: 360px;
+  width: min(360px, 92vw);
+}
+
+/* Modal Programare noua / Edit */
+.prgm-form-modal {
+  max-width: 640px;
+  width: min(640px, 96vw);
+  max-height: 92vh;
+}
+
+.prgm-form-body {
+  padding: 14px 18px;
+  display: grid;
   gap: 10px;
+  overflow-y: auto;
 }
 
-.prgm-sidebar-today {
-  width: 100%;
-  font-size: 12px;
+.prgm-form-row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 
-.prgm-sidebar-new {
-  width: 100%;
-  font-size: 12px;
-}
-
-.prgm-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
+.prgm-form-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 /* Mini calendar */
@@ -3441,7 +3443,7 @@ body {
 .prgm-week-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .prgm-week-label {
@@ -3449,6 +3451,7 @@ body {
   font-weight: 600;
   min-width: 155px;
   text-align: center;
+  flex: 1;
 }
 
 .prgm-dept-chips {
@@ -3609,10 +3612,12 @@ body {
 }
 
 @media (max-width: 640px) {
-  .prgm-sidebar { display: none; }
-  .prgm-search { width: 140px; }
-  .prgm-week-label { min-width: 120px; font-size: 12px; }
+  .prgm-search { width: 100%; flex: 1 1 100%; order: 5; }
+  .prgm-week-label { min-width: 0; font-size: 12px; flex: 1 1 100%; text-align: left; order: 6; }
+  .prgm-dept-chips { flex: 1 1 100%; order: 7; }
   .prgm-col-date { font-size: 16px; }
+  .prgm-form-row3 { grid-template-columns: 1fr; }
+  .prgm-form-row2 { grid-template-columns: 1fr; }
 }
 
 /* ── cfg-layout mobile ── */
@@ -4874,6 +4879,57 @@ body {
 
   .hotel-img-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ===== Hotel Anvelope page layout ===== */
+.hotel-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.hotel-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.hotel-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.hotel-header-select {
+  width: 160px;
+  font-size: 13px;
+}
+
+@media (max-width: 768px) {
+  .hotel-layout {
+    flex-direction: column;
+  }
+  .hotel-sidebar {
+    width: 100%;
+  }
+  .hotel-content {
+    width: 100%;
+  }
+  .reception-header-right {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .reception-search,
+  .hotel-header-select {
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+  }
+  .reception-count {
+    flex: 1 1 100%;
+    order: 10;
   }
 }
 

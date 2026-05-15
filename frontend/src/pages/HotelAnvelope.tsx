@@ -578,6 +578,7 @@ export default function HotelAnvelope() {
 
   // ── Admin section ──────────────────────────────────────────────────────────
   const [adminTab, setAdminTab] = createSignal<"locuri" | "marci" | "dimensiuni" | "profiluri">("locuri");
+  const [adminOpen, setAdminOpen] = createSignal(false);
 
   // admin forms - adăugare
   const [newLocNume, setNewLocNume] = createSignal("");
@@ -1416,8 +1417,7 @@ export default function HotelAnvelope() {
             onInput={(e) => setSearchName(e.currentTarget.value)}
           />
           <select
-            class="input"
-            style="width:160px;font-size:13px"
+            class="input hotel-header-select"
             value={filterDim()}
             onChange={(e) => setFilterDim(e.currentTarget.value)}
           >
@@ -1425,8 +1425,7 @@ export default function HotelAnvelope() {
             <For each={dimensiuni()}>{(d) => <option value={d.valoare}>{d.valoare}</option>}</For>
           </select>
           <select
-            class="input"
-            style="width:130px;font-size:13px"
+            class="input hotel-header-select"
             value={filterTip()}
             onChange={(e) => setFilterTip(e.currentTarget.value as TipAnvelopa | "")}
           >
@@ -1438,156 +1437,154 @@ export default function HotelAnvelope() {
           </select>
           <span class="reception-count">{filtered().length} / {cazari().length} cazări</span>
           <button class="btn btn-primary btn-sm" onClick={openNewModal}>+ Cazare Nouă</button>
+          <button class="btn btn-ghost btn-sm" title="Administrare" aria-label="Administrare" onClick={() => setAdminOpen(true)}>⚙</button>
         </div>
       </div>
 
-      {/* ── Layout: stânga=Admin, dreapta=Listă ── */}
-      <div style="display:flex;gap:16px;align-items:flex-start">
-
-        {/* ══ Coloana Stânga: Administrare ══ */}
-        <div style="width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:0">
-          <div class="rcard" style="padding:14px 16px">
-            <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:12px">Administrare</div>
-
-            {/* Tab-uri admin */}
-            <div style="display:flex;gap:4px;margin-bottom:12px">
-              <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("locuri")}>Locuri</button>
-              <button class={`btn btn-sm ${adminTab() === "marci" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("marci")}>Mărci</button>
-              <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("dimensiuni")}>Dim.</button>
-              <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1;font-size:11px" onClick={() => setAdminTab("profiluri")}>Profil</button>
-            </div>
-
-            {/* Locuri */}
-            <Show when={adminTab() === "locuri"}>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <input class="input" style="font-size:12px" placeholder="Nume loc *" value={newLocNume()} onInput={(e) => setNewLocNume(e.currentTarget.value)} />
-                <input class="input" style="font-size:12px" placeholder="Descriere" value={newLocDesc()} onInput={(e) => setNewLocDesc(e.currentTarget.value)} />
-                <button class="btn btn-primary btn-sm w-full" onClick={addLoc} disabled={!newLocNume().trim()}>+ Adaugă</button>
-                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
-                  <For each={locuriCazare()}>
-                    {(loc) => (
-                      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
-                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
-                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-
-            {/* Mărci */}
-            <Show when={adminTab() === "marci"}>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <input class="input" style="font-size:12px" placeholder="Nume marcă *" value={newMarcaNume()} onInput={(e) => setNewMarcaNume(e.currentTarget.value)} />
-                <button class="btn btn-primary btn-sm w-full" onClick={addMarca} disabled={!newMarcaNume().trim()}>+ Adaugă</button>
-                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
-                  <For each={marci()}>
-                    {(m) => (
-                      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{m.nume}</span>
-                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
-                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "marca", id: m.id, nume: m.nume })}>Edit</button>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-
-            {/* Dimensiuni */}
-            <Show when={adminTab() === "dimensiuni"}>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <input class="input" style="font-size:12px" placeholder="ex: 205/55 R16 *" value={newDimValoare()} onInput={(e) => setNewDimValoare(e.currentTarget.value)} />
-                <button class="btn btn-primary btn-sm w-full" onClick={addDim} disabled={!newDimValoare().trim()}>+ Adaugă</button>
-                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
-                  <For each={dimensiuni()}>
-                    {(d) => (
-                      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
-                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
-                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-
-            {/* Profiluri */}
-            <Show when={adminTab() === "profiluri"}>
-              <div style="display:flex;flex-direction:column;gap:6px">
-                <input class="input" style="font-size:12px" placeholder="ex: 60, 55, 45 *" value={newProfilValoare()} onInput={(e) => setNewProfilValoare(e.currentTarget.value)} />
-                <button class="btn btn-primary btn-sm w-full" onClick={addProfilAdmin} disabled={!newProfilValoare().trim()}>+ Adaugă</button>
-                <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
-                  <For each={profiluri()}>
-                    {(p) => (
-                      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:var(--bg);border-radius:5px;font-size:12px">
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{p.valoare}</span>
-                        <div style="display:flex;gap:3px;margin-left:4px;flex-shrink:0">
-                          <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => openAdminEdit({ type: "profil", id: p.id, valoare: p.valoare })}>Edit</button>
-                        </div>
-                      </div>
-                    )}
-                  </For>
-                </div>
-              </div>
-            </Show>
-          </div>
+      {/* ── Listă Cazări ── */}
+      <div>
+        {/* Tab Active / Istoric */}
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class={`btn btn-sm ${view() === "active" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("active")}>Active</button>
+          <button class={`btn btn-sm ${view() === "istoric" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("istoric")}>Istoric</button>
         </div>
 
-        {/* ══ Coloana Dreapta: Lista Cazări ══ */}
-        <div style="flex:1;min-width:0">
-          {/* Tab Active / Istoric */}
-          <div style="display:flex;gap:8px;margin-bottom:12px">
-            <button class={`btn btn-sm ${view() === "active" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("active")}>Active</button>
-            <button class={`btn btn-sm ${view() === "istoric" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("istoric")}>Istoric</button>
-          </div>
+        <Show when={loading()}>
+          <p style="color:var(--text-muted)">Se încarcă...</p>
+        </Show>
 
-          <Show when={loading()}>
-            <p style="color:var(--text-muted)">Se încarcă...</p>
-          </Show>
-
-          <Show when={!loading() && filtered().length === 0}>
-            <div class="rcard" style="text-align:center;padding:40px 16px">
-              <div style="color:var(--text-muted)">
-                {cazari().length === 0
-                  ? `Nicio cazare ${view() === "active" ? "activă" : "în istoric"}.`
-                  : "Niciun rezultat pentru filtrul selectat."}
-              </div>
+        <Show when={!loading() && filtered().length === 0}>
+          <div class="rcard" style="text-align:center;padding:40px 16px">
+            <div style="color:var(--text-muted)">
+              {cazari().length === 0
+                ? `Nicio cazare ${view() === "active" ? "activă" : "în istoric"}.`
+                : "Niciun rezultat pentru filtrul selectat."}
             </div>
+          </div>
+        </Show>
+
+        <div class="rcard-list">
+          <For each={filtered()}>
+            {(c) => (
+              <CazareCard
+                cazare={c}
+                companyData={companyData()}
+                onCheckout={openCheckout}
+                onCheckoutNew={(c) => openCombined(c)}
+                onEdit={openEdit}
+                onView={(c) => setViewOnlyCazare(c)}
+              />
+            )}
+          </For>
+        </div>
+
+        {/* Sentinel pentru infinite scroll */}
+        <div ref={sentinelRef} style="height:40px;display:flex;align-items:center;justify-content:center">
+          <Show when={cazariLoadingMore()}>
+            <span style="color:var(--text-muted);font-size:13px">Se încarcă...</span>
           </Show>
-
-          <div class="rcard-list">
-            <For each={filtered()}>
-              {(c) => (
-                <CazareCard
-                  cazare={c}
-                  companyData={companyData()}
-                  onCheckout={openCheckout}
-                  onCheckoutNew={(c) => openCombined(c)}
-                  onEdit={openEdit}
-                  onView={(c) => setViewOnlyCazare(c)}
-                />
-              )}
-            </For>
-          </div>
-
-          {/* Sentinel pentru infinite scroll */}
-          <div ref={sentinelRef} style="height:40px;display:flex;align-items:center;justify-content:center">
-            <Show when={cazariLoadingMore()}>
-              <span style="color:var(--text-muted);font-size:13px">Se încarcă...</span>
-            </Show>
-            <Show when={!cazariHasMore() && !cazariLoadingMore() && cazari().length > 0}>
-              <span style="color:var(--text-muted);font-size:12px">— toate cazările încărcate —</span>
-            </Show>
-          </div>
+          <Show when={!cazariHasMore() && !cazariLoadingMore() && cazari().length > 0}>
+            <span style="color:var(--text-muted);font-size:12px">— toate cazările încărcate —</span>
+          </Show>
         </div>
       </div>
+
+      {/* Modal: Administrare */}
+      <Show when={adminOpen()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Administrare</span>
+              <button class="btn btn-ghost btn-sm" aria-label="Închide" onClick={() => setAdminOpen(false)}>✕</button>
+            </div>
+            <div class="sl-modal-body" style="padding:16px 20px;overflow-y:auto">
+              {/* Tab-uri admin */}
+              <div style="display:flex;gap:4px;margin-bottom:14px">
+                <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("locuri")}>Locuri</button>
+                <button class={`btn btn-sm ${adminTab() === "marci" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("marci")}>Mărci</button>
+                <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("dimensiuni")}>Dimensiuni</button>
+                <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("profiluri")}>Profiluri</button>
+              </div>
+
+              {/* Locuri */}
+              <Show when={adminTab() === "locuri"}>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <input class="input" placeholder="Nume loc *" value={newLocNume()} onInput={(e) => setNewLocNume(e.currentTarget.value)} />
+                  <input class="input" placeholder="Descriere" value={newLocDesc()} onInput={(e) => setNewLocDesc(e.currentTarget.value)} />
+                  <button class="btn btn-primary btn-sm w-full" onClick={addLoc} disabled={!newLocNume().trim()}>+ Adaugă</button>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                    <For each={locuriCazare()}>
+                      {(loc) => (
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
+                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Mărci */}
+              <Show when={adminTab() === "marci"}>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <input class="input" placeholder="Nume marcă *" value={newMarcaNume()} onInput={(e) => setNewMarcaNume(e.currentTarget.value)} />
+                  <button class="btn btn-primary btn-sm w-full" onClick={addMarca} disabled={!newMarcaNume().trim()}>+ Adaugă</button>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                    <For each={marci()}>
+                      {(m) => (
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{m.nume}</span>
+                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "marca", id: m.id, nume: m.nume })}>Edit</button>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Dimensiuni */}
+              <Show when={adminTab() === "dimensiuni"}>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <input class="input" placeholder="ex: 205/55 R16 *" value={newDimValoare()} onInput={(e) => setNewDimValoare(e.currentTarget.value)} />
+                  <button class="btn btn-primary btn-sm w-full" onClick={addDim} disabled={!newDimValoare().trim()}>+ Adaugă</button>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                    <For each={dimensiuni()}>
+                      {(d) => (
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
+                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Profiluri */}
+              <Show when={adminTab() === "profiluri"}>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <input class="input" placeholder="ex: 60, 55, 45 *" value={newProfilValoare()} onInput={(e) => setNewProfilValoare(e.currentTarget.value)} />
+                  <button class="btn btn-primary btn-sm w-full" onClick={addProfilAdmin} disabled={!newProfilValoare().trim()}>+ Adaugă</button>
+                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                    <For each={profiluri()}>
+                      {(p) => (
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{p.valoare}</span>
+                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "profil", id: p.id, valoare: p.valoare })}>Edit</button>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setAdminOpen(false)}>Închide</button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       {/* Modal: Confirmare Stergere */}
       <Show when={deleteTarget()}>

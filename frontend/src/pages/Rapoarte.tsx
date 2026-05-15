@@ -17,6 +17,9 @@ const SECTIONS = [
   { id: "locatii", label: "Locații" },
   { id: "produse-servicii", label: "Produse / Servicii" },
   { id: "angajati", label: "Angajați" },
+  { id: "hotel-anvelope", label: "Hotel Anvelope" },
+  { id: "clienti", label: "Clienți" },
+  { id: "programari", label: "Programări" },
 ] as const;
 
 type SectionId = typeof SECTIONS[number]["id"];
@@ -1913,12 +1916,12 @@ function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
     .attr("y", (d) => y(d.total))
     .attr("height", (d) => ih - y(d.total));
 
-  // Delta badges deasupra barei
+  // Delta badge (MoM %) — cel mai sus, deasupra valorii
   g.selectAll("g.delta")
     .data(items)
     .join("g")
     .attr("class", "delta")
-    .attr("transform", (d) => `translate(${(x(d.month) || 0) + x.bandwidth() / 2},${y(d.total) - 8})`)
+    .attr("transform", (d) => `translate(${(x(d.month) || 0) + x.bandwidth() / 2},${y(d.total) - 24})`)
     .each(function (d) {
       const sel = d3.select(this);
       if (d.delta_pct === null) {
@@ -1944,20 +1947,20 @@ function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
       }
     });
 
-  // Value label inside / above bar
+  // Valoare absoluta — deasupra barei (intre bara si delta)
   g.selectAll("text.bar-value")
     .data(items)
     .join("text")
     .attr("class", "bar-value")
     .attr("x", (d) => (x(d.month) || 0) + x.bandwidth() / 2)
-    .attr("y", (d) => y(d.total) + 16)
+    .attr("y", (d) => y(d.total) - 8)
     .attr("text-anchor", "middle")
-    .attr("fill", "#fff")
+    .attr("fill", "var(--text, #e8eaf0)")
     .style("font-size", "10px")
     .style("font-weight", 600)
     .style("opacity", 0)
     .text((d) => fmtMoney(d.total))
-    .transition().delay(700).duration(300).style("opacity", (d) => (ih - y(d.total) > 20 ? 1 : 0));
+    .transition().delay(700).duration(300).style("opacity", 1);
 }
 
 // ───── TARGET ANGAJAȚI PANEL (donut contribuție pe ultimele 3 luni) ──────────
@@ -2154,6 +2157,595 @@ function TargetAngajatiPanel() {
   );
 }
 
+// ───── HOTEL ANVELOPE PANEL ───────────────────────────────────────────────────
+
+interface AnvelopeLocationActive {
+  location_id: number | null;
+  location_name: string;
+  cazari_active: number;
+  anvelope_depozitate: number;
+}
+
+interface AnvelopeLocCazareActive {
+  location_id: number | null;
+  location_name: string;
+  loc_cazare_id: number | null;
+  loc_cazare_nume: string;
+  cazari_active: number;
+  anvelope_depozitate: number;
+}
+
+interface AnvelopeMonthly {
+  month: string;
+  checkins: number;
+  checkouts: number;
+  checkouts_montate: number;
+  anvelope_in: number;
+  anvelope_out: number;
+}
+
+interface AnvelopeEmployeeTotal {
+  employee_id: number | null;
+  employee_name: string;
+  image_path: string | null;
+  count_checkins: number;
+  count_checkouts: number;
+}
+
+interface AnvelopeEmployeeLocation {
+  employee_id: number | null;
+  employee_name: string;
+  location_id: number | null;
+  location_name: string;
+  count_checkouts: number;
+}
+
+interface AnvelopeKpi {
+  cazari_active_total: number;
+  anvelope_depozitate_total: number;
+  intrari_perioada: number;
+  iesiri_perioada: number;
+  iesiri_montate_perioada: number;
+}
+
+interface HotelAnvelopeSummary {
+  kpi: AnvelopeKpi;
+  active_per_location: AnvelopeLocationActive[];
+  active_per_loc_cazare: AnvelopeLocCazareActive[];
+  monthly: AnvelopeMonthly[];
+  per_employee: AnvelopeEmployeeTotal[];
+  per_employee_location: AnvelopeEmployeeLocation[];
+  period_start: string;
+  period_end: string;
+}
+
+function drawMonthlyDualBars(
+  container: HTMLDivElement,
+  items: { month: string; checkins: number; checkouts: number }[],
+) {
+  d3.select(container).selectAll("*").remove();
+  if (items.length === 0) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const w = container.clientWidth || 600;
+  const h = 240;
+  const margin = { top: 18, right: 16, bottom: 36, left: 40 };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  const svg = d3
+    .select(container)
+    .append("svg")
+    .attr("width", w)
+    .attr("height", h)
+    .attr("viewBox", `0 0 ${w} ${h}`);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x0 = d3.scaleBand<string>().domain(items.map((d) => d.month)).range([0, iw]).padding(0.18);
+  const x1 = d3
+    .scaleBand<string>()
+    .domain(["checkins", "checkouts"])
+    .range([0, x0.bandwidth()])
+    .padding(0.08);
+  const maxY = Math.max(1, d3.max(items, (d) => Math.max(d.checkins, d.checkouts)) ?? 1);
+  const y = d3.scaleLinear().domain([0, maxY * 1.1]).range([ih, 0]);
+
+  g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x0).tickFormat((m) => fmtMonth(m)))
+    .selectAll("text")
+    .style("font-size", "10px")
+    .style("fill", "var(--text-muted, #8b90a0)");
+
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d")))
+    .selectAll("text")
+    .style("font-size", "10px")
+    .style("fill", "var(--text-muted, #8b90a0)");
+
+  const colorIn = "#3ea96a";
+  const colorOut = "#e8441a";
+
+  for (const it of items) {
+    const xb = x0(it.month) ?? 0;
+    g.append("rect")
+      .attr("x", xb + (x1("checkins") ?? 0))
+      .attr("y", y(it.checkins))
+      .attr("width", x1.bandwidth())
+      .attr("height", ih - y(it.checkins))
+      .attr("fill", colorIn)
+      .attr("rx", 3);
+    g.append("text")
+      .attr("x", xb + (x1("checkins") ?? 0) + x1.bandwidth() / 2)
+      .attr("y", y(it.checkins) - 4)
+      .attr("text-anchor", "middle")
+      .style("font-size", "10px")
+      .style("fill", "var(--text-muted, #8b90a0)")
+      .text(it.checkins);
+
+    g.append("rect")
+      .attr("x", xb + (x1("checkouts") ?? 0))
+      .attr("y", y(it.checkouts))
+      .attr("width", x1.bandwidth())
+      .attr("height", ih - y(it.checkouts))
+      .attr("fill", colorOut)
+      .attr("rx", 3);
+    g.append("text")
+      .attr("x", xb + (x1("checkouts") ?? 0) + x1.bandwidth() / 2)
+      .attr("y", y(it.checkouts) - 4)
+      .attr("text-anchor", "middle")
+      .style("font-size", "10px")
+      .style("fill", "var(--text-muted, #8b90a0)")
+      .text(it.checkouts);
+  }
+
+  // Legendă
+  const legend = d3
+    .select(container)
+    .append("div")
+    .style("display", "flex")
+    .style("gap", "12px")
+    .style("flex-wrap", "wrap")
+    .style("margin-top", "8px")
+    .style("font-size", "0.8rem");
+  legend
+    .append("div")
+    .html(
+      `<span style="display:inline-block;width:10px;height:10px;background:${colorIn};border-radius:2px;margin-right:6px"></span>Intrări`,
+    );
+  legend
+    .append("div")
+    .html(
+      `<span style="display:inline-block;width:10px;height:10px;background:${colorOut};border-radius:2px;margin-right:6px"></span>Scoateri`,
+    );
+}
+
+function HotelAnvelopePanel() {
+  const [data, setData] = createSignal<HotelAnvelopeSummary | null>(null);
+  const [, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>(
+    "rapoarte_anvelope_loc_ids",
+    [],
+  );
+
+  let activeBarRef: HTMLDivElement | undefined;
+  let monthlyDualRef: HTMLDivElement | undefined;
+  let montateDonutRef: HTMLDivElement | undefined;
+  let empBarRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await apiFetch(`/api/reports/hotel-anvelope?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(ensureLocationsLoaded);
+  createEffect(() => {
+    periodVersion();
+    selectedLocIds();
+    void load();
+  });
+
+  // Bar: cazări active per locație
+  createEffect(() => {
+    const d = data();
+    if (!d || !activeBarRef) return;
+    const items: BarItem[] = d.active_per_location.map((r, i) => ({
+      label: r.location_name,
+      value: r.cazari_active,
+      color: colorByIndex(i),
+    }));
+    drawBar(activeBarRef, items);
+  });
+
+  // Dual bars: intrări vs scoateri pe lună
+  createEffect(() => {
+    const d = data();
+    if (!d || !monthlyDualRef) return;
+    drawMonthlyDualBars(
+      monthlyDualRef,
+      d.monthly.map((m) => ({
+        month: m.month,
+        checkins: m.checkins,
+        checkouts: m.checkouts,
+      })),
+    );
+  });
+
+  // Donut: scoateri montate vs nemontate
+  createEffect(() => {
+    const d = data();
+    if (!d || !montateDonutRef) return;
+    const montate = d.kpi.iesiri_montate_perioada;
+    const nemontate = Math.max(0, d.kpi.iesiri_perioada - montate);
+    const items: DonutItem[] = [
+      { label: "Montate pe mașină", value: montate, color: "#3ea96a" },
+      { label: "Predate la sediu", value: nemontate, color: "#5b7cfa" },
+    ].filter((i) => i.value > 0);
+    drawDonut(montateDonutRef, items, "scoateri");
+  });
+
+  // Bar: cazări (check-ins) per angajat
+  createEffect(() => {
+    const d = data();
+    if (!d || !empBarRef) return;
+    const items: BarItem[] = d.per_employee.map((r, i) => ({
+      label: r.employee_name,
+      value: r.count_checkins,
+      color: colorByIndex(i),
+    }));
+    drawBar(empBarRef, items);
+  });
+
+  // Matrice angajat × locație (scoateri): grupăm pe angajat, păstrăm doar
+  // angajații cu cel puțin o scoatere în perioadă.
+  const matrix = createMemo(() => {
+    const d = data();
+    if (!d) return { employees: [] as string[], locations: [] as string[], grid: {} as Record<string, Record<string, number>> };
+    const byEmp = new Map<string, Map<string, number>>();
+    const locSet = new Set<string>();
+    for (const r of d.per_employee_location) {
+      const emp = r.employee_name;
+      const loc = r.location_name;
+      locSet.add(loc);
+      let m = byEmp.get(emp);
+      if (!m) {
+        m = new Map();
+        byEmp.set(emp, m);
+      }
+      m.set(loc, (m.get(loc) ?? 0) + r.count_checkouts);
+    }
+    const employees = Array.from(byEmp.keys()).sort((a, b) => {
+      const sa = Array.from(byEmp.get(a)!.values()).reduce((s, v) => s + v, 0);
+      const sb = Array.from(byEmp.get(b)!.values()).reduce((s, v) => s + v, 0);
+      return sb - sa;
+    });
+    const locations = Array.from(locSet).sort();
+    const grid: Record<string, Record<string, number>> = {};
+    for (const e of employees) {
+      grid[e] = {};
+      const m = byEmp.get(e)!;
+      for (const l of locations) grid[e][l] = m.get(l) ?? 0;
+    }
+    return { employees, locations, grid };
+  });
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Hotel Anvelope" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Această secțiune arată operațiunile din hotelul de anvelope: câte cazări sunt
+          active acum (anvelope efectiv depozitate la sediu), câte intrări și scoateri
+          au fost procesate, cine le-a procesat și unde. Snapshot-ul „cazări active" este
+          calculat live, restul indicatorilor sunt agregați noaptea de un proces automat.
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
+
+      <Show when={data()}>
+        {(d) => (
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0">
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Cazări active</span>
+              <span class="locatii-kpi__value">{d().kpi.cazari_active_total}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Anvelope depozitate</span>
+              <span class="locatii-kpi__value">{d().kpi.anvelope_depozitate_total}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Intrări (perioadă)</span>
+              <span class="locatii-kpi__value">{d().kpi.intrari_perioada}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Scoateri (perioadă)</span>
+              <span class="locatii-kpi__value">{d().kpi.iesiri_perioada}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Scoateri montate</span>
+              <span class="locatii-kpi__value">{d().kpi.iesiri_montate_perioada}</span>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      <div class="locatii-charts">
+        <div class="locatii-chart-card" style="flex:2;min-width:0">
+          <div class="locatii-chart-title">Cazări active per locație</div>
+          <div class="locatii-chart-subtitle">Snapshot curent — cazări fără check-out</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Numărul de cazări <strong>active acum</strong> în fiecare locație. Filtrul de perioadă
+              nu se aplică aici — e o fotografie a momentului prezent. Folosește tabelul de mai jos
+              pentru a vedea și câte anvelope sunt depozitate fizic.
+            </p>
+          </Show>
+          <div ref={activeBarRef} style="margin-top:8px" />
+        </div>
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Detalii per locație</div>
+          <div class="locatii-chart-subtitle">Cazări + anvelope depozitate</div>
+          <Show when={data()}>
+            {(d) => (
+              <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:0.85rem">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <th style="text-align:left;padding:6px 4px">Locație</th>
+                    <th style="text-align:right;padding:6px 4px">Cazări</th>
+                    <th style="text-align:right;padding:6px 4px">Anvelope</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={d().active_per_location}>
+                    {(r) => (
+                      <tr style="border-bottom:1px solid var(--border)">
+                        <td style="padding:6px 4px">{r.location_name}</td>
+                        <td style="text-align:right;padding:6px 4px">{r.cazari_active}</td>
+                        <td style="text-align:right;padding:6px 4px">{r.anvelope_depozitate}</td>
+                      </tr>
+                    )}
+                  </For>
+                  <Show when={d().active_per_location.length === 0}>
+                    <tr>
+                      <td colspan="3" style="padding:12px;text-align:center;color:var(--text-muted)">
+                        Nicio cazare activă.
+                      </td>
+                    </tr>
+                  </Show>
+                </tbody>
+              </table>
+            )}
+          </Show>
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Locuri de depozitare</div>
+          <div class="locatii-chart-subtitle">
+            Câte cazări și câte anvelope sunt în fiecare loc de depozitare, grupat pe locație
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Pentru fiecare locație, vezi defalcarea pe locurile fizice de depozitare (rafturi, camere etc.):
+              câte cazări active sunt acolo și câte anvelope conțin total. Util pentru a vedea
+              ocuparea pe spații și a planifica reorganizarea.
+            </p>
+          </Show>
+          <Show when={data()}>
+            {(d) => {
+              const groups = createMemo(() => {
+                const byLoc = new Map<string, AnvelopeLocCazareActive[]>();
+                for (const r of d().active_per_loc_cazare) {
+                  const key = r.location_name;
+                  const arr = byLoc.get(key) ?? [];
+                  arr.push(r);
+                  byLoc.set(key, arr);
+                }
+                return Array.from(byLoc.entries()).map(([location_name, rows]) => ({
+                  location_name,
+                  rows,
+                  cazari_total: rows.reduce((s, r) => s + r.cazari_active, 0),
+                  anvelope_total: rows.reduce((s, r) => s + r.anvelope_depozitate, 0),
+                }));
+              });
+              return (
+                <Show
+                  when={groups().length > 0}
+                  fallback={
+                    <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">
+                      Nicio cazare activă.
+                    </div>
+                  }
+                >
+                  <div style="overflow-x:auto;margin-top:8px">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+                      <thead>
+                        <tr style="border-bottom:1px solid var(--border)">
+                          <th style="text-align:left;padding:6px 8px">Locație / Loc de depozitare</th>
+                          <th style="text-align:right;padding:6px 8px">Cazări</th>
+                          <th style="text-align:right;padding:6px 8px">Anvelope</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={groups()}>
+                          {(g) => (
+                            <>
+                              <tr style="background:var(--surface2);font-weight:600">
+                                <td style="padding:8px;border-top:1px solid var(--border)">{g.location_name}</td>
+                                <td style="text-align:right;padding:8px;border-top:1px solid var(--border)">{g.cazari_total}</td>
+                                <td style="text-align:right;padding:8px;border-top:1px solid var(--border)">{g.anvelope_total}</td>
+                              </tr>
+                              <For each={g.rows}>
+                                {(r) => (
+                                  <tr style="border-top:1px solid var(--border)">
+                                    <td style="padding:6px 8px 6px 24px;color:var(--text-muted)">↳ {r.loc_cazare_nume}</td>
+                                    <td style="text-align:right;padding:6px 8px">{r.cazari_active}</td>
+                                    <td style="text-align:right;padding:6px 8px">{r.anvelope_depozitate}</td>
+                                  </tr>
+                                )}
+                              </For>
+                            </>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              );
+            }}
+          </Show>
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:2;min-width:0">
+          <div class="locatii-chart-title">Intrări vs scoateri pe lună</div>
+          <div class="locatii-chart-subtitle">Mișcările lunare în perioada selectată</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Bare grupate per lună: <strong>verde</strong> = intrări (cazări noi), <strong>portocaliu</strong> = scoateri
+              (cazări încheiate). Util pentru a vedea sezonalitatea (peak primăvară/toamnă) și
+              echilibrul intrări/ieșiri într-o perioadă.
+            </p>
+          </Show>
+          <div ref={monthlyDualRef} style="margin-top:8px" />
+        </div>
+        <div class="locatii-chart-card" style="flex:1;min-width:260px">
+          <div class="locatii-chart-title">Scoateri montate pe mașină</div>
+          <div class="locatii-chart-subtitle">Anvelope predate montate vs predate la sediu</div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              La scoatere, anvelopele pot fi montate direct pe mașină (clientul pleacă cu ele
+              montate) sau predate la sediu. Util pentru a vedea ce procent din scoateri sunt
+              însoțite de serviciul de montaj.
+            </p>
+          </Show>
+          <div ref={montateDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Cazări per angajat</div>
+          <div class="locatii-chart-subtitle">
+            Numărul de check-in-uri procesate de fiecare angajat în perioada selectată
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Câte cazări noi a procesat fiecare angajat. Util pentru a vedea distribuția
+              volumului de muncă pe operațiunea de hotel anvelope.
+            </p>
+          </Show>
+          <div ref={empBarRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Scoateri: angajat × locație</div>
+          <div class="locatii-chart-subtitle">
+            Câte scoateri a procesat fiecare angajat în fiecare locație
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Matrice cu numărul de scoateri (check-out-uri) per combinație angajat × locație.
+              Util pentru a vedea cine acoperă ce locație și echilibrul de încărcare.
+            </p>
+          </Show>
+          <Show when={data()}>
+            {(_d) => {
+              const m = matrix();
+              return (
+                <Show
+                  when={m.employees.length > 0 && m.locations.length > 0}
+                  fallback={
+                    <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.85rem">
+                      Nicio scoatere în perioada selectată.
+                    </div>
+                  }
+                >
+                  <div style="overflow-x:auto;margin-top:8px">
+                    <table style="border-collapse:collapse;font-size:0.85rem;min-width:100%">
+                      <thead>
+                        <tr style="border-bottom:1px solid var(--border)">
+                          <th style="text-align:left;padding:6px 8px;position:sticky;left:0;background:var(--surface);z-index:1">
+                            Angajat
+                          </th>
+                          <For each={m.locations}>
+                            {(loc) => (
+                              <th style="text-align:right;padding:6px 8px;white-space:nowrap">{loc}</th>
+                            )}
+                          </For>
+                          <th style="text-align:right;padding:6px 8px;border-left:1px solid var(--border)">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={m.employees}>
+                          {(emp) => {
+                            const total = m.locations.reduce((s, l) => s + (m.grid[emp][l] ?? 0), 0);
+                            return (
+                              <tr style="border-bottom:1px solid var(--border)">
+                                <td style="padding:6px 8px;white-space:nowrap;position:sticky;left:0;background:var(--surface)">
+                                  {emp}
+                                </td>
+                                <For each={m.locations}>
+                                  {(loc) => {
+                                    const v = m.grid[emp][loc] ?? 0;
+                                    return (
+                                      <td
+                                        style={`text-align:right;padding:6px 8px;${v === 0 ? "color:var(--text-muted);opacity:0.4" : ""}`}
+                                      >
+                                        {v || "—"}
+                                      </td>
+                                    );
+                                  }}
+                                </For>
+                                <td style="text-align:right;padding:6px 8px;font-weight:600;border-left:1px solid var(--border)">
+                                  {total}
+                                </td>
+                              </tr>
+                            );
+                          }}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              );
+            }}
+          </Show>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ───── ROOT ───────────────────────────────────────────────────────────────────
 
 export default function Rapoarte() {
@@ -2179,6 +2771,9 @@ export default function Rapoarte() {
           <Match when={active() === "locatii"}><LocatiiPanel /></Match>
           <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
           <Match when={active() === "angajati"}><AngajatiPanel /></Match>
+          <Match when={active() === "hotel-anvelope"}><HotelAnvelopePanel /></Match>
+          <Match when={active() === "clienti"}><ClientiPanel /></Match>
+          <Match when={active() === "programari"}><ProgramariPanel /></Match>
         </Switch>
       </main>
     </div>

@@ -173,6 +173,7 @@ export default function Programari() {
   const [formAppt,      setFormAppt]      = createSignal<Programare | null>(null);
   const [deleteConfirm, setDeleteConfirm] = createSignal<string | null>(null);
   const [actionError,   setActionError]   = createSignal<string | null>(null);
+  const [calendarOpen,  setCalendarOpen]  = createSignal(false);
   const [miniMonth,     setMiniMonth]     = createSignal({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [nowMin,        setNowMin]        = createSignal(new Date().getHours() * 60 + new Date().getMinutes());
 
@@ -186,6 +187,14 @@ export default function Programari() {
   const [dragTick, setDragTick] = createSignal(0);
 
   let calGridRef!: HTMLDivElement;
+  let calWrapRef!: HTMLDivElement;
+
+  function scrollToNow() {
+    if (!calWrapRef) return;
+    const headerH = 48;
+    const target = Math.max(0, minToTop(nowMin()) - 80);
+    calWrapRef.scrollTo({ top: target + headerH, behavior: "smooth" });
+  }
 
   const weekDays    = createMemo(() => getWeekDays(weekOffset()));
   const locationId  = createMemo(() => device()?.locationId ?? null);
@@ -243,6 +252,11 @@ export default function Programari() {
   onMount(async () => {
     await loadCatalogDepartments(); // load all departments, not filtered by location
     await reloadAppts();
+    queueMicrotask(() => {
+      if (!calWrapRef) return;
+      const headerH = 48;
+      calWrapRef.scrollTop = Math.max(0, minToTop(nowMin()) - 80) + headerH;
+    });
     const timer = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 30_000);
     onCleanup(() => clearInterval(timer));
   });
@@ -564,44 +578,22 @@ export default function Programari() {
 
   return (
     <div class="prgm-page">
-      {/* ── Left sidebar — mini calendar ────────────────────────────────── */}
-      <div class="prgm-sidebar">
-        <button class="btn btn-ghost btn-sm prgm-sidebar-today" onClick={() => setWeekOffset(0)}>Azi</button>
-        <div class="prgm-mini-cal">
-          <div class="prgm-mini-cal-header">
-            <button class="btn btn-ghost btn-sm" style="padding:0 6px" onClick={prevMiniMonth}>‹</button>
-            <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
-            <button class="btn btn-ghost btn-sm" style="padding:0 6px" onClick={nextMiniMonth}>›</button>
-          </div>
-          <div class="prgm-mini-cal-grid">
-            <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
-            <For each={miniCalDays()}>{(day) =>
-              <div
-                class={[
-                  "prgm-mini-day",
-                  isInSelectedWeek(day) ? "prgm-mini-day-sel" : "",
-                  isSameDay(day, new Date()) ? "prgm-mini-day-today" : "",
-                  day.getMonth() !== miniMonth().month ? "prgm-mini-day-other" : "",
-                ].filter(Boolean).join(" ")}
-                onClick={() => selectWeekContaining(day)}
-              >{day.getDate()}</div>
-            }</For>
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm prgm-sidebar-new" onClick={openCreateModal}>+ Programare nouă</button>
-      </div>
-
-      {/* ── Main content ────────────────────────────────────────────────── */}
-      <div class="prgm-main">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div class="prgm-header">
+        <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(true)}>📅 Calendar</button>
+        <button class="btn btn-ghost btn-sm" onClick={() => { setWeekOffset(0); scrollToNow(); }}>Azi</button>
+        <button class="btn btn-primary btn-sm" onClick={openCreateModal}>+ Programare nouă</button>
         <input
           class="input prgm-search"
           placeholder="Caută titlu sau client..."
           value={q()}
           onInput={(e) => setQ(e.currentTarget.value)}
         />
-        <span class="prgm-week-label">{weekLabel()}</span>
+        <div class="prgm-week-nav">
+          <button class="btn btn-ghost btn-sm" aria-label="Săptămâna anterioară" onClick={() => setWeekOffset(weekOffset() - 1)}>‹</button>
+          <span class="prgm-week-label">{weekLabel()}</span>
+          <button class="btn btn-ghost btn-sm" aria-label="Săptămâna următoare" onClick={() => setWeekOffset(weekOffset() + 1)}>›</button>
+        </div>
         <div class="prgm-dept-chips">
           <button
             class={`prgm-chip${selectedDept() === null ? " prgm-chip-active" : ""}`}
@@ -623,7 +615,7 @@ export default function Programari() {
       </div>
 
       {/* ── Calendar ───────────────────────────────────────────────────── */}
-      <div class="prgm-cal-wrap">
+      <div class="prgm-cal-wrap" ref={calWrapRef}>
         <div
           class="prgm-cal-grid"
           ref={calGridRef}
@@ -700,7 +692,6 @@ export default function Programari() {
           }}</For>
         </div>
       </div>
-      </div>{/* end prgm-main */}
 
       <Show when={loading()}>
         <div class="prgm-loading">Se încarcă...</div>
@@ -773,15 +764,54 @@ export default function Programari() {
         )}
       </Show>
 
+      {/* ── Calendar modal ──────────────────────────────────────────────── */}
+      <Show when={calendarOpen()}>
+        <div class="sl-modal-overlay" onClick={() => setCalendarOpen(false)}>
+          <div class="sl-modal prgm-cal-modal" onClick={(e) => e.stopPropagation()}>
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Calendar</span>
+              <button class="btn btn-ghost btn-sm" aria-label="Închide" onClick={() => setCalendarOpen(false)}>✕</button>
+            </div>
+            <div class="sl-modal-body" style="display:flex;flex-direction:column;gap:10px">
+              <button class="btn btn-ghost btn-sm w-full" onClick={() => { setWeekOffset(0); setCalendarOpen(false); }}>Azi</button>
+              <div class="prgm-mini-cal">
+                <div class="prgm-mini-cal-header">
+                  <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={prevMiniMonth}>‹</button>
+                  <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
+                  <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={nextMiniMonth}>›</button>
+                </div>
+                <div class="prgm-mini-cal-grid">
+                  <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
+                  <For each={miniCalDays()}>{(day) =>
+                    <div
+                      class={[
+                        "prgm-mini-day",
+                        isInSelectedWeek(day) ? "prgm-mini-day-sel" : "",
+                        isSameDay(day, new Date()) ? "prgm-mini-day-today" : "",
+                        day.getMonth() !== miniMonth().month ? "prgm-mini-day-other" : "",
+                      ].filter(Boolean).join(" ")}
+                      onClick={() => { selectWeekContaining(day); setCalendarOpen(false); }}
+                    >{day.getDate()}</div>
+                  }</For>
+                </div>
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(false)}>Închide</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
       {/* ── Create / Edit modal ─────────────────────────────────────────── */}
       <Show when={showFormModal()}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:640px;width:100%" onClick={(e) => e.stopPropagation()}>
+          <div class="sl-modal prgm-form-modal" onClick={(e) => e.stopPropagation()}>
             <div class="sl-modal-header">
               <span class="sl-modal-title">{formAppt() ? "Editează programare" : "Programare nouă"}</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowFormModal(false)}>✕</button>
             </div>
-            <div class="sl-modal-body" style="padding:14px 18px;display:grid;gap:10px;overflow-y:auto;max-height:85vh">
+            <div class="sl-modal-body prgm-form-body">
 
               {/* Titlu */}
               <input
@@ -883,7 +913,7 @@ export default function Programari() {
               </Show>
 
               {/* Date + time grid */}
-              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+              <div class="prgm-form-row3">
                 <div>
                   <div class="prgm-form-label">Data</div>
                   <input
@@ -934,7 +964,7 @@ export default function Programari() {
               </div>
 
               {/* Status + Departament */}
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <div class="prgm-form-row2">
                 <div>
                   <div class="prgm-form-label">Status</div>
                   <select class="input" style="font-size:13px" value={formStatus()} onChange={(e) => setFormStatus(e.currentTarget.value as ProgramareStatus)}>
