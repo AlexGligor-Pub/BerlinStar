@@ -79,7 +79,6 @@ export default function AdminV2() {
       when={verified()}
       fallback={
         <div class="login-page">
-          <video class="login-video-bg" src="/super_cars.mp4" autoplay loop muted playsinline />
           <div class="login-video-overlay" />
           <div class="login-card">
             <img src={logo} alt="Berlin Star" class="login-logo" />

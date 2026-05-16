@@ -153,7 +153,6 @@ export default function Login() {
 
   return (
     <div class="login-page">
-      <video class="login-video-bg" src="/super_cars.mp4" autoplay loop muted playsinline />
       <div class="login-video-overlay" />
       <div style="position:fixed;top:12px;right:12px;z-index:2">
         <ThemeToggle />
