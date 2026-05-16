@@ -26,6 +26,9 @@ def upgrade() -> None:
     op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS themes_name_key")
     op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_name_key")
     op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS uq_themes_name")
+    # Idempotent: daca alembic a esuat dupa ce constraint-ul a fost deja creat
+    # (ex. heads divergente, baza restaurata partial), recream curat.
+    op.execute("ALTER TABLE departments DROP CONSTRAINT IF EXISTS uq_departments_account_id_name")
     op.execute(
         "ALTER TABLE departments ADD CONSTRAINT uq_departments_account_id_name "
         "UNIQUE (account_id, name)"
