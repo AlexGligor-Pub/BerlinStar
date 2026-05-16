@@ -29,6 +29,7 @@ from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
+from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
 
 router = APIRouter()
 
@@ -345,6 +346,13 @@ async def patch_receipt(
     )).scalars().all()
     emp_ids = {eid for eid in emp_id_rows if eid}
 
+    old_pay = receipt.pay_method
+    new_pay = body.pay_method
+    if old_pay == PayMethod.NEPLATIT and new_pay != PayMethod.NEPLATIT:
+        await apply_sale_for_receipt(db, account_id, receipt)
+    elif old_pay != PayMethod.NEPLATIT and new_pay == PayMethod.NEPLATIT:
+        await reverse_sale_for_receipt(db, account_id, receipt)
+
     receipt.pay_method = body.pay_method
     receipt.partial_pay = body.partial_pay
     receipt.updated_at = datetime.now(timezone.utc)
@@ -384,6 +392,12 @@ async def patch_receipt_content(
         if eid
     }
 
+    # Daca bonul e platit, intoarcem stocul pentru liniile vechi inainte de a le sterge,
+    # apoi vom reaplica scaderea pentru liniile noi mai jos.
+    was_paid = receipt.pay_method != PayMethod.NEPLATIT
+    if was_paid:
+        await reverse_sale_for_receipt(db, account_id, receipt)
+
     receipt.titlu = body.titlu
     receipt.descriere = body.descriere
     receipt.date_tehn = body.date_tehn
@@ -411,6 +425,11 @@ async def patch_receipt_content(
         ))
         if item.employee_id:
             new_emp_ids.add(item.employee_id)
+
+    await db.flush()
+    # Reaplica scaderea pentru liniile noi daca bonul era platit
+    if was_paid:
+        await apply_sale_for_receipt(db, account_id, receipt)
 
     await db.commit()
     await _refresh_accumulations(db, account_id, old_emp_ids | new_emp_ids)
@@ -607,6 +626,10 @@ async def delete_receipt(
         select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
     )).scalars().all()
     emp_ids = {eid for eid in emp_id_rows if eid}
+
+    # Storno stoc daca bonul era platit (marfa revine in stoc).
+    if receipt.pay_method != PayMethod.NEPLATIT:
+        await reverse_sale_for_receipt(db, account_id, receipt)
 
     await soft_delete(db, Receipt, receipt_id)
     await _refresh_accumulations(db, account_id, emp_ids)

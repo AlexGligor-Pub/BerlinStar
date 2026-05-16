@@ -32,5 +32,7 @@ from .report_cazari_daily import ReportCazariDaily
 from .report_clients_daily import ReportClientsDaily
 from .report_programari_daily import ReportProgramariDaily
 from .report_run import ReportRun
+from .stock import Stock
+from .stock_movement import StockMovement, StockMovementType
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType"]

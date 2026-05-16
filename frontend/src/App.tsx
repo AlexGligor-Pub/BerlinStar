@@ -14,6 +14,7 @@ const POS = lazy(() => import("./pages/POS"));
 const Reception = lazy(() => import("./pages/Reception"));
 const Configurari = lazy(() => import("./pages/Configurari"));
 const Rapoarte = lazy(() => import("./pages/Rapoarte"));
+const Stocuri = lazy(() => import("./pages/Stocuri"));
 const Clienti = lazy(() => import("./pages/Clienti"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const HotelAnvelope = lazy(() => import("./pages/HotelAnvelope"));
@@ -82,6 +83,11 @@ export default function App() {
         <Route path="/rapoarte" component={() => (
           <Show when={adminVisible()} fallback={<Navigate href="/" />}>
             <Protected component={Rapoarte} />
+          </Show>
+        )} />
+        <Route path="/stocuri" component={() => (
+          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+            <Protected component={Stocuri} />
           </Show>
         )} />
         <Route path="/clienti" component={() => <Protected component={Clienti} />} />

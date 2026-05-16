@@ -20,6 +20,7 @@ import {
   type DailyTotal, type DonutItem, type BarItem, type GroupedBarItem,
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
 } from "./rapoarte/charts";
+import StocuriSection from "./rapoarte/StocuriSection";
 
 interface EmployeeReport {
   id: number;
@@ -38,6 +39,7 @@ const SECTIONS = [
   { id: "hotel-anvelope", label: "Hotel Anvelope" },
   { id: "clienti", label: "Clienți" },
   { id: "programari", label: "Programări" },
+  { id: "stocuri", label: "Stocuri" },
 ] as const;
 
 type SectionId = typeof SECTIONS[number]["id"];
@@ -2524,6 +2526,7 @@ export default function Rapoarte() {
           <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
           <Match when={active() === "clienti"}><ClientiPanel /></Match>
           <Match when={active() === "programari"}><ProgramariPanel /></Match>
+          <Match when={active() === "stocuri"}><StocuriSection /></Match>
         </Switch>
       </main>
     </div>
