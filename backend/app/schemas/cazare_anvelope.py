@@ -27,6 +27,7 @@ class CazareCheckoutBody(BaseModel):
     data_checkout: date
     comments: str | None = None
     receipt_id: int | None = None
+    montate_pe_masina: bool | None = None
 
 
 class CazareUpdateBody(BaseModel):

@@ -320,6 +320,8 @@ async def checkout_cazare(
         cazare.comments = body.comments
     if body.receipt_id is not None:
         cazare.receipt_id = body.receipt_id
+    if body.montate_pe_masina is not None:
+        cazare.montate_pe_masina = body.montate_pe_masina
     cazare.updated_at = datetime.now(timezone.utc)
     await db.commit()
 

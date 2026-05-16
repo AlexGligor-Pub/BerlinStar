@@ -1,10 +1,10 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
-import { useSearchParams } from "@solidjs/router";
+import { useSearchParams, useNavigate } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
 import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
-import { posHotelCtx } from "../store/posHotelStore";
+import { posHotelCtx, clearPosHotelCtx, setPendingPosReturn } from "../store/posHotelStore";
 import { device } from "../store/deviceStore";
 import {
   cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
@@ -470,6 +470,17 @@ function CazareCard(props: {
 
 export default function HotelAnvelope() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [scoatereFollowedByCazare, setScoatereFollowedByCazare] = createSignal(false);
+
+  function returnToPos(action: "cazare" | "scoatere" | "scoatere_si_cazare") {
+    const ctx = posHotelCtx();
+    if (!ctx) return;
+    setPendingPosReturn({ action, titlu: ctx.titlu });
+    clearPosHotelCtx();
+    navigate("/");
+  }
+
   const [view, setView] = createSignal<"active" | "istoric">("active");
   const [loading, setLoading] = createSignal(false);
   const [companyData, setCompanyData] = createSignal<CompanyData | null>(null);
@@ -537,6 +548,7 @@ export default function HotelAnvelope() {
   const [checkoutDate, setCheckoutDate] = createSignal(todayStr());
   const [checkoutComments, setCheckoutComments] = createSignal("");
   const [checkoutSaving, setCheckoutSaving] = createSignal(false);
+  const [checkoutMontatePeMasina, setCheckoutMontatePeMasina] = createSignal(true);
 
   // ── Modal Combined Scoatere + Introducere Nouă ─────────────────────────────
   const [combinedCazare, setCombinedCazare] = createSignal<Cazare | null>(null);
@@ -792,7 +804,15 @@ export default function HotelAnvelope() {
     });
   }
 
+  function cancelNewModal() {
+    const wasCombo = scoatereFollowedByCazare();
+    setScoatereFollowedByCazare(false);
+    setShowNewModal(false);
+    if (wasCombo && posHotelCtx()) returnToPos("scoatere");
+  }
+
   function openNewModal() {
+    setScoatereFollowedByCazare(false);
     const ctx = posHotelCtx();
     const preClient = ctx ? pageSelectedClient() : null;
     setNewClient(preClient);
@@ -915,6 +935,11 @@ export default function HotelAnvelope() {
       }
       setShowNewModal(false);
       await fetchCazari();
+      if (ctx) {
+        const wasCombo = scoatereFollowedByCazare();
+        setScoatereFollowedByCazare(false);
+        returnToPos(wasCombo ? "scoatere_si_cazare" : "cazare");
+      }
     } finally { setSaving(false); }
   }
 
@@ -925,6 +950,7 @@ export default function HotelAnvelope() {
     setCheckoutCazare(c);
     setCheckoutDate(todayStr());
     setCheckoutComments(c.comments ?? "");
+    setCheckoutMontatePeMasina(true);
   }
 
   async function openCombined(c: Cazare) {
@@ -1072,6 +1098,7 @@ export default function HotelAnvelope() {
 
       setCombinedCazare(null);
       await fetchCazari();
+      if (ctx) returnToPos("scoatere_si_cazare");
     } catch (e: any) {
       setCombinedErr(e?.message ?? "Eroare necunoscută.");
     } finally {
@@ -1190,6 +1217,7 @@ export default function HotelAnvelope() {
       const checkoutBody: Record<string, any> = {
         data_checkout: checkoutDate(),
         comments: checkoutComments().trim() || null,
+        montate_pe_masina: checkoutMontatePeMasina(),
       };
       if (ctx) checkoutBody.receipt_id = parseInt(ctx.receiptId);
       const res = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
@@ -1250,6 +1278,9 @@ export default function HotelAnvelope() {
         } catch { setNewClientVehicole([]); setNewSelectedVehicol(null); }
         setNewVehicolLocked(true);
         setShowNewModal(true);
+        if (ctx) setScoatereFollowedByCazare(true);
+      } else if (ctx) {
+        returnToPos("scoatere");
       }
     } finally { setCheckoutSaving(false); }
   }
@@ -1884,7 +1915,7 @@ export default function HotelAnvelope() {
           <div class="sl-modal" style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
             <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
               <span class="sl-modal-title">Cazare Nouă</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>✕</button>
+              <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>✕</button>
             </div>
 
             <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1.8fr 1.3fr;min-height:0">
@@ -2087,7 +2118,7 @@ export default function HotelAnvelope() {
             </div>
 
             <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowNewModal(false)}>Anulează</button>
+              <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>Anulează</button>
               <button class="btn btn-primary btn-sm" onClick={saveCazare} disabled={saving()}>
                 {saving() ? "Se salvează..." : "Salvează Cazarea"}
               </button>
@@ -2433,6 +2464,26 @@ export default function HotelAnvelope() {
                       </table>
                     </div>
                   </Show>
+                </div>
+
+                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelopele scoase au fost</div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${checkoutMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${checkoutMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                      <input type="radio" name="checkout-montate" checked={checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(true)} />
+                      <div>
+                        <div style={`font-weight:600;font-size:13px;color:${checkoutMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                      </div>
+                    </label>
+                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!checkoutMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!checkoutMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                      <input type="radio" name="checkout-montate" checked={!checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(false)} />
+                      <div>
+                        <div style={`font-weight:600;font-size:13px;color:${!checkoutMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                      </div>
+                    </label>
+                  </div>
                 </div>
 
                 <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">

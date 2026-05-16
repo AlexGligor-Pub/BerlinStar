@@ -6,7 +6,8 @@ import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeSto
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
-import { savePosHotelCtx } from "../store/posHotelStore";
+import { savePosHotelCtx, consumePendingPosReturn } from "../store/posHotelStore";
+import { notify } from "../store/notificationsStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft } from "../store/montajRotiStore";
@@ -472,6 +473,9 @@ interface CazareItemPayload {
 
 interface CazareDetail extends CazareBasic {
   montate_pe_masina: boolean | null;
+  successor_montate_pe_masina: boolean | null;
+  referinta_cazare_id: number | null;
+  referinta_cazare_items: CazareItemPayload[];
   items: CazareItemPayload[];
 }
 
@@ -617,6 +621,27 @@ export default function ShoppingList() {
   }
 
   onMount(() => {
+    const pending = consumePendingPosReturn();
+    if (pending) {
+      // Întoarcere automată din Hotel Anvelope — restaurează meta și sari peste resume modal.
+      const meta = loadCartMeta();
+      if (meta) {
+        setTitlu(meta.titlu ?? "");
+        setDescriere(meta.descriere ?? "");
+        setDateTehn(meta.dateTehn ?? "");
+        setSelectedClient(meta.client ?? null);
+        setVehicol(meta.vehicol ?? null);
+        setLoadedReceiptId(meta.receiptId ?? null);
+      }
+      metaSaveEnabled = true;
+      const msg = pending.action === "scoatere_si_cazare"
+        ? "Scoaterea și cazarea au fost adăugate la deviz."
+        : pending.action === "scoatere"
+        ? "Scoaterea a fost adăugată la deviz."
+        : "Cazarea a fost adăugată la deviz.";
+      notify(msg, "success");
+      return;
+    }
     const r = consumeResume();
     if (r) {
       setLoadedReceiptId(r.id ?? null);
@@ -783,10 +808,29 @@ export default function ShoppingList() {
         if (res.ok) {
           const data = await res.json() as CazariResponse;
           const cazari = data?.items ?? [];
-          const src = cazari.find((c) => c.data_checkout && c.montate_pe_masina);
-          if (src) {
-            const items = src.items ?? [];
-            initial = items
+          // Caută o scoatere atașată devizului unde rotile au fost bifate ca montate pe mașină.
+          // 1) Scoatere simplă: cazarea are data_checkout + montate_pe_masina=true (flag original).
+          // 2) Scoatere + introducere combinată: cazarea veche are data_checkout +
+          //    successor_montate_pe_masina=true (bifa „Montate pe mașină" de la scoatere).
+          // 3) Fallback — cazarea nouă (referinta_cazare_id!=null, montate_pe_masina=true);
+          //    rotile montate sunt în referinta_cazare_items (cele scoase din vechea cazare).
+          let mountedItems: CazareItemPayload[] | null = null;
+          for (const c of cazari) {
+            if (c.data_checkout && (c.montate_pe_masina || c.successor_montate_pe_masina)) {
+              mountedItems = c.items ?? [];
+              break;
+            }
+          }
+          if (!mountedItems) {
+            for (const c of cazari) {
+              if (c.referinta_cazare_id != null && c.montate_pe_masina && (c.referinta_cazare_items?.length ?? 0) > 0) {
+                mountedItems = c.referinta_cazare_items ?? [];
+                break;
+              }
+            }
+          }
+          if (mountedItems) {
+            initial = mountedItems
               .filter((it): it is CazareItemPayload & { anvelopa: CazareAnvelopaPayload } => !!it.anvelopa)
               .map((it, i) => ({
                 pozitie: defaultPozitieForIndex(i),
