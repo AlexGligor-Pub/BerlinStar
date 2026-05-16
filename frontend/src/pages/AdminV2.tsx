@@ -79,7 +79,6 @@ export default function AdminV2() {
       when={verified()}
       fallback={
         <div class="login-page">
-          <div class="login-video-overlay" />
           <div class="login-card">
             <img src={logo} alt="Berlin Star" class="login-logo" />
             <div class="login-subtitle">Administrator</div>

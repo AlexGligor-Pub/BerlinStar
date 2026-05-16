@@ -309,29 +309,6 @@ body {
   overflow-x: hidden;
 }
 
-.login-video-bg {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.login-video-bg + .login-video-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 0;
-  pointer-events: none;
-}
-
-.login-page > *:not(.login-video-bg):not(.login-video-overlay) {
-  position: relative;
-  z-index: 1;
-}
-
 .login-news-link {
   font-size: 0.75rem;
   color: var(--text-muted);
