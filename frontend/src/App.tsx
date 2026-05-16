@@ -15,6 +15,7 @@ const Reception = lazy(() => import("./pages/Reception"));
 const Configurari = lazy(() => import("./pages/Configurari"));
 const Rapoarte = lazy(() => import("./pages/Rapoarte"));
 const Stocuri = lazy(() => import("./pages/Stocuri"));
+const StocActivitate = lazy(() => import("./pages/StocActivitate"));
 const Clienti = lazy(() => import("./pages/Clienti"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const HotelAnvelope = lazy(() => import("./pages/HotelAnvelope"));
@@ -88,6 +89,11 @@ export default function App() {
         <Route path="/stocuri" component={() => (
           <Show when={adminVisible()} fallback={<Navigate href="/" />}>
             <Protected component={Stocuri} />
+          </Show>
+        )} />
+        <Route path="/stocuri/:itemId/activitate" component={() => (
+          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+            <Protected component={StocActivitate} />
           </Show>
         )} />
         <Route path="/clienti" component={() => <Protected component={Clienti} />} />

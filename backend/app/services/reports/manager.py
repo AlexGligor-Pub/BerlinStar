@@ -22,6 +22,7 @@ SUPPORTED_REPORTS = (
     "cazari_daily",
     "clients_daily",
     "programari_daily",
+    "stock_movements_daily",
 )
 RunMode = Literal["incremental", "weekly_refresh"]
 
@@ -92,6 +93,10 @@ async def _get_oldest_source_date(db: AsyncSession, report_type: str) -> date | 
         query = text(
             f"SELECT MIN((start_time AT TIME ZONE '{BUCHAREST_TZ}')::date) FROM programari "
             "WHERE is_deleted = false"
+        )
+    elif report_type == "stock_movements_daily":
+        query = text(
+            f"SELECT MIN((created_at AT TIME ZONE '{BUCHAREST_TZ}')::date) FROM stock_movements"
         )
     else:
         return None
@@ -239,10 +244,19 @@ async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
         raise
 
 
-async def run_all(mode: RunMode = "incremental") -> None:
-    """Rulează toate rapoartele suportate, secvențial."""
-    for rt in SUPPORTED_REPORTS:
+async def run_all(mode: RunMode = "incremental", stagger_seconds: int = 0) -> None:
+    """Rulează toate rapoartele suportate, secvențial.
+
+    Dacă `stagger_seconds > 0`, așteaptă atâtea secunde între rapoarte (nu și după
+    ultimul). Util pentru a evita spike-uri de încărcare pe DB când scheduler-ul
+    rulează toate rapoartele odată.
+    """
+    import asyncio
+    reports = list(SUPPORTED_REPORTS)
+    for idx, rt in enumerate(reports):
         try:
             await run_report(rt, mode)
         except Exception:
             log.exception("Raportul %s a eșuat, continuăm cu următorul.", rt)
+        if stagger_seconds > 0 and idx < len(reports) - 1:
+            await asyncio.sleep(stagger_seconds)

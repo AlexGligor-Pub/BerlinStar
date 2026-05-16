@@ -26,6 +26,22 @@ const REPORT_LABELS: Record<string, { title: string; description: string }> = {
     title: "Raport zilnic — Per angajat",
     description: "Doar receipts plătite (pay_method ≠ Neplatit). Grupat pe employee × item_type × categorie × departament.",
   },
+  cazari_daily: {
+    title: "Raport zilnic — Hotel Anvelope",
+    description: "Cazări active și check-in / check-out pe zi, per locație. Sursa pentru ocupare și venit estimat din modulul Hotel Anvelope.",
+  },
+  clients_daily: {
+    title: "Raport zilnic — Clienți",
+    description: "Clienți noi pe zi (după created_at) și clienți recurenți (cu bonuri în ziua respectivă). Sursa pentru raportul Clienți CRM.",
+  },
+  programari_daily: {
+    title: "Raport zilnic — Programări",
+    description: "Programări create și programări active pe zi (per locație, per status). Sursa pentru raportul Programări.",
+  },
+  stock_movements_daily: {
+    title: "Raport zilnic — Stocuri (mișcări)",
+    description: "Agregare zilnică a mișcărilor de stoc (SALE, SALE_REVERSE, PURCHASE, ADJUSTMENT) per locație × produs × angajat × tip. Sursa pentru raportul Stocuri din Rapoarte: top produse vândute, vânzări per angajat, valori vânzare și cost.",
+  },
 };
 
 function fmtCooldown(s: number): string {
@@ -99,7 +115,7 @@ export default function ReportsSection() {
         <div>
           <h1 class="page-title">Rapoarte globale</h1>
           <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px">
-            Worker zilnic la 02:00 (Europe/Bucharest) + refresh duminică la 04:00. Trigger manual cu cooldown 5min.
+            Worker luni–sâmbătă, 08:00–20:00, din 2 în 2 ore (Europe/Bucharest). Toate rapoartele rulează secvențial, cu pauză de 3 minute între ele. Trigger manual cu cooldown 5min.
           </div>
         </div>
         <button class="btn btn-ghost btn-sm" onClick={loadReports} disabled={loading()}>

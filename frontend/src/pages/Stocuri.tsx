@@ -1,4 +1,5 @@
 import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import {
   createSolidTable, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -15,6 +16,7 @@ import {
 interface Loc { id: number; name: string }
 
 export default function Stocuri() {
+  const navigate = useNavigate();
   const [locName, setLocName] = createSignal<string>("");
   const [filter, setFilter] = createSignal("");
   const [onlyLow, setOnlyLow] = createSignal(false);
@@ -174,7 +176,14 @@ export default function Stocuri() {
       header: "Acțiuni",
       enableSorting: false,
       cell: (info) => (
-        <div style="display:flex;gap:6px;justify-content:flex-end">
+        <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button
+            class="btn btn-ghost btn-sm"
+            title="Vezi toată activitatea produsului"
+            onClick={() => navigate(`/stocuri/${info.row.original.item_id}/activitate`)}
+          >
+            📊 Activitate
+          </button>
           <button
             class="btn btn-ghost btn-sm"
             title="Editează preț cumpărare și stoc minim"
@@ -340,7 +349,13 @@ export default function Stocuri() {
                         <div style="padding:4px 0">{r.stoc_minim}</div>
                       </div>
                     </div>
-                    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px">
+                    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap">
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        onClick={() => navigate(`/stocuri/${r.item_id}/activitate`)}
+                      >
+                        📊 Activitate
+                      </button>
                       <button class="btn btn-ghost btn-sm" onClick={() => setShowEditMeta(r)}>
                         ✎ Edit
                       </button>

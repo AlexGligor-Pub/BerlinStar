@@ -415,6 +415,54 @@ async def build_programari_daily(
     return inserted
 
 
+async def build_stock_movements_daily(
+    db: AsyncSession, period_start: date, period_end: date
+) -> int:
+    """Agregare zilnica a `stock_movements` pe (account, locatie, produs, angajat, tip).
+
+    Granularitate fina pentru a permite filtre flexibile in Rapoarte: top produse
+    vandute, vanzari per angajat, intrari de marfa, ajustari. Idempotent —
+    DELETE pe perioada ceruta, apoi INSERT proaspat.
+    """
+    await db.execute(
+        text("DELETE FROM report_stock_movements_daily WHERE report_date BETWEEN :s AND :e"),
+        {"s": period_start, "e": period_end},
+    )
+
+    insert_sql = text(f"""
+        INSERT INTO report_stock_movements_daily (
+            report_date, account_id, location_id, item_id, item_name,
+            employee_id, movement_type,
+            qty_total, qty_delta_total, valoare_vanzare, valoare_cost,
+            nr_movements, created_at, updated_at
+        )
+        SELECT
+            (sm.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date AS report_date,
+            sm.account_id,
+            sm.location_id,
+            sm.item_id,
+            MAX(sm.item_name) AS item_name,
+            sm.employee_id,
+            sm.movement_type,
+            COALESCE(SUM(ABS(sm.qty_delta)), 0) AS qty_total,
+            COALESCE(SUM(sm.qty_delta), 0) AS qty_delta_total,
+            COALESCE(SUM(ABS(sm.qty_delta) * COALESCE(sm.unit_price, 0)), 0) AS valoare_vanzare,
+            COALESCE(SUM(ABS(sm.qty_delta) * COALESCE(sm.unit_cost, 0)), 0) AS valoare_cost,
+            COUNT(*) AS nr_movements,
+            NOW(), NOW()
+        FROM stock_movements sm
+        WHERE (sm.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+        GROUP BY 1, 2, 3, 4, 6, 7
+    """)
+    result = await db.execute(insert_sql, {"s": period_start, "e": period_end})
+    inserted = result.rowcount or 0
+    log.info(
+        "report_stock_movements_daily build: %s..%s -> %d randuri",
+        period_start, period_end, inserted,
+    )
+    return inserted
+
+
 # Registru: report_type -> funcție builder
 BUILDERS = {
     "receipts_daily": build_receipts_daily,
@@ -422,4 +470,5 @@ BUILDERS = {
     "cazari_daily": build_cazari_daily,
     "clients_daily": build_clients_daily,
     "programari_daily": build_programari_daily,
+    "stock_movements_daily": build_stock_movements_daily,
 }

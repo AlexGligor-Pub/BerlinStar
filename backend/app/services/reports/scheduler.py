@@ -11,6 +11,10 @@ log = logging.getLogger("berlinstar.reports")
 
 _scheduler: AsyncIOScheduler | None = None
 
+# Pauza intre rapoarte la o rulare batch (in secunde), ca sa nu loveasca DB-ul
+# cu toate query-urile odata.
+STAGGER_SECONDS = 180  # 3 minute
+
 
 def get_scheduler() -> AsyncIOScheduler | None:
     return _scheduler
@@ -24,32 +28,30 @@ async def start_scheduler() -> None:
 
     _scheduler = AsyncIOScheduler(timezone=BUCHAREST_TZ)
 
-    # Daily la 02:00 — rulează incremental (de la ultima rulare până ieri)
+    # Luni - sambata, la fiecare 2 ore intre 08:00 si 20:00 (08, 10, 12, 14, 16, 18, 20).
+    # In fiecare slot ruleaza toate rapoartele secvential cu pauza de 3 minute intre ele,
+    # pentru a nu suprasolicita DB-ul. Rapoartele individuale au cooldown intern de 5min,
+    # asa ca daca un job nu se termina pana la urmatoarea ora-par se va sari peste.
     _scheduler.add_job(
         run_all,
-        CronTrigger(hour=2, minute=0, timezone=BUCHAREST_TZ),
-        kwargs={"mode": "incremental"},
-        id="reports_daily_incremental",
+        CronTrigger(
+            day_of_week="mon-sat",
+            hour="8-20/2",
+            minute=0,
+            timezone=BUCHAREST_TZ,
+        ),
+        kwargs={"mode": "incremental", "stagger_seconds": STAGGER_SECONDS},
+        id="reports_business_hours_incremental",
         replace_existing=True,
-        misfire_grace_time=3600,
-        coalesce=True,
-    )
-
-    # Duminică la 04:00 — refresh pentru luna trecută + luna curentă
-    _scheduler.add_job(
-        run_all,
-        CronTrigger(day_of_week="sun", hour=4, minute=0, timezone=BUCHAREST_TZ),
-        kwargs={"mode": "weekly_refresh"},
-        id="reports_weekly_refresh",
-        replace_existing=True,
-        misfire_grace_time=3600,
+        misfire_grace_time=600,
         coalesce=True,
     )
 
     _scheduler.start()
     log.info(
-        "Scheduler rapoarte pornit (timezone=%s). Job-uri: daily@02:00 + sunday@04:00.",
-        BUCHAREST_TZ,
+        "Scheduler rapoarte pornit (timezone=%s). Job: luni-sambata 08:00-20:00 / 2h, "
+        "stagger %ds intre rapoarte.",
+        BUCHAREST_TZ, STAGGER_SECONDS,
     )
 
 
