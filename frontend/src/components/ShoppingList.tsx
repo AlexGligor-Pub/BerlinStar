@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
@@ -10,6 +10,7 @@ import { savePosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft } from "../store/montajRotiStore";
+import type { TipAnvelopa } from "../store/hotelAnvelopeStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -457,6 +458,27 @@ interface CazareBasic {
   numar_masina: string | null;
 }
 
+interface CazareAnvelopaPayload {
+  marca_id: number | null;
+  dimensiune_id: number | null;
+  profil_id: number | null;
+  tip: TipAnvelopa;
+  adancime: number | null;
+}
+
+interface CazareItemPayload {
+  anvelopa: CazareAnvelopaPayload | null;
+}
+
+interface CazareDetail extends CazareBasic {
+  montate_pe_masina: boolean | null;
+  items: CazareItemPayload[];
+}
+
+interface CazariResponse {
+  items: CazareDetail[];
+}
+
 export default function ShoppingList() {
   const navigate = useNavigate();
   const [titlu, setTitlu] = createSignal("");
@@ -653,20 +675,32 @@ export default function ShoppingList() {
     setVehicol(d.vehicol ?? null);
   });
 
-  // Încarcă cazarile legate de receiptul curent
-  createEffect(async () => {
+  // Încarcă cazarile legate de receiptul curent. Folosim AbortController + flag
+  // pentru a anula request-uri în zbor la schimbare de receipt sau unmount.
+  let cazariAbort: AbortController | null = null;
+  createEffect(() => {
     const rId = loadedReceiptId();
+    if (cazariAbort) { cazariAbort.abort(); cazariAbort = null; }
     if (!rId) { setLinkedCazari([]); return; }
-    try {
-      const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${rId}&limit=10`);
-      if (res.ok) {
-        const data = await res.json();
-        setLinkedCazari(data.items ?? []);
+    const controller = new AbortController();
+    cazariAbort = controller;
+    (async () => {
+      try {
+        const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${rId}&limit=10`, {
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (res.ok) {
+          const data = await res.json() as CazariResponse;
+          if (controller.signal.aborted) return;
+          setLinkedCazari(data.items ?? []);
+        }
+      } catch {
+        // ignoră erori de rețea / abort
       }
-    } catch {
-      // ignoră erori de rețea
-    }
+    })();
   });
+  onCleanup(() => { if (cazariAbort) cazariAbort.abort(); });
 
   const [montareRotiOpen, setMontareRotiOpen] = createSignal(false);
   const [montareRotiInitial, setMontareRotiInitial] = createSignal<MontajRotaDraft[]>([]);
@@ -747,13 +781,13 @@ export default function ShoppingList() {
       } else {
         const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${receiptIdNum}&limit=10`);
         if (res.ok) {
-          const data = await res.json();
-          const cazari = (data?.items ?? []) as any[];
+          const data = await res.json() as CazariResponse;
+          const cazari = data?.items ?? [];
           const src = cazari.find((c) => c.data_checkout && c.montate_pe_masina);
           if (src) {
-            const items = (src.items ?? []) as any[];
+            const items = src.items ?? [];
             initial = items
-              .filter((it) => it.anvelopa)
+              .filter((it): it is CazareItemPayload & { anvelopa: CazareAnvelopaPayload } => !!it.anvelopa)
               .map((it, i) => ({
                 pozitie: defaultPozitieForIndex(i),
                 presiune: 2.3,

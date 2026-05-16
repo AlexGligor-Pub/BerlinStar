@@ -5,6 +5,16 @@
  */
 
 import type { Receipt } from "../store/receiptsStore";
+import {
+  COLORS, PAGE, CONTENT_WIDTH,
+  lastTableY,
+  fmtDate, lei, docFilename, asciifyDiacritics,
+  hline, drawBackground, drawLogo, drawSideImage,
+  drawFooterWithBranding,
+  fetchImageAsDataUrl,
+  drawHeader, drawCompanyBlock, drawClientBlock,
+  drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
+} from "./pdf";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -29,22 +39,15 @@ export interface DocContext {
   disclaimer: { title: string; text: string } | null;
 }
 
-// ─── Culori ───────────────────────────────────────────────────────────────────
+// ─── Culori si margini ────────────────────────────────────────────────────────
+// Aliase locale catre constantele partajate din ./pdf — au ramas in nume scurte
+// pentru compactness, dar single source of truth e in pdf/constants.ts.
 
-const C = {
-  black:     [20, 20, 20]      as [number, number, number],
-  gray:      [100, 100, 100]   as [number, number, number],
-  lightGray: [180, 180, 180]   as [number, number, number],
-  veryLight: [240, 240, 240]   as [number, number, number],  // header tabel
-  white:     [255, 255, 255]   as [number, number, number],
-};
-
-const ML = 15;
-const MR = 15;
-const PAGE_W = 210;
-const CW = PAGE_W - ML - MR;  // content width
-const MT = 14;
-const PAGE_H = 297;
+const C = COLORS;
+const ML = PAGE.marginLeft;
+const MR = PAGE.marginRight;
+const CW = CONTENT_WIDTH;
+const MT = PAGE.marginTop;
 
 // ─── Encoding helper ──────────────────────────────────────────────────────────
 // jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1.
@@ -58,10 +61,7 @@ function ro(s: string | null | undefined): string {
   if (!s) return "";
   if (_keepDiacritics) return s;
   // fallback pentru Helvetica: inlocuieste diacriticele care nu sunt in Latin-1
-  return s
-    .replace(/ă/g, "a").replace(/Ă/g, "A")
-    .replace(/[șşȘŞ]/g, (c) => /[A-Z]/.test(c) ? "S" : "s")
-    .replace(/[țţȚŢ]/g, (c) => /[A-Z]/.test(c) ? "T" : "t");
+  return asciifyDiacritics(s);
 }
 
 /**
@@ -153,319 +153,14 @@ function makeT(hasFont: boolean) {
 }
 
 // ─── Format helpers ───────────────────────────────────────────────────────────
-
-function fmtDate(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleDateString("ro-RO");
-}
-
-function fmtNow() {
-  return new Date().toLocaleDateString("ro-RO");
-}
-
-function docFilename(prefix: string, titlu: string): string {
-  const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14); // YYYYMMDDHHmmss
-  const slug = titlu
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // scoate diacritice
-    .replace(/[^a-zA-Z0-9 _-]/g, "")                 // scoate caractere speciale
-    .trim().replace(/\s+/g, "_")
-    .slice(0, 60);
-  return `${prefix}_${slug}_${ts}.pdf`;
-}
-
-function lei(n: number) {
-  return `${n.toFixed(2)} lei`;
-}
+// fmtDate, fmtNow, lei, docFilename sunt importate din ./pdf — partajate cu
+// generateReceiptPdf si orice generator viitor.
 
 // ─── Componente desenare ──────────────────────────────────────────────────────
 
-/** Linie orizontala subtire */
-function hline(doc: any, y: number, color = C.lightGray, w = 0.2): void {
-  doc.setDrawColor(...color);
-  doc.setLineWidth(w);
-  doc.line(ML, y, PAGE_W - MR, y);
-}
-
-/** Header document: titlu + serie/nr + data (stanga), logo (dreapta via drawLogo) */
-function drawHeader(doc: any, title: string, serie: string, nr: number, date: string, font = "helvetica"): number {
-  let y = MT;
-
-  // Titlu document
-  doc.setFont(font, "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...C.black);
-  doc.text(title, ML, y);
-
-  // Serie + Nr + Data — stanga, sub titlu
-  doc.setFont(font, "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-  y += 6;
-  if (serie) {
-    doc.text(`Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}`, ML, y);
-  } else {
-    doc.text(`Nr.: ${String(nr).padStart(2, "0")}`, ML, y);
-  }
-  y += 4;
-  doc.text(`Data: ${date}`, ML, y);
-
-  y += 5;
-  return y + 5;
-}
-
-/** Bloc companie: eticheta + camp info */
-function drawCompanyBlock(
-  doc: any, label: string, company: DocContext["company"],
-  x: number, y: number, bw: number
-): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.black);
-  doc.text(ro(label).toUpperCase(), x, y);
-  y += 3.5;
-
-  if (!company) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...C.black);
-    doc.text("-", x, y);
-    return y + 4;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.black);
-  const nameLines: string[] = doc.splitTextToSize(ro(company.name), bw);
-  doc.text(nameLines, x, y);
-  y += nameLines.length * 4.2;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
-  if (company.cui) { doc.text(`CUI: ${company.cui}`, x, y); y += 3.5; }
-  if (company.nr_reg_com) { doc.text(`Reg.Com.: ${ro(company.nr_reg_com)}`, x, y); y += 3.5; }
-  if (company.address) {
-    const al: string[] = doc.splitTextToSize(ro(company.address), bw);
-    doc.text(al, x, y);
-    y += al.length * 3.5;
-  }
-  if (company.phone) { doc.text(`Tel: ${ro(company.phone)}`, x, y); y += 3.5; }
-  if (company.bank_name) { doc.text(`Banca: ${ro(company.bank_name)}`, x, y); y += 3.5; }
-  if (company.iban) { doc.text(`IBAN: ${company.iban}`, x, y); y += 3.5; }
-  if (company.capital_social != null) { doc.text(`Capital social: ${company.capital_social.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} lei`, x, y); y += 3.5; }
-  return y;
-}
-
-/** Bloc client */
-function drawClientBlock(
-  doc: any, label: string, r: Receipt,
-  x: number, y: number, bw: number
-): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.black);
-  doc.text(ro(label).toUpperCase(), x, y);
-  y += 3.5;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...C.black);
-  const lines: string[] = doc.splitTextToSize(ro(r.clientNume ?? "-"), bw);
-  doc.text(lines, x, y);
-  y += lines.length * 4.2;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
-  if (r.clientCui)          { doc.text(`CUI: ${r.clientCui}`, x, y); y += 3.5; }
-  if (r.clientReprezentant) { doc.text(`Repr.: ${ro(r.clientReprezentant)}`, x, y); y += 3.5; }
-  if (r.clientAdresa) {
-    const al: string[] = doc.splitTextToSize(ro(r.clientAdresa), bw);
-    doc.text(al, x, y);
-    y += al.length * 3.5;
-  }
-  if (r.clientTelefon) { doc.text(`Tel: ${r.clientTelefon}`, x, y); y += 3.5; }
-  return y;
-}
-
-/** Tabel articole cu TVA per linie */
-function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number, tvaPct: number, showTehnician = false): number {
-  const rows = r.items.map((item, idx) => {
-    const total = item.price * item.qty;
-    const net = total / (1 + tvaPct / 100);
-    const tva = total - net;
-    const row = [
-      String(idx + 1),
-      ro(item.name),
-    ];
-    if (showTehnician) {
-      const teh = item.employeeName ? ro(item.employeeName).slice(0, 15) : "";
-      row.push(teh);
-    }
-    row.push(
-      String(item.qty),
-      ro(item.unit),
-      item.price.toFixed(2),
-      net.toFixed(2),
-      tva.toFixed(2),
-      total.toFixed(2),
-    );
-    return row;
-  });
-
-  const head = showTehnician
-    ? [["#", "Denumire", "Tehnician", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]]
-    : [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]];
-
-  const columnStyles: Record<number, any> = showTehnician
-    ? {
-        0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
-        1: { cellWidth: "auto" },
-        2: { cellWidth: 22 },
-        3: { halign: "center", cellWidth: 11 },
-        4: { halign: "center", cellWidth: 11 },
-        5: { halign: "right", cellWidth: 20 },
-        6: { halign: "right", cellWidth: 20 },
-        7: { halign: "right", cellWidth: 20 },
-        8: { halign: "right", cellWidth: 22, fontStyle: "bold" },
-      }
-    : {
-        0: { halign: "center", cellWidth: 8, textColor: [...C.black] },
-        1: { cellWidth: "auto" },
-        2: { halign: "center", cellWidth: 11 },
-        3: { halign: "center", cellWidth: 11 },
-        4: { halign: "right", cellWidth: 22 },
-        5: { halign: "right", cellWidth: 22 },
-        6: { halign: "right", cellWidth: 22 },
-        7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
-      };
-
-  autoTable(doc, {
-    startY: y,
-    head,
-    body: rows,
-    styles: {
-      fontSize: 7.5,
-      cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
-      textColor: [...C.black],
-      lineColor: [...C.black],
-      lineWidth: 0.1,
-    },
-    headStyles: {
-      fillColor: [...C.veryLight],
-      textColor: [...C.black],
-      fontSize: 7,
-      fontStyle: "bold",
-      lineColor: [...C.black],
-      lineWidth: 0.2,
-    },
-    alternateRowStyles: {},
-    columnStyles,
-    margin: { left: ML, right: MR },
-    tableWidth: CW,
-  });
-
-  return (doc as any).lastAutoTable.finalY + 3; // jsPDF-autotable extinde doc cu lastAutoTable la runtime — neexpus in types
-}
-
-/** Sectiune totale — TVA afisat intotdeauna (0% daca nu e platitor TVA) */
-function drawTotals(
-  doc: any, r: Receipt, y: number, tvaPct: number | null | undefined
-): number {
-  const rightX = PAGE_W - MR;
-  const labelX = rightX - 60;
-
-  const pct = tvaPct ?? 0;
-  const totalFinal = r.total;
-  const net = totalFinal / (1 + pct / 100);
-  const tvaAmt = totalFinal - net;
-
-  hline(doc, y, C.lightGray, 0.2);
-  y += 4;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-
-  // Subtotal fara TVA
-  doc.text("Subtotal (fara TVA):", labelX, y);
-  doc.text(lei(net), rightX, y, { align: "right" });
-  y += 4.5;
-
-  // TVA
-  doc.text(`TVA ${pct}%:`, labelX, y);
-  doc.text(lei(tvaAmt), rightX, y, { align: "right" });
-  y += 4.5;
-
-  hline(doc, y, C.lightGray, 0.2);
-  y += 4;
-
-  // Total de plata
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.setTextColor(...C.black);
-  doc.text("TOTAL DE PLATA:", labelX, y);
-  doc.text(lei(totalFinal), rightX, y, { align: "right" });
-  y += 5;
-
-  if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...C.black);
-    const restVal = totalFinal - r.partialPay;
-    doc.text(`Avans: ${lei(r.partialPay)}`, labelX, y);
-    doc.text(`Rest: ${lei(restVal)}`, rightX, y, { align: "right" });
-    y += 4.5;
-  }
-
-  return y + 2;
-}
-
-/** Disclaimer — 6pt, gri deschis */
-function drawDisclaimer(doc: any, disclaimer: DocContext["disclaimer"], y: number): number {
-  if (!disclaimer?.text) return y;
-  if (y > PAGE_H - 30) { doc.addPage(); y = MT; }
-
-  hline(doc, y, C.veryLight, 0.2);
-  y += 3;
-
-  if (disclaimer.title) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(6);
-    doc.setTextColor(...C.black);
-    doc.text(ro(disclaimer.title).toUpperCase(), ML, y);
-    y += 3;
-  }
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6);
-  doc.setTextColor(...C.black);
-  const lines: string[] = doc.splitTextToSize(ro(disclaimer.text), CW);
-  doc.text(lines, ML, y);
-  y += lines.length * 2.8 + 3;
-  return y;
-}
-
-/** Doua rubrici de semnatura */
-function drawSignatures(doc: any, leftLabel: string, rightLabel: string, y: number): number {
-  if (y > PAGE_H - 22) { doc.addPage(); y = MT; }
-  y += 8;
-
-  const colW = CW / 2 - 8;
-  const col2X = ML + colW + 16;
-
-  doc.setDrawColor(...C.black);
-  doc.setLineWidth(0.3);
-  doc.line(ML, y, ML + colW, y);
-  doc.line(col2X, y, col2X + colW, y);
-
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
-  doc.text(leftLabel, ML, y + 4);
-  doc.text(rightLabel, col2X, y + 4);
-
-  return y + 12;
-}
+// hline, drawHeader, drawCompanyBlock, drawClientBlock, drawItemsTable,
+// drawTotals, drawDisclaimer, drawSignatures mutate in ./pdf/primitives si
+// ./pdf/documents. Call sites paseaza `ro` ca text-transform (parametrul t).
 
 
 async function loadPdf() {
@@ -476,147 +171,8 @@ async function loadPdf() {
   return { jsPDF, autoTable };
 }
 
-/** Incarca o imagine remote ca dataURL (via Image + canvas, fara CORS fetch) */
-async function loadImageAsDataUrl(url: string): Promise<string | null> {
-  try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("load failed"));
-      img.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalWidth || 300;
-    canvas.height = img.naturalHeight || 300;
-    canvas.getContext("2d")!.drawImage(img, 0, 0);
-    return canvas.toDataURL("image/png");
-  } catch {
-    return null;
-  }
-}
-
-/** Deseneaza fundalul cu 20% opacitate pe pagina curenta (apeleaza inainte de orice alt continut) */
-async function drawBackground(doc: any, url: string | null | undefined): Promise<void> {
-  if (!url) return;
-  try {
-    const dataUrl = await loadImageAsDataUrl(url);
-    if (!dataUrl) return;
-    const img = new Image();
-    await new Promise<void>((res) => { img.onload = () => res(); img.onerror = () => res(); img.src = dataUrl; });
-    const canvas = document.createElement("canvas");
-    canvas.width = 794; canvas.height = 1123; // ~A4 la 96dpi
-    const ctx2d = canvas.getContext("2d")!;
-    ctx2d.fillStyle = "#ffffff";
-    ctx2d.fillRect(0, 0, canvas.width, canvas.height);
-    ctx2d.globalAlpha = 0.5;
-    ctx2d.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const faded = canvas.toDataURL("image/png");
-    doc.addImage(faded, "PNG", 0, 0, PAGE_W, PAGE_H, "bg", "FAST");
-  } catch { /* ignore */ }
-}
-
-/** Deseneaza logo-ul in coltul din dreapta-sus */
-async function drawLogo(doc: any, url: string | null | undefined, y: number): Promise<void> {
-  if (!url) return;
-  try {
-    const dataUrl = await loadImageAsDataUrl(url);
-    if (!dataUrl) return;
-    const logoH = 20;
-    const logoW = 20;
-    const x = PAGE_W - MR - logoW;
-    doc.addImage(dataUrl, "PNG", x, y, logoW, logoH, undefined, "FAST");
-  } catch { /* ignore */ }
-}
-
-/** Incarca o imagine via fetch (bypass-eaza taint-ul de canvas) si o intoarce ca dataURL + dimensiuni naturale. */
-async function fetchImageAsDataUrl(url: string): Promise<{ dataUrl: string; w: number; h: number } | null> {
-  try {
-    const res = await fetch(url, { mode: "cors", credentials: "omit" });
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    const dataUrl: string = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error("read failed"));
-      reader.readAsDataURL(blob);
-    });
-    const dims: { w: number; h: number } = await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
-      img.onerror = () => resolve({ w: 1, h: 1 });
-      img.src = dataUrl;
-    });
-    return { dataUrl, w: dims.w, h: dims.h };
-  } catch {
-    return null;
-  }
-}
-
-/** Deseneaza o imagine intr-o caseta (boxW x boxH), pastrand aspect-ratio si centrand. */
-async function drawSideImage(
-  doc: any,
-  url: string | null | undefined,
-  boxX: number,
-  boxY: number,
-  boxW: number,
-  boxH: number,
-): Promise<void> {
-  if (!url || boxH <= 0 || boxW <= 0) return;
-  const loaded = await fetchImageAsDataUrl(url);
-  if (!loaded) return;
-  try {
-    const ratio = loaded.w / loaded.h;
-    let w = boxW;
-    let h = w / ratio;
-    if (h > boxH) { h = boxH; w = h * ratio; }
-    const x = boxX + (boxW - w) / 2;
-    const y = boxY + (boxH - h) / 2;
-    // Determina format-ul din mime type (JPEG vs PNG). jsPDF accepta dataURL direct.
-    const fmt = loaded.dataUrl.startsWith("data:image/jpeg") ? "JPEG" : "PNG";
-    doc.addImage(loaded.dataUrl, fmt, x, y, w, h, undefined, "FAST");
-  } catch { /* ignore */ }
-}
-
-/** Genereaza QR code ca data URL */
-async function qrDataUrl(text: string): Promise<string | null> {
-  try {
-    const QRCode = await import("qrcode");
-    return await QRCode.toDataURL(text, { width: 80, margin: 1, errorCorrectionLevel: "M" });
-  } catch {
-    return null;
-  }
-}
-
-/** Footer cu website + QR code */
-async function drawFooterWithBranding(doc: any, website: string | null | undefined): Promise<void> {
-  const n = (doc as any).internal.getNumberOfPages();
-  const now = fmtNow();
-  const qr = website ? await qrDataUrl(website) : null;
-
-  for (let i = 1; i <= n; i++) {
-    doc.setPage(i);
-    const h = doc.internal.pageSize.getHeight();
-    hline(doc, h - 10, C.veryLight, 0.2);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...C.black);
-    doc.text(`Generat: ${now}`, ML, h - 5.5);
-    doc.text(`Pagina ${i} / ${n}`, PAGE_W - MR, h - 5.5, { align: "right" });
-
-    if (website) {
-      doc.setFontSize(6.5);
-      doc.setTextColor(...C.black);
-      doc.text(website, PAGE_W / 2, h - 5.5, { align: "center" });
-    }
-
-    if (qr && i === 1) {
-      const qrSize = 12;
-      doc.addImage(qr, "PNG", PAGE_W / 2 - qrSize / 2, h - 10 - qrSize - 1, qrSize, qrSize, undefined, "FAST");
-    }
-  }
-}
+// loadImageAsDataUrl, drawBackground, drawLogo, fetchImageAsDataUrl,
+// drawSideImage, qrDataUrl, drawFooterWithBranding mutate in ./pdf/primitives.
 
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
@@ -642,48 +198,36 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   doc.text(titluLines, ML, y);
   y += titluLines.length * 4.5 + 3;
 
-  // Prestator + Beneficiar
-  const bw = CW / 2 - 5;
-  const col2X = ML + bw + 10;
-  const y1 = drawCompanyBlock(doc, "Prestator", ctx.company, ML, y, bw);
-  let y2 = drawClientBlock(doc, "Client", r, col2X, y, bw);
-
-  // Vehicol sub datele clientului
+  // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
+  const t = makeT(true);
+  const client: ClientInfoForPdf = {
+    clientNume: r.clientNume,
+    clientCui: r.clientCui,
+    clientReprezentant: r.clientReprezentant,
+    clientAdresa: r.clientAdresa,
+    clientTelefon: r.clientTelefon,
+  };
   const veh = r.vehicol;
-  if (veh) {
-    y2 += 2;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...C.black);
-    doc.text("VEHICUL", col2X, y2);
-    y2 += 3.5;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text(ro(veh.numarMasina), col2X, y2);
-    y2 += 4.2;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    if (veh.marca || veh.model) {
-      doc.text([ro(veh.marca), ro(veh.model)].filter(Boolean).join(" "), col2X, y2);
-      y2 += 3.5;
-    }
-    const kmVin: string[] = [];
-    if (veh.numarKilometrii != null) kmVin.push(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`);
-    if (veh.vin) kmVin.push(`VIN: ${veh.vin}`);
-    if (kmVin.length) { doc.text(kmVin.join("  ·  "), col2X, y2); y2 += 3.5; }
-    if (veh.observatii?.trim()) {
-      const ol: string[] = doc.splitTextToSize(ro(veh.observatii.trim()), bw);
-      doc.text(ol, col2X, y2);
-      y2 += ol.length * 3.5;
-    }
-  }
+  const vehicleForPdf: VehiculForPdf | null = veh
+    ? {
+        numarMasina: veh.numarMasina,
+        marca: veh.marca,
+        model: veh.model,
+        numarKilometrii: veh.numarKilometrii,
+        vin: veh.vin,
+        observatii: veh.observatii,
+      }
+    : null;
 
-  y = Math.max(y1, y2) + 4;
+  const bw = (CW - CARDS_GAP_X) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + CARDS_GAP_X;
+  y = drawCazareTopCards(doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, y, bw, t, "helvetica") + 4;
 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
 
-  y = drawItemsTable(doc, autoTable, r, y, tvaPct, showTehnician);
+  y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
   y = drawTotals(doc, r, y, tvaPct);
 
   if (r.descriere?.trim()) {
@@ -733,7 +277,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     y += 12;
   }
 
-  y = drawDisclaimer(doc, ctx.disclaimer, y);
+  y = drawDisclaimer(doc, ctx.disclaimer, y, ro);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   await drawFooterWithBranding(doc, ctx.company?.website);
 
@@ -765,14 +309,14 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   // Furnizor + Cumparator
   const bw = CW / 2 - 5;
   const col2X = ML + bw + 10;
-  const y1 = drawCompanyBlock(doc, "Furnizor", ctx.company, ML, y, bw);
-  const y2 = drawClientBlock(doc, "Cumparator", r, col2X, y, bw);
+  const y1 = drawCompanyBlock(doc, "Furnizor", ctx.company, ML, y, bw, ro);
+  const y2 = drawClientBlock(doc, "Cumparator", r, col2X, y, bw, ro);
   y = Math.max(y1, y2) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
 
-  y = drawItemsTable(doc, autoTable, r, y, tvaPct);
+  y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
   y = drawTotals(doc, r, y, tvaPct);
 
   if (r.metodaPlata) {
@@ -783,7 +327,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
     y += 5;
   }
 
-  y = drawDisclaimer(doc, ctx.disclaimer, y);
+  y = drawDisclaimer(doc, ctx.disclaimer, y, ro);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   await drawFooterWithBranding(doc, ctx.company?.website);
 
@@ -983,7 +527,7 @@ export interface CompanyData {
   capital_social?: number | null;
 }
 
-interface CazareForPdf {
+export interface CazareForPdf {
   id: number;
   dataCheckin: string;
   dataCheckout?: string | null;
@@ -1389,7 +933,7 @@ export async function generateCazareCheckin(
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
     });
-    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableEndY = lastTableY(doc);
     const tableH = tableEndY - tableStartY;
 
     await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
@@ -1447,7 +991,7 @@ export async function generateCazareCheckin(
         margin: { left: ML, right: MR },
         tableWidth: CW,
       });
-      y = (doc as any).lastAutoTable.finalY + 3;
+      y = lastTableY(doc) + 3;
     }
     y += 4;
   }
@@ -1608,7 +1152,7 @@ export async function generateCazareScoatereIntroducere(
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
     });
-    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableEndY = lastTableY(doc);
     const tableH = tableEndY - tableStartY;
 
     // Side image: montare if mounted on car, otherwise scoatere (fallback to the other if missing)
@@ -1701,7 +1245,7 @@ export async function generateCazareScoatereIntroducere(
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
     });
-    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableEndY = lastTableY(doc);
     const tableH = tableEndY - tableStartY;
 
     await drawSideImage(doc, images?.cazare ?? null, ML + tableW + SIDE_GAP, tableStartY, SIDE_IMG_W, tableH);
@@ -1850,7 +1394,7 @@ export async function generateCazareCheckout(
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
     });
-    const tableEndY = (doc as any).lastAutoTable.finalY;
+    const tableEndY = lastTableY(doc);
     const tableH = tableEndY - tableStartY;
 
     const sideUrl = images?.scoatere ?? images?.montare ?? null;

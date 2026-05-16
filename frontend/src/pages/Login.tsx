@@ -1,23 +1,21 @@
 import { createSignal, Show } from "solid-js";
-import { useNavigate, useSearchParams } from "@solidjs/router";
-import { login } from "../store/authStore";
-import { API_BASE, readApiError } from "../utils/api";
+import { useSearchParams } from "@solidjs/router";
+import { loginAndRedirect } from "../store/authStore";
+import { apiFetch, readApiError } from "../utils/api";
 import ThemeToggle from "../components/ThemeToggle";
 import Modal from "../components/ui/Modal";
 import logo from "../assets/logo.png";
 
 export default function Login() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  function redirectAfterLogin() {
+  function resolveLoginTarget(): string {
     const raw = searchParams.from;
     const from = Array.isArray(raw) ? raw[0] : raw;
-    let target = "/";
     if (typeof from === "string" && from.startsWith("/") && !from.startsWith("//")) {
-      try { target = decodeURIComponent(from); } catch { target = from; }
+      try { return decodeURIComponent(from); } catch { return from; }
     }
-    navigate(target, { replace: true });
+    return "/";
   }
 
   // login
@@ -63,16 +61,22 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        handleUnauthorized: false,
         body: JSON.stringify({ username: username().trim(), password: password() }),
       });
 
       if (res.ok) {
-        const data = await res.json();
-        login(username().trim(), data.access_token, data.is_locked ?? false, data.locked_at ?? null);
-        redirectAfterLogin();
+        const data = await res.json() as { access_token: string; is_locked?: boolean; locked_at?: string | null };
+        loginAndRedirect(
+          username().trim(),
+          data.access_token,
+          data.is_locked ?? false,
+          data.locked_at ?? null,
+          resolveLoginTarget(),
+        );
+        return;
       } else if (res.status === 401 || res.status === 403) {
         setError("Utilizator sau parola incorecta.");
       } else if (res.status === 429) {
@@ -117,9 +121,9 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/register`, {
+      const res = await apiFetch("/api/auth/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        handleUnauthorized: false,
         body: JSON.stringify({
           name: regName().trim(),
           username: regUsername().trim(),
@@ -242,30 +246,32 @@ export default function Login() {
                 required
               />
             </div>
-            <div class="form-group">
-              <label class="form-label" for="reg-cui">CUI Firma</label>
-              <input
-                id="reg-cui"
-                class="input"
-                type="text"
-                inputmode="numeric"
-                placeholder="ex: 12345678"
-                value={regCui()}
-                onInput={(e) => setRegCui(e.currentTarget.value)}
-                required
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="reg-phone">Numar de telefon</label>
-              <input
-                id="reg-phone"
-                class="input"
-                type="tel"
-                placeholder="ex: 0712345678"
-                value={regPhone()}
-                onInput={(e) => setRegPhone(e.currentTarget.value)}
-                required
-              />
+            <div class="login-form-row">
+              <div class="form-group">
+                <label class="form-label" for="reg-cui">CUI Firma</label>
+                <input
+                  id="reg-cui"
+                  class="input"
+                  type="text"
+                  inputmode="numeric"
+                  placeholder="ex: 12345678"
+                  value={regCui()}
+                  onInput={(e) => setRegCui(e.currentTarget.value)}
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="reg-phone">Numar de telefon</label>
+                <input
+                  id="reg-phone"
+                  class="input"
+                  type="tel"
+                  placeholder="ex: 0712345678"
+                  value={regPhone()}
+                  onInput={(e) => setRegPhone(e.currentTarget.value)}
+                  required
+                />
+              </div>
             </div>
             <div class="form-group">
               <label class="form-label" for="reg-password">Parola</label>

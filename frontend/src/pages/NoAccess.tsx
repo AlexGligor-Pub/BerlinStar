@@ -1,13 +1,9 @@
 import { logout } from "../store/authStore";
-import { useNavigate } from "@solidjs/router";
 import logo from "../assets/logo.png";
 
 export default function NoAccess() {
-  const navigate = useNavigate();
-
   function handleLogout() {
     logout();
-    navigate("/login");
   }
 
   return (

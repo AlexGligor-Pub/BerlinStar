@@ -10,18 +10,6 @@ interface AuthState {
 
 const STORAGE_KEY = "bs_auth";
 
-// Cheile localStorage care contin date utilizator legate de cont si trebuie
-// curatate la logout. NU le sterge cu localStorage.clear() — pastram theme,
-// device setup, etc.
-const ACCOUNT_SCOPED_KEYS = [
-  STORAGE_KEY,
-  "bs_products_cache_v2",
-  "bs_cart",
-  "bs_emp_view_mode",
-  "bs_resume",
-  "bs_admin_token",
-];
-
 function loadAuth(): AuthState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -38,19 +26,41 @@ function persist(state: AuthState) {
   } catch {}
 }
 
+function clearAllStorage() {
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+}
+
 export function login(user: string, token: string, isLocked = false, lockedAt: string | null = null) {
+  clearAllStorage();
   const next: AuthState = { user, token, isLocked, lockedAt };
   setAuth(next);
   persist(next);
 }
 
-export function logout() {
+export function loginAndRedirect(
+  user: string,
+  token: string,
+  isLocked: boolean,
+  lockedAt: string | null,
+  target: string,
+) {
+  clearAllStorage();
+  const next: AuthState = { user, token, isLocked, lockedAt };
+  setAuth(next);
+  persist(next);
+  // Hard reload pentru ca toate store-urile Solid sa se reinitializeze de la zero.
+  window.location.assign(target);
+}
+
+export function logout(redirectTo: string | null = "/login") {
   setAdminVisible(false);
   const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null };
   setAuth(next);
-  // Sterge doar cheile legate de cont, nu intregul localStorage.
-  for (const k of ACCOUNT_SCOPED_KEYS) {
-    try { localStorage.removeItem(k); } catch {}
+  clearAllStorage();
+  if (redirectTo) {
+    // Hard reload pentru a sterge si starea in-memory a store-urilor Solid.
+    window.location.assign(redirectTo);
   }
 }
 

@@ -11,26 +11,53 @@ function emitUnauthorized(): void {
   }
 }
 
-export function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+export interface ApiFetchOptions extends RequestInit {
+  /** Token alternativ (ex. token admin elevat). Daca lipseste, foloseste auth.token. */
+  authToken?: string | null;
+  /** Daca true (default), un raspuns 401 declanseaza logout + emit "bs:unauthorized". */
+  handleUnauthorized?: boolean;
+}
+
+function buildHeaders(options: ApiFetchOptions): Record<string, string> {
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
-  // Nu seta Content-Type pentru FormData (lasa browserul sa puna boundary-ul).
   const body = options.body;
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   if (!isFormData && !headers["Content-Type"] && body !== undefined && body !== null) {
     headers["Content-Type"] = "application/json";
   }
-  if (auth.token) {
-    headers["Authorization"] = `Bearer ${auth.token}`;
+  const tok = options.authToken !== undefined ? options.authToken : auth.token;
+  if (tok) {
+    headers["Authorization"] = `Bearer ${tok}`;
   }
-  return fetch(API_BASE + url, { ...options, headers }).then((res) => {
-    if (res.status === 401 && auth.token) {
+  return headers;
+}
+
+export function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Response> {
+  const handleUnauthorized = options.handleUnauthorized !== false;
+  const headers = buildHeaders(options);
+  const { authToken: _at, handleUnauthorized: _hu, ...init } = options;
+  return fetch(API_BASE + url, { ...init, headers }).then((res) => {
+    if (handleUnauthorized && res.status === 401 && auth.token) {
       logout();
       emitUnauthorized();
     }
     return res;
   });
+}
+
+/**
+ * Helper pentru upload multipart/form-data prin apiFetch.
+ * Nu seta Content-Type — browserul ataseaza boundary automat.
+ */
+export function apiUpload(
+  url: string,
+  formData: FormData,
+  options: Omit<ApiFetchOptions, "body" | "method"> & { method?: "POST" | "PUT" | "PATCH" } = {},
+): Promise<Response> {
+  const { method = "POST", ...rest } = options;
+  return apiFetch(url, { ...rest, method, body: formData });
 }
 
 interface PydanticValidationError {
@@ -73,4 +100,29 @@ export async function readApiError(res: Response, fallback = "Eroare la procesar
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Citeste body-ul ca JSON, dar daca parsing-ul esueaza intoarce un obiect gol.
+ * Utilizeaza-l cand vrei doar sa extragi un eventual .detail dintr-un raspuns eroare.
+ */
+export async function readJsonSafe<T = Record<string, unknown>>(res: Response): Promise<T> {
+  try {
+    return (await res.json()) as T;
+  } catch {
+    return {} as T;
+  }
+}
+
+/**
+ * Fetch + parse JSON, typed. Pe error arunca un Error cu mesaj prelucrat din raspuns.
+ * Util cand vrei `const data = await apiFetchJson<MyType>("/api/x")` fara boilerplate.
+ */
+export async function apiFetchJson<T>(url: string, options: ApiFetchOptions = {}): Promise<T> {
+  const res = await apiFetch(url, options);
+  if (!res.ok) {
+    const msg = await readApiError(res, `Eroare HTTP ${res.status}`);
+    throw new Error(msg);
+  }
+  return (await res.json()) as T;
 }

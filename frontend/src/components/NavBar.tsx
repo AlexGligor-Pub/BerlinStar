@@ -7,7 +7,7 @@ import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import { Show, createSignal, onCleanup, onMount, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
-import { API_BASE } from "../utils/api";
+import { apiFetch } from "../utils/api";
 
 export default function NavBar() {
   const navigate = useNavigate();
@@ -32,7 +32,6 @@ export default function NavBar() {
   function handleLogout() {
     setOpen(false);
     logout();
-    navigate("/login");
   }
 
   function handleNavigate(path: string) {
@@ -50,9 +49,9 @@ export default function NavBar() {
     setAdminError("");
     setAdminLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/login`, {
+      const res = await apiFetch("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        handleUnauthorized: false,
         body: JSON.stringify({ username: auth.user, password: adminPassword() }),
       });
       if (res.ok) {

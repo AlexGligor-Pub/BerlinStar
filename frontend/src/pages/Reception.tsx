@@ -563,16 +563,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
       const imgs = buildHotelImageProxyUrls();
       const vehicle = r.vehicol ?? null;
       if (type === "checkin") {
-        await generateCazareCheckin(full as any, company, imgs, vehicle);
+        await generateCazareCheckin(full, company, imgs, vehicle);
       } else if (type === "checkout") {
-        await generateCazareCheckout(full as any, company, imgs, vehicle);
+        await generateCazareCheckout(full, company, imgs, vehicle);
       } else {
         if (full.successorCazareId == null || !full.dataCheckout) return;
         const successor = await getCazareById(full.successorCazareId);
         if (!successor) return;
         await generateCazareScoatereIntroducere(
-          full as any,
-          successor as any,
+          full,
+          successor,
           company,
           full.dataCheckout,
           full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
@@ -636,7 +636,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
     }));
 
-    const cazariBasice: any[] = cazariRes?.items ?? [];
+    const cazariBasice: Array<{ id: number }> = cazariRes?.items ?? [];
     const sections: CazareSection[] = [];
     const renderedIds = new Set<number>();
 
@@ -649,8 +649,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
         if (successor) {
           sections.push({
             type: "combined",
-            checkout: full as any,
-            newCazare: successor as any,
+            checkout: full,
+            newCazare: successor,
             checkoutDate: full.dataCheckout,
             montatePeMasina: full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
           });
@@ -660,9 +660,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
         }
       }
       if (full.dataCheckout) {
-        sections.push({ type: "checkout", cazare: full as any, checkoutDate: full.dataCheckout });
+        sections.push({ type: "checkout", cazare: full, checkoutDate: full.dataCheckout });
       } else {
-        sections.push({ type: "checkin", cazare: full as any });
+        sections.push({ type: "checkin", cazare: full });
       }
       renderedIds.add(full.id);
     }

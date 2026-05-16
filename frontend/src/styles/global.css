@@ -306,7 +306,7 @@ body {
   min-height: 100dvh;
   padding: 16px;
   background: var(--bg);
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .login-video-bg {
@@ -404,6 +404,59 @@ body {
   padding: 8px 12px;
   font-size: 0.85rem;
   margin-bottom: 16px;
+}
+
+.login-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.login-form-row > .form-group {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 600px) {
+  .login-page {
+    justify-content: flex-start;
+    padding: 56px 12px 24px;
+    gap: 14px;
+  }
+  .login-card {
+    padding: 20px 16px;
+    max-width: 100%;
+    border-radius: 12px;
+  }
+  .login-logo {
+    height: 56px;
+  }
+  .login-subtitle {
+    font-size: 0.95rem;
+  }
+  .login-powered {
+    margin-bottom: 16px;
+  }
+  .login-news-link {
+    padding: 0 8px;
+    line-height: 1.4;
+  }
+  .login-card .input {
+    font-size: 16px;
+    padding: 11px 12px;
+  }
+  .login-card .btn {
+    padding: 12px 16px;
+    font-size: 0.95rem;
+  }
+  .login-card .form-group {
+    margin-bottom: 12px;
+  }
+  .login-form-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .login-form-row > .form-group {
+    margin-bottom: 12px;
+  }
 }
 
 
@@ -4693,9 +4746,12 @@ body {
   padding: 24px;
 }
 
-/* Override sticky top — no 56px navbar in adminv2 */
+/* Override sticky top — no 56px navbar in adminv2.
+   z-index sub sidebar-ul mobil (30) si sub mobile-header (20) ca sa nu se
+   suprapuna peste meniul din stanga cand se deschide. */
 .adminv2-content .page-header {
   top: 0;
+  z-index: 10;
 }
 
 /* ── Account cards grid ──────────────────────────────────────────────────── */
@@ -4956,6 +5012,20 @@ body {
 ───────────────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
+  /* Pe mobil renuntam la container-ul cu inaltime fixa si lasam pagina sa
+     curga normal — astfel scroll-ul functioneaza pana jos chiar si cand
+     address bar-ul browserului e afisat (100vh nu acopera viewport-ul
+     vizibil). */
+  .adminv2-page {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .adminv2-layout {
+    overflow: visible;
+  }
+
   .adminv2-mobile-header {
     display: flex;
   }
@@ -4980,7 +5050,14 @@ body {
   }
 
   .adminv2-content {
+    overflow: visible;
     padding: 16px;
+  }
+
+  /* Pe mobil page-header nu mai e sticky — altfel ar acoperi meniul din
+     stanga (sidebar overlay) si tot el ar bloca scroll-ul vizual. */
+  .adminv2-content .page-header {
+    position: static;
   }
 
   .hotel-img-grid {

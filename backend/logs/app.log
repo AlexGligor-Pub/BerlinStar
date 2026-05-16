@@ -1477,3 +1477,607 @@ DETAIL:  Key (name)=(Geometrie) already exists.
 2026-05-15T23:48:02 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=0ffab5b3  status=200  1.1ms
 2026-05-15T23:48:13 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=da4ea78d  ip=127.0.0.1
 2026-05-15T23:48:13 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=da4ea78d  status=200  13.9ms
+2026-05-15T23:55:19 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=41b169c4  ip=127.0.0.1
+2026-05-15T23:55:19 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=41b169c4  status=200  1.4ms
+2026-05-15T23:55:54 [INFO    ] berlinstar.http: → GET /api/items  rid=5ab30489  ip=127.0.0.1
+2026-05-15T23:55:54 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=1beb74fd  ip=127.0.0.1
+2026-05-15T23:55:54 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=1beb74fd  status=200  1.8ms
+2026-05-15T23:55:54 [INFO    ] berlinstar.http: ← GET /api/items  rid=5ab30489  status=200  77.4ms
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: → GET /api/categories  rid=6c900287  ip=127.0.0.1
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: → GET /api/departments  rid=e2240ef4  ip=127.0.0.1
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: ← GET /api/categories  rid=6c900287  status=200  175.5ms
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: ← GET /api/departments  rid=e2240ef4  status=200  21.9ms
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: → GET /api/categories  rid=51b5cbad  ip=127.0.0.1
+2026-05-15T23:57:31 [INFO    ] berlinstar.http: ← GET /api/categories  rid=51b5cbad  status=200  7.1ms
+2026-05-15T23:57:34 [INFO    ] berlinstar.http: → GET /api/items  rid=512f66c6  ip=127.0.0.1
+2026-05-15T23:57:34 [INFO    ] berlinstar.http: ← GET /api/items  rid=512f66c6  status=200  16.2ms
+2026-05-15T23:57:57 [INFO    ] berlinstar.http: → GET /api/items  rid=0b6ce366  ip=127.0.0.1
+2026-05-15T23:57:57 [INFO    ] berlinstar.http: ← GET /api/items  rid=0b6ce366  status=200  15.6ms
+2026-05-15T23:57:59 [INFO    ] berlinstar.http: → GET /api/items  rid=4a7a9fdc  ip=127.0.0.1
+2026-05-15T23:57:59 [INFO    ] berlinstar.http: ← GET /api/items  rid=4a7a9fdc  status=200  20.0ms
+2026-05-15T23:58:01 [INFO    ] berlinstar.http: → GET /api/items  rid=99c7f82d  ip=127.0.0.1
+2026-05-15T23:58:01 [INFO    ] berlinstar.http: ← GET /api/items  rid=99c7f82d  status=200  31.9ms
+2026-05-15T23:58:03 [INFO    ] berlinstar.http: → GET /api/items  rid=f0acdafc  ip=127.0.0.1
+2026-05-15T23:58:03 [INFO    ] berlinstar.http: ← GET /api/items  rid=f0acdafc  status=200  24.9ms
+2026-05-15T23:58:25 [INFO    ] berlinstar.http: → GET /api/items  rid=98b8fbdc  ip=127.0.0.1
+2026-05-15T23:58:25 [INFO    ] berlinstar.http: ← GET /api/items  rid=98b8fbdc  status=200  18.3ms
+2026-05-15T23:58:26 [INFO    ] berlinstar.http: → GET /api/items  rid=e78dd887  ip=127.0.0.1
+2026-05-15T23:58:26 [INFO    ] berlinstar.http: ← GET /api/items  rid=e78dd887  status=200  9.3ms
+2026-05-15T23:58:30 [INFO    ] berlinstar.http: → GET /api/items  rid=d1057d5c  ip=127.0.0.1
+2026-05-15T23:58:30 [INFO    ] berlinstar.http: ← GET /api/items  rid=d1057d5c  status=200  27.5ms
+2026-05-15T23:58:44 [INFO    ] berlinstar.http: → GET /api/companies  rid=188ddbaa  ip=127.0.0.1
+2026-05-15T23:58:44 [INFO    ] berlinstar.http: ← GET /api/companies  rid=188ddbaa  status=200  17.7ms
+2026-05-15T23:58:47 [INFO    ] berlinstar.http: → GET /api/disclaimers  rid=f122ffc7  ip=127.0.0.1
+2026-05-15T23:58:47 [INFO    ] berlinstar.http: ← GET /api/disclaimers  rid=f122ffc7  status=200  160.6ms
+2026-05-15T23:58:50 [INFO    ] berlinstar.http: → GET /api/registers  rid=73c2f4fe  ip=127.0.0.1
+2026-05-15T23:58:50 [INFO    ] berlinstar.http: ← GET /api/registers  rid=73c2f4fe  status=200  178.0ms
+2026-05-15T23:58:50 [INFO    ] berlinstar.http: → GET /api/companies  rid=c97db620  ip=127.0.0.1
+2026-05-15T23:58:50 [INFO    ] berlinstar.http: ← GET /api/companies  rid=c97db620  status=200  17.2ms
+2026-05-15T23:59:21 [INFO    ] berlinstar.http: → GET /api/locations  rid=81f75e7c  ip=127.0.0.1
+2026-05-15T23:59:21 [INFO    ] berlinstar.http: ← GET /api/locations  rid=81f75e7c  status=200  35.9ms
+2026-05-15T23:59:23 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=801f9f14  ip=127.0.0.1
+2026-05-15T23:59:23 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=801f9f14  status=200  14.5ms
+2026-05-15T23:59:29 [INFO    ] berlinstar.http: → PATCH /api/general-settings  rid=0e148a00  ip=127.0.0.1
+2026-05-15T23:59:29 [INFO    ] berlinstar.http: ← PATCH /api/general-settings  rid=0e148a00  status=200  33.8ms
+2026-05-16T10:03:35 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=83cea2d7  ip=127.0.0.1
+2026-05-16T10:03:35 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=83cea2d7  status=200  1.2ms
+2026-05-16T10:07:37 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T10:07:37 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T10:07:37 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T10:07:37 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T10:07:37 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-16T10:07:37 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-16T10:07:37 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-16T10:07:39 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=28794a66  ip=127.0.0.1
+2026-05-16T10:07:39 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=28794a66  status=200  119.3ms
+2026-05-16T10:10:02 [INFO    ] berlinstar.http: → GET /api/items  rid=7b7625c1  ip=127.0.0.1
+2026-05-16T10:10:02 [INFO    ] berlinstar.http: → GET /api/departments  rid=52a7ae0f  ip=127.0.0.1
+2026-05-16T10:10:02 [INFO    ] berlinstar.http: → GET /api/employees  rid=3764a5dd  ip=127.0.0.1
+2026-05-16T10:10:03 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=b713e4c9  ip=127.0.0.1
+2026-05-16T10:10:03 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=b713e4c9  status=200  1.2ms
+2026-05-16T10:10:03 [INFO    ] berlinstar.http: ← GET /api/employees  rid=3764a5dd  status=200  201.4ms
+2026-05-16T10:10:03 [INFO    ] berlinstar.http: ← GET /api/departments  rid=52a7ae0f  status=200  324.4ms
+2026-05-16T10:10:03 [INFO    ] berlinstar.http: ← GET /api/items  rid=7b7625c1  status=200  498.6ms
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: → GET /api/programari  rid=35c0c7ef  ip=127.0.0.1
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: ← GET /api/programari  rid=35c0c7ef  status=200  196.2ms
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: → GET /api/departments  rid=9e7ab4d1  ip=127.0.0.1
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: ← GET /api/departments  rid=9e7ab4d1  status=200  5.4ms
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: → GET /api/programari  rid=d81540c5  ip=127.0.0.1
+2026-05-16T10:10:23 [INFO    ] berlinstar.http: ← GET /api/programari  rid=d81540c5  status=200  13.5ms
+2026-05-16T10:10:29 [INFO    ] berlinstar.http: → PATCH /api/programari/3  rid=ef84a295  ip=127.0.0.1
+2026-05-16T10:10:29 [INFO    ] berlinstar.http: ← PATCH /api/programari/3  rid=ef84a295  status=200  50.2ms
+2026-05-16T10:10:29 [INFO    ] berlinstar.http: → GET /api/items  rid=2f913390  ip=127.0.0.1
+2026-05-16T10:10:30 [INFO    ] berlinstar.http: ← GET /api/items  rid=2f913390  status=200  7.4ms
+2026-05-16T10:10:30 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=63ae468c  ip=127.0.0.1
+2026-05-16T10:10:30 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=63ae468c  status=200  1.0ms
+2026-05-16T10:10:33 [INFO    ] berlinstar.http: → GET /api/clienti/2231  rid=57b4dda4  ip=127.0.0.1
+2026-05-16T10:10:34 [INFO    ] berlinstar.http: ← GET /api/clienti/2231  rid=57b4dda4  status=200  169.7ms
+2026-05-16T10:10:52 [INFO    ] berlinstar.http: → GET /api/clienti/2231  rid=b5228243  ip=127.0.0.1
+2026-05-16T10:10:52 [INFO    ] berlinstar.http: ← GET /api/clienti/2231  rid=b5228243  status=200  8.2ms
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=70dfb1b8  ip=127.0.0.1
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=70dfb1b8  status=200  159.6ms
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: → GET /api/receipts  rid=6eca5a16  ip=127.0.0.1
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=929212fc  ip=127.0.0.1
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=929212fc  status=200  0.8ms
+2026-05-16T10:12:04 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=6eca5a16  status=200  48.5ms
+2026-05-16T10:12:06 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=a02fc433  ip=127.0.0.1
+2026-05-16T10:12:06 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=13d45b39  ip=127.0.0.1
+2026-05-16T10:12:06 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=13d45b39  status=200  196.3ms
+2026-05-16T10:12:06 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=a02fc433  status=200  379.5ms
+2026-05-16T10:12:07 [INFO    ] berlinstar.http: → POST /api/receipts/2797/assign-number  rid=57493455  ip=127.0.0.1
+2026-05-16T10:12:07 [INFO    ] berlinstar.http: ← POST /api/receipts/2797/assign-number  rid=57493455  status=200  58.1ms
+2026-05-16T10:12:07 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=f42f93d7  ip=127.0.0.1
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti  rid=7a0b8205  ip=127.0.0.1
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti  rid=7a0b8205  status=200  19.2ms
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=f42f93d7  status=200  226.1ms
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=7ae0a309  ip=127.0.0.1
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=c7febafb  ip=127.0.0.1
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=c7febafb  status=200  13.8ms
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=7ae0a309  status=200  29.0ms
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope/15  rid=c760f84d  ip=127.0.0.1
+2026-05-16T10:12:08 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope/15  rid=c760f84d  status=200  48.6ms
+2026-05-16T10:12:09 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti/image/stanga_fata  rid=6c0cfe86  ip=127.0.0.1
+2026-05-16T10:12:10 [INFO    ] httpx: HTTP Request: GET https://professorprimedev.nbg1.your-objectstorage.com/global/montare_roti/stanga_fata.png "HTTP/1.1 200 OK"
+2026-05-16T10:12:10 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti/image/stanga_fata  rid=6c0cfe86  status=200  658.0ms
+2026-05-16T10:12:10 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti/image/dreapta_fata  rid=4deeee53  ip=127.0.0.1
+2026-05-16T10:12:10 [INFO    ] httpx: HTTP Request: GET https://professorprimedev.nbg1.your-objectstorage.com/global/montare_roti/dreapta_fata.png "HTTP/1.1 200 OK"
+2026-05-16T10:12:10 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti/image/dreapta_fata  rid=4deeee53  status=200  373.9ms
+2026-05-16T10:12:11 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti/image/stanga_spate  rid=27cd229d  ip=127.0.0.1
+2026-05-16T10:12:11 [INFO    ] httpx: HTTP Request: GET https://professorprimedev.nbg1.your-objectstorage.com/global/montare_roti/stanga_spate.png "HTTP/1.1 200 OK"
+2026-05-16T10:12:11 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti/image/stanga_spate  rid=27cd229d  status=200  593.3ms
+2026-05-16T10:12:11 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti/image/dreapta_spate  rid=70862a62  ip=127.0.0.1
+2026-05-16T10:12:12 [INFO    ] httpx: HTTP Request: GET https://professorprimedev.nbg1.your-objectstorage.com/global/montare_roti/dreapta_spate.png "HTTP/1.1 200 OK"
+2026-05-16T10:12:12 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti/image/dreapta_spate  rid=70862a62  status=200  568.8ms
+2026-05-16T10:12:12 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope/image/cazare  rid=d6abdcf3  ip=127.0.0.1
+2026-05-16T10:12:13 [INFO    ] httpx: HTTP Request: GET https://professorprimedev.nbg1.your-objectstorage.com/global/hotel_anvelope/cazare.png "HTTP/1.1 200 OK"
+2026-05-16T10:12:13 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope/image/cazare  rid=d6abdcf3  status=200  788.8ms
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: → GET /api/items  rid=01df618d  ip=127.0.0.1
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=548949da  ip=127.0.0.1
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: → GET /api/departments  rid=853cfc49  ip=127.0.0.1
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: → GET /api/employees  rid=ba79a173  ip=127.0.0.1
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=548949da  status=200  29.9ms
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: ← GET /api/departments  rid=853cfc49  status=200  43.3ms
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: ← GET /api/items  rid=01df618d  status=200  84.9ms
+2026-05-16T10:33:11 [INFO    ] berlinstar.http: ← GET /api/employees  rid=ba79a173  status=200  44.7ms
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=0493de71  ip=127.0.0.1
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: → GET /api/receipts  rid=e0214f4d  ip=127.0.0.1
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=0493de71  status=200  7.8ms
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=fea90e87  ip=127.0.0.1
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=fea90e87  status=200  1.1ms
+2026-05-16T10:37:09 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=e0214f4d  status=200  27.4ms
+2026-05-16T10:37:11 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=ba60bf91  ip=127.0.0.1
+2026-05-16T10:37:11 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=12bba677  ip=127.0.0.1
+2026-05-16T10:37:11 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=12bba677  status=200  7.4ms
+2026-05-16T10:37:11 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=ba60bf91  status=200  19.5ms
+2026-05-16T10:37:15 [INFO    ] berlinstar.http: → PATCH /api/receipts/2797  rid=c23216ac  ip=127.0.0.1
+2026-05-16T10:37:15 [INFO    ] berlinstar.http: ← PATCH /api/receipts/2797  rid=c23216ac  status=200  47.9ms
+2026-05-16T10:37:16 [INFO    ] berlinstar.http: → GET /api/receipts  rid=825a71c0  ip=127.0.0.1
+2026-05-16T10:37:16 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=825a71c0  status=200  3.7ms
+2026-05-16T10:37:17 [INFO    ] berlinstar.http: → GET /api/receipts  rid=58bd191b  ip=127.0.0.1
+2026-05-16T10:37:17 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=58bd191b  status=200  5.8ms
+2026-05-16T10:37:33 [INFO    ] berlinstar.http: → GET /api/items  rid=c4d03646  ip=127.0.0.1
+2026-05-16T10:37:33 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d2cc0628  ip=127.0.0.1
+2026-05-16T10:37:33 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d2cc0628  status=200  1.4ms
+2026-05-16T10:37:33 [INFO    ] berlinstar.http: ← GET /api/items  rid=c4d03646  status=200  24.1ms
+2026-05-16T10:37:43 [INFO    ] berlinstar.http: → GET /api/employees  rid=06a0e8fe  ip=127.0.0.1
+2026-05-16T10:37:43 [INFO    ] berlinstar.http: ← GET /api/employees  rid=06a0e8fe  status=200  5.3ms
+2026-05-16T10:37:48 [INFO    ] berlinstar.http: → PATCH /api/employees/30  rid=a87eb6f0  ip=127.0.0.1
+2026-05-16T10:37:48 [INFO    ] berlinstar.http: ← PATCH /api/employees/30  rid=a87eb6f0  status=200  26.8ms
+2026-05-16T10:37:48 [INFO    ] berlinstar.http: → GET /api/employees  rid=85052d04  ip=127.0.0.1
+2026-05-16T10:37:48 [INFO    ] berlinstar.http: ← GET /api/employees  rid=85052d04  status=200  2.8ms
+2026-05-16T10:37:50 [INFO    ] berlinstar.http: → GET /api/items  rid=a67c6fb9  ip=127.0.0.1
+2026-05-16T10:37:50 [INFO    ] berlinstar.http: ← GET /api/items  rid=a67c6fb9  status=200  20.4ms
+2026-05-16T10:37:50 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=1978b923  ip=127.0.0.1
+2026-05-16T10:37:50 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=1978b923  status=200  0.5ms
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=f933e100  ip=127.0.0.1
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=c043c248  ip=127.0.0.1
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: → GET /api/receipts  rid=0fe902e4  ip=127.0.0.1
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=c043c248  status=200  3.6ms
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=f933e100  status=200  11.0ms
+2026-05-16T10:38:18 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=0fe902e4  status=200  9.9ms
+2026-05-16T10:45:30 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=bd324645  ip=127.0.0.1
+2026-05-16T10:45:30 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=bd324645  status=200  0.8ms
+2026-05-16T10:49:42 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=8f4dcb92  ip=127.0.0.1
+2026-05-16T10:49:42 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=8f4dcb92  status=200  309.4ms
+2026-05-16T10:49:44 [INFO    ] berlinstar.http: → GET /api/items  rid=4d269d2a  ip=127.0.0.1
+2026-05-16T10:49:44 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d445b4ae  ip=127.0.0.1
+2026-05-16T10:49:44 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d445b4ae  status=200  1.8ms
+2026-05-16T10:49:44 [INFO    ] berlinstar.http: ← GET /api/items  rid=4d269d2a  status=200  33.0ms
+2026-05-16T10:50:00 [INFO    ] berlinstar.http: → GET /api/receipts  rid=e77b5809  ip=127.0.0.1
+2026-05-16T10:50:00 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=e77b5809  status=200  19.7ms
+2026-05-16T10:50:01 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=f9378cb5  ip=127.0.0.1
+2026-05-16T10:50:01 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=f9378cb5  status=200  16.4ms
+2026-05-16T10:51:14 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=ef29bc04  ip=127.0.0.1
+2026-05-16T10:51:14 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=ef29bc04  status=200  206.1ms
+2026-05-16T10:51:14 [INFO    ] berlinstar.http: → GET /api/items  rid=3f4268e6  ip=127.0.0.1
+2026-05-16T10:51:14 [INFO    ] berlinstar.http: ← GET /api/items  rid=3f4268e6  status=200  17.1ms
+2026-05-16T10:51:15 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d9e55001  ip=127.0.0.1
+2026-05-16T10:51:15 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d9e55001  status=200  1.8ms
+2026-05-16T10:53:53 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d7b85557  ip=127.0.0.1
+2026-05-16T10:53:53 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d7b85557  status=200  1.0ms
+2026-05-16T10:53:53 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=59e2c32f  ip=127.0.0.1
+2026-05-16T10:53:53 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=59e2c32f  status=200  0.6ms
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: → GET /api/items  rid=a0ab7aa1  ip=127.0.0.1
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: → GET /api/departments  rid=6b0529aa  ip=127.0.0.1
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: → GET /api/employees  rid=4998eca1  ip=127.0.0.1
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=ddf56e47  ip=127.0.0.1
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=ddf56e47  status=200  0.9ms
+2026-05-16T10:54:04 [INFO    ] berlinstar.http: ← GET /api/employees  rid=4998eca1  status=200  12.1ms
+2026-05-16T10:54:05 [INFO    ] berlinstar.http: ← GET /api/departments  rid=6b0529aa  status=200  20.6ms
+2026-05-16T10:54:05 [INFO    ] berlinstar.http: ← GET /api/items  rid=a0ab7aa1  status=200  31.0ms
+2026-05-16T10:54:23 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=03aaa5ef  ip=127.0.0.1
+2026-05-16T10:54:23 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=03aaa5ef  status=200  206.2ms
+2026-05-16T10:54:23 [INFO    ] berlinstar.http: → GET /api/items  rid=cbad5670  ip=127.0.0.1
+2026-05-16T10:54:23 [INFO    ] berlinstar.http: ← GET /api/items  rid=cbad5670  status=200  7.2ms
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d6d2e0ce  ip=127.0.0.1
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: → GET /api/departments  rid=3ea2926a  ip=127.0.0.1
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: → GET /api/employees  rid=5e8b6d24  ip=127.0.0.1
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d6d2e0ce  status=200  8.6ms
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: ← GET /api/employees  rid=5e8b6d24  status=200  9.6ms
+2026-05-16T10:54:24 [INFO    ] berlinstar.http: ← GET /api/departments  rid=3ea2926a  status=200  17.5ms
+2026-05-16T10:54:44 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=3f092c30  ip=127.0.0.1
+2026-05-16T10:54:45 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=3f092c30  status=200  205.1ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → GET /api/locations  rid=370cb630  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← GET /api/locations  rid=370cb630  status=200  119.8ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → POST /api/devices  rid=d5a14533  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → GET /api/items  rid=568a95a4  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → GET /api/departments  rid=e0184eae  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → GET /api/employees  rid=31bdd6e3  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=0e86d614  ip=127.0.0.1
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=0e86d614  status=200  1.4ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← GET /api/departments  rid=e0184eae  status=200  36.6ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← GET /api/items  rid=568a95a4  status=200  46.5ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← POST /api/devices  rid=d5a14533  status=201  170.2ms
+2026-05-16T10:54:56 [INFO    ] berlinstar.http: ← GET /api/employees  rid=31bdd6e3  status=200  48.4ms
+2026-05-16T10:59:52 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=6dddcb1b  ip=127.0.0.1
+2026-05-16T10:59:52 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=f6125571  ip=127.0.0.1
+2026-05-16T10:59:52 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=6dddcb1b  status=200  3.7ms
+2026-05-16T10:59:52 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=f6125571  status=200  4.2ms
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: → GET /api/departments  rid=ef93ba29  ip=127.0.0.1
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: → GET /api/items  rid=b396496b  ip=127.0.0.1
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: → GET /api/employees  rid=38f91ed5  ip=127.0.0.1
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=a33f7762  ip=127.0.0.1
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=a33f7762  status=200  1.1ms
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: ← GET /api/departments  rid=ef93ba29  status=200  23.6ms
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: ← GET /api/items  rid=b396496b  status=200  22.6ms
+2026-05-16T10:59:59 [INFO    ] berlinstar.http: ← GET /api/employees  rid=38f91ed5  status=200  22.6ms
+2026-05-16T11:00:21 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=810b19d2  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=810b19d2  status=200  209.3ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → GET /api/locations  rid=9f49dc6d  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← GET /api/locations  rid=9f49dc6d  status=200  7.7ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → POST /api/devices  rid=c925f9c1  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← POST /api/devices  rid=c925f9c1  status=201  10.1ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → GET /api/items  rid=2bd6a1b1  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → GET /api/departments  rid=9cd61713  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← GET /api/departments  rid=9cd61713  status=200  2.9ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← GET /api/items  rid=2bd6a1b1  status=200  24.9ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → GET /api/employees  rid=21723c10  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=82b4b2cd  ip=127.0.0.1
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=82b4b2cd  status=200  1.2ms
+2026-05-16T11:00:22 [INFO    ] berlinstar.http: ← GET /api/employees  rid=21723c10  status=200  10.8ms
+2026-05-16T11:00:43 [INFO    ] berlinstar.http: → GET /api/clienti/vehicole-by-plate  rid=72e2b07d  ip=127.0.0.1
+2026-05-16T11:00:43 [INFO    ] berlinstar.http: ← GET /api/clienti/vehicole-by-plate  rid=72e2b07d  status=200  23.0ms
+2026-05-16T11:00:44 [INFO    ] berlinstar.http: → POST /api/receipts  rid=f17a3361  ip=127.0.0.1
+2026-05-16T11:00:44 [INFO    ] berlinstar.http: ← POST /api/receipts  rid=f17a3361  status=201  51.1ms
+2026-05-16T11:00:44 [INFO    ] berlinstar.http: → GET /api/receipts  rid=50db488a  ip=127.0.0.1
+2026-05-16T11:00:44 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=50db488a  status=200  89.3ms
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=88301e21  ip=127.0.0.1
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: → GET /api/receipts  rid=da4aef6e  ip=127.0.0.1
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=833fa476  ip=127.0.0.1
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=833fa476  status=200  1.5ms
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=88301e21  status=200  20.2ms
+2026-05-16T11:00:49 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=da4aef6e  status=200  27.8ms
+2026-05-16T11:00:51 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=6b42d18c  ip=127.0.0.1
+2026-05-16T11:00:51 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=6b42d18c  status=200  4.8ms
+2026-05-16T11:00:51 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=d32fc85d  ip=127.0.0.1
+2026-05-16T11:00:51 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=d32fc85d  status=200  2.8ms
+2026-05-16T11:01:03 [INFO    ] berlinstar.http: → GET /api/clienti  rid=bcdbeb7c  ip=127.0.0.1
+2026-05-16T11:01:03 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=bcdbeb7c  status=200  23.7ms
+2026-05-16T11:01:18 [INFO    ] berlinstar.http: → POST /api/clienti  rid=29384d0f  ip=127.0.0.1
+2026-05-16T11:01:18 [INFO    ] berlinstar.http: ← POST /api/clienti  rid=29384d0f  status=201  12.7ms
+2026-05-16T11:01:19 [INFO    ] berlinstar.http: → PATCH /api/receipts/2798/client  rid=32088cc1  ip=127.0.0.1
+2026-05-16T11:01:19 [INFO    ] berlinstar.http: ← PATCH /api/receipts/2798/client  rid=32088cc1  status=200  20.5ms
+2026-05-16T11:01:23 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=3bfa5587  ip=127.0.0.1
+2026-05-16T11:01:23 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=bf15af04  ip=127.0.0.1
+2026-05-16T11:01:23 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=bf15af04  status=200  5.2ms
+2026-05-16T11:01:23 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=3bfa5587  status=200  24.0ms
+2026-05-16T11:01:28 [INFO    ] berlinstar.http: → PATCH /api/receipts/2798  rid=5b087cd2  ip=127.0.0.1
+2026-05-16T11:01:28 [INFO    ] berlinstar.http: ← PATCH /api/receipts/2798  rid=5b087cd2  status=200  35.6ms
+2026-05-16T11:01:29 [INFO    ] berlinstar.http: → GET /api/receipts  rid=fc82118e  ip=127.0.0.1
+2026-05-16T11:01:29 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=fc82118e  status=200  7.8ms
+2026-05-16T11:01:30 [INFO    ] berlinstar.http: → GET /api/receipts  rid=00cb24a5  ip=127.0.0.1
+2026-05-16T11:01:30 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=00cb24a5  status=200  8.6ms
+2026-05-16T11:01:33 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=765e4923  ip=127.0.0.1
+2026-05-16T11:01:33 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=cd5887bc  ip=127.0.0.1
+2026-05-16T11:01:33 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=765e4923  status=200  7.8ms
+2026-05-16T11:01:33 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=cd5887bc  status=200  5.3ms
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: → GET /api/departments  rid=bbb09ba5  ip=127.0.0.1
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: → GET /api/employees  rid=cb2edd70  ip=127.0.0.1
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: → GET /api/items  rid=7b34f91d  ip=127.0.0.1
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=e1cda581  ip=127.0.0.1
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=e1cda581  status=200  0.9ms
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: ← GET /api/departments  rid=bbb09ba5  status=200  24.5ms
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: ← GET /api/employees  rid=cb2edd70  status=200  19.7ms
+2026-05-16T11:01:48 [INFO    ] berlinstar.http: ← GET /api/items  rid=7b34f91d  status=200  18.4ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=edb5be5a  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=edb5be5a  status=200  201.8ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → GET /api/locations  rid=38114508  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← GET /api/locations  rid=38114508  status=200  13.5ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → POST /api/devices  rid=4da4dc63  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← POST /api/devices  rid=4da4dc63  status=201  11.3ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → GET /api/items  rid=0c7d0d74  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← GET /api/items  rid=0c7d0d74  status=200  9.2ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → GET /api/departments  rid=e5e38492  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← GET /api/departments  rid=e5e38492  status=200  3.6ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → GET /api/employees  rid=295641c5  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=1e7c97b3  ip=127.0.0.1
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=1e7c97b3  status=200  0.7ms
+2026-05-16T11:02:31 [INFO    ] berlinstar.http: ← GET /api/employees  rid=295641c5  status=200  8.6ms
+2026-05-16T11:03:04 [INFO    ] berlinstar.http: → GET /api/clienti/vehicole-by-plate  rid=a7c9f7f9  ip=127.0.0.1
+2026-05-16T11:03:04 [INFO    ] berlinstar.http: ← GET /api/clienti/vehicole-by-plate  rid=a7c9f7f9  status=200  4.3ms
+2026-05-16T11:03:04 [INFO    ] berlinstar.http: → POST /api/receipts  rid=611336cc  ip=127.0.0.1
+2026-05-16T11:03:04 [INFO    ] berlinstar.http: ← POST /api/receipts  rid=611336cc  status=201  26.4ms
+2026-05-16T11:20:10 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=72940e76  ip=127.0.0.1
+2026-05-16T11:20:10 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=72940e76  status=200  222.3ms
+2026-05-16T11:20:10 [INFO    ] berlinstar.http: → GET /api/locations  rid=b209019d  ip=127.0.0.1
+2026-05-16T11:20:10 [INFO    ] berlinstar.http: ← GET /api/locations  rid=b209019d  status=200  35.1ms
+2026-05-16T11:20:10 [INFO    ] berlinstar.http: → POST /api/devices  rid=eb25961a  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← POST /api/devices  rid=eb25961a  status=201  41.7ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → GET /api/locations  rid=d9490141  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← GET /api/locations  rid=d9490141  status=200  15.8ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → POST /api/devices  rid=a2acdf79  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← POST /api/devices  rid=a2acdf79  status=201  16.6ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → GET /api/items  rid=89ee238e  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → GET /api/departments  rid=6f1ae66b  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← GET /api/departments  rid=6f1ae66b  status=200  3.3ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → GET /api/employees  rid=492b65a2  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=6855708c  ip=127.0.0.1
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=6855708c  status=200  1.5ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← GET /api/employees  rid=492b65a2  status=200  21.3ms
+2026-05-16T11:20:11 [INFO    ] berlinstar.http: ← GET /api/items  rid=89ee238e  status=200  63.1ms
+2026-05-16T11:20:18 [INFO    ] berlinstar.http: → GET /api/receipts  rid=b0597c0b  ip=127.0.0.1
+2026-05-16T11:20:18 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=b0597c0b  status=200  15.2ms
+2026-05-16T11:20:19 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=5912db34  ip=127.0.0.1
+2026-05-16T11:20:19 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=3b2fbc72  ip=127.0.0.1
+2026-05-16T11:20:19 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=3b2fbc72  status=200  0.7ms
+2026-05-16T11:20:19 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=5912db34  status=200  12.7ms
+2026-05-16T11:20:39 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=7eacd2df  ip=127.0.0.1
+2026-05-16T11:20:39 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=31276c39  ip=127.0.0.1
+2026-05-16T11:20:39 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=7eacd2df  status=200  11.7ms
+2026-05-16T11:20:39 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=31276c39  status=200  12.3ms
+2026-05-16T11:20:42 [INFO    ] berlinstar.http: → POST /api/receipts/2799/assign-number  rid=bd1a6f13  ip=127.0.0.1
+2026-05-16T11:20:42 [INFO    ] berlinstar.http: ← POST /api/receipts/2799/assign-number  rid=bd1a6f13  status=200  23.0ms
+2026-05-16T11:21:19 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=a873999f  ip=127.0.0.1
+2026-05-16T11:21:19 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=adfd57f6  ip=127.0.0.1
+2026-05-16T11:21:19 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=adfd57f6  status=200  5.4ms
+2026-05-16T11:21:19 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=a873999f  status=200  21.1ms
+2026-05-16T11:21:23 [INFO    ] berlinstar.http: → POST /api/receipts/2735/assign-number  rid=0d0a8c49  ip=127.0.0.1
+2026-05-16T11:21:23 [INFO    ] berlinstar.http: ← POST /api/receipts/2735/assign-number  rid=0d0a8c49  status=200  8.6ms
+2026-05-16T11:31:18 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=13e675ba  ip=127.0.0.1
+2026-05-16T11:31:18 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=13e675ba  status=200  154.8ms
+2026-05-16T11:31:18 [INFO    ] berlinstar.http: → GET /api/accounts  rid=5086433a  ip=127.0.0.1
+2026-05-16T11:31:18 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=5086433a  status=200  155.0ms
+2026-05-16T11:31:25 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=5466a588  ip=127.0.0.1
+2026-05-16T11:31:25 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=5466a588  status=200  3.7ms
+2026-05-16T11:31:27 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti  rid=4b46f395  ip=127.0.0.1
+2026-05-16T11:31:27 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti  rid=4b46f395  status=200  5.8ms
+2026-05-16T11:31:30 [INFO    ] berlinstar.http: → GET /api/email-settings/smtp  rid=94e2e317  ip=127.0.0.1
+2026-05-16T11:31:30 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=c660d568  ip=127.0.0.1
+2026-05-16T11:31:30 [ERROR   ] berlinstar.http: !! GET /api/email-settings/smtp  rid=94e2e317  184.2ms  UNHANDLED: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/email_settings.py", line 40, in get_smtp
+    data = SmtpSettingsRead.model_validate(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+2026-05-16T11:31:31 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=c660d568  status=200  1264.9ms
+2026-05-16T11:31:31 [INFO    ] berlinstar.http: → GET /api/email-settings/templates  rid=e660c79a  ip=127.0.0.1
+2026-05-16T11:31:31 [INFO    ] berlinstar.http: ← GET /api/email-settings/templates  rid=e660c79a  status=200  25.0ms
+2026-05-16T11:31:32 [INFO    ] berlinstar.http: → GET /api/accounts  rid=3c881267  ip=127.0.0.1
+2026-05-16T11:31:32 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=3c881267  status=200  3.4ms
+2026-05-16T11:31:32 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=7d1f6f58  ip=127.0.0.1
+2026-05-16T11:31:32 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=7d1f6f58  status=200  10.1ms
+2026-05-16T11:31:35 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=802c5d2e  ip=127.0.0.1
+2026-05-16T11:31:35 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=802c5d2e  status=200  167.7ms
+2026-05-16T11:31:45 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=6ed9e71d  ip=127.0.0.1
+2026-05-16T11:31:45 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=6ed9e71d  status=200  4.7ms
+2026-05-16T11:31:55 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=1f909d91  ip=127.0.0.1
+2026-05-16T11:31:55 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=1f909d91  status=200  8.9ms
+2026-05-16T11:32:05 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=ddf22d4e  ip=127.0.0.1
+2026-05-16T11:32:06 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=ddf22d4e  status=200  4.9ms
+2026-05-16T11:32:11 [INFO    ] berlinstar.http: → POST /api/admin/reports/cazari_daily/trigger  rid=4cd5b9c0  ip=127.0.0.1
+2026-05-16T11:32:11 [INFO    ] berlinstar.http: ← POST /api/admin/reports/cazari_daily/trigger  rid=4cd5b9c0  status=202  18.8ms
+2026-05-16T11:32:11 [INFO    ] berlinstar.reports: Raportul cazari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-16T11:32:11 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=e336aafe  ip=127.0.0.1
+2026-05-16T11:32:11 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=e336aafe  status=200  4.3ms
+2026-05-16T11:32:12 [INFO    ] berlinstar.http: → POST /api/admin/reports/clients_daily/trigger  rid=93d36a40  ip=127.0.0.1
+2026-05-16T11:32:12 [INFO    ] berlinstar.http: ← POST /api/admin/reports/clients_daily/trigger  rid=93d36a40  status=202  10.4ms
+2026-05-16T11:32:12 [INFO    ] berlinstar.reports: Raportul clients_daily nu are perioadă de procesat (mode=incremental).
+2026-05-16T11:32:12 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=a0ff52ed  ip=127.0.0.1
+2026-05-16T11:32:12 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=a0ff52ed  status=200  10.6ms
+2026-05-16T11:32:13 [INFO    ] berlinstar.http: → POST /api/admin/reports/employee_daily/trigger  rid=05401e50  ip=127.0.0.1
+2026-05-16T11:32:13 [INFO    ] berlinstar.http: ← POST /api/admin/reports/employee_daily/trigger  rid=05401e50  status=202  9.8ms
+2026-05-16T11:32:13 [INFO    ] berlinstar.reports: Raportul employee_daily nu are perioadă de procesat (mode=incremental).
+2026-05-16T11:32:13 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=cb078448  ip=127.0.0.1
+2026-05-16T11:32:13 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=cb078448  status=200  5.6ms
+2026-05-16T11:32:14 [INFO    ] berlinstar.http: → POST /api/admin/reports/programari_daily/trigger  rid=785288c2  ip=127.0.0.1
+2026-05-16T11:32:14 [INFO    ] berlinstar.http: ← POST /api/admin/reports/programari_daily/trigger  rid=785288c2  status=202  20.1ms
+2026-05-16T11:32:14 [INFO    ] berlinstar.reports: Raportul programari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-16T11:32:15 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=9cae944c  ip=127.0.0.1
+2026-05-16T11:32:15 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=9cae944c  status=200  3.6ms
+2026-05-16T11:32:15 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=24f221de  ip=127.0.0.1
+2026-05-16T11:32:15 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=24f221de  status=200  5.7ms
+2026-05-16T11:32:25 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=ca4917ba  ip=127.0.0.1
+2026-05-16T11:32:25 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=ca4917ba  status=200  4.5ms
+2026-05-16T11:32:35 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=68b4251c  ip=127.0.0.1
+2026-05-16T11:32:35 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=68b4251c  status=200  3.0ms
+2026-05-16T11:32:45 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=f3e7bca8  ip=127.0.0.1
+2026-05-16T11:32:45 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=f3e7bca8  status=200  2.8ms
+2026-05-16T11:32:55 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=e96f470a  ip=127.0.0.1
+2026-05-16T11:32:55 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=e96f470a  status=200  4.1ms
+2026-05-16T11:33:06 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=c784184e  ip=127.0.0.1
+2026-05-16T11:33:06 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=c784184e  status=200  4.5ms
+2026-05-16T11:33:15 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=4561e17f  ip=127.0.0.1
+2026-05-16T11:33:15 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=4561e17f  status=200  2.4ms
+2026-05-16T11:33:25 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=baa0a787  ip=127.0.0.1
+2026-05-16T11:33:25 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=baa0a787  status=200  2.6ms
+2026-05-16T11:33:35 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=f21cef10  ip=127.0.0.1
+2026-05-16T11:33:35 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=f21cef10  status=200  3.1ms
+2026-05-16T11:33:39 [INFO    ] berlinstar.http: → GET /api/accounts  rid=2ecdf38c  ip=127.0.0.1
+2026-05-16T11:33:39 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=2ecdf38c  status=200  3.2ms
+2026-05-16T11:34:26 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=14a3fd86  ip=127.0.0.1
+2026-05-16T11:34:26 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=14a3fd86  status=200  2.5ms
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: → GET /api/email-settings/smtp  rid=e32427e4  ip=127.0.0.1
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=c3d98b6e  ip=127.0.0.1
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=c3d98b6e  status=200  3.7ms
+2026-05-16T11:35:35 [ERROR   ] berlinstar.http: !! GET /api/email-settings/smtp  rid=e32427e4  15.9ms  UNHANDLED: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/email_settings.py", line 40, in get_smtp
+    data = SmtpSettingsRead.model_validate(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: → GET /api/email-settings/templates  rid=c26cb00d  ip=127.0.0.1
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: ← GET /api/email-settings/templates  rid=c26cb00d  status=200  3.1ms
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: → GET /api/accounts  rid=9e0c8ee0  ip=127.0.0.1
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=9e0c8ee0  status=200  4.6ms
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=3f072663  ip=127.0.0.1
+2026-05-16T11:35:35 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=3f072663  status=200  2.6ms
+2026-05-16T11:35:41 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=b855da94  ip=127.0.0.1
+2026-05-16T11:35:41 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=b855da94  status=200  3.3ms
+2026-05-16T11:35:46 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=b60b0606  ip=127.0.0.1
+2026-05-16T11:35:46 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=b60b0606  status=200  3.4ms
+2026-05-16T11:35:48 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=c47ff732  ip=127.0.0.1
+2026-05-16T11:35:48 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=c47ff732  status=200  3.7ms
+2026-05-16T11:35:51 [INFO    ] berlinstar.http: → GET /api/accounts  rid=8ac54912  ip=127.0.0.1
+2026-05-16T11:35:51 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=8ac54912  status=200  5.5ms
+2026-05-16T11:36:05 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=53f7879c  ip=127.0.0.1
+2026-05-16T11:36:05 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=53f7879c  status=200  3.2ms
+2026-05-16T11:36:15 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=acb0f721  ip=127.0.0.1
+2026-05-16T11:36:15 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=acb0f721  status=200  3.2ms
+2026-05-16T11:36:25 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=6dd08411  ip=127.0.0.1
+2026-05-16T11:36:25 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=6dd08411  status=200  2.9ms
+2026-05-16T11:36:35 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=a05b7b36  ip=127.0.0.1
+2026-05-16T11:36:35 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=a05b7b36  status=200  3.9ms
+2026-05-16T11:37:04 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=043eeb9b  ip=127.0.0.1
+2026-05-16T11:37:04 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=043eeb9b  status=200  4.1ms
+2026-05-16T11:37:04 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=29467353  ip=127.0.0.1
+2026-05-16T11:37:04 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=29467353  status=200  2.9ms
+2026-05-16T11:37:10 [INFO    ] berlinstar.http: → GET /api/accounts  rid=926c6aaf  ip=127.0.0.1
+2026-05-16T11:37:10 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=926c6aaf  status=200  4.3ms
+2026-05-16T11:44:11 [INFO    ] berlinstar.http: → GET /api/accounts  rid=23f44d42  ip=127.0.0.1
+2026-05-16T11:44:11 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=23f44d42  status=200  4.5ms
+2026-05-16T11:44:22 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=fce0c9d8  ip=127.0.0.1
+2026-05-16T11:44:22 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=fce0c9d8  status=200  10.0ms
+2026-05-16T11:44:33 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti  rid=0c572f08  ip=127.0.0.1
+2026-05-16T11:44:33 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti  rid=0c572f08  status=200  3.1ms
+2026-05-16T11:44:35 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=28fdc9ce  ip=127.0.0.1
+2026-05-16T11:44:35 [INFO    ] berlinstar.http: → GET /api/email-settings/smtp  rid=76132c87  ip=127.0.0.1
+2026-05-16T11:44:35 [ERROR   ] berlinstar.http: !! GET /api/email-settings/smtp  rid=76132c87  3.0ms  UNHANDLED: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/email_settings.py", line 40, in get_smtp
+    data = SmtpSettingsRead.model_validate(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+2026-05-16T11:44:35 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=28fdc9ce  status=200  34.4ms
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: → GET /api/email-settings/templates  rid=e5e89cc1  ip=127.0.0.1
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: ← GET /api/email-settings/templates  rid=e5e89cc1  status=200  2.8ms
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: → GET /api/accounts  rid=a522cd1a  ip=127.0.0.1
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=a522cd1a  status=200  3.7ms
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=f527b7a5  ip=127.0.0.1
+2026-05-16T11:44:36 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=f527b7a5  status=200  5.2ms
+2026-05-16T11:44:42 [INFO    ] berlinstar.http: → GET /api/accounts  rid=706e65c2  ip=127.0.0.1
+2026-05-16T11:44:42 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=706e65c2  status=200  4.3ms

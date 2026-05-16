@@ -378,8 +378,8 @@ function CazareCard(props: {
       if (!successor) return;
       const vehicle = await getVehiculForCazare(c());
       await generateCazareScoatereIntroducere(
-        c() as any,
-        successor as any,
+        c(),
+        successor,
         props.companyData,
         c().dataCheckout!,
         c().successorMontatePeMasina ?? successor.montatePeMasina ?? false,
@@ -484,16 +484,16 @@ export default function HotelAnvelope() {
       const imgs = buildHotelImageProxyUrls();
       const vehicle = await getVehiculForCazare(c);
       if (type === "checkin") {
-        await generateCazareCheckin(c as any, companyData(), imgs, vehicle);
+        await generateCazareCheckin(c, companyData(), imgs, vehicle);
       } else if (type === "checkout") {
-        await generateCazareCheckout(c as any, companyData(), imgs, vehicle);
+        await generateCazareCheckout(c, companyData(), imgs, vehicle);
       } else {
         if (c.successorCazareId == null || !c.dataCheckout) return;
         const successor = await getCazareById(c.successorCazareId);
         if (!successor) return;
         await generateCazareScoatereIntroducere(
-          c as any,
-          successor as any,
+          c,
+          successor,
           companyData(),
           c.dataCheckout,
           c.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
@@ -588,13 +588,13 @@ export default function HotelAnvelope() {
   const [newProfilValoare, setNewProfilValoare] = createSignal("");
 
   // admin edit modals
-  const [editAdminTarget, setEditAdminTarget] = createSignal<
+  type AdminEditTarget =
     | { type: "loc"; id: number; nume: string; description: string }
     | { type: "marca"; id: number; nume: string }
     | { type: "dim"; id: number; valoare: string }
     | { type: "profil"; id: number; valoare: string }
-    | null
-  >(null);
+    | null;
+  const [editAdminTarget, setEditAdminTarget] = createSignal<AdminEditTarget>(null);
   const [editAdminVal1, setEditAdminVal1] = createSignal("");
   const [editAdminVal2, setEditAdminVal2] = createSignal("");
   const [editAdminSaving, setEditAdminSaving] = createSignal(false);
@@ -1061,8 +1061,8 @@ export default function HotelAnvelope() {
       await loadHotelImages();
       const combinedVehicle = await getVehiculForCazare(updatedCheckout);
       await generateCazareScoatereIntroducere(
-        updatedCheckout as any,
-        newCazareData as any,
+        updatedCheckout,
+        newCazareData,
         companyData(),
         checkoutDate(),
         newMontatePeMasina(),
@@ -1327,8 +1327,8 @@ export default function HotelAnvelope() {
 
   // ── Admin Edit / Delete helpers ───────────────────────────────────────────
 
-  function openAdminEdit(t: typeof editAdminTarget extends () => infer T ? T : never) {
-    setEditAdminTarget(t as any);
+  function openAdminEdit(t: AdminEditTarget) {
+    setEditAdminTarget(t);
     if (!t) return;
     if (t.type === "loc") { setEditAdminVal1(t.nume); setEditAdminVal2(t.description); }
     else if (t.type === "marca") { setEditAdminVal1(t.nume); setEditAdminVal2(""); }

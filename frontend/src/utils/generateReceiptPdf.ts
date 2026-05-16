@@ -16,6 +16,7 @@
  */
 
 import type { Receipt } from "../store/receiptsStore";
+import { lastTableY, pageCount } from "./pdf/types";
 
 // ─── Configurare vizuala ──────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ function drawItemsTable(doc: any, autoTable: any, r: Receipt, y: number): number
     tableLineWidth: 0.2,
   });
 
-  return (doc as any).lastAutoTable.finalY + 4;
+  return lastTableY(doc) + 4;
 }
 
 function drawTotal(doc: any, r: Receipt, y: number): number {
@@ -293,7 +294,7 @@ export async function generateReceiptPdf(r: Receipt): Promise<void> {
     y = drawTextBlock(doc, "Observații", r.dateTehn.trim(), y);
   }
 
-  drawFooter(doc, (doc as any).internal.getNumberOfPages());
+  drawFooter(doc, pageCount(doc));
 
   const { date } = formatDate(r.date);
   doc.save(`berlin-star-bon-${date.replace(/\./g, "-")}-${r.id}.pdf`);
