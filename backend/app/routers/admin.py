@@ -1,17 +1,21 @@
 from __future__ import annotations
 import hmac
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
+from app.dependencies import get_account_id
 from app.models.account import Account
 from app.rate_limit import limiter
+
+log = logging.getLogger("berlinstar")
 
 router = APIRouter()
 
@@ -63,3 +67,63 @@ async def verify_admin(request: Request, body: VerifyRequest, db: AsyncSession =
     payload = {"sub": str(account.id), "name": account.name, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
     return VerifyResponse(access_token=token, expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600)
+
+
+class ImpersonateResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    username: str
+    name: str
+    is_locked: bool = False
+    locked_at: datetime | None = None
+
+
+async def _require_super_admin(
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+) -> Account:
+    account = (await db.execute(
+        select(Account).where(
+            Account.id == account_id,
+            Account.is_deleted == False,
+            Account.username == "admin",
+        )
+    )).scalar_one_or_none()
+    if account is None:
+        raise HTTPException(403, "Acces interzis: este necesar contul administrator.")
+    return account
+
+
+@router.post("/accounts/{account_id}/impersonate", response_model=ImpersonateResponse)
+@limiter.limit("10/minute")
+async def impersonate_account(
+    request: Request,
+    account_id: int = Path(..., gt=0),
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    if account_id == admin.id:
+        raise HTTPException(400, "Esti deja logat ca admin.")
+
+    target = (await db.execute(
+        select(Account).where(Account.id == account_id, Account.is_deleted == False)
+    )).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(404, "Contul nu exista.")
+
+    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
+    payload = {"sub": str(target.id), "name": target.name, "exp": expire}
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    log.warning(
+        "Admin impersonation: admin_id=%s target_id=%s username=%s",
+        admin.id, target.id, target.username,
+    )
+    return ImpersonateResponse(
+        access_token=token,
+        expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600,
+        username=target.username,
+        name=target.name,
+        is_locked=target.is_locked,
+        locked_at=target.locked_at,
+    )

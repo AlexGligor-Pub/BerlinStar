@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
 import { readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
+import { loginAsImpersonatedUser } from "../../store/authStore";
 import { adminFetch } from "./admin-auth";
 import { fmtDate } from "./shared";
 import type { Account } from "./types";
@@ -126,6 +127,43 @@ export default function AccountsSection() {
 
   const [deleteConfirmInput, setDeleteConfirmInput] = createSignal("");
   const [deleting, setDeleting] = createSignal(false);
+
+  // ── Support tehnic / impersonate ─────────────────────────────────────────
+  const [confirmSupportOpen, setConfirmSupportOpen] = createSignal(false);
+  const [impersonating, setImpersonating] = createSignal(false);
+  const [supportErr, setSupportErr] = createSignal("");
+
+  async function doImpersonate() {
+    const a = previewAccount();
+    if (!a) return;
+    setImpersonating(true);
+    setSupportErr("");
+    try {
+      const res = await adminFetch(`/api/admin/accounts/${a.id}/impersonate`, { method: "POST" });
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        setSupportErr(d.detail ?? "Eroare la logare.");
+        return;
+      }
+      const data: {
+        access_token: string;
+        username: string;
+        is_locked: boolean;
+        locked_at: string | null;
+      } = await res.json();
+      loginAsImpersonatedUser(
+        data.username,
+        data.access_token,
+        data.is_locked,
+        data.locked_at ?? null,
+        "/",
+      );
+    } catch {
+      setSupportErr("Eroare de conexiune.");
+    } finally {
+      setImpersonating(false);
+    }
+  }
 
   function openPreview(a: Account) {
     setPreviewAccount(a);
@@ -352,6 +390,12 @@ export default function AccountsSection() {
                   <button class="btn btn-danger btn-sm" onClick={() => { setDeleteConfirmInput(""); setPreviewMode("delete"); }}>
                     Șterge
                   </button>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    onClick={() => { setSupportErr(""); setConfirmSupportOpen(true); }}
+                  >
+                    Oferă support tehnic
+                  </button>
                   <button class="btn btn-primary btn-sm" onClick={startEdit}>Editează</button>
                 </div>
               </Show>
@@ -430,6 +474,49 @@ export default function AccountsSection() {
                 </div>
               </Show>
 
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Modal: confirmare logare ca support tehnic (impersonate) */}
+      <Show when={confirmSupportOpen() && previewAccount()}>
+        {(a) => (
+          <div class="sl-modal-overlay">
+            <div class="sl-modal">
+              <div class="sl-modal-header">
+                <span class="sl-modal-title">Logare ca support tehnic</span>
+              </div>
+              <div class="admin-modal-body">
+                <p style="margin:0 0 12px">
+                  Te vei loga ca <strong>{a().name}</strong> ({a().username}) cu drepturi
+                  complete pe acel cont. Sesiunea ta de administrator se va închide și
+                  vei părăsi pagina AdminV2.
+                </p>
+                <p style="margin:0 0 12px">
+                  Pentru a reveni va trebui să te delogi și să reintroduci parolele
+                  administrator.
+                </p>
+                <Show when={supportErr()}>
+                  <p style="color:var(--danger);font-size:13px;margin:0">{supportErr()}</p>
+                </Show>
+              </div>
+              <div class="sl-modal-footer">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  disabled={impersonating()}
+                  onClick={() => setConfirmSupportOpen(false)}
+                >
+                  Anulează
+                </button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  disabled={impersonating()}
+                  onClick={doImpersonate}
+                >
+                  {impersonating() ? "Se loghează..." : "Da, loghează-mă"}
+                </button>
+              </div>
             </div>
           </div>
         )}

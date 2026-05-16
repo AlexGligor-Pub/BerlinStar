@@ -5406,3 +5406,173 @@ body {
   .ta-emp-row { grid-template-columns: 40px 1fr auto; gap: 10px; padding: 10px; }
   .ta-contrib-badge { min-width: 56px; font-size: 0.92rem; padding: 8px 6px; }
 }
+
+/* ===== RECEPTION PAGE — MOBILE ===== */
+/* Layout responsive pentru lista de bonuri si vizualizarea expandata a unui bon.
+ * Punctul de breakpoint principal e 768px (tabletele si telefoanele). Sub 480px
+ * tightening suplimentar pentru telefoane mici. */
+
+@media (max-width: 768px) {
+  /* Header pagina: search + filtru se aliniaza pe randuri separate */
+  .reception-header-right {
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+  .reception-search {
+    width: 100% !important;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .reception-count,
+  .reception-pos-count {
+    font-size: 0.78rem;
+  }
+
+  /* Card colaps: laasa numele de client + tag-urile sa wrap fara overflow */
+  .rcard-header {
+    padding: 10px 12px;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .rcard-info {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .rcard-titlu {
+    word-break: break-word;
+  }
+  .rcard-right {
+    gap: 8px;
+    align-items: flex-start;
+    flex-shrink: 0;
+  }
+  .rcard-right-col {
+    gap: 3px;
+  }
+  .rcard-total { font-size: 0.95rem; }
+  .rcard-metoda { font-size: 0.68rem; padding: 1px 5px; }
+  .rcard-continua-btn {
+    font-size: 0.78rem;
+    padding: 6px 10px;
+    min-height: 32px;
+  }
+
+  /* Corpul expandat: stacked vertical, nu flex row */
+  .rcard-body {
+    padding: 12px;
+  }
+  .rcard-body-inner {
+    flex-direction: column;
+    gap: 12px;
+    max-width: 100%;
+  }
+
+  /* "Hartia de bon" trebuie sa fie full-width pe mobil — nu 360px fix */
+  .rcard-body-inner > .receipt {
+    max-width: 100%;
+    padding: 16px 14px;
+  }
+
+  /* Actiuni document: distributie pe latime, cu tap target generos */
+  .receipt-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 6px;
+    justify-content: stretch;
+  }
+  .receipt-actions .btn {
+    min-height: 38px;
+    font-size: 0.8rem;
+  }
+
+  /* Coloana cardurilor extra (Client / Status plata / Hotel / Roti) */
+  .rcard-extra-col {
+    gap: 8px;
+  }
+  .rcard-extra-card {
+    padding: 12px;
+  }
+  .rcard-extra-text {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  /* Date filter modal: cele doua calendare unul sub altul */
+  .date-modal-body {
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+  }
+  .date-modal-col {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Telefoane mici: stricti pe padding-uri si tipografie */
+  .rcard-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .rcard-right {
+    width: 100%;
+    justify-content: space-between;
+    gap: 6px;
+  }
+  .rcard-right-col {
+    align-items: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .rcard-metoda {
+    text-align: left;
+  }
+  .rcard-continua-btn {
+    flex-shrink: 0;
+  }
+  .rcard-chevron {
+    align-self: flex-start;
+    flex-shrink: 0;
+  }
+
+  /* Tag-urile de document raman pe acelasi rand cu titlul daca incap, dar
+   * coboara pe randul urmator daca nu — `flex-wrap` deja activ pe parinte. */
+  .rcard-doc-tag {
+    font-size: 0.62rem;
+  }
+
+  /* Itemii bonului: 2 coloane (nume + total) pe foarte mic, qty integrat sub */
+  .receipt-item {
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+    column-gap: 8px;
+  }
+  .receipt-item-qty {
+    grid-column: 1 / 2;
+    font-size: 0.72rem;
+  }
+  .receipt-item-total {
+    grid-row: 1 / 2;
+    grid-column: 2 / 3;
+  }
+
+  /* Butoanele de actiuni: 2 pe rand */
+  .receipt-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Header pagina: chiar mai compact */
+  .page-header {
+    top: 48px;
+  }
+  .page-title {
+    font-size: 1rem;
+  }
+  .date-range-btn {
+    font-size: 0.75rem;
+  }
+}

@@ -53,6 +53,34 @@ export function loginAndRedirect(
   window.location.assign(target);
 }
 
+// Folosita de AdminV2 la "Ofera support tehnic" — logheaza super-adminul ca user
+// tinta si activeaza vizibilitatea admin (Rapoarte + Configurari) imediat dupa
+// reload, ca sa vada toate paginile.
+export function loginAsImpersonatedUser(
+  user: string,
+  token: string,
+  isLocked: boolean,
+  lockedAt: string | null,
+  target: string,
+) {
+  clearAllStorage();
+  const next: AuthState = { user, token, isLocked, lockedAt };
+  setAuth(next);
+  persist(next);
+  // Setam direct flag-ul adminVisible in localStorage (cheia/formatul din
+  // adminStore.ts) — la hard reload, adminStore citeste si activeaza tile-urile
+  // Rapoarte + Configurari fara sa fie nevoie sa retrecem prin modalul de parola.
+  try {
+    localStorage.setItem(
+      "bs_admin_visible",
+      JSON.stringify({ value: true, ts: Date.now() }),
+    );
+  } catch {
+    // storage quota/disabled — ignoram, userul oricum poate activa manual.
+  }
+  window.location.assign(target);
+}
+
 export function logout(redirectTo: string | null = "/login") {
   setAdminVisible(false);
   const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null };
