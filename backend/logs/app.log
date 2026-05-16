@@ -2160,3 +2160,1442 @@ smtp_password
 2026-05-16T12:31:32 [INFO    ] berlinstar: BerlinStar POS API shutting down
 2026-05-16T12:31:32 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
 2026-05-16T12:31:32 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-16T14:06:12 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:06:12 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:06:13 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:06:13 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:06:13 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-16T14:06:13 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-16T14:06:13 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-16T14:31:58 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=ddd9ac26  ip=127.0.0.1
+2026-05-16T14:31:58 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=4cd54ff5  ip=127.0.0.1
+2026-05-16T14:31:58 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=ddd9ac26  status=200  136.8ms
+2026-05-16T14:31:58 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=4cd54ff5  status=200  5.9ms
+2026-05-16T14:32:42 [INFO    ] berlinstar.http: → GET /api/items  rid=820f958a  ip=127.0.0.1
+2026-05-16T14:32:42 [INFO    ] berlinstar.http: → GET /api/departments  rid=949b2304  ip=127.0.0.1
+2026-05-16T14:32:42 [INFO    ] berlinstar.http: → GET /api/employees  rid=0e835132  ip=127.0.0.1
+2026-05-16T14:32:43 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=41959fd4  ip=127.0.0.1
+2026-05-16T14:32:43 [ERROR   ] berlinstar.http: !! GET /api/items  rid=820f958a  444.1ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/items.py", line 69, in list_items
+    return await paginate(db, stmt, limit, transform=_with_category_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:32:45 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=41959fd4  status=200  2679.5ms
+2026-05-16T14:32:45 [ERROR   ] berlinstar.http: !! GET /api/departments  rid=949b2304  2963.7ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/departments.py", line 49, in list_departments
+    return await paginate(db, stmt, limit)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:32:46 [ERROR   ] berlinstar.http: !! GET /api/employees  rid=0e835132  3112.0ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/employees.py", line 54, in list_employees
+    return await paginate(db, stmt, limit)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:32:53 [INFO    ] berlinstar.http: → GET /api/items  rid=d72022f4  ip=127.0.0.1
+2026-05-16T14:32:53 [INFO    ] berlinstar.http: → GET /api/departments  rid=b46a9771  ip=127.0.0.1
+2026-05-16T14:32:53 [INFO    ] berlinstar.http: → GET /api/employees  rid=0481be83  ip=127.0.0.1
+2026-05-16T14:32:53 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=7ac2d08d  ip=127.0.0.1
+2026-05-16T14:32:53 [ERROR   ] berlinstar.http: !! GET /api/items  rid=d72022f4  22.6ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/items.py", line 69, in list_items
+    return await paginate(db, stmt, limit, transform=_with_category_name)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:32:53 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=7ac2d08d  status=200  136.7ms
+2026-05-16T14:32:53 [ERROR   ] berlinstar.http: !! GET /api/departments  rid=b46a9771  154.4ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/departments.py", line 49, in list_departments
+    return await paginate(db, stmt, limit)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:32:53 [ERROR   ] berlinstar.http: !! GET /api/employees  rid=0481be83  319.2ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/employees.py", line 54, in list_employees
+    return await paginate(db, stmt, limit)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/utils/paginate.py", line 19, in paginate
+    rows = (await db.execute(stmt)).scalars().all()
+            ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:33:28 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=dea17a18  ip=127.0.0.1
+2026-05-16T14:33:28 [ERROR   ] berlinstar.http: !! POST /api/admin/verify  rid=dea17a18  142.3ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/slowapi/extension.py", line 734, in async_wrapper
+    response = await func(*args, **kwargs)  # type: ignore
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/admin.py", line 60, in verify_admin
+    account = (await db.execute(
+               ^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:34:41 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=7edf6146  ip=127.0.0.1
+2026-05-16T14:34:41 [ERROR   ] berlinstar.http: !! POST /api/auth/login  rid=7edf6146  114.9ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/slowapi/extension.py", line 734, in async_wrapper
+    response = await func(*args, **kwargs)  # type: ignore
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/auth.py", line 61, in login
+    token, account = await _authenticate(body.username, body.password, db)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/auth.py", line 38, in _authenticate
+    account = (await db.execute(
+               ^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:37:02 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:37:02 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:37:02 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:37:02 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:37:02 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-16T14:37:02 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-16T14:37:02 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-16T14:37:06 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=4bd42210  ip=127.0.0.1
+2026-05-16T14:37:06 [ERROR   ] berlinstar.http: !! POST /api/auth/login  rid=4bd42210  80.3ms  UNHANDLED: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/slowapi/extension.py", line 734, in async_wrapper
+    response = await func(*args, **kwargs)  # type: ignore
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/auth.py", line 61, in login
+    token, account = await _authenticate(body.username, body.password, db)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/auth.py", line 38, in _authenticate
+    account = (await db.execute(
+               ^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 201, in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2239, in _execute_internal
+    conn = self._connection_for_bind(bind)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2108, in _connection_for_bind
+    return trans._connection_for_bind(engine, execution_options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 2, in _connection_for_bind
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1187, in _connection_for_bind
+    conn = bind.connect()
+           ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3293, in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 143, in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 3317, in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 448, in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 1272, in _checkout
+    fairy = _ConnectionRecord.checkout(pool)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 712, in checkout
+    rec = pool._do_get()
+          ^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 177, in _do_get
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/impl.py", line 175, in _do_get
+    return self._create_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 389, in _create_connection
+    return _ConnectionRecord(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 674, in __init__
+    self.__connect()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 900, in __connect
+    with util.safe_reraise():
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py", line 121, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/pool/base.py", line 896, in __connect
+    self.dbapi_connection = connection = pool._invoke_creator(self)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/create.py", line 667, in connect
+    return dialect.connect(*cargs_tup, **cparams)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 630, in connect
+    return self.loaded_dbapi.connect(*cargs, **cparams)  # type: ignore[no-any-return]  # NOQA: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 955, in connect
+    await_only(creator_fn(*arg, **kw)),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connection.py", line 2443, in connect
+    return await connect_utils._connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1249, in _connect
+    raise last_error or exceptions.TargetServerAttributeNotMatched(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1218, in _connect
+    conn = await _connect_addr(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1054, in _connect_addr
+    return await __connect_addr(params, True, *args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 1099, in __connect_addr
+    tr, pr = await connector
+             ^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connect_utils.py", line 969, in _create_ssl_connection
+    tr, pr = await loop.create_connection(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "uvloop/loop.pyx", line 2043, in create_connection
+  File "uvloop/loop.pyx", line 2020, in uvloop.loop.Loop.create_connection
+ConnectionRefusedError: [Errno 111] Connection refused
+2026-05-16T14:39:11 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-16T14:39:11 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-16T14:39:11 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-16T14:40:52 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:40:52 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T14:40:52 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:40:52 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T14:40:52 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-16T14:40:52 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-16T14:40:52 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-16T14:40:57 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=bad312af  ip=127.0.0.1
+2026-05-16T14:40:58 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=bad312af  status=200  425.0ms
+2026-05-16T14:40:58 [INFO    ] berlinstar.http: → GET /api/locations  rid=0b620591  ip=127.0.0.1
+2026-05-16T14:40:58 [INFO    ] berlinstar.http: ← GET /api/locations  rid=0b620591  status=200  159.5ms
+2026-05-16T14:40:58 [INFO    ] berlinstar.http: → POST /api/devices  rid=70fba364  ip=127.0.0.1
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: → GET /api/departments  rid=2c71258b  ip=127.0.0.1
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: → GET /api/items  rid=244b88e5  ip=127.0.0.1
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: → GET /api/employees  rid=f5720257  ip=127.0.0.1
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=895ff37f  ip=127.0.0.1
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=895ff37f  status=200  111.7ms
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: ← GET /api/departments  rid=2c71258b  status=200  520.5ms
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: ← GET /api/employees  rid=f5720257  status=200  286.8ms
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: ← POST /api/devices  rid=70fba364  status=201  672.4ms
+2026-05-16T14:40:59 [INFO    ] berlinstar.http: ← GET /api/items  rid=244b88e5  status=200  438.8ms
+2026-05-16T14:41:25 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=e6f9feb9  ip=127.0.0.1
+2026-05-16T14:41:25 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=e6f9feb9  status=200  199.8ms
+2026-05-16T14:41:32 [INFO    ] berlinstar.http: → GET /api/locations  rid=e40b50c4  ip=127.0.0.1
+2026-05-16T14:41:32 [INFO    ] berlinstar.http: ← GET /api/locations  rid=e40b50c4  status=200  11.3ms
+2026-05-16T14:41:33 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=fb700134  ip=127.0.0.1
+2026-05-16T14:41:33 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=fb700134  status=200  120.8ms
+2026-05-16T14:42:29 [INFO    ] berlinstar.http: → PATCH /api/stocuri/item/110  rid=a628df9e  ip=127.0.0.1
+2026-05-16T14:42:29 [INFO    ] berlinstar.http: ← PATCH /api/stocuri/item/110  rid=a628df9e  status=200  32.1ms
+2026-05-16T14:42:38 [INFO    ] berlinstar.http: → PATCH /api/stocuri/item/111  rid=510643de  ip=127.0.0.1
+2026-05-16T14:42:38 [INFO    ] berlinstar.http: ← PATCH /api/stocuri/item/111  rid=510643de  status=200  44.5ms
+2026-05-16T14:42:52 [INFO    ] berlinstar.http: → PATCH /api/stocuri/item/110  rid=1dd2b46a  ip=127.0.0.1
+2026-05-16T14:42:52 [INFO    ] berlinstar.http: ← PATCH /api/stocuri/item/110  rid=1dd2b46a  status=200  25.9ms
+2026-05-16T14:42:57 [INFO    ] berlinstar.http: → PATCH /api/stocuri/item/111  rid=0035e657  ip=127.0.0.1
+2026-05-16T14:42:57 [INFO    ] berlinstar.http: ← PATCH /api/stocuri/item/111  rid=0035e657  status=200  17.7ms
+2026-05-16T14:43:00 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=1ee8272a  ip=127.0.0.1
+2026-05-16T14:43:00 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=1ee8272a  status=200  7.4ms
+2026-05-16T14:43:07 [INFO    ] berlinstar.http: → GET /api/locations  rid=d5a6d98d  ip=127.0.0.1
+2026-05-16T14:43:07 [INFO    ] berlinstar.http: ← GET /api/locations  rid=d5a6d98d  status=200  9.5ms
+2026-05-16T14:43:07 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=0acf6790  ip=127.0.0.1
+2026-05-16T14:43:07 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=0acf6790  status=200  8.5ms
+2026-05-16T14:43:40 [INFO    ] berlinstar.http: → POST /api/stocuri/ajustare  rid=81eb5423  ip=127.0.0.1
+2026-05-16T14:43:40 [INFO    ] berlinstar.http: ← POST /api/stocuri/ajustare  rid=81eb5423  status=200  52.8ms
+2026-05-16T14:43:40 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=205d3e61  ip=127.0.0.1
+2026-05-16T14:43:40 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=205d3e61  status=200  16.4ms
+2026-05-16T14:43:49 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=fb20f1d3  ip=127.0.0.1
+2026-05-16T14:43:49 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=fb20f1d3  status=200  4.6ms
+2026-05-16T14:44:54 [INFO    ] berlinstar.http: → POST /api/stocuri/ajustare  rid=1e8810b3  ip=127.0.0.1
+2026-05-16T14:44:54 [INFO    ] berlinstar.http: ← POST /api/stocuri/ajustare  rid=1e8810b3  status=200  24.0ms
+2026-05-16T14:44:54 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=3fdceceb  ip=127.0.0.1
+2026-05-16T14:44:54 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=3fdceceb  status=200  19.0ms
+2026-05-16T14:45:48 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=60ae6883  ip=127.0.0.1
+2026-05-16T14:45:48 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=60ae6883  status=200  13.6ms
+2026-05-16T15:02:00 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-16T15:02:00 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-16T15:02:00 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-16T15:03:10 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T15:03:10 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-16T15:03:11 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T15:03:11 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-16T15:03:11 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-16T15:03:11 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job-uri: daily@02:00 + sunday@04:00.
+2026-05-16T15:03:11 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-16T15:03:18 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=a654b84c  ip=127.0.0.1
+2026-05-16T15:03:18 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=29c6c212  ip=127.0.0.1
+2026-05-16T15:03:18 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=a654b84c  status=200  66.9ms
+2026-05-16T15:03:18 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=29c6c212  status=200  9.8ms
+2026-05-16T15:03:50 [INFO    ] berlinstar.http: → GET /api/locations  rid=41799b39  ip=127.0.0.1
+2026-05-16T15:03:50 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=eb5d4c23  ip=127.0.0.1
+2026-05-16T15:03:50 [INFO    ] berlinstar.http: ← GET /api/locations  rid=41799b39  status=200  263.8ms
+2026-05-16T15:03:50 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=eb5d4c23  status=200  160.9ms
+2026-05-16T15:12:45 [INFO    ] berlinstar.http: → GET /api/locations  rid=e0764f94  ip=127.0.0.1
+2026-05-16T15:12:45 [INFO    ] berlinstar.http: ← GET /api/locations  rid=e0764f94  status=200  10.0ms
+2026-05-16T15:12:45 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=a05f2067  ip=127.0.0.1
+2026-05-16T15:12:45 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=a05f2067  status=200  5.3ms
+2026-05-16T15:20:37 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=e1e8ab79  ip=127.0.0.1
+2026-05-16T15:20:37 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=e1e8ab79  status=200  4.0ms
+2026-05-16T15:20:39 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=15c881fb  ip=127.0.0.1
+2026-05-16T15:20:39 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=15c881fb  status=200  1.9ms
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=a4fe254b  ip=127.0.0.1
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=719c30fa  ip=127.0.0.1
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: → GET /api/receipts  rid=23669673  ip=127.0.0.1
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=719c30fa  status=200  41.8ms
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=a4fe254b  status=200  297.9ms
+2026-05-16T15:25:44 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=23669673  status=200  268.3ms
+2026-05-16T15:37:34 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=4c3c640e  ip=127.0.0.1
+2026-05-16T15:37:34 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=4c3c640e  status=200  1.4ms
+2026-05-16T15:41:57 [INFO    ] berlinstar.http: → GET /api/locations  rid=9ad4126f  ip=127.0.0.1
+2026-05-16T15:41:57 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=1334c12d  ip=127.0.0.1
+2026-05-16T15:41:57 [INFO    ] berlinstar.http: ← GET /api/locations  rid=9ad4126f  status=200  35.5ms
+2026-05-16T15:41:57 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=1334c12d  status=200  39.2ms
+2026-05-16T15:50:25 [INFO    ] berlinstar.http: → GET /api/locations  rid=76c3b6ac  ip=127.0.0.1
+2026-05-16T15:50:25 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=3cde8c34  ip=127.0.0.1
+2026-05-16T15:50:25 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=3cde8c34  status=200  11.5ms
+2026-05-16T15:50:25 [INFO    ] berlinstar.http: ← GET /api/locations  rid=76c3b6ac  status=200  24.4ms
+2026-05-16T15:51:02 [INFO    ] berlinstar.http: → GET /api/items  rid=ba5e2731  ip=127.0.0.1
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: → GET /api/departments  rid=c1ed4cb0  ip=127.0.0.1
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: → GET /api/employees  rid=75aa6423  ip=127.0.0.1
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=2b06b7bd  ip=127.0.0.1
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=2b06b7bd  status=200  3.0ms
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: ← GET /api/departments  rid=c1ed4cb0  status=200  400.2ms
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: ← GET /api/items  rid=ba5e2731  status=200  602.1ms
+2026-05-16T15:51:03 [INFO    ] berlinstar.http: ← GET /api/employees  rid=75aa6423  status=200  412.0ms
+2026-05-16T15:51:20 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=4dda3134  ip=127.0.0.1
+2026-05-16T15:51:20 [INFO    ] berlinstar.http: → GET /api/receipts  rid=01aabe32  ip=127.0.0.1
+2026-05-16T15:51:20 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=eed34b04  ip=127.0.0.1
+2026-05-16T15:51:21 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=eed34b04  status=200  4.8ms
+2026-05-16T15:51:21 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=4dda3134  status=200  44.3ms
+2026-05-16T15:51:21 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=01aabe32  status=200  66.9ms
+2026-05-16T15:51:30 [INFO    ] berlinstar.http: → GET /api/reports/contributii-angajati  rid=72c65ea4  ip=127.0.0.1
+2026-05-16T15:51:30 [INFO    ] berlinstar.http: ← GET /api/reports/contributii-angajati  rid=72c65ea4  status=200  257.0ms
+2026-05-16T15:52:17 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=25863371  ip=127.0.0.1
+2026-05-16T15:52:17 [INFO    ] berlinstar.http: → GET /api/locations  rid=64a9ec27  ip=127.0.0.1
+2026-05-16T15:52:17 [INFO    ] berlinstar.http: ← GET /api/locations  rid=64a9ec27  status=200  20.1ms
+2026-05-16T15:52:17 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=25863371  status=200  87.0ms
+2026-05-16T15:52:21 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=8820cb58  ip=127.0.0.1
+2026-05-16T15:52:21 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=8820cb58  status=200  29.7ms
+2026-05-16T15:52:21 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=705bdff6  ip=127.0.0.1
+2026-05-16T15:52:21 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=705bdff6  status=200  14.9ms
+2026-05-16T15:54:07 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=15c2a65d  ip=127.0.0.1
+2026-05-16T15:54:07 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=15c2a65d  status=200  79.3ms
+2026-05-16T15:54:30 [INFO    ] berlinstar.http: → GET /api/employees  rid=a48bd5c6  ip=127.0.0.1
+2026-05-16T15:54:30 [INFO    ] berlinstar.http: ← GET /api/employees  rid=a48bd5c6  status=200  8.7ms
+2026-05-16T15:54:32 [INFO    ] berlinstar.http: → GET /api/reports/employees/21  rid=6c37a610  ip=127.0.0.1
+2026-05-16T15:54:32 [INFO    ] berlinstar.http: ← GET /api/reports/employees/21  rid=6c37a610  status=200  89.7ms
+2026-05-16T15:55:24 [INFO    ] berlinstar.http: → GET /api/reports/clienti  rid=5f4a6b10  ip=127.0.0.1
+2026-05-16T15:55:24 [INFO    ] berlinstar.http: ← GET /api/reports/clienti  rid=5f4a6b10  status=200  179.0ms
+2026-05-16T15:57:29 [INFO    ] berlinstar.http: → GET /api/reports/programari  rid=eed98acd  ip=127.0.0.1
+2026-05-16T15:57:29 [INFO    ] berlinstar.http: ← GET /api/reports/programari  rid=eed98acd  status=200  66.7ms
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: → GET /api/stocuri/snapshot  rid=bcf77871  ip=127.0.0.1
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: ← GET /api/stocuri/snapshot  rid=bcf77871  status=200  37.0ms
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: → GET /api/stocuri/reports/top-produse  rid=d8b831c5  ip=127.0.0.1
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: → GET /api/stocuri/reports/per-angajat  rid=53098e9e  ip=127.0.0.1
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: → GET /api/stocuri/miscari  rid=6470049f  ip=127.0.0.1
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: ← GET /api/stocuri/miscari  rid=6470049f  status=200  106.7ms
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: ← GET /api/stocuri/reports/per-angajat  rid=53098e9e  status=200  152.7ms
+2026-05-16T15:57:32 [INFO    ] berlinstar.http: ← GET /api/stocuri/reports/top-produse  rid=d8b831c5  status=200  190.0ms
+2026-05-16T15:57:44 [INFO    ] berlinstar.http: → GET /api/reports/programari  rid=e78d9c39  ip=127.0.0.1
+2026-05-16T15:57:44 [INFO    ] berlinstar.http: ← GET /api/reports/programari  rid=e78d9c39  status=200  12.8ms
+2026-05-16T15:57:45 [INFO    ] berlinstar.http: → GET /api/stocuri/snapshot  rid=a27fac39  ip=127.0.0.1
+2026-05-16T15:57:45 [INFO    ] berlinstar.http: ← GET /api/stocuri/snapshot  rid=a27fac39  status=200  31.8ms
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: → GET /api/stocuri/reports/per-angajat  rid=c5cadc81  ip=127.0.0.1
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: → GET /api/stocuri/reports/top-produse  rid=2ed78d60  ip=127.0.0.1
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: → GET /api/stocuri/miscari  rid=2f73952d  ip=127.0.0.1
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: ← GET /api/stocuri/reports/per-angajat  rid=c5cadc81  status=200  41.6ms
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: ← GET /api/stocuri/miscari  rid=2f73952d  status=200  15.5ms
+2026-05-16T15:57:46 [INFO    ] berlinstar.http: ← GET /api/stocuri/reports/top-produse  rid=2ed78d60  status=200  30.5ms
+2026-05-16T15:57:47 [INFO    ] berlinstar.http: → GET /api/reports/programari  rid=41012e28  ip=127.0.0.1
+2026-05-16T15:57:47 [INFO    ] berlinstar.http: ← GET /api/reports/programari  rid=41012e28  status=200  10.8ms
+2026-05-16T15:57:49 [INFO    ] berlinstar.http: → GET /api/items  rid=123c3a9a  ip=127.0.0.1
+2026-05-16T15:57:49 [INFO    ] berlinstar.http: ← GET /api/items  rid=123c3a9a  status=200  38.1ms
+2026-05-16T15:57:49 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=67b0247f  ip=127.0.0.1
+2026-05-16T15:57:49 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=67b0247f  status=200  2.4ms
+2026-05-16T15:58:43 [INFO    ] berlinstar.http: → GET /api/locations  rid=3ce17f99  ip=127.0.0.1
+2026-05-16T15:58:43 [INFO    ] berlinstar.http: → GET /api/stocuri  rid=2eb22242  ip=127.0.0.1
+2026-05-16T15:58:43 [INFO    ] berlinstar.http: ← GET /api/locations  rid=3ce17f99  status=200  29.8ms
+2026-05-16T15:58:43 [INFO    ] berlinstar.http: ← GET /api/stocuri  rid=2eb22242  status=200  49.7ms
