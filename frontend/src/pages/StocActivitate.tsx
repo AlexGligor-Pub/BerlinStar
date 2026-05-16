@@ -5,7 +5,6 @@ import {
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
 import { device } from "../store/deviceStore";
-import { notify } from "../store/notificationsStore";
 import { loadMiscari, stocuri, loadStocuri, type MiscareStoc, type StocRow } from "../store/stocStore";
 
 const MOVEMENT_LABELS: Record<string, string> = {
