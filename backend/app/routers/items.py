@@ -9,6 +9,7 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.item import Item, ItemType
 from app.models.category import Category
+from app.models.department import Department
 from app.schemas.item import ItemCreate, ItemUpdate, ItemRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
@@ -51,7 +52,11 @@ async def list_items(
     )
 
     if not include_deleted:
-        stmt = stmt.where(Item.is_deleted == False)
+        stmt = stmt.where(
+            Item.is_deleted == False,
+            Category.is_deleted == False,
+            Department.is_deleted == False,
+        )
     if last_id is not None:
         stmt = stmt.where(Item.id > last_id)
     if q:

@@ -156,8 +156,16 @@ async def mark_triggered(db: AsyncSession, report_type: str) -> None:
     await db.commit()
 
 
-async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
-    """Rulează un raport într-o sesiune nouă. Folosit din scheduler și ca task din endpoint."""
+async def run_report(
+    report_type: str,
+    mode: RunMode = "incremental",
+    period_override: tuple[date, date] | None = None,
+) -> dict:
+    """Rulează un raport într-o sesiune nouă. Folosit din scheduler și ca task din endpoint.
+
+    Dacă `period_override` este setat, se ignoră `mode` și se folosește perioada explicită
+    (folosit de "run avansat" din admin pentru rebuild pe interval custom).
+    """
     if report_type not in BUILDERS:
         raise ValueError(f"Raport necunoscut: {report_type}")
 
@@ -176,8 +184,11 @@ async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
             log.warning("Raportul %s e deja în rulare — skip.", report_type)
             return {"skipped": True, "reason": "already_running"}
 
-        oldest = await _get_oldest_source_date(db, report_type)
-        period = _compute_period(mode, run.last_period_end, oldest)
+        if period_override is not None:
+            period: tuple[date, date] | None = period_override
+        else:
+            oldest = await _get_oldest_source_date(db, report_type)
+            period = _compute_period(mode, run.last_period_end, oldest)
         if period is None:
             log.info("Raportul %s nu are perioadă de procesat (mode=%s).", report_type, mode)
             run.status = "idle"
@@ -202,11 +213,12 @@ async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
         async with AsyncSessionLocal() as upd:
+            # GREATEST: la run cu period_override pe interval mai vechi, nu regresam cursorul incremental.
             await upd.execute(
                 text(
                     "UPDATE report_runs SET status = 'idle', last_run_at = NOW(), "
-                    "last_period_end = :pe, last_duration_ms = :dur, "
-                    "last_error = NULL, updated_at = NOW() "
+                    "last_period_end = GREATEST(COALESCE(last_period_end, :pe), :pe), "
+                    "last_duration_ms = :dur, last_error = NULL, updated_at = NOW() "
                     "WHERE report_type = :rt"
                 ),
                 {"pe": period_end, "dur": duration_ms, "rt": report_type},
@@ -244,18 +256,25 @@ async def run_report(report_type: str, mode: RunMode = "incremental") -> dict:
         raise
 
 
-async def run_all(mode: RunMode = "incremental", stagger_seconds: int = 0) -> None:
+async def run_all(
+    mode: RunMode = "incremental",
+    stagger_seconds: int = 0,
+    period_override: tuple[date, date] | None = None,
+) -> None:
     """Rulează toate rapoartele suportate, secvențial.
 
     Dacă `stagger_seconds > 0`, așteaptă atâtea secunde între rapoarte (nu și după
     ultimul). Util pentru a evita spike-uri de încărcare pe DB când scheduler-ul
     rulează toate rapoartele odată.
+
+    Dacă `period_override` este setat, toate rapoartele rulează pe acel interval
+    (rebuild custom din admin).
     """
     import asyncio
     reports = list(SUPPORTED_REPORTS)
     for idx, rt in enumerate(reports):
         try:
-            await run_report(rt, mode)
+            await run_report(rt, mode, period_override=period_override)
         except Exception:
             log.exception("Raportul %s a eșuat, continuăm cu următorul.", rt)
         if stagger_seconds > 0 and idx < len(reports) - 1:

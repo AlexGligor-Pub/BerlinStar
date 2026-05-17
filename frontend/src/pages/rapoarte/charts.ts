@@ -6,7 +6,7 @@
  */
 
 import * as d3 from "d3";
-import { toNumber, fmtMoney } from "./format";
+import { toNumber, fmtMoney, fmtMoneyInt } from "./format";
 import { PALETTE, fmtMonth, RO_DOW, RO_DOW_SHORT } from "./constants";
 
 export interface DailyTotal {
@@ -247,7 +247,7 @@ export function drawDonut(container: HTMLDivElement, items: DonutItem[], centerL
     .attr("font-size", "20px")
     .attr("font-weight", 700)
     .attr("fill", "var(--text, #e8eaf0)")
-    .text(fmtMoney(total));
+    .text(fmtMoneyInt(total));
   centerLabel.append("tspan")
     .attr("class", "donut-center-label")
     .attr("x", 0)
@@ -279,7 +279,7 @@ export function drawDonut(container: HTMLDivElement, items: DonutItem[], centerL
     .style("cursor", "pointer")
     .on("mouseover", function (_event, d) {
       d3.select(this).transition().duration(120).attr("d", arcHover as any);
-      const pct = ((d.data.value / total) * 100).toFixed(1);
+      const pct = Math.round((d.data.value / total) * 100);
       centerLabel.select(".donut-center-value")
         .attr("fill", d.data.color)
         .text(pct + "%");
@@ -287,18 +287,18 @@ export function drawDonut(container: HTMLDivElement, items: DonutItem[], centerL
     })
     .on("mousemove", function (event, d) {
       const rect = container.getBoundingClientRect();
-      const pct = ((d.data.value / total) * 100).toFixed(1);
+      const pct = Math.round((d.data.value / total) * 100);
       tooltip
         .style("opacity", 1)
         .style("left", (event.clientX - rect.left + 14) + "px")
         .style("top", (event.clientY - rect.top - 10) + "px")
-        .html(`<strong style="display:block;color:${d.data.color}">${d.data.label}</strong>${fmtMoney(d.data.value)} lei (${pct}%)`);
+        .html(`<strong style="display:block;color:${d.data.color}">${d.data.label}</strong>${fmtMoneyInt(d.data.value)} lei (${pct}%)`);
     })
     .on("mouseout", function () {
       d3.select(this).transition().duration(120).attr("d", arc as any);
       centerLabel.select(".donut-center-value")
         .attr("fill", "var(--text, #e8eaf0)")
-        .text(fmtMoney(total));
+        .text(fmtMoneyInt(total));
       centerLabel.select(".donut-center-label").text(centerLabelText);
       tooltip.style("opacity", 0);
     });
@@ -314,7 +314,7 @@ export function drawDonut(container: HTMLDivElement, items: DonutItem[], centerL
     .style("max-width", "260px");
 
   filtered.slice(0, 8).forEach((item) => {
-    const pct = ((item.value / total) * 100).toFixed(1);
+    const pct = Math.round((item.value / total) * 100);
     const entry = legend.append("div")
       .style("display", "flex")
       .style("align-items", "center")

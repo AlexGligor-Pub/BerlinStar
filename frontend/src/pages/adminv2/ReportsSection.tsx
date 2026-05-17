@@ -53,11 +53,31 @@ function fmtCooldown(s: number): string {
 }
 
 
+function todayISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function firstOfMonthISO(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
+}
+
 export default function ReportsSection() {
   const [reports, setReports] = createSignal<ReportStatus[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [triggering, setTriggering] = createSignal<Record<string, boolean>>({});
   const [errMsg, setErrMsg] = createSignal<string>("");
+  const [runAllBusy, setRunAllBusy] = createSignal(false);
+  const [advancedOpen, setAdvancedOpen] = createSignal(false);
+  const [advStart, setAdvStart] = createSignal(firstOfMonthISO());
+  const [advEnd, setAdvEnd] = createSignal(todayISO());
+  const [advErr, setAdvErr] = createSignal("");
 
   async function loadReports() {
     setLoading(true);
@@ -75,6 +95,52 @@ export default function ReportsSection() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function doRunAll(opts?: { periodStart?: string; periodEnd?: string }) {
+    setRunAllBusy(true);
+    try {
+      const params = new URLSearchParams({ mode: "incremental", stagger_seconds: "0" });
+      if (opts?.periodStart && opts?.periodEnd) {
+        params.set("period_start", opts.periodStart);
+        params.set("period_end", opts.periodEnd);
+      }
+      const res = await adminFetch(`/api/admin/reports/run-all?${params.toString()}`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        notify(`Eroare ${res.status}: ${d.detail ?? "Rulare bulk eșuată."}`, "error");
+        return false;
+      }
+      const msg = opts?.periodStart && opts?.periodEnd
+        ? `Rulare avansată pornită: ${opts.periodStart} → ${opts.periodEnd}.`
+        : "Toate rapoartele rulează secvențial în background.";
+      notify(msg, "success");
+      await loadReports();
+      return true;
+    } catch {
+      notify("Eroare de conexiune la rularea bulk.", "error");
+      return false;
+    } finally {
+      setRunAllBusy(false);
+    }
+  }
+
+  async function submitAdvanced() {
+    setAdvErr("");
+    const s = advStart();
+    const e = advEnd();
+    if (!s || !e) {
+      setAdvErr("Selectează ambele date.");
+      return;
+    }
+    if (s > e) {
+      setAdvErr("Data de început trebuie ≤ data de sfârșit.");
+      return;
+    }
+    const ok = await doRunAll({ periodStart: s, periodEnd: e });
+    if (ok) setAdvancedOpen(false);
   }
 
   async function doTrigger(reportType: string, mode: "incremental" | "weekly_refresh" = "incremental") {
@@ -118,9 +184,27 @@ export default function ReportsSection() {
             Worker luni–sâmbătă, 08:00–20:00, din 2 în 2 ore (Europe/Bucharest). Toate rapoartele rulează secvențial, cu pauză de 3 minute între ele. Trigger manual cu cooldown 5min.
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" onClick={loadReports} disabled={loading()}>
-          {loading() ? "Se reîncarcă..." : "↻ Reîncarcă"}
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button
+            class="btn btn-primary btn-sm"
+            onClick={() => void doRunAll()}
+            disabled={runAllBusy() || loading()}
+            title="Rulează toate rapoartele secvențial, mod incremental"
+          >
+            {runAllBusy() ? "Pornește..." : "▶ Rulează toate"}
+          </button>
+          <button
+            class="btn btn-ghost btn-sm"
+            onClick={() => { setAdvErr(""); setAdvancedOpen(true); }}
+            disabled={runAllBusy() || loading()}
+            title="Rulează toate rapoartele pe un interval custom (start → end)"
+          >
+            ⚙ Run avansat
+          </button>
+          <button class="btn btn-ghost btn-sm" onClick={loadReports} disabled={loading()}>
+            {loading() ? "Se reîncarcă..." : "↻ Reîncarcă"}
+          </button>
+        </div>
       </div>
 
       <Show when={errMsg()}>
@@ -194,6 +278,61 @@ export default function ReportsSection() {
       <Show when={!loading() && reports().length === 0}>
         <div style="padding:24px;text-align:center;color:var(--text-muted)">
           Niciun raport configurat.
+        </div>
+      </Show>
+
+      <Show when={advancedOpen()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Run avansat — toate rapoartele</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setAdvancedOpen(false)} disabled={runAllBusy()}>✕</button>
+            </div>
+            <div class="admin-modal-body">
+              <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px">
+                Rebuild idempotent pentru toate rapoartele pe intervalul ales. Datele existente pe perioadă sunt înlocuite.
+              </div>
+              <div class="admin-form-row">
+                <label class="admin-form-label">Data început *</label>
+                <input
+                  class="input"
+                  type="date"
+                  value={advStart()}
+                  onInput={(e) => setAdvStart(e.currentTarget.value)}
+                />
+              </div>
+              <div class="admin-form-row">
+                <label class="admin-form-label">Data sfârșit *</label>
+                <input
+                  class="input"
+                  type="date"
+                  value={advEnd()}
+                  onInput={(e) => setAdvEnd(e.currentTarget.value)}
+                />
+              </div>
+              <Show when={advErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:8px 0 0">{advErr()}</p>
+              </Show>
+            </div>
+            <div class="sl-modal-footer">
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                onClick={() => setAdvancedOpen(false)}
+                disabled={runAllBusy()}
+              >
+                Anulează
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                onClick={() => void submitAdvanced()}
+                disabled={runAllBusy()}
+              >
+                {runAllBusy() ? "Pornește..." : "Rulează"}
+              </button>
+            </div>
+          </div>
         </div>
       </Show>
     </div>

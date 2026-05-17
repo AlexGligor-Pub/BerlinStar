@@ -15,7 +15,7 @@ from app.services.reports import (
     can_trigger,
     COOLDOWN_SECONDS,
 )
-from app.services.reports.manager import SUPPORTED_REPORTS, mark_triggered
+from app.services.reports.manager import SUPPORTED_REPORTS, mark_triggered, run_all
 
 log = logging.getLogger("berlinstar.reports")
 router = APIRouter()
@@ -87,3 +87,74 @@ async def _safe_run(report_type: str, mode: str) -> None:
         await run_report(report_type, mode)  # type: ignore[arg-type]
     except Exception:
         log.exception("Background run pentru raportul %s a eșuat.", report_type)
+
+
+class RunAllResponse(BaseModel):
+    accepted: bool
+    count: int
+    mode: str
+    period_start: date | None
+    period_end: date | None
+    stagger_seconds: int
+
+
+@router.post("/run-all", response_model=RunAllResponse, status_code=202)
+@limiter.limit("3/minute")
+async def trigger_run_all(
+    request: Request,
+    mode: str = "incremental",
+    period_start: date | None = None,
+    period_end: date | None = None,
+    stagger_seconds: int = 0,
+    db: AsyncSession = Depends(get_db),
+    _account_id: int = Depends(get_account_id),
+):
+    """Rulează toate rapoartele secvențial.
+
+    - fără `period_start`/`period_end`: foloseste `mode` (incremental sau weekly_refresh)
+    - cu `period_start` + `period_end`: rebuild pe interval custom (override pe toate)
+
+    Bypass cooldown per-raport: e o operație explicit declanșată de admin.
+    """
+    if mode not in ("incremental", "weekly_refresh"):
+        raise HTTPException(400, "Mod invalid.")
+    has_start = period_start is not None
+    has_end = period_end is not None
+    if has_start != has_end:
+        raise HTTPException(400, "period_start și period_end trebuie furnizate împreună.")
+
+    period_override: tuple[date, date] | None = None
+    if has_start and has_end:
+        assert period_start is not None and period_end is not None
+        if period_start > period_end:
+            raise HTTPException(400, "period_start trebuie ≤ period_end.")
+        period_override = (period_start, period_end)
+
+    if stagger_seconds < 0 or stagger_seconds > 600:
+        raise HTTPException(400, "stagger_seconds trebuie între 0 și 600.")
+
+    # Marcheaza toate rapoartele ca triggered (cooldown UI) — bypass-am verificarea de cooldown.
+    for rt in SUPPORTED_REPORTS:
+        await mark_triggered(db, rt)
+
+    asyncio.create_task(_safe_run_all(mode, stagger_seconds, period_override))
+
+    return RunAllResponse(
+        accepted=True,
+        count=len(SUPPORTED_REPORTS),
+        mode=mode,
+        period_start=period_start,
+        period_end=period_end,
+        stagger_seconds=stagger_seconds,
+    )
+
+
+async def _safe_run_all(
+    mode: str,
+    stagger_seconds: int,
+    period_override: tuple[date, date] | None,
+) -> None:
+    try:
+        await run_all(mode, stagger_seconds=stagger_seconds, period_override=period_override)  # type: ignore[arg-type]
+    except Exception:
+        log.exception("Background run-all a eșuat.")
