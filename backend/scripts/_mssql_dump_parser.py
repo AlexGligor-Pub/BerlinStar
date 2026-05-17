@@ -31,7 +31,8 @@ from typing import Iterator
 
 
 _INSERT_HEAD_RE = re.compile(
-    r"^INSERT \[dbo\]\.\[(?P<table>[^\]]+)\] \((?P<cols>[^)]+)\) VALUES \((?P<vals>.+)\)\s*$"
+    r"^INSERT \[dbo\]\.\[(?P<table>[^\]]+)\] \((?P<cols>[^)]+)\) VALUES \((?P<vals>.+)\)\s*$",
+    re.DOTALL,
 )
 _COLUMN_RE = re.compile(r"\[([^\]]+)\]")
 
@@ -161,7 +162,17 @@ def parse_inserts(dump_path: Path, table_name: str) -> Iterator[dict[str, object
         for line in f:
             if not line.startswith(prefix):
                 continue
-            m = _INSERT_HEAD_RE.match(line)
+            # T-SQL INSERTs sometimes contain literal newlines inside N'...'
+            # string values (e.g. multi-line Description). Keep accumulating
+            # lines until the statement is structurally complete: an even
+            # number of unescaped single quotes AND parentheses balanced to 0.
+            buf = line.rstrip("\r\n")
+            while not _statement_complete(buf):
+                next_line = f.readline()
+                if not next_line:
+                    break
+                buf += "\n" + next_line.rstrip("\r\n")
+            m = _INSERT_HEAD_RE.match(buf)
             if not m:
                 continue
             cols = _parse_columns(m.group("cols"))
@@ -171,6 +182,35 @@ def parse_inserts(dump_path: Path, table_name: str) -> Iterator[dict[str, object
                 # Caller can detect missing rows via a count comparison if needed.
                 continue
             yield dict(zip(cols, vals))
+
+
+def _statement_complete(s: str) -> bool:
+    """True iff the buffer holds a complete INSERT (balanced quotes & parens).
+
+    Walks the buffer once, treating '' inside N'...' as an escaped quote.
+    """
+    in_str = False
+    depth = 0
+    i = 0
+    n = len(s)
+    while i < n:
+        c = s[i]
+        if in_str:
+            if c == "'":
+                # Lookahead for '' escape
+                if i + 1 < n and s[i + 1] == "'":
+                    i += 2
+                    continue
+                in_str = False
+        else:
+            if c == "'":
+                in_str = True
+            elif c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+        i += 1
+    return (not in_str) and depth == 0 and s.rstrip().endswith(")")
 
 
 def count_inserts(dump_path: Path, table_name: str) -> int:
