@@ -110,12 +110,30 @@ class EFacturaGlobalSettings(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     fernet_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    anaf_auth_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    anaf_token_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    anaf_api_base_prod: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    anaf_api_base_test: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    default_redirect_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    frontend_callback_redirect: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    anaf_auth_url: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="https://logincert.anaf.ro/anaf-oauth2/v1/authorize",
+    )
+    anaf_token_url: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="https://logincert.anaf.ro/anaf-oauth2/v1/token",
+    )
+    anaf_api_base_prod: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="https://api.anaf.ro/prod/FCTEL/rest",
+    )
+    anaf_api_base_test: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="https://api.anaf.ro/test/FCTEL/rest",
+    )
+    default_redirect_uri: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="http://localhost:8000/api/efactura/callback",
+    )
+    frontend_callback_redirect: Mapped[str] = mapped_column(
+        String(500), nullable=False,
+        default="http://localhost:2000/adminv2?section=efactura",
+    )
     scheduler_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

@@ -41,18 +41,25 @@ async def lifespan(app: FastAPI):
     global http_client
     http_client = httpx.AsyncClient(timeout=15.0)
 
-    # Bootstrap config eFactura din DB (Fernet key + URL-uri) inainte de scheduler.
+    # Bootstrap config eFactura din DB:
+    # - asigura rand singleton in efactura_global_settings
+    # - completeaza URL-urile NULL cu defaults oficiale ANAF
+    # - auto-genereaza Fernet key daca lipseste (o singura data, persistat)
+    # - incarca toate valorile in cache-ul module-level pentru acces sincron
     try:
         from app.database import AsyncSessionLocal
         from app.efactura import runtime_config
         from app.efactura.crypto import set_fernet_key
         async with AsyncSessionLocal() as db:
+            await runtime_config.ensure_initialized(db)
             cfg = await runtime_config.load(db, force=True)
         set_fernet_key(cfg.fernet_key)
-        if not cfg.fernet_key:
-            log.warning(
-                "eFactura: cheia Fernet NU este setata. Mergi in AdminV2 -> eFactura -> Configurare globala."
-            )
+        log.info(
+            "eFactura: config initializat (Fernet=%s, scheduler=%s, prod_url=%s)",
+            "set" if cfg.fernet_key else "MISSING",
+            "ON" if cfg.scheduler_enabled else "off",
+            cfg.anaf_api_base_prod,
+        )
     except Exception as exc:  # noqa: BLE001
         log.warning("eFactura bootstrap esuat: %s — folosesc fallback env vars.", exc)
 

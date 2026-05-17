@@ -76,6 +76,59 @@ async def get_or_create_row(db: AsyncSession) -> EFacturaGlobalSettings:
     return row
 
 
+async def ensure_initialized(db: AsyncSession) -> EFacturaGlobalSettings:
+    """Asigura ca singleton-ul exista, are toate URL-urile populate cu defaults
+    si are o cheie Fernet auto-generata.
+
+    Idempotenta — se cheama in lifespan la fiecare pornire. Daca DB-ul are deja
+    valori, nu schimba nimic. Daca un camp e NULL, il completeaza cu default.
+    """
+    row = await get_or_create_row(db)
+    changed = False
+
+    # Backfill URL fields daca cumva sunt NULL (cazul migratiei vechi fara server_default)
+    if not row.anaf_auth_url:
+        row.anaf_auth_url = DEFAULT_ANAF_AUTH_URL
+        changed = True
+    if not row.anaf_token_url:
+        row.anaf_token_url = DEFAULT_ANAF_TOKEN_URL
+        changed = True
+    if not row.anaf_api_base_prod:
+        row.anaf_api_base_prod = DEFAULT_ANAF_API_BASE_PROD
+        changed = True
+    if not row.anaf_api_base_test:
+        row.anaf_api_base_test = DEFAULT_ANAF_API_BASE_TEST
+        changed = True
+    if not row.default_redirect_uri:
+        row.default_redirect_uri = DEFAULT_REDIRECT_URI
+        changed = True
+    if not row.frontend_callback_redirect:
+        row.frontend_callback_redirect = DEFAULT_FRONTEND_CALLBACK
+        changed = True
+
+    # Auto-generare Fernet key la primul startup (deci tokeni se pot stoca imediat)
+    if not row.fernet_key:
+        # Daca env-ul are una setata, o preluam pentru migrare smooth
+        env_key = (os.getenv("ANAF_FERNET_KEY") or "").strip()
+        if env_key:
+            row.fernet_key = env_key
+            log.info("Cheie Fernet preluata din ANAF_FERNET_KEY env si salvata in DB.")
+        else:
+            row.fernet_key = generate_fernet_key()
+            log.warning(
+                "Cheie Fernet auto-generata la startup pentru efactura_global_settings. "
+                "Daca regenerati cheia mai tarziu, conexiunile ANAF deja stabilite vor trebui refacute."
+            )
+        changed = True
+
+    if changed:
+        await db.commit()
+        await db.refresh(row)
+        invalidate_cache()
+
+    return row
+
+
 async def load(db: AsyncSession, force: bool = False) -> ResolvedConfig:
     """Returneaza config-ul curent (din cache daca exista, sau citeste DB)."""
     global _cache
