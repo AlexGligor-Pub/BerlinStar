@@ -58,6 +58,7 @@ import asyncio
 import logging
 import re
 import sys
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -66,7 +67,7 @@ from pathlib import Path
 from typing import Iterable, Iterator
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, insert
+from sqlalchemy import select, insert, func, text
 
 # Make `app` importable when run as `python -m scripts.import_legacy_vulcanizare`
 # from inside the backend directory.
@@ -185,16 +186,23 @@ def _normalize_license_plate(s: str | None) -> str | None:
 # Phase 0 — Account
 # ---------------------------------------------------------------------------
 
+class UsernameExists(Exception):
+    """Raised when the requested Account.username is already taken."""
+    def __init__(self, username: str, existing_id: int):
+        self.username = username
+        self.existing_id = existing_id
+        super().__init__(
+            f"Account with username '{username}' already exists (id={existing_id})."
+        )
+
+
 async def create_account(session, username: str, password: str, account_name: str) -> int:
-    """Create the new Account; abort if username already exists."""
+    """Create the new Account; raise UsernameExists if username taken."""
     existing = (await session.execute(
         select(Account).where(Account.username == username)
     )).scalar_one_or_none()
     if existing is not None:
-        raise SystemExit(
-            f"[FATAL] Account with username '{username}' already exists "
-            f"(id={existing.id}). Delete it first to retry."
-        )
+        raise UsernameExists(username, existing.id)
     account = Account(
         username=username,
         password=hash_password(password),
@@ -374,7 +382,7 @@ async def import_devices(session, dump: Path, account_id: int, id_map: dict) -> 
 # Phase 2 — Junctions
 # ---------------------------------------------------------------------------
 
-async def import_junctions(session, dump: Path, id_map: dict) -> None:
+async def import_junctions(session, dump: Path, id_map: dict) -> dict:
     # SiteUser → employee_locations
     pairs_eu: set[tuple[int, int]] = set()
     for row in parse_inserts(dump, "SiteUser"):
@@ -400,13 +408,14 @@ async def import_junctions(session, dump: Path, id_map: dict) -> None:
             location_departments.insert().values(location_id=loc_id, department_id=dep_id)
         )
     log.info("Phase 2: linked %d location↔department pairs", len(pairs_ld))
+    return {"employee_locations": len(pairs_eu), "location_departments": len(pairs_ld)}
 
 
 # ---------------------------------------------------------------------------
 # Phase 3 — Clients (dedup B2B by CIF)
 # ---------------------------------------------------------------------------
 
-async def import_clients(session, dump: Path, account_id: int, id_map: dict) -> None:
+async def import_clients(session, dump: Path, account_id: int, id_map: dict) -> dict:
     """Create one Client per unique CIF in CompanyDetails. Map every
     CompanyDetails.Id (whether dedup-merged or skipped) to that Client.id when
     a Client was created.
@@ -449,16 +458,18 @@ async def import_clients(session, dump: Path, account_id: int, id_map: dict) -> 
         "Phase 3: created %d unique clients from CompanyDetails (skipped %d empty placeholders)",
         len(cif_to_client), skipped_empty,
     )
+    return {"clients": len(cif_to_client), "skipped_empty": skipped_empty}
 
 
 # ---------------------------------------------------------------------------
 # Phase 4 — Receipts + Vehicole (batched)
 # ---------------------------------------------------------------------------
 
-async def import_receipts(session, dump: Path, account_id: int, id_map: dict) -> None:
+async def import_receipts(session, dump: Path, account_id: int, id_map: dict) -> dict:
     """Stream Receipt rows; bulk-insert in batches; create Vehicol for rows
     whose Title looks like a license plate."""
     total = 0
+    vehicole_total = 0
     cd_to_client = id_map.get("client_details", {})
 
     for batch in batched(parse_inserts(dump, "Receipt"), RECEIPT_BATCH):
@@ -541,17 +552,20 @@ async def import_receipts(session, dump: Path, account_id: int, id_map: dict) ->
             })
         if vehicol_values:
             await session.execute(insert(Vehicol), vehicol_values)
+            vehicole_total += len(vehicol_values)
 
         total += len(receipt_values)
         await session.commit()
         log.info("Phase 4: receipts imported so far = %d", total)
+
+    return {"receipts": total, "vehicole": vehicole_total}
 
 
 # ---------------------------------------------------------------------------
 # Phase 5 — Receipt items from SelledServices
 # ---------------------------------------------------------------------------
 
-async def import_receipt_items(session, dump: Path, account_id: int, id_map: dict) -> None:
+async def import_receipt_items(session, dump: Path, account_id: int, id_map: dict) -> dict:
     """Stream SelledServices and bulk-insert as receipt_items. Service.UM is
     used for the unit field; falls back to "buc" when missing."""
     total = 0
@@ -589,44 +603,90 @@ async def import_receipt_items(session, dump: Path, account_id: int, id_map: dic
         log.warning("Phase 5: skipped %d SelledServices rows (parent Receipt missing)",
                     skipped_no_receipt)
 
+    return {"receipt_items": total, "skipped_no_receipt": skipped_no_receipt}
+
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
-async def run(args: argparse.Namespace) -> None:
-    dump = Path(args.dump).resolve()
+async def _verify_counts(session, account_id: int) -> dict:
+    """Query final row counts per entity table for the new account."""
+    queries = {
+        "companies": "SELECT COUNT(*) FROM companies WHERE account_id = :a",
+        "locations": "SELECT COUNT(*) FROM locations WHERE account_id = :a",
+        "employees": "SELECT COUNT(*) FROM employees WHERE account_id = :a",
+        "departments": "SELECT COUNT(*) FROM departments WHERE account_id = :a",
+        "categories": "SELECT COUNT(*) FROM categories WHERE account_id = :a",
+        "items": "SELECT COUNT(*) FROM items WHERE account_id = :a",
+        "devices": "SELECT COUNT(*) FROM devices WHERE account_id = :a",
+        "clienti": "SELECT COUNT(*) FROM clienti WHERE account_id = :a",
+        "receipts": "SELECT COUNT(*) FROM receipts WHERE account_id = :a",
+        "vehicole": "SELECT COUNT(*) FROM vehicole WHERE account_id = :a",
+        "receipt_items": "SELECT COUNT(*) FROM receipt_items WHERE account_id = :a",
+    }
+    out: dict[str, int | str] = {}
+    for key, q in queries.items():
+        out[key] = int((await session.execute(text(q), {"a": account_id})).scalar() or 0)
+    total = (await session.execute(
+        text("SELECT COALESCE(SUM(total), 0) FROM receipts WHERE account_id = :a"),
+        {"a": account_id},
+    )).scalar() or Decimal("0")
+    out["sum_total"] = str(total)
+    return out
+
+
+async def run_import(
+    dump_path: Path,
+    username: str,
+    password: str,
+    account_name: str,
+    dry_run: bool = False,
+) -> dict:
+    """Run the full import and return a structured report.
+
+    Raises FileNotFoundError if dump missing, UsernameExists if username taken.
+    Returns dict with keys: account_id, username, phases, verification, dry_run,
+    inventory, duration_seconds.
+    """
+    started = time.monotonic()
+    dump = Path(dump_path).resolve()
     if not dump.exists():
-        raise SystemExit(f"[FATAL] Dump file not found: {dump}")
+        raise FileNotFoundError(f"Dump file not found: {dump}")
 
-    log.info("=== Dump inventory ===")
-    for name, cnt in sorted(list_tables(dump).items(), key=lambda x: -x[1]):
-        log.info("  %s: %d", name, cnt)
+    inventory = {name: cnt for name, cnt in list_tables(dump).items()}
+    log.info("=== Dump inventory === %s", inventory)
 
-    if args.dry_run:
-        log.warning("DRY RUN — counters only, no DB inserts will be performed.")
-        # Quick parse check: try to read 10 sample rows from each table
-        for tbl in ["Companies", "Sites", "Users", "Divisions", "ServiceTypes",
-                    "Service", "Devices", "SiteUser", "SiteDivision",
-                    "CompanyDetails", "Receipt", "SelledServices"]:
-            try:
-                sample = next(parse_inserts(dump, tbl), None)
-                if sample is None:
-                    log.info("  %s: no rows", tbl)
-                else:
-                    log.info("  %s: sample = %s", tbl, sample)
-            except Exception as e:
-                log.error("  %s: parse error: %s", tbl, e)
-        return
+    phases: list[dict] = []
+
+    if dry_run:
+        log.warning("DRY RUN — parsing only, no DB writes.")
+        sample_tables = ["Companies", "Sites", "Users", "Divisions", "ServiceTypes",
+                         "Service", "Devices", "SiteUser", "SiteDivision",
+                         "CompanyDetails", "Receipt", "SelledServices"]
+        sample_counts = {}
+        for tbl in sample_tables:
+            sample_counts[tbl] = inventory.get(tbl, 0)
+        phases.append({"name": "Dry run inventory", "status": "ok", "counts": sample_counts})
+        return {
+            "account_id": None,
+            "username": username,
+            "phases": phases,
+            "verification": None,
+            "dry_run": True,
+            "inventory": inventory,
+            "duration_seconds": round(time.monotonic() - started, 2),
+        }
 
     id_map: dict[str, dict] = defaultdict(dict)
 
     async with AsyncSessionLocal() as session:
         # Phase 0
-        account_id = await create_account(
-            session, args.username, args.password, args.account_name
-        )
+        account_id = await create_account(session, username, password, account_name)
         await session.commit()
+        phases.append({"name": "Phase 0: Account",
+                       "status": "ok",
+                       "counts": {"account_id": account_id}})
 
         # Phase 1
         log.info("--- Phase 1: reference data ---")
@@ -638,26 +698,77 @@ async def run(args: argparse.Namespace) -> None:
         await import_items(session, dump, account_id, id_map)
         await import_devices(session, dump, account_id, id_map)
         await session.commit()
+        phases.append({"name": "Phase 1: reference data", "status": "ok",
+                       "counts": {"companies": len(id_map["company"]),
+                                  "locations": len(id_map["location"]),
+                                  "employees": len(id_map["employee"]),
+                                  "departments": len(id_map["department"]),
+                                  "categories": len(id_map["category"]),
+                                  "items": len(id_map["item"]),
+                                  "devices": len(id_map["device"])}})
 
         # Phase 2
         log.info("--- Phase 2: junctions ---")
-        await import_junctions(session, dump, id_map)
+        junctions = await import_junctions(session, dump, id_map)
         await session.commit()
+        phases.append({"name": "Phase 2: junctions", "status": "ok", "counts": junctions})
 
         # Phase 3
         log.info("--- Phase 3: clients ---")
-        await import_clients(session, dump, account_id, id_map)
+        clients = await import_clients(session, dump, account_id, id_map)
         await session.commit()
+        phases.append({"name": "Phase 3: clients (B2B dedup pe CIF)",
+                       "status": "ok", "counts": clients})
 
         # Phase 4
         log.info("--- Phase 4: receipts + vehicole ---")
-        await import_receipts(session, dump, account_id, id_map)
+        receipts = await import_receipts(session, dump, account_id, id_map)
+        phases.append({"name": "Phase 4: receipts + vehicole",
+                       "status": "ok", "counts": receipts})
 
         # Phase 5
         log.info("--- Phase 5: receipt items ---")
-        await import_receipt_items(session, dump, account_id, id_map)
+        items_res = await import_receipt_items(session, dump, account_id, id_map)
+        phases.append({"name": "Phase 5: receipt items",
+                       "status": "ok", "counts": items_res})
 
-        log.info("=== DONE === account_id=%s username=%s", account_id, args.username)
+        verification = await _verify_counts(session, account_id)
+
+        log.info("=== DONE === account_id=%s username=%s", account_id, username)
+
+    return {
+        "account_id": account_id,
+        "username": username,
+        "phases": phases,
+        "verification": verification,
+        "dry_run": False,
+        "inventory": inventory,
+        "duration_seconds": round(time.monotonic() - started, 2),
+    }
+
+
+async def run(args: argparse.Namespace) -> None:
+    """CLI entrypoint — wraps run_import() and prints exit message."""
+    try:
+        result = await run_import(
+            dump_path=Path(args.dump),
+            username=args.username,
+            password=args.password,
+            account_name=args.account_name,
+            dry_run=args.dry_run,
+        )
+    except UsernameExists as e:
+        raise SystemExit(f"[FATAL] {e}")
+    except FileNotFoundError as e:
+        raise SystemExit(f"[FATAL] {e}")
+
+    if result["dry_run"]:
+        log.info("=== DRY RUN DONE === inventory: %s", result["inventory"])
+    else:
+        log.info(
+            "=== DONE === account_id=%s username=%s verification=%s",
+            result["account_id"], result["username"], result["verification"],
+        )
 
 
 def main() -> None:

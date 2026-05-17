@@ -18,7 +18,7 @@ exec gunicorn app.main:app \
   -w 1 \
   --bind 0.0.0.0:8000 \
   --worker-connections 1000 \
-  --timeout 120 \
+  --timeout 600 \
   --graceful-timeout 30 \
   --max-requests 2000 \
   --max-requests-jitter 200 \

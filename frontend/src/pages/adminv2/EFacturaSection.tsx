@@ -1370,13 +1370,3 @@ function AuditTab(props: { companies: CompanySummary[] }) {
   );
 }
 
-// ---------- Placeholder pentru taburi viitoare ----------
-
-function PlaceholderTab(props: { title: string; body: string }) {
-  return (
-    <div style="background:var(--surface2);border:1px dashed var(--border);border-radius:8px;padding:30px;text-align:center">
-      <h3 style="margin:0 0 8px;color:var(--text-muted)">{props.title}</h3>
-      <p style="margin:0;color:var(--text-muted);font-size:13px">{props.body}</p>
-    </div>
-  );
-}
