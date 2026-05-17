@@ -33,6 +33,13 @@ class Company(Base):
     iban: Mapped[str | None] = mapped_column(String(50), nullable=True)
     capital_social: Mapped[float | None] = mapped_column(sa.Float, nullable=True, default=200.0)
 
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    legal_form: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    street: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    county_code: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False, default="RO")
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

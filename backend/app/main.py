@@ -24,6 +24,12 @@ log = logging.getLogger("berlinstar")
 
 from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri
 from app.services.reports import start_scheduler, stop_scheduler
+from app.efactura import router_admin as efactura_admin
+from app.efactura import router as efactura_user
+from app.efactura.scheduler import (
+    start_scheduler as start_efactura_scheduler,
+    stop_scheduler as stop_efactura_scheduler,
+)
 
 
 # Shared httpx client reused across requests — saves one TCP handshake per call
@@ -34,10 +40,28 @@ http_client: httpx.AsyncClient | None = None
 async def lifespan(app: FastAPI):
     global http_client
     http_client = httpx.AsyncClient(timeout=15.0)
+
+    # Bootstrap config eFactura din DB (Fernet key + URL-uri) inainte de scheduler.
+    try:
+        from app.database import AsyncSessionLocal
+        from app.efactura import runtime_config
+        from app.efactura.crypto import set_fernet_key
+        async with AsyncSessionLocal() as db:
+            cfg = await runtime_config.load(db, force=True)
+        set_fernet_key(cfg.fernet_key)
+        if not cfg.fernet_key:
+            log.warning(
+                "eFactura: cheia Fernet NU este setata. Mergi in AdminV2 -> eFactura -> Configurare globala."
+            )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("eFactura bootstrap esuat: %s — folosesc fallback env vars.", exc)
+
     await start_scheduler()
+    await start_efactura_scheduler()
     log.info("BerlinStar POS API starting up")
     yield
     log.info("BerlinStar POS API shutting down")
+    await stop_efactura_scheduler()
     await stop_scheduler()
     await http_client.aclose()
     await engine.dispose()
@@ -118,6 +142,8 @@ app.include_router(email_settings.router,  prefix="/api/email-settings",      ta
 app.include_router(admin_reports.router,    prefix="/api/admin/reports",       tags=["admin-reports"])
 app.include_router(reports.router,          prefix="/api/reports",             tags=["reports"])
 app.include_router(stocuri.router,          prefix="/api/stocuri",             tags=["stocuri"])
+app.include_router(efactura_admin.router,   prefix="/api/admin/efactura",      tags=["admin-efactura"])
+app.include_router(efactura_user.router,    prefix="/api/efactura",            tags=["efactura"])
 
 
 @app.get("/api/health")

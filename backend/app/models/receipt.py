@@ -1,8 +1,8 @@
 from __future__ import annotations
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
-from sqlalchemy import Integer, String, Text, Boolean, DateTime, Numeric, ForeignKey, Index, Enum as SAEnum
+from sqlalchemy import Date, Integer, String, Text, Boolean, DateTime, Numeric, ForeignKey, Index, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 from .item import ItemType
@@ -52,6 +52,16 @@ class Receipt(Base):
         Integer, ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
     )
 
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="RON")
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    invoice_type_code: Mapped[str] = mapped_column(String(5), nullable=False, default="380")
+    tax_exclusive_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    tax_total: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    is_extern: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    parent_receipt_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("receipts.id", ondelete="SET NULL"), nullable=True
+    )
+
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
     )
@@ -89,6 +99,10 @@ class ReceiptItem(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
+    vat_category: Mapped[str] = mapped_column(String(10), nullable=False, default="S")
+    vat_percent: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    unit_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    tax_exemption_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     receipt: Mapped[Receipt] = relationship("Receipt", back_populates="receipt_items")
     employee: Mapped[Employee | None] = relationship("Employee", back_populates="receipt_items")

@@ -21,6 +21,11 @@ class Client(Base):
     telefon: Mapped[str | None] = mapped_column(String(50), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     adresa: Mapped[str | None] = mapped_column(Text, nullable=True)
+    street: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    county_code: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    country_code: Mapped[str] = mapped_column(String(2), nullable=False, default="RO")
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
     numar_masina: Mapped[str | None] = mapped_column(String(50), nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

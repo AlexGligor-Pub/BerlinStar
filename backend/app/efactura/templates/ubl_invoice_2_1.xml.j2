@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:CustomizationID>{{ payload.customization_id }}</cbc:CustomizationID>
+  <cbc:ID>{{ payload.invoice_number | e }}</cbc:ID>
+  <cbc:IssueDate>{{ payload.issue_date.isoformat() }}</cbc:IssueDate>
+  {%- if payload.due_date %}
+  <cbc:DueDate>{{ payload.due_date.isoformat() }}</cbc:DueDate>
+  {%- endif %}
+  <cbc:InvoiceTypeCode>{{ payload.invoice_type_code }}</cbc:InvoiceTypeCode>
+  {%- if payload.note %}
+  <cbc:Note>{{ payload.note | e }}</cbc:Note>
+  {%- endif %}
+  <cbc:DocumentCurrencyCode>{{ payload.currency }}</cbc:DocumentCurrencyCode>
+
+  {# ---------- Supplier ---------- #}
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cac:PartyName><cbc:Name>{{ payload.supplier.name | e }}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>{{ payload.supplier.address.street | e }}</cbc:StreetName>
+        <cbc:CityName>{{ payload.supplier.address.city | e }}</cbc:CityName>
+        {%- if payload.supplier.address.postal_zone %}
+        <cbc:PostalZone>{{ payload.supplier.address.postal_zone | e }}</cbc:PostalZone>
+        {%- endif %}
+        <cbc:CountrySubentity>{{ payload.supplier.address.county_code | e }}</cbc:CountrySubentity>
+        <cac:Country><cbc:IdentificationCode>{{ payload.supplier.address.country_code }}</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      {%- if payload.supplier.tax_id %}
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>{{ payload.supplier.tax_id | e }}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      {%- endif %}
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>{{ payload.supplier.legal_name | e }}</cbc:RegistrationName>
+        {%- if payload.supplier.legal_id %}
+        <cbc:CompanyID>{{ payload.supplier.legal_id | e }}</cbc:CompanyID>
+        {%- endif %}
+      </cac:PartyLegalEntity>
+      {%- if payload.supplier.phone or payload.supplier.email %}
+      <cac:Contact>
+        {%- if payload.supplier.phone %}
+        <cbc:Telephone>{{ payload.supplier.phone | e }}</cbc:Telephone>
+        {%- endif %}
+        {%- if payload.supplier.email %}
+        <cbc:ElectronicMail>{{ payload.supplier.email | e }}</cbc:ElectronicMail>
+        {%- endif %}
+      </cac:Contact>
+      {%- endif %}
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+
+  {# ---------- Customer ---------- #}
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      {%- if payload.customer.party_id_scheme %}
+      <cac:PartyIdentification>
+        <cbc:ID schemeID="CNP">{{ payload.customer.party_id_scheme | e }}</cbc:ID>
+      </cac:PartyIdentification>
+      {%- endif %}
+      <cac:PartyName><cbc:Name>{{ payload.customer.name | e }}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>{{ payload.customer.address.street | e }}</cbc:StreetName>
+        <cbc:CityName>{{ payload.customer.address.city | e }}</cbc:CityName>
+        {%- if payload.customer.address.postal_zone %}
+        <cbc:PostalZone>{{ payload.customer.address.postal_zone | e }}</cbc:PostalZone>
+        {%- endif %}
+        <cbc:CountrySubentity>{{ payload.customer.address.county_code | e }}</cbc:CountrySubentity>
+        <cac:Country><cbc:IdentificationCode>{{ payload.customer.address.country_code }}</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      {%- if payload.customer.tax_id %}
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>{{ payload.customer.tax_id | e }}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+      {%- endif %}
+      <cac:PartyLegalEntity>
+        <cbc:RegistrationName>{{ payload.customer.legal_name or payload.customer.name | e }}</cbc:RegistrationName>
+      </cac:PartyLegalEntity>
+      {%- if payload.customer.phone or payload.customer.email %}
+      <cac:Contact>
+        {%- if payload.customer.phone %}
+        <cbc:Telephone>{{ payload.customer.phone | e }}</cbc:Telephone>
+        {%- endif %}
+        {%- if payload.customer.email %}
+        <cbc:ElectronicMail>{{ payload.customer.email | e }}</cbc:ElectronicMail>
+        {%- endif %}
+      </cac:Contact>
+      {%- endif %}
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+
+  {# ---------- Payment Means ---------- #}
+  {%- if payload.payment_means %}
+  <cac:PaymentMeans>
+    <cbc:PaymentMeansCode>{{ payload.payment_means.code }}</cbc:PaymentMeansCode>
+    {%- if payload.payment_means.payment_id %}
+    <cbc:PaymentID>{{ payload.payment_means.payment_id | e }}</cbc:PaymentID>
+    {%- endif %}
+    {%- if payload.payment_means.iban %}
+    <cac:PayeeFinancialAccount>
+      <cbc:ID>{{ payload.payment_means.iban | e }}</cbc:ID>
+      {%- if payload.payment_means.bank_name %}
+      <cbc:Name>{{ payload.payment_means.bank_name | e }}</cbc:Name>
+      {%- endif %}
+    </cac:PayeeFinancialAccount>
+    {%- endif %}
+  </cac:PaymentMeans>
+  {%- endif %}
+
+  {# ---------- TaxTotal ---------- #}
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_total }}</cbc:TaxAmount>
+    {%- for subtotal in payload.tax_subtotals %}
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="{{ payload.currency }}">{{ '%.2f' % subtotal.taxable_amount }}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="{{ payload.currency }}">{{ '%.2f' % subtotal.tax_amount }}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>{{ subtotal.vat_category }}</cbc:ID>
+        <cbc:Percent>{{ '%.2f' % subtotal.vat_percent }}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+    {%- endfor %}
+  </cac:TaxTotal>
+
+  {# ---------- LegalMonetaryTotal ---------- #}
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.line_extension_total }}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_exclusive_total }}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_inclusive_total }}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.payable_amount }}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+
+  {# ---------- InvoiceLines ---------- #}
+  {%- for line in payload.lines %}
+  <cac:InvoiceLine>
+    <cbc:ID>{{ line.line_id }}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="{{ line.unit_code }}">{{ line.quantity }}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="{{ payload.currency }}">{{ '%.2f' % line.line_extension_amount }}</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>{{ line.name | e }}</cbc:Name>
+      {%- if line.item_id_ref %}
+      <cac:SellersItemIdentification><cbc:ID>{{ line.item_id_ref }}</cbc:ID></cac:SellersItemIdentification>
+      {%- endif %}
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>{{ line.vat_category }}</cbc:ID>
+        <cbc:Percent>{{ '%.2f' % line.vat_percent }}</cbc:Percent>
+        {%- if line.tax_exemption_reason %}
+        <cbc:TaxExemptionReasonCode>{{ line.tax_exemption_reason | e }}</cbc:TaxExemptionReasonCode>
+        {%- endif %}
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="{{ payload.currency }}">{{ '%.2f' % line.unit_price }}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>
+  {%- endfor %}
+</Invoice>
