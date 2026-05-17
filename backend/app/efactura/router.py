@@ -17,6 +17,7 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.efactura import oauth_service, service as efactura_service
 from app.efactura.anaf_client import AnafEFacturaClient
+from app.efactura.crypto import encrypt, is_configured as fernet_configured
 from app.efactura.exceptions import (
     AnafAuthError,
     AnafConfigError,
@@ -29,7 +30,10 @@ from app.efactura.exceptions import (
 from app.efactura.mapping import build_invoice_payload
 from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFacturaReceivedIndex
 from app.efactura.schemas import (
+    AnafSettingsOut,
+    AnafSettingsUpdate,
     AnafTokenStatus,
+    CompanyEFacturaSummary,
     EFacturaRecordOut,
     MappingAuditEntry,
     ValidationIssue,
@@ -69,6 +73,170 @@ async def _require_company_access(
         if acc is None or acc.username != "admin":
             raise HTTPException(403, "Acces interzis la aceasta companie.")
     return company
+
+
+# ---------- Self-service endpoints (per-account) ----------
+
+def _settings_to_out(row: AnafSettings) -> AnafSettingsOut:
+    return AnafSettingsOut(
+        id=row.id,
+        company_id=row.company_id,
+        use_test_env=row.use_test_env,
+        client_id=row.client_id,
+        redirect_uri=row.redirect_uri,
+        payment_terms_days=row.payment_terms_days,
+        default_invoice_type=row.default_invoice_type,
+        auto_upload=row.auto_upload,
+        auto_upload_delay_minutes=row.auto_upload_delay_minutes,
+        deadline_alert_email=row.deadline_alert_email,
+        validate_schematron=row.validate_schematron,
+        has_client_secret=bool(row.client_secret_enc),
+        last_sync_at=row.last_sync_at,
+    )
+
+
+def _token_status_for(token: AnafToken | None, company_id: int) -> AnafTokenStatus:
+    if token is None:
+        return AnafTokenStatus(company_id=company_id, connected=False, state="disconnected")
+    expires_at = token.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    delta = (expires_at - datetime.now(timezone.utc)).days
+    if delta < 0:
+        state = "expired"
+    elif delta <= 14:
+        state = "expiring_soon"
+    else:
+        state = "connected"
+    return AnafTokenStatus(
+        company_id=company_id,
+        connected=delta >= 0,
+        expires_at=expires_at,
+        days_until_expiry=delta,
+        state=state,  # type: ignore[arg-type]
+    )
+
+
+@router.get("/my-companies", response_model=list[CompanyEFacturaSummary])
+async def list_my_companies(
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Listeaza companiile contului curent cu setarile ANAF si statusul OAuth (USB)."""
+    companies = (
+        await db.execute(
+            select(Company)
+            .where(Company.account_id == account_id, Company.is_deleted == False)
+            .order_by(Company.name)
+        )
+    ).scalars().all()
+    if not companies:
+        return []
+    ids = [c.id for c in companies]
+    settings_map = {
+        s.company_id: s
+        for s in (
+            await db.execute(select(AnafSettings).where(AnafSettings.company_id.in_(ids)))
+        ).scalars().all()
+    }
+    tokens_map = {
+        t.company_id: t
+        for t in (
+            await db.execute(select(AnafToken).where(AnafToken.company_id.in_(ids)))
+        ).scalars().all()
+    }
+    return [
+        CompanyEFacturaSummary(
+            company_id=c.id,
+            account_id=c.account_id,
+            name=c.name,
+            cui=c.cui,
+            is_vat_payer=c.is_vat_payer,
+            settings=_settings_to_out(settings_map[c.id]) if c.id in settings_map else None,
+            token_status=_token_status_for(tokens_map.get(c.id), c.id),
+        )
+        for c in companies
+    ]
+
+
+@router.get("/companies/{company_id}/settings", response_model=AnafSettingsOut)
+async def get_my_company_settings(
+    company_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returneaza setarile ANAF ale unei companii detinute de cont (auto-creeaza daca lipsesc)."""
+    await _require_company_access(db, company_id, account_id)
+    row = (
+        await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
+    ).scalar_one_or_none()
+    if row is None:
+        row = AnafSettings(company_id=company_id)
+        db.add(row)
+        await db.commit()
+        await db.refresh(row)
+    return _settings_to_out(row)
+
+
+@router.patch("/companies/{company_id}/settings", response_model=AnafSettingsOut)
+async def update_my_company_settings(
+    body: AnafSettingsUpdate,
+    company_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """User-level update pentru AnafSettings. Acces doar pentru proprietarul contului."""
+    await _require_company_access(db, company_id, account_id)
+    row = (
+        await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
+    ).scalar_one_or_none()
+    if row is None:
+        row = AnafSettings(company_id=company_id)
+        db.add(row)
+        await db.flush()
+
+    data = body.model_dump(exclude_unset=True)
+    if "client_secret" in data:
+        secret = data.pop("client_secret")
+        if secret:
+            if not fernet_configured():
+                raise HTTPException(
+                    500,
+                    "Cheia Fernet nu este configurata global. Contacteaza administratorul.",
+                )
+            row.client_secret_enc = encrypt(secret)
+        else:
+            row.client_secret_enc = None
+
+    for k, v in data.items():
+        if hasattr(row, k):
+            setattr(row, k, v)
+
+    row.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(row)
+    return _settings_to_out(row)
+
+
+@router.post("/companies/{company_id}/test-connection")
+async def test_my_company_connection(
+    company_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Smoke-test al conexiunii ANAF pentru o companie a contului (refresh-uieste tokenul daca expira curand)."""
+    await _require_company_access(db, company_id, account_id)
+    try:
+        await oauth_service.get_valid_access_token(db, company_id)
+    except AnafTokenMissing:
+        return {"ok": False, "detail": "Compania nu este conectata la ANAF. Apasa Connect cu USB-ul plugat."}
+    except AnafTokenExpired:
+        return {"ok": False, "detail": "Token-ul ANAF a expirat. Reconnect cu USB necesar."}
+    except AnafConfigError as exc:
+        return {"ok": False, "detail": f"Configurare incompleta: {exc}"}
+    except AnafAuthError as exc:
+        return {"ok": False, "detail": f"Eroare ANAF: {exc}"}
+    return {"ok": True, "detail": "Token ANAF valid (refresh-ul automat functioneaza)."}
 
 
 # ---------- Connect / Disconnect ----------

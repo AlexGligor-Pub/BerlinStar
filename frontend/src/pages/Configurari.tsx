@@ -9,6 +9,7 @@ import CompaniiPanel from "./configurari/CompaniiPanel";
 import RegisterPanel from "./configurari/RegisterPanel";
 import DispozitivulMeuPanel from "./configurari/DispozitivulMeuPanel";
 import SetariGeneralePanel from "./configurari/SetariGeneralePanel";
+import EFacturaPanel from "./configurari/EFacturaPanel";
 
 const TOPICS = [
   { id: "locatii",         label: "Locații"            },
@@ -20,6 +21,7 @@ const TOPICS = [
   { id: "registre",        label: "Registre"           },
   { id: "dispozitiv",      label: "Dispozitivul meu"   },
   { id: "setari-generale", label: "Setări generale"    },
+  { id: "efactura",        label: "eFactura ANAF"      },
 ] as const;
 
 type TopicId = typeof TOPICS[number]["id"];
@@ -52,6 +54,7 @@ export default function Configurari() {
           <Match when={active() === "registre"}><RegisterPanel /></Match>
           <Match when={active() === "dispozitiv"}><DispozitivulMeuPanel /></Match>
           <Match when={active() === "setari-generale"}><SetariGeneralePanel /></Match>
+          <Match when={active() === "efactura"}><EFacturaPanel /></Match>
         </Switch>
       </main>
     </div>
