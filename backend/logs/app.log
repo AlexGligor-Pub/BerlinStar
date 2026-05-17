@@ -4770,3 +4770,173 @@ ConnectionRefusedError: [Errno 111] Connection refused
 2026-05-16T20:43:19 [INFO    ] berlinstar.http: ← PATCH /api/receipts/2807/client  rid=7fa60ac1  status=200  16.6ms
 2026-05-16T20:43:19 [INFO    ] berlinstar.http: → PUT /api/receipts/2807/vehicol  rid=83b673f2  ip=127.0.0.1
 2026-05-16T20:43:19 [INFO    ] berlinstar.http: ← PUT /api/receipts/2807/vehicol  rid=83b673f2  status=200  14.9ms
+2026-05-16T21:01:59 [INFO    ] berlinstar.http: → GET /api/locations  rid=70f8e896  ip=127.0.0.1
+2026-05-16T21:01:59 [INFO    ] berlinstar.http: → GET /api/reports/programari  rid=d00d092d  ip=127.0.0.1
+2026-05-16T21:01:59 [INFO    ] berlinstar.http: ← GET /api/locations  rid=70f8e896  status=200  220.0ms
+2026-05-16T21:01:59 [INFO    ] berlinstar.http: ← GET /api/reports/programari  rid=d00d092d  status=200  119.3ms
+2026-05-16T21:02:04 [INFO    ] berlinstar.http: → GET /api/reports/hotel-anvelope  rid=41a25453  ip=127.0.0.1
+2026-05-16T21:02:04 [INFO    ] berlinstar.http: ← GET /api/reports/hotel-anvelope  rid=41a25453  status=200  23.3ms
+2026-05-16T21:02:06 [INFO    ] berlinstar.http: → GET /api/reports/contributii-angajati  rid=f74707bc  ip=127.0.0.1
+2026-05-16T21:02:06 [INFO    ] berlinstar.http: ← GET /api/reports/contributii-angajati  rid=f74707bc  status=200  18.6ms
+2026-05-16T21:02:09 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=47d05253  ip=127.0.0.1
+2026-05-16T21:02:09 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=47d05253  status=200  18.9ms
+2026-05-17T15:32:21 [WARNING ] berlinstar.efactura.runtime_config: Cheie Fernet auto-generata la startup pentru efactura_global_settings. Daca regenerati cheia mai tarziu, conexiunile ANAF deja stabilite vor trebui refacute.
+2026-05-17T15:47:19 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-17T15:47:19 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-17T15:47:19 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-17T15:47:19 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-17T15:47:19 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-17T15:47:19 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-17T15:47:19 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-17T16:16:54 [INFO    ] berlinstar.http: → GET /api/items  rid=9d73c56c  ip=127.0.0.1
+2026-05-17T16:16:54 [INFO    ] berlinstar.http: → GET /api/departments  rid=a15ba719  ip=127.0.0.1
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: → GET /api/employees  rid=9ac1057a  ip=127.0.0.1
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=359500e2  ip=127.0.0.1
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=359500e2  status=200  277.7ms
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: ← GET /api/departments  rid=a15ba719  status=200  951.8ms
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: ← GET /api/employees  rid=9ac1057a  status=200  668.9ms
+2026-05-17T16:16:55 [INFO    ] berlinstar.http: ← GET /api/items  rid=9d73c56c  status=200  1381.5ms
+2026-05-17T16:17:19 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=51e3710b  ip=127.0.0.1
+2026-05-17T16:17:19 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=51e3710b  status=200  500.0ms
+2026-05-17T16:17:33 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=41b264e2  ip=127.0.0.1
+2026-05-17T16:17:33 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=41b264e2  status=200  221.0ms
+2026-05-17T16:17:35 [INFO    ] berlinstar.http: → GET /api/locations  rid=2f7faed0  ip=127.0.0.1
+2026-05-17T16:17:35 [INFO    ] berlinstar.http: ← GET /api/locations  rid=2f7faed0  status=200  314.1ms
+2026-05-17T16:18:10 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=0717f63c  ip=127.0.0.1
+2026-05-17T16:18:11 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=0717f63c  status=200  204.9ms
+2026-05-17T16:18:11 [INFO    ] berlinstar.http: → GET /api/accounts  rid=38b1d654  ip=127.0.0.1
+2026-05-17T16:18:11 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=38b1d654  status=200  158.4ms
+2026-05-17T16:18:14 [INFO    ] berlinstar.http: → GET /api/admin/efactura/dashboard  rid=e97aba52  ip=127.0.0.1
+2026-05-17T16:18:14 [ERROR   ] berlinstar.http: !! GET /api/admin/efactura/dashboard  rid=e97aba52  288.7ms  UNHANDLED: module 'app.config' has no attribute 'EFACTURA_SCHEDULER_ENABLED'
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/efactura/router_admin.py", line 259, in admin_dashboard
+    "scheduler_enabled": __import__("app.config", fromlist=["EFACTURA_SCHEDULER_ENABLED"]).EFACTURA_SCHEDULER_ENABLED,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'app.config' has no attribute 'EFACTURA_SCHEDULER_ENABLED'
+2026-05-17T16:18:15 [INFO    ] berlinstar.http: → GET /api/admin/efactura/companies  rid=8e9cc208  ip=127.0.0.1
+2026-05-17T16:18:15 [INFO    ] berlinstar.http: → GET /api/admin/efactura/global  rid=11f1b0b9  ip=127.0.0.1
+2026-05-17T16:18:15 [INFO    ] berlinstar.http: ← GET /api/admin/efactura/global  rid=11f1b0b9  status=200  48.8ms
+2026-05-17T16:18:15 [INFO    ] berlinstar.http: ← GET /api/admin/efactura/companies  rid=8e9cc208  status=200  96.4ms
+2026-05-17T16:19:34 [INFO    ] berlinstar.http: → POST /api/admin/efactura/global/test-setup  rid=b73097b8  ip=127.0.0.1
+2026-05-17T16:19:34 [INFO    ] httpx: HTTP Request: GET https://logincert.anaf.ro/anaf-oauth2/v1/authorize "HTTP/1.1 400 Bad Request"
+2026-05-17T16:19:34 [INFO    ] httpx: HTTP Request: GET https://logincert.anaf.ro/anaf-oauth2/v1/token "HTTP/1.1 400 Bad Request"
+2026-05-17T16:19:35 [INFO    ] httpx: HTTP Request: GET https://api.anaf.ro/test/FCTEL/rest "HTTP/1.1 401 Unauthorized"
+2026-05-17T16:19:35 [INFO    ] httpx: HTTP Request: GET https://api.anaf.ro/prod/FCTEL/rest "HTTP/1.1 401 Unauthorized"
+2026-05-17T16:19:35 [INFO    ] berlinstar.http: ← POST /api/admin/efactura/global/test-setup  rid=b73097b8  status=200  2389.0ms
+2026-05-17T16:25:23 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-17T16:25:23 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-17T16:25:23 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-17T16:28:00 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-17T16:28:00 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-17T16:28:01 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-17T16:28:01 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-17T16:28:01 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-17T16:28:01 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-17T16:28:01 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-17T16:28:32 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-17T16:28:32 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-17T16:28:32 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-17T16:31:31 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-17T16:31:31 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-17T16:31:31 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-17T16:31:31 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-17T16:31:31 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-17T16:31:31 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-17T16:31:31 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-17T16:31:40 [INFO    ] berlinstar.http: → GET /api/companies  rid=e64c9208  ip=127.0.0.1
+2026-05-17T16:31:40 [INFO    ] berlinstar.http: ← GET /api/companies  rid=e64c9208  status=200  246.5ms
+2026-05-17T16:32:20 [INFO    ] berlinstar.http: → GET /api/departments  rid=c1bbc0aa  ip=127.0.0.1
+2026-05-17T16:32:20 [INFO    ] berlinstar.http: ← GET /api/departments  rid=c1bbc0aa  status=200  262.5ms
+2026-05-17T16:32:20 [INFO    ] berlinstar.http: → GET /api/categories  rid=45e986f9  ip=127.0.0.1
+2026-05-17T16:32:20 [INFO    ] berlinstar.http: ← GET /api/categories  rid=45e986f9  status=200  361.1ms
+2026-05-17T16:32:21 [INFO    ] berlinstar.http: → GET /api/categories  rid=5240eced  ip=127.0.0.1
+2026-05-17T16:32:21 [INFO    ] berlinstar.http: ← GET /api/categories  rid=5240eced  status=200  9.0ms
+2026-05-17T16:32:22 [INFO    ] berlinstar.http: → GET /api/companies  rid=939c140e  ip=127.0.0.1
+2026-05-17T16:32:22 [INFO    ] berlinstar.http: ← GET /api/companies  rid=939c140e  status=200  5.4ms
+2026-05-17T16:32:28 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=75fb2319  ip=127.0.0.1
+2026-05-17T16:32:28 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=75fb2319  status=200  389.2ms
+2026-05-17T16:36:06 [INFO    ] berlinstar.http: → GET /api/admin/efactura/dashboard  rid=dd3c6bdc  ip=127.0.0.1
+2026-05-17T16:36:06 [INFO    ] berlinstar.http: → GET /api/admin/efactura/companies  rid=132da379  ip=127.0.0.1
+2026-05-17T16:36:06 [INFO    ] berlinstar.http: → GET /api/admin/efactura/global  rid=48615375  ip=127.0.0.1
+2026-05-17T16:36:06 [INFO    ] berlinstar.http: ← GET /api/admin/efactura/global  rid=48615375  status=200  115.8ms
+2026-05-17T16:36:06 [ERROR   ] berlinstar.http: !! GET /api/admin/efactura/dashboard  rid=dd3c6bdc  400.0ms  UNHANDLED: module 'app.config' has no attribute 'EFACTURA_SCHEDULER_ENABLED'
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/efactura/router_admin.py", line 259, in admin_dashboard
+    "scheduler_enabled": __import__("app.config", fromlist=["EFACTURA_SCHEDULER_ENABLED"]).EFACTURA_SCHEDULER_ENABLED,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'app.config' has no attribute 'EFACTURA_SCHEDULER_ENABLED'
+2026-05-17T16:36:07 [INFO    ] berlinstar.http: ← GET /api/admin/efactura/companies  rid=132da379  status=200  1472.9ms
+2026-05-17T16:36:44 [INFO    ] berlinstar.http: → GET /api/admin/efactura/global  rid=5ed3cc27  ip=127.0.0.1
+2026-05-17T16:36:44 [INFO    ] berlinstar.http: ← GET /api/admin/efactura/global  rid=5ed3cc27  status=200  22.2ms
