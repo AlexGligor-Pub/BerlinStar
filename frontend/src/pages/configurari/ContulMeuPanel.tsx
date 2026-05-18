@@ -28,9 +28,11 @@ export default function ContulMeuPanel() {
   const [editName, setEditName] = createSignal("");
   const [editDesc, setEditDesc] = createSignal("");
   const [editEmail, setEditEmail] = createSignal("");
-  const [editImageUrl, setEditImageUrl] = createSignal("");
   const [meErr, setMeErr] = createSignal("");
   const [meSaving, setMeSaving] = createSignal(false);
+  const [imgUploading, setImgUploading] = createSignal(false);
+  const [imgErr, setImgErr] = createSignal("");
+  let imgFileInput: HTMLInputElement | undefined;
 
   async function loadMe() {
     try {
@@ -50,9 +52,57 @@ export default function ContulMeuPanel() {
     setEditName(m.name ?? "");
     setEditDesc(m.description ?? "");
     setEditEmail(m.email ?? "");
-    setEditImageUrl(m.image_url ?? "");
     setMeErr("");
     setEditMode(true);
+  }
+
+  async function uploadImage(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setImgErr("Selecteaza un fisier imagine.");
+      return;
+    }
+    setImgErr("");
+    setImgUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await apiUpload("/api/auth/me/image", fd);
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        setImgErr(d.detail ?? "Eroare la upload.");
+        return;
+      }
+      const d = (await res.json()) as MeResponse;
+      setMe(d);
+      setDisplayName(d.name);
+      notify("Imaginea a fost incarcata.", "success");
+    } catch {
+      setImgErr("Eroare de conexiune.");
+    } finally {
+      setImgUploading(false);
+      if (imgFileInput) imgFileInput.value = "";
+    }
+  }
+
+  async function deleteImage() {
+    setImgErr("");
+    setImgUploading(true);
+    try {
+      const res = await apiFetch("/api/auth/me/image", { method: "DELETE" });
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        setImgErr(d.detail ?? "Eroare la stergere.");
+        return;
+      }
+      const d = (await res.json()) as MeResponse;
+      setMe(d);
+      notify("Imaginea a fost stearsa.", "success");
+    } catch {
+      setImgErr("Eroare de conexiune.");
+    } finally {
+      setImgUploading(false);
+    }
   }
 
   function cancelEdit() {
@@ -75,7 +125,6 @@ export default function ContulMeuPanel() {
           name: editName().trim(),
           description: editDesc().trim() || null,
           email: editEmail().trim() || null,
-          image_url: editImageUrl().trim() || null,
         }),
       });
       if (!res.ok) {
@@ -238,15 +287,51 @@ export default function ContulMeuPanel() {
                 <div style="color:var(--text-muted)">Descriere</div>
                 <div style="white-space:pre-wrap">{m().description || <span style="color:var(--text-muted);font-style:italic">—</span>}</div>
                 <div style="color:var(--text-muted)">Imagine</div>
-                <div>
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
                   <Show
                     when={m().image_url}
-                    fallback={<span style="color:var(--text-muted);font-style:italic">—</span>}
+                    fallback={
+                      <div style="width:56px;height:56px;border-radius:50%;background:var(--surface-2,#f1f5f9);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-weight:700;font-size:1.2rem">
+                        {(m().name?.charAt(0) || "?").toUpperCase()}
+                      </div>
+                    }
                   >
-                    <div style="display:flex;align-items:center;gap:10px">
-                      <img src={m().image_url!} alt={m().name} style="width:40px;height:40px;border-radius:50%;object-fit:cover" />
-                      <span style="word-break:break-all;font-size:0.78rem;color:var(--text-muted)">{m().image_url}</span>
-                    </div>
+                    <img
+                      src={m().image_url!}
+                      alt={m().name}
+                      style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:1px solid var(--border,#e5e7eb)"
+                    />
+                  </Show>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      onClick={() => imgFileInput?.click()}
+                      disabled={imgUploading()}
+                    >
+                      {imgUploading() ? "Se încarcă…" : m().image_url ? "Schimbă imaginea" : "Upload imagine"}
+                    </button>
+                    <Show when={m().image_url}>
+                      <button
+                        type="button"
+                        class="btn btn-ghost btn-sm"
+                        style="color:var(--danger,#ef4444)"
+                        onClick={deleteImage}
+                        disabled={imgUploading()}
+                      >
+                        Șterge
+                      </button>
+                    </Show>
+                  </div>
+                  <input
+                    ref={imgFileInput}
+                    type="file"
+                    accept="image/*"
+                    style="display:none"
+                    onChange={(e) => void uploadImage(e.currentTarget.files?.[0])}
+                  />
+                  <Show when={imgErr()}>
+                    <div style="width:100%;color:var(--danger,#ef4444);font-size:0.82rem">{imgErr()}</div>
                   </Show>
                 </div>
               </div>
@@ -292,17 +377,10 @@ export default function ContulMeuPanel() {
                     onInput={(e) => setEditDesc(e.currentTarget.value)}
                   />
                 </div>
-                <div class="form-group">
-                  <label class="form-label">URL imagine</label>
-                  <input
-                    class="input"
-                    type="text"
-                    value={editImageUrl()}
-                    onInput={(e) => setEditImageUrl(e.currentTarget.value)}
-                    maxLength={500}
-                    placeholder="https://…/avatar.png"
-                  />
-                </div>
+                <p class="cfg-hint" style="margin:4px 0 12px">
+                  Imaginea de profil se gestionează direct (Upload / Șterge) — nu
+                  face parte din acest formular.
+                </p>
                 <Show when={meErr()}>
                   <div class="login-error" style="margin:8px 0">{meErr()}</div>
                 </Show>

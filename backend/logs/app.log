@@ -6217,3 +6217,10 @@ smtp_password
 2026-05-18T13:27:50 [INFO    ] berlinstar: BerlinStar POS API shutting down
 2026-05-18T13:27:50 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
 2026-05-18T13:27:50 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T13:28:53 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T13:28:53 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T13:28:53 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T13:28:53 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T13:28:53 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T13:28:53 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T13:28:53 [INFO    ] berlinstar: BerlinStar POS API starting up
