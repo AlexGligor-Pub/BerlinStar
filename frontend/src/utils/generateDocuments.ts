@@ -70,9 +70,9 @@ function ro(s: string | null | undefined): string {
  * restaura starea (in caz de append intr-un doc partajat).
  */
 async function enableRomanianFont(doc: any): Promise<() => void> {
-  const b64 = await loadRoFontBase64();
-  if (!b64) return () => {};
-  registerRoFont(doc, b64);
+  const fonts = await loadRoFontBase64();
+  if (!fonts) return () => {};
+  registerRoFont(doc, fonts);
   // Alias "helvetica" -> NotoSans astfel incat tot codul existent care apeleaza
   // doc.setFont("helvetica", "bold|normal|italic") sa foloseasca glyph-urile cu
   // diacritice. "italic" cade pe "normal" cand nu exista variants italic.
@@ -94,10 +94,14 @@ async function enableRomanianFont(doc: any): Promise<() => void> {
 
 // ─── Romanian font loader ─────────────────────────────────────────────────────
 
-const _FONT_CACHE_KEY = "bs_ro_font_b64_v2";
+// v3: subset extins (ASCII complet + Latin-1 + Latin Extended + paranteze/%/etc).
+// Bump key cand schimbam .ttf-ul, ca sa invalidam cache-ul localStorage al userilor.
+const _FONT_CACHE_KEY = "bs_ro_font_b64_v3";
 const _FONT_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 zile
 
-let _roFontB64: string | null | false = false; // false = neincercat, null = esec
+interface RoFontPair { regular: string; bold: string; }
+
+let _roFont: RoFontPair | null | false = false; // false = neincercat, null = esec
 
 function _bufToB64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -108,43 +112,66 @@ function _bufToB64(buf: ArrayBuffer): string {
   return btoa(chunks.join(""));
 }
 
-async function loadRoFontBase64(): Promise<string | null> {
-  if (_roFontB64 !== false) return _roFontB64;
+async function _fetchAsB64(url: string): Promise<string | null> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength <= 5_000) return null;
+    return _bufToB64(buf);
+  } catch {
+    return null;
+  }
+}
 
-  // 1. Incearca cache localStorage
+async function loadRoFontBase64(): Promise<RoFontPair | null> {
+  if (_roFont !== false) return _roFont;
+
+  // 1. Cache localStorage
   try {
     const cached = localStorage.getItem(_FONT_CACHE_KEY);
     if (cached) {
-      const { ts, b64 } = JSON.parse(cached);
-      if (Date.now() - ts < _FONT_CACHE_TTL && typeof b64 === "string" && b64.length > 5_000) {
-        _roFontB64 = b64;
-        return b64;
+      const parsed = JSON.parse(cached);
+      if (
+        parsed && Date.now() - parsed.ts < _FONT_CACHE_TTL &&
+        typeof parsed.regular === "string" && parsed.regular.length > 5_000 &&
+        typeof parsed.bold === "string" && parsed.bold.length > 5_000
+      ) {
+        _roFont = { regular: parsed.regular, bold: parsed.bold };
+        return _roFont;
       }
     }
   } catch {}
 
-  // 2. Font local (subset NotoSans cu diacritice romanesti, generat din Google Fonts)
-  try {
-    const resp = await fetch("/fonts/NotoSans-Ro.ttf");
-    if (resp.ok) {
-      const buf = await resp.arrayBuffer();
-      if (buf.byteLength > 5_000) {
-        const b64 = _bufToB64(buf);
-        _roFontB64 = b64;
-        try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), b64 })); } catch {}
-        return b64;
-      }
-    }
-  } catch {}
+  // 2. Font local (subset DejaVuSans cu Latin-1 + Latin Extended + Romanian)
+  const [regular, bold] = await Promise.all([
+    _fetchAsB64("/fonts/NotoSans-Ro.ttf"),
+    _fetchAsB64("/fonts/NotoSans-Ro-Bold.ttf"),
+  ]);
+  if (regular && bold) {
+    _roFont = { regular, bold };
+    try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), regular, bold })); } catch {}
+    return _roFont;
+  }
+  // Fallback: doar regular (bold mapat pe regular, bold-ul nu apare bold dar afiseaza diacriticele)
+  if (regular) {
+    _roFont = { regular, bold: regular };
+    return _roFont;
+  }
 
-  _roFontB64 = null;
+  _roFont = null;
   return null;
 }
 
-function registerRoFont(doc: any, base64: string): void {
-  doc.addFileToVFS("NotoSans-Ro.ttf", base64);
+function registerRoFont(doc: any, fonts: RoFontPair): void {
+  doc.addFileToVFS("NotoSans-Ro.ttf", fonts.regular);
   doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
-  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+  if (fonts.bold && fonts.bold !== fonts.regular) {
+    doc.addFileToVFS("NotoSans-Ro-Bold.ttf", fonts.bold);
+    doc.addFont("NotoSans-Ro-Bold.ttf", "NotoSans", "bold");
+  } else {
+    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+  }
 }
 
 // t() — text helper: lasa textul neschimbat daca avem font roman, altfel ro()
@@ -926,7 +953,7 @@ export async function generateCazareCheckin(
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
         2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 14 },
+        3: { halign: "center", cellWidth: 22 },
         4: { halign: "center", cellWidth: 14 },
         5: { halign: "center", cellWidth: 18 },
       },
@@ -987,7 +1014,7 @@ export async function generateCazareCheckin(
         styles: { font: FONT },
         headStyles: { fillColor: refColor, textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
         bodyStyles: { fontSize: 7.5, cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 16 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
+        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 22 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
         margin: { left: ML, right: MR },
         tableWidth: CW,
       });
@@ -1145,7 +1172,7 @@ export async function generateCazareScoatereIntroducere(
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
         2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 14 },
+        3: { halign: "center", cellWidth: 22 },
         4: { halign: "center", cellWidth: 14 },
         5: { halign: "center", cellWidth: 18 },
       },
@@ -1238,7 +1265,7 @@ export async function generateCazareScoatereIntroducere(
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
         2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 14 },
+        3: { halign: "center", cellWidth: 22 },
         4: { halign: "center", cellWidth: 14 },
         5: { halign: "center", cellWidth: 18 },
       },
@@ -1387,7 +1414,7 @@ export async function generateCazareCheckout(
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
         2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 14 },
+        3: { halign: "center", cellWidth: 22 },
         4: { halign: "center", cellWidth: 14 },
         5: { halign: "center", cellWidth: 18 },
       },
