@@ -21,6 +21,21 @@ import {
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
 } from "./rapoarte/charts";
 import StocuriSection from "./rapoarte/StocuriSection";
+import ReportsGate from "./rapoarte/ReportsGate";
+import { reportsFetch, setReportsToken } from "./rapoarte/reports-auth";
+
+/** Wrapper peste apiFetch care injecteaza tokenul de Rapoarte si, la 401,
+ * curata tokenul si emite un eveniment ca gate-ul sa reia ecranul de parola.
+ */
+function reportsApiFetch(url: string, options?: RequestInit): Promise<Response> {
+  return reportsFetch(url, options).then((res) => {
+    if (res.status === 401) {
+      setReportsToken(null);
+      try { window.dispatchEvent(new CustomEvent("bs:reports-locked")); } catch {}
+    }
+    return res;
+  });
+}
 
 interface EmployeeReport {
   id: number;
@@ -351,7 +366,7 @@ function LocatiiPanel() {
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
       for (const id of selectedLocIds()) qs.append("location_ids", String(id));
-      const res = await apiFetch(`/api/reports/locatii?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/locatii?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -558,7 +573,7 @@ function ProduseServiciiPanel() {
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
       for (const id of selectedLocIds()) qs.append("location_ids", String(id));
-      const res = await apiFetch(`/api/reports/produse-servicii?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/produse-servicii?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -818,7 +833,7 @@ function AngajatiPanel() {
     setDetail(null);
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
-      const res = await apiFetch(`/api/reports/employees/${empId}?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/employees/${empId}?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -1238,7 +1253,7 @@ function TargetAngajatiPanel() {
 
   onMount(async () => {
     try {
-      const res = await apiFetch("/api/reports/contributii-angajati");
+      const res = await reportsApiFetch("/api/reports/contributii-angajati");
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -1472,7 +1487,7 @@ function HotelAnvelopePanel() {
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
       for (const id of selectedLocIds()) qs.append("location_ids", String(id));
-      const res = await apiFetch(`/api/reports/hotel-anvelope?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/hotel-anvelope?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -1952,7 +1967,7 @@ function ClientiPanel() {
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
       for (const id of selectedLocIds()) qs.append("location_ids", String(id));
-      const res = await apiFetch(`/api/reports/clienti?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/clienti?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -2293,7 +2308,7 @@ function ProgramariPanel() {
     try {
       const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
       for (const id of selectedLocIds()) qs.append("location_ids", String(id));
-      const res = await apiFetch(`/api/reports/programari?${qs.toString()}`);
+      const res = await reportsApiFetch(`/api/reports/programari?${qs.toString()}`);
       if (!res.ok) {
         notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
         return;
@@ -2504,31 +2519,33 @@ export default function Rapoarte() {
   const isHotelHidden = () => !!generalSettings()?.dezactiveazaHotelAnvelope;
 
   return (
-    <div class="cfg-layout">
-      <aside class="cfg-sidebar">
-        <div class="cfg-sidebar-title">Rapoarte</div>
-        <For each={visibleSections()}>
-          {(s) => (
-            <button
-              class="cfg-sidebar-item"
-              classList={{ "cfg-sidebar-item--active": active() === s.id }}
-              onClick={() => setActive(s.id)}
-            >{s.label}</button>
-          )}
-        </For>
-      </aside>
-      <main class="cfg-content">
-        <Switch>
-          <Match when={active() === "target-angajati"}><TargetAngajatiPanel /></Match>
-          <Match when={active() === "locatii"}><LocatiiPanel /></Match>
-          <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
-          <Match when={active() === "angajati"}><AngajatiPanel /></Match>
-          <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
-          <Match when={active() === "clienti"}><ClientiPanel /></Match>
-          <Match when={active() === "programari"}><ProgramariPanel /></Match>
-          <Match when={active() === "stocuri"}><StocuriSection /></Match>
-        </Switch>
-      </main>
-    </div>
+    <ReportsGate>
+      <div class="cfg-layout">
+        <aside class="cfg-sidebar">
+          <div class="cfg-sidebar-title">Rapoarte</div>
+          <For each={visibleSections()}>
+            {(s) => (
+              <button
+                class="cfg-sidebar-item"
+                classList={{ "cfg-sidebar-item--active": active() === s.id }}
+                onClick={() => setActive(s.id)}
+              >{s.label}</button>
+            )}
+          </For>
+        </aside>
+        <main class="cfg-content">
+          <Switch>
+            <Match when={active() === "target-angajati"}><TargetAngajatiPanel /></Match>
+            <Match when={active() === "locatii"}><LocatiiPanel /></Match>
+            <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
+            <Match when={active() === "angajati"}><AngajatiPanel /></Match>
+            <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
+            <Match when={active() === "clienti"}><ClientiPanel /></Match>
+            <Match when={active() === "programari"}><ProgramariPanel /></Match>
+            <Match when={active() === "stocuri"}><StocuriSection /></Match>
+          </Switch>
+        </main>
+      </div>
+    </ReportsGate>
   );
 }

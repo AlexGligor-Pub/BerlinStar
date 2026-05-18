@@ -22,6 +22,7 @@ class Account(Base):
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
+    reports_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

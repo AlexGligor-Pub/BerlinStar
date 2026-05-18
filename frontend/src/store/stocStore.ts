@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { getReportsToken } from "../pages/rapoarte/reports-auth";
 
 export interface StocRow {
   item_id: number;
@@ -155,7 +156,10 @@ export async function loadTopProduse(params: {
   if (params.date_to) qs.set("date_to", params.date_to);
   if (params.limit) qs.set("limit", String(params.limit));
   for (const lid of params.location_ids || []) qs.append("location_ids", String(lid));
-  const res = await apiFetch(`/api/stocuri/reports/top-produse?${qs.toString()}`);
+  const res = await apiFetch(`/api/stocuri/reports/top-produse?${qs.toString()}`, {
+    authToken: getReportsToken(),
+    handleUnauthorized: false,
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }
@@ -176,7 +180,10 @@ export async function loadPerAngajat(params: {
   if (params.date_from) qs.set("date_from", params.date_from);
   if (params.date_to) qs.set("date_to", params.date_to);
   for (const lid of params.location_ids || []) qs.append("location_ids", String(lid));
-  const res = await apiFetch(`/api/stocuri/reports/per-angajat?${qs.toString()}`);
+  const res = await apiFetch(`/api/stocuri/reports/per-angajat?${qs.toString()}`, {
+    authToken: getReportsToken(),
+    handleUnauthorized: false,
+  });
   if (!res.ok) throw new Error(await res.text());
   return await res.json();
 }

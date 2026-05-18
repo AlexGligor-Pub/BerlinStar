@@ -6,6 +6,9 @@ interface AuthState {
   token: string | null;
   isLocked: boolean;
   lockedAt: string | null; // ISO string
+  /** Numele afisabil al contului (account.name). Diferit de `user` (username).
+   * Populat la mount-ul NavBar via /api/auth/me; actualizat din ContulMeuPanel. */
+  displayName: string | null;
 }
 
 const STORAGE_KEY = "bs_auth";
@@ -13,9 +16,16 @@ const STORAGE_KEY = "bs_auth";
 function loadAuth(): AuthState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return { isLocked: false, lockedAt: null, ...JSON.parse(saved) };
+    if (saved) return { isLocked: false, lockedAt: null, displayName: null, ...JSON.parse(saved) };
   } catch {}
-  return { user: null, token: null, isLocked: false, lockedAt: null };
+  return { user: null, token: null, isLocked: false, lockedAt: null, displayName: null };
+}
+
+/** Actualizeaza numele afisabil al contului si il persista. Folosit dupa
+ * /api/auth/me sau dupa editarea profilului din Configurari -> Contul Meu. */
+export function setDisplayName(name: string | null): void {
+  setAuth("displayName", name);
+  persist({ ...auth, displayName: name });
 }
 
 const [auth, setAuth] = createStore<AuthState>(loadAuth());
@@ -33,7 +43,7 @@ function clearAllStorage() {
 
 export function login(user: string, token: string, isLocked = false, lockedAt: string | null = null) {
   clearAllStorage();
-  const next: AuthState = { user, token, isLocked, lockedAt };
+  const next: AuthState = { user, token, isLocked, lockedAt, displayName: null };
   setAuth(next);
   persist(next);
 }
@@ -46,7 +56,7 @@ export function loginAndRedirect(
   target: string,
 ) {
   clearAllStorage();
-  const next: AuthState = { user, token, isLocked, lockedAt };
+  const next: AuthState = { user, token, isLocked, lockedAt, displayName: null };
   setAuth(next);
   persist(next);
   // Hard reload pentru ca toate store-urile Solid sa se reinitializeze de la zero.
@@ -64,7 +74,7 @@ export function loginAsImpersonatedUser(
   target: string,
 ) {
   clearAllStorage();
-  const next: AuthState = { user, token, isLocked, lockedAt };
+  const next: AuthState = { user, token, isLocked, lockedAt, displayName: null };
   setAuth(next);
   persist(next);
   // Setam direct flag-ul adminVisible in localStorage (cheia/formatul din
@@ -83,7 +93,7 @@ export function loginAsImpersonatedUser(
 
 export function logout(redirectTo: string | null = "/login") {
   setAdminVisible(false);
-  const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null };
+  const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null, displayName: null };
   setAuth(next);
   clearAllStorage();
   if (redirectTo) {

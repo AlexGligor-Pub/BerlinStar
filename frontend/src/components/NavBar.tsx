@@ -1,11 +1,11 @@
 import { useNavigate } from "@solidjs/router";
-import { auth, logout, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
+import { auth, logout, setDisplayName, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
 import { isOffline } from "../store/productsStore";
 import { theme, toggleTheme } from "../store/themeStore";
 import { adminVisible, setAdminVisible } from "../store/adminStore";
 import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
-import { Show, createSignal, onCleanup, createMemo } from "solid-js";
+import { Show, createSignal, onCleanup, createMemo, onMount } from "solid-js";
 import logo from "../assets/logo.png";
 import { apiFetch } from "../utils/api";
 
@@ -134,11 +134,26 @@ export default function NavBar() {
   document.addEventListener("pointerdown", onOutsidePointerDown);
   onCleanup(() => document.removeEventListener("pointerdown", onOutsidePointerDown));
 
+  // Cand display-name-ul nu e in localStorage (prima vizita dupa login),
+  // il aducem din /api/auth/me. Daca utilizatorul isi schimba numele din
+  // Configurari -> Contul Meu, store-ul e actualizat direct de acolo si
+  // navbar-ul reactioneaza automat.
+  onMount(() => {
+    if (!auth.token || auth.displayName) return;
+    void apiFetch("/api/auth/me").then(async (res) => {
+      if (!res.ok) return;
+      const d = (await res.json()) as { name?: string };
+      if (d?.name) setDisplayName(d.name);
+    }).catch(() => {});
+  });
+
+  const displayLabel = createMemo(() => auth.displayName?.trim() || auth.user || "");
+
   return (
     <>
       <nav class="navbar">
         <div class="offline-banner" classList={{ "offline-banner--online": !isOffline() }} />
-        <div class="logo-menu" style="position:relative">
+        <div class="logo-menu" style="position:relative;display:flex;align-items:center;gap:10px">
           <button
             class="btn-icon"
             style="border:none;padding:4px;background:transparent"
@@ -147,6 +162,16 @@ export default function NavBar() {
           >
             <img src={logo} alt="Logo" style="height:40px;display:block" />
           </button>
+
+          <Show when={displayLabel()}>
+            <span
+              class="navbar-account-name"
+              title={displayLabel()}
+              style="font-family:'Segoe UI',system-ui,sans-serif;font-weight:600;font-size:1.05rem;letter-spacing:0.2px;background:linear-gradient(90deg,var(--accent,#5b7cfa),#9b6bff);-webkit-background-clip:text;background-clip:text;color:transparent;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
+            >
+              {displayLabel()}
+            </span>
+          </Show>
 
           <Show when={open()}>
             <div class="logo-dropdown">

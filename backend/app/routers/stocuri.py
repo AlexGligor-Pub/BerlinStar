@@ -6,7 +6,7 @@ from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_reports_account_id
 from app.models.category import Category
 from app.models.department import Department
 from app.models.employee import Employee
@@ -267,7 +267,7 @@ async def report_top_produse(
     location_ids: list[int] = Query(default=[]),
     limit: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_reports_account_id),
 ):
     stmt = (
         select(
@@ -312,7 +312,7 @@ async def report_per_angajat(
     date_to: datetime | None = None,
     location_ids: list[int] = Query(default=[]),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_reports_account_id),
 ):
     stmt = (
         select(

@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 import jwt
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
@@ -10,11 +10,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
+from app.dependencies import get_current_account
 from app.models.account import Account
 from app.models.company import Company
 from app.rate_limit import limiter
 from app.services.account_seeder import seed_new_account
 from app.utils.security import hash_password, is_legacy_hash, verify_password
+from app.utils.storage import delete_image_by_url, upload_image, validate_image
+
+# Token de acces la pagina Rapoarte: scurt (1h), scope distinct fata de
+# token-ul normal de login, ca sa nu ne incurcam intre ele in dependinte.
+REPORTS_TOKEN_TTL_SECONDS = 3600
 
 log = logging.getLogger("berlinstar")
 
@@ -163,6 +169,217 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
     if account.email:
         background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
     return GENERIC_OK
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1, max_length=255)
+    new_password: str = Field(..., min_length=10, max_length=255)
+
+
+class MessageResponse(BaseModel):
+    message: str
+
+
+class MeResponse(BaseModel):
+    """Detaliile contului curent (fara campuri sensibile: parolele, flag-uri admin)."""
+    id: int
+    name: str
+    username: str
+    description: str | None
+    email: str | None
+    image_url: str | None
+
+
+class MeUpdateRequest(BaseModel):
+    """Acceptam doar campurile pe care userul are voie sa si le editeze din
+    propriul cont. Username-ul ramane imuabil, parolele se schimba prin
+    endpointurile dedicate.
+    """
+    name: str | None = Field(None, max_length=200)
+    description: str | None = None
+    email: EmailStr | None = Field(None, max_length=255)
+    image_url: str | None = Field(None, max_length=500)
+
+    @field_validator("email")
+    @classmethod
+    def _no_crlf_in_email(cls, v: str | None) -> str | None:
+        if v and ("\r" in v or "\n" in v):
+            raise ValueError("Email invalid.")
+        return v
+
+
+@router.get("/me", response_model=MeResponse)
+async def get_me(account: Account = Depends(get_current_account)):
+    return MeResponse(
+        id=account.id,
+        name=account.name,
+        username=account.username,
+        description=account.description,
+        email=account.email,
+        image_url=account.image_url,
+    )
+
+
+@router.patch("/me", response_model=MeResponse)
+@limiter.limit("20/minute")
+async def update_me(
+    request: Request,
+    body: MeUpdateRequest,
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+):
+    patch = body.model_dump(exclude_unset=True)
+    if "name" in patch:
+        new_name = (patch["name"] or "").strip()
+        if not new_name:
+            raise HTTPException(400, "Numele nu poate fi gol.")
+        account.name = new_name
+    if "description" in patch:
+        account.description = patch["description"]
+    if "email" in patch:
+        account.email = patch["email"] or None
+    if "image_url" in patch:
+        url = patch["image_url"]
+        account.image_url = (url.strip() or None) if isinstance(url, str) else url
+    account.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return MeResponse(
+        id=account.id,
+        name=account.name,
+        username=account.username,
+        description=account.description,
+        email=account.email,
+        image_url=account.image_url,
+    )
+
+
+@router.post("/me/image", response_model=MeResponse)
+async def upload_me_image(
+    file: UploadFile = File(...),
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload imagine de profil. Inlocuieste imaginea curenta (daca exista) si
+    o sterge din S3 doar dupa commit reusit, ca sa nu pierdem fisierul vechi
+    inainte de a-l confirma pe cel nou in DB.
+    """
+    data = await validate_image(file)
+    old_url = account.image_url
+    url = await upload_image(account.id, "accounts/avatars", data, file.content_type)
+    account.image_url = url
+    account.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    if old_url:
+        await delete_image_by_url(old_url)
+    return MeResponse(
+        id=account.id,
+        name=account.name,
+        username=account.username,
+        description=account.description,
+        email=account.email,
+        image_url=account.image_url,
+    )
+
+
+@router.delete("/me/image", response_model=MeResponse)
+async def delete_me_image(
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+):
+    old_url = account.image_url
+    account.image_url = None
+    account.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    if old_url:
+        await delete_image_by_url(old_url)
+    return MeResponse(
+        id=account.id,
+        name=account.name,
+        username=account.username,
+        description=account.description,
+        email=account.email,
+        image_url=account.image_url,
+    )
+
+
+@router.post("/change-password", response_model=MessageResponse)
+@limiter.limit("5/minute")
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(body.old_password, account.password):
+        raise HTTPException(401, "Parola curenta este incorecta.")
+    account.password = hash_password(body.new_password)
+    account.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return MessageResponse(message="Parola a fost schimbata.")
+
+
+class ReportsPasswordStatus(BaseModel):
+    has_password: bool
+
+
+@router.get("/reports/status", response_model=ReportsPasswordStatus)
+async def reports_password_status(account: Account = Depends(get_current_account)):
+    return ReportsPasswordStatus(has_password=bool(account.reports_password))
+
+
+class ReportsVerifyRequest(BaseModel):
+    password: str = Field(..., min_length=1, max_length=255)
+
+
+class ReportsTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+@router.post("/reports/verify", response_model=ReportsTokenResponse)
+@limiter.limit("10/minute")
+async def reports_verify(
+    request: Request,
+    body: ReportsVerifyRequest,
+    account: Account = Depends(get_current_account),
+):
+    if not account.reports_password:
+        raise HTTPException(409, "Parola pentru Rapoarte nu este setata. Seteaza-o din Configurari -> Contul Meu.")
+    if not verify_password(body.password, account.reports_password):
+        raise HTTPException(401, "Parola incorecta.")
+    expire = datetime.now(timezone.utc) + timedelta(seconds=REPORTS_TOKEN_TTL_SECONDS)
+    payload = {
+        "sub": str(account.id),
+        "name": account.name,
+        "scope": "reports",
+        "exp": expire,
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return ReportsTokenResponse(access_token=token, expires_in=REPORTS_TOKEN_TTL_SECONDS)
+
+
+class ReportsSetPasswordRequest(BaseModel):
+    # `old_password` este obligatorie doar daca exista deja o parola setata.
+    old_password: str | None = Field(None, max_length=255)
+    new_password: str = Field(..., min_length=6, max_length=255)
+
+
+@router.post("/reports/set-password", response_model=MessageResponse)
+@limiter.limit("5/minute")
+async def reports_set_password(
+    request: Request,
+    body: ReportsSetPasswordRequest,
+    account: Account = Depends(get_current_account),
+    db: AsyncSession = Depends(get_db),
+):
+    if account.reports_password:
+        if not body.old_password or not verify_password(body.old_password, account.reports_password):
+            raise HTTPException(401, "Parola curenta pentru Rapoarte este incorecta.")
+    account.reports_password = hash_password(body.new_password)
+    account.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    return MessageResponse(message="Parola pentru Rapoarte a fost salvata.")
 
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)
