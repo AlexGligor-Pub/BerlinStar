@@ -21,7 +21,7 @@ from urllib.parse import urlencode
 
 import httpx
 import jwt
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import ALGORITHM, SECRET_KEY
@@ -41,6 +41,31 @@ log = logging.getLogger("berlinstar.efactura.oauth")
 _STATE_EXP_MINUTES = 10
 _TOKEN_LIFETIME_DAYS = 90  # ANAF default, conform documentatiei
 _REFRESH_THRESHOLD_SECONDS = 5 * 60  # refresh daca expira in <5 min
+# Namespace pentru pg_advisory_xact_lock — orice constanta distincta de alte
+# locks din app. Combinata cu company_id ca al doilea argument int4.
+_ANAF_REFRESH_LOCK_NS = 0x4e414146  # 'NAAF'
+
+
+def _sanitize_anaf_body(body_text: str) -> str:
+    """Pregateste corpul raspunsului ANAF pentru logging: scoate orice posibil
+    token / secret si trunchiaza la 200 caractere. Daca raspunsul e JSON cu
+    chei access_token/refresh_token, le inlocuim cu '***'.
+    """
+    if not body_text:
+        return ""
+    try:
+        import json
+
+        data = json.loads(body_text)
+        if isinstance(data, dict):
+            for k in ("access_token", "refresh_token", "id_token", "client_secret"):
+                if k in data:
+                    data[k] = "***"
+            return json.dumps(data)[:200]
+    except Exception:
+        pass
+    # Plain-text fallback — nu cunoastem structura, deci logam doar lungimea.
+    return f"<{len(body_text)} chars, non-JSON body suprimat>"
 
 
 # ---------- State JWT (CSRF protection) ----------
@@ -157,7 +182,10 @@ async def handle_callback(db: AsyncSession, code: str, state: str) -> AnafToken:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
     if resp.status_code != 200:
-        log.error("ANAF token exchange failed: status=%s body=%s", resp.status_code, resp.text[:500])
+        log.error(
+            "ANAF token exchange failed: status=%s body=%s",
+            resp.status_code, _sanitize_anaf_body(resp.text),
+        )
         raise AnafAuthError(f"ANAF a respins schimbul de cod (HTTP {resp.status_code}).")
 
     body = resp.json()
@@ -233,7 +261,10 @@ async def _refresh_token(db: AsyncSession, token: AnafToken) -> AnafToken:
             "Refresh token expirat sau invalid. Reconectare cu USB necesara."
         )
     if resp.status_code != 200:
-        log.error("ANAF refresh failed: status=%s body=%s", resp.status_code, resp.text[:500])
+        log.error(
+            "ANAF refresh failed: status=%s body=%s",
+            resp.status_code, _sanitize_anaf_body(resp.text),
+        )
         raise AnafAuthError(f"ANAF a respins refresh-ul (HTTP {resp.status_code}).")
 
     body = resp.json()
@@ -257,7 +288,12 @@ async def _refresh_token(db: AsyncSession, token: AnafToken) -> AnafToken:
 
 
 async def get_valid_access_token(db: AsyncSession, company_id: int) -> str:
-    """Returneaza access_token valid, refreshuind tacit daca e necesar."""
+    """Returneaza access_token valid, refreshuind tacit daca e necesar.
+
+    Foloseste pg_advisory_xact_lock pe (namespace, company_id) pentru a serializa
+    eventuale refresh-uri concurente — altfel doua request-uri simultane pot
+    consuma acelasi refresh_token, iar ANAF il poate invalida pe al doilea.
+    """
     token = (
         await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
     ).scalar_one_or_none()
@@ -268,8 +304,27 @@ async def get_valid_access_token(db: AsyncSession, company_id: int) -> str:
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     seconds_left = (expires_at - datetime.now(timezone.utc)).total_seconds()
+
     if seconds_left < _REFRESH_THRESHOLD_SECONDS:
-        token = await _refresh_token(db, token)
+        # Lock pessimist la nivel de tranzactie; alti procesi care vor refresh
+        # pentru aceeasi companie asteapta aici.
+        await db.execute(
+            text("SELECT pg_advisory_xact_lock(:ns, :cid)"),
+            {"ns": _ANAF_REFRESH_LOCK_NS, "cid": int(company_id)},
+        )
+        # Re-citim tokenul dupa achizitia lock-ului — alt proces poate l-a
+        # refresheat deja in fereastra de asteptare.
+        token = (
+            await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
+        ).scalar_one_or_none()
+        if token is None:
+            raise AnafTokenMissing(f"Nu exista token ANAF pentru company_id={company_id}.")
+        expires_at = token.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        seconds_left = (expires_at - datetime.now(timezone.utc)).total_seconds()
+        if seconds_left < _REFRESH_THRESHOLD_SECONDS:
+            token = await _refresh_token(db, token)
 
     return decrypt(token.access_token_enc)
 

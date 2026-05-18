@@ -468,6 +468,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const [saving, setSaving] = createSignal(false);
   const [docLoading, setDocLoading] = createSignal<string | null>(null);
   const [docError, setDocError] = createSignal<string | null>(null);
+  const [showFactureazaModal, setShowFactureazaModal] = createSignal(false);
+  const [factureazaPending, setFactureazaPending] = createSignal(false);
+  const [factureazaError, setFactureazaError] = createSignal<string | null>(null);
   const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
   const r = props.receipt;
 
@@ -584,18 +587,23 @@ function ReceiptCard(props: { receipt: Receipt }) {
   }
 
 
-  async function handleFactureaza() {
-    setDocError(null);
+  function openFactureazaModal() {
+    setFactureazaError(null);
+    setShowFactureazaModal(true);
+  }
+
+  async function handleFactureazaConfirm() {
+    setFactureazaError(null);
     const locationId = device()?.locationId;
-    if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
-    if (!window.confirm(`Generezi factura din devizul D${r.devizSerie}${r.devizNr}?\n\nDupă confirmare, se va aloca un număr de factură din registru (acțiunea nu este reversibilă).`)) return;
-    setDocLoading("factureaza");
+    if (!locationId) { setFactureazaError("Dispozitivul nu are o locație configurată."); return; }
+    setFactureazaPending(true);
     try {
       await assignFacturaNumber(r.id, locationId);
+      setShowFactureazaModal(false);
     } catch (e: any) {
-      setDocError(e?.message ?? "Eroare la alocarea numărului de factură.");
+      setFactureazaError(e?.message ?? "Eroare la alocarea numărului de factură.");
     } finally {
-      setDocLoading(null);
+      setFactureazaPending(false);
     }
   }
 
@@ -827,10 +835,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <button
                     class="btn btn-primary btn-sm"
                     disabled={docLoading() !== null}
-                    onClick={handleFactureaza}
+                    onClick={openFactureazaModal}
                     title="Alocă număr de factură pe baza devizului existent"
                   >
-                    {docLoading() === "factureaza" ? "..." : "Facturează"}
+                    Facturează
                   </button>
                 </Show>
                 <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
@@ -1071,6 +1079,59 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={() => setDeleteStage("final")}>Continuă</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Facturează: confirmare alocare număr factură pe baza devizului */}
+      <Show when={showFactureazaModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Generează factură din deviz</span>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={factureazaPending()}
+                onClick={() => setShowFactureazaModal(false)}
+              >✕</button>
+            </div>
+            <div style="padding:0 16px 8px;font-size:0.88rem">
+              <p style="margin-bottom:10px">
+                Se va aloca un număr nou de factură din registrul locației pentru bonul:
+              </p>
+              <ul style="margin:0 0 12px 16px;padding:0">
+                <li><strong>{r.titlu}</strong></li>
+                <li>
+                  Deviz:&nbsp;
+                  <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
+                    D {r.devizSerie}{r.devizNr}
+                  </span>
+                </li>
+                <Show when={r.clientNume}>
+                  <li>Client: <strong>{r.clientNume}</strong></li>
+                </Show>
+                <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
+              </ul>
+              <p style="color:var(--text-muted);margin:0">
+                După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
+                numărul de factură nu poate fi reutilizat.
+              </p>
+              <Show when={factureazaError()}>
+                <p class="cfg-error" role="alert" style="margin-top:10px">{factureazaError()}</p>
+              </Show>
+            </div>
+            <div class="sl-modal-footer">
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={factureazaPending()}
+                onClick={() => setShowFactureazaModal(false)}
+              >Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={factureazaPending()}
+                onClick={handleFactureazaConfirm}
+              >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
             </div>
           </div>
         </div>

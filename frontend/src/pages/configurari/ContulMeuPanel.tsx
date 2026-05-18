@@ -166,8 +166,8 @@ export default function ContulMeuPanel() {
   async function doSaveReportsPwd(e: Event) {
     e.preventDefault();
     setRErr("");
-    if (rNew().length < 6) {
-      setRErr("Parola nouă trebuie să aibă minim 6 caractere.");
+    if (rNew().length < 10) {
+      setRErr("Parola nouă trebuie să aibă minim 10 caractere.");
       return;
     }
     if (rNew() !== rNew2()) {
@@ -436,7 +436,7 @@ export default function ContulMeuPanel() {
               <input
                 class="input"
                 type="password"
-                placeholder="minim 6 caractere"
+                placeholder="minim 10 caractere"
                 value={rNew()}
                 onInput={(e) => setRNew(e.currentTarget.value)}
               />

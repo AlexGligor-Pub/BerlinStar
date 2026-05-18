@@ -22,6 +22,33 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # 0. PRE-CHECK: refuza migrarea daca mai multe perechi distincte de
+    #    credentiale OAuth exista in anaf_settings — altfel pierdem date silent.
+    #    Adminul trebuie sa-si aleaga explicit perechea pe care o promoveaza.
+    bind = op.get_bind()
+    distinct_pairs = bind.execute(
+        sa.text(
+            """
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT client_id, client_secret_enc
+                FROM anaf_settings
+                WHERE client_id IS NOT NULL
+                  AND client_secret_enc IS NOT NULL
+            ) t
+            """
+        )
+    ).scalar() or 0
+    if distinct_pairs > 1:
+        raise RuntimeError(
+            f"Migrarea ef12oauthglb nu poate continua: detectate {distinct_pairs} "
+            "perechi distincte de credentiale OAuth in anaf_settings. "
+            "Inainte de upgrade, alege manual perechea care merge la global: "
+            "UPDATE efactura_global_settings SET oauth_client_id=..., "
+            "oauth_client_secret_enc=... WHERE id=1; "
+            "apoi sterge celelalte: UPDATE anaf_settings SET client_id=NULL, "
+            "client_secret_enc=NULL WHERE client_id <> '<perechea pastrata>'."
+        )
+
     # 1. Adauga coloane globale
     op.add_column(
         "efactura_global_settings",
@@ -32,19 +59,18 @@ def upgrade() -> None:
         sa.Column("oauth_client_secret_enc", sa.Text(), nullable=True),
     )
 
-    # 2. Backfill: promoveaza prima pereche valida client_id+secret la global,
-    #    doar daca global nu are deja credentiale.
+    # 2. Backfill: promoveaza unica pereche valida (verificata la pasul 0) la
+    #    global, doar daca global nu are deja credentiale.
     op.execute(
         """
         UPDATE efactura_global_settings g
         SET oauth_client_id = s.client_id,
             oauth_client_secret_enc = s.client_secret_enc
         FROM (
-            SELECT client_id, client_secret_enc
+            SELECT DISTINCT client_id, client_secret_enc
             FROM anaf_settings
             WHERE client_id IS NOT NULL
               AND client_secret_enc IS NOT NULL
-            ORDER BY id ASC
             LIMIT 1
         ) s
         WHERE g.id = 1
@@ -59,6 +85,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # NU completam automat anaf_settings cu valoarea globala — daca cheia Fernet
+    # a fost rotita dupa upgrade, secret-ul global nu mai poate fi decriptat in
+    # contextul vechi. Adminul trebuie sa repopulze manual credentiale pe
+    # companiile care le aveau anterior.
     op.add_column(
         "anaf_settings",
         sa.Column("client_id", sa.String(255), nullable=True),
@@ -70,18 +100,6 @@ def downgrade() -> None:
     op.add_column(
         "anaf_settings",
         sa.Column("redirect_uri", sa.String(500), nullable=True),
-    )
-
-    # Best-effort restore: pune valorile globale pe TOATE companiile
-    # (pierderea informatiei la upgrade nu se poate inversa exact)
-    op.execute(
-        """
-        UPDATE anaf_settings s
-        SET client_id = g.oauth_client_id,
-            client_secret_enc = g.oauth_client_secret_enc
-        FROM efactura_global_settings g
-        WHERE g.id = 1
-        """
     )
 
     op.drop_column("efactura_global_settings", "oauth_client_secret_enc")

@@ -8,7 +8,7 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -280,8 +280,10 @@ async def reports_locatii_yoy(
     """
     metric_col = _YOY_METRIC_COLS.get(metric)
     if metric_col is None:
-        metric = "sum_total"
-        metric_col = "sum_total"
+        raise HTTPException(
+            status_code=400,
+            detail=f"metric invalid. Valori permise: {sorted(_YOY_METRIC_COLS.keys())}",
+        )
 
     params: dict = {
         "acc": account_id,
@@ -292,6 +294,10 @@ async def reports_locatii_yoy(
     if location_ids:
         params["loc_ids"] = list(location_ids)
         loc_filter = "AND location_id = ANY(:loc_ids)"
+
+    # metric_col vine strict din _YOY_METRIC_COLS (whitelist), deci e safe să-l
+    # interpolăm. Validăm încă o dată ca apărare în profunzime.
+    assert metric_col in _YOY_METRIC_COLS.values()
 
     # Monthly: 12 luni × 2 ani
     monthly_rows = (await db.execute(

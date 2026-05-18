@@ -105,60 +105,83 @@ async def seed_demo_account(force: bool = False) -> dict:
     Returneaza un dict cu rezumat (counts + duration_seconds).
     Daca exista deja un cont cu username `ProfessorPrimeDemo` si force=False,
     arunca ValueError. force=True nu este implementat (decizie utilizator: cleanup manual).
+
+    Pseudo-tranzactie: daca orice pas dupa creearea contului esueaza, apelam
+    automat delete_demo_account pentru a evita lasarea unei stari corupte
+    (cont partial seedat, FK orfane). Eroarea originala se re-ridica.
     """
     start_ts = datetime.now(timezone.utc)
-    async with AsyncSessionLocal() as db:
-        existing = (await db.execute(
-            select(Account).where(Account.username == DEMO_USERNAME)
-        )).scalar_one_or_none()
-        if existing is not None:
-            raise ValueError(
-                f"Account '{DEMO_USERNAME}' already exists (id={existing.id}). "
-                "Sterge-l manual din DB inainte de a rerula seederul."
+    seed_started = False
+    try:
+        async with AsyncSessionLocal() as db:
+            existing = (await db.execute(
+                select(Account).where(Account.username == DEMO_USERNAME)
+            )).scalar_one_or_none()
+            if existing is not None:
+                raise ValueError(
+                    f"Account '{DEMO_USERNAME}' already exists (id={existing.id}). "
+                    "Sterge-l manual din DB inainte de a rerula seederul."
+                )
+
+            rng = random.Random(RNG_SEED)
+            fake = Faker("ro_RO")
+            Faker.seed(RNG_SEED)
+
+            log.info("demo-seed: pornit pentru cont '%s'", DEMO_USERNAME)
+
+            ctx = _Ctx(db=db, rng=rng, fake=fake)
+
+            # 1. Master data
+            await _create_account_and_company(ctx)
+            seed_started = True
+            await _create_locations(ctx)
+            await _create_departments(ctx)
+            await _create_employees(ctx)
+            await _create_tire_catalog(ctx)
+            await _create_items_and_categories(ctx)
+            await _create_clients(ctx)
+            await _create_initial_stock(ctx)
+            await db.commit()
+            log.info("demo-seed: master data OK")
+
+            # 2. Bucla de generare devize
+            await _generate_receipts(ctx)
+            log.info("demo-seed: receipts OK (n=%d)", ctx.counts["receipts"])
+
+            # 3. Programari (post-pass)
+            await _generate_programari(ctx)
+            await db.commit()
+            log.info("demo-seed: programari OK (n=%d)", ctx.counts["programari"])
+
+            # 4. Hotel anvelope
+            await _generate_tire_hotel(ctx)
+            await db.commit()
+            log.info("demo-seed: hotel anvelope OK (n=%d)", ctx.counts["cazari"])
+
+            # 5. Update register counters + employee targets
+            await _finalize_register_and_employees(ctx)
+            await db.commit()
+
+        duration = (datetime.now(timezone.utc) - start_ts).total_seconds()
+        summary = {**ctx.counts, "duration_seconds": round(duration, 2)}
+        log.info("demo-seed: COMPLET in %ss → %s", round(duration, 1), summary)
+        return summary
+    except Exception:
+        if seed_started:
+            log.exception(
+                "demo-seed: ESEC dupa creearea contului — pornesc cleanup automat",
             )
+            try:
+                from app.services.demo_seeder.cleanup import delete_demo_account
 
-        rng = random.Random(RNG_SEED)
-        fake = Faker("ro_RO")
-        Faker.seed(RNG_SEED)
-
-        log.info("demo-seed: pornit pentru cont '%s'", DEMO_USERNAME)
-
-        ctx = _Ctx(db=db, rng=rng, fake=fake)
-
-        # 1. Master data
-        await _create_account_and_company(ctx)
-        await _create_locations(ctx)
-        await _create_departments(ctx)
-        await _create_employees(ctx)
-        await _create_tire_catalog(ctx)
-        await _create_items_and_categories(ctx)
-        await _create_clients(ctx)
-        await _create_initial_stock(ctx)
-        await db.commit()
-        log.info("demo-seed: master data OK")
-
-        # 2. Bucla de generare devize
-        await _generate_receipts(ctx)
-        log.info("demo-seed: receipts OK (n=%d)", ctx.counts["receipts"])
-
-        # 3. Programari (post-pass)
-        await _generate_programari(ctx)
-        await db.commit()
-        log.info("demo-seed: programari OK (n=%d)", ctx.counts["programari"])
-
-        # 4. Hotel anvelope
-        await _generate_tire_hotel(ctx)
-        await db.commit()
-        log.info("demo-seed: hotel anvelope OK (n=%d)", ctx.counts["cazari"])
-
-        # 5. Update register counters + employee targets
-        await _finalize_register_and_employees(ctx)
-        await db.commit()
-
-    duration = (datetime.now(timezone.utc) - start_ts).total_seconds()
-    summary = {**ctx.counts, "duration_seconds": round(duration, 2)}
-    log.info("demo-seed: COMPLET in %ss → %s", round(duration, 1), summary)
-    return summary
+                await delete_demo_account()
+                log.info("demo-seed: cleanup automat OK dupa esec")
+            except Exception:
+                log.exception(
+                    "demo-seed: cleanup automat a esuat — STARE CORUPTA, "
+                    "sterge manual contul '%s'", DEMO_USERNAME,
+                )
+        raise
 
 
 # ─────────────────────────── Context obiect ──────────────────────────────────

@@ -1,5 +1,6 @@
 import { createStore } from "solid-js/store";
 import { setAdminVisible } from "./adminStore";
+import { setReportsToken } from "../pages/rapoarte/reports-auth";
 
 interface AuthState {
   user: string | null;
@@ -93,6 +94,9 @@ export function loginAsImpersonatedUser(
 
 export function logout(redirectTo: string | null = "/login") {
   setAdminVisible(false);
+  // Invalidam explicit si tokenul de Rapoarte inainte de clearAllStorage —
+  // setReportsToken(null) sterge si copia in-memory, nu doar storage-ul.
+  try { setReportsToken(null); } catch {}
   const next: AuthState = { user: null, token: null, isLocked: false, lockedAt: null, displayName: null };
   setAuth(next);
   clearAllStorage();

@@ -38,3 +38,8 @@ Thumbs.db
 
 # Workspace scratch (dump-uri, copii temporare)
 work/
+
+# Loguri runtime — nu intră în git
+backend/logs/*.log
+backend/logs/*.log.*
+*.log

@@ -254,7 +254,9 @@ async def update_me(
 
 
 @router.post("/me/image", response_model=MeResponse)
+@limiter.limit("5/minute")
 async def upload_me_image(
+    request: Request,
     file: UploadFile = File(...),
     account: Account = Depends(get_current_account),
     db: AsyncSession = Depends(get_db),
@@ -338,7 +340,7 @@ class ReportsTokenResponse(BaseModel):
 
 
 @router.post("/reports/verify", response_model=ReportsTokenResponse)
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")
 async def reports_verify(
     request: Request,
     body: ReportsVerifyRequest,
@@ -362,7 +364,10 @@ async def reports_verify(
 class ReportsSetPasswordRequest(BaseModel):
     # `old_password` este obligatorie doar daca exista deja o parola setata.
     old_password: str | None = Field(None, max_length=255)
-    new_password: str = Field(..., min_length=6, max_length=255)
+    # min_length=10 ca la login — Rapoartele expun date sensibile (cifra de
+    # afaceri, target angajati), deci nu pot avea parola mai slaba decat
+    # contul principal.
+    new_password: str = Field(..., min_length=10, max_length=255)
 
 
 @router.post("/reports/set-password", response_model=MessageResponse)
