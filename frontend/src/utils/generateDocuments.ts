@@ -70,9 +70,9 @@ function ro(s: string | null | undefined): string {
  * restaura starea (in caz de append intr-un doc partajat).
  */
 async function enableRomanianFont(doc: any): Promise<() => void> {
-  const fonts = await loadRoFontBase64();
-  if (!fonts) return () => {};
-  registerRoFont(doc, fonts);
+  const b64 = await loadRoFontBase64();
+  if (!b64) return () => {};
+  registerRoFont(doc, b64);
   // Alias "helvetica" -> NotoSans astfel incat tot codul existent care apeleaza
   // doc.setFont("helvetica", "bold|normal|italic") sa foloseasca glyph-urile cu
   // diacritice. "italic" cade pe "normal" cand nu exista variants italic.
@@ -94,14 +94,12 @@ async function enableRomanianFont(doc: any): Promise<() => void> {
 
 // ─── Romanian font loader ─────────────────────────────────────────────────────
 
-// v3: subset extins (ASCII complet + Latin-1 + Latin Extended + paranteze/%/etc).
+// v4: subset cu unitsPerEm=1000 (jsPDF nu scaleaza corect upem=2048 → spatii intre litere).
 // Bump key cand schimbam .ttf-ul, ca sa invalidam cache-ul localStorage al userilor.
-const _FONT_CACHE_KEY = "bs_ro_font_b64_v3";
+const _FONT_CACHE_KEY = "bs_ro_font_b64_v4";
 const _FONT_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 zile
 
-interface RoFontPair { regular: string; bold: string; }
-
-let _roFont: RoFontPair | null | false = false; // false = neincercat, null = esec
+let _roFontB64: string | null | false = false; // false = neincercat, null = esec
 
 function _bufToB64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
@@ -112,66 +110,45 @@ function _bufToB64(buf: ArrayBuffer): string {
   return btoa(chunks.join(""));
 }
 
-async function _fetchAsB64(url: string): Promise<string | null> {
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const buf = await resp.arrayBuffer();
-    if (buf.byteLength <= 5_000) return null;
-    return _bufToB64(buf);
-  } catch {
-    return null;
-  }
-}
-
-async function loadRoFontBase64(): Promise<RoFontPair | null> {
-  if (_roFont !== false) return _roFont;
+async function loadRoFontBase64(): Promise<string | null> {
+  if (_roFontB64 !== false) return _roFontB64;
 
   // 1. Cache localStorage
   try {
     const cached = localStorage.getItem(_FONT_CACHE_KEY);
     if (cached) {
-      const parsed = JSON.parse(cached);
-      if (
-        parsed && Date.now() - parsed.ts < _FONT_CACHE_TTL &&
-        typeof parsed.regular === "string" && parsed.regular.length > 5_000 &&
-        typeof parsed.bold === "string" && parsed.bold.length > 5_000
-      ) {
-        _roFont = { regular: parsed.regular, bold: parsed.bold };
-        return _roFont;
+      const { ts, b64 } = JSON.parse(cached);
+      if (Date.now() - ts < _FONT_CACHE_TTL && typeof b64 === "string" && b64.length > 5_000) {
+        _roFontB64 = b64;
+        return b64;
       }
     }
   } catch {}
 
-  // 2. Font local (subset DejaVuSans cu Latin-1 + Latin Extended + Romanian)
-  const [regular, bold] = await Promise.all([
-    _fetchAsB64("/fonts/NotoSans-Ro.ttf"),
-    _fetchAsB64("/fonts/NotoSans-Ro-Bold.ttf"),
-  ]);
-  if (regular && bold) {
-    _roFont = { regular, bold };
-    try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), regular, bold })); } catch {}
-    return _roFont;
-  }
-  // Fallback: doar regular (bold mapat pe regular, bold-ul nu apare bold dar afiseaza diacriticele)
-  if (regular) {
-    _roFont = { regular, bold: regular };
-    return _roFont;
-  }
+  // 2. Font local (subset NotoSans cu diacritice romanesti, upem=1000)
+  try {
+    const resp = await fetch("/fonts/NotoSans-Ro.ttf");
+    if (resp.ok) {
+      const buf = await resp.arrayBuffer();
+      if (buf.byteLength > 5_000) {
+        const b64 = _bufToB64(buf);
+        _roFontB64 = b64;
+        try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), b64 })); } catch {}
+        return b64;
+      }
+    }
+  } catch {}
 
-  _roFont = null;
+  _roFontB64 = null;
   return null;
 }
 
-function registerRoFont(doc: any, fonts: RoFontPair): void {
-  doc.addFileToVFS("NotoSans-Ro.ttf", fonts.regular);
+function registerRoFont(doc: any, base64: string): void {
+  doc.addFileToVFS("NotoSans-Ro.ttf", base64);
   doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
-  if (fonts.bold && fonts.bold !== fonts.regular) {
-    doc.addFileToVFS("NotoSans-Ro-Bold.ttf", fonts.bold);
-    doc.addFont("NotoSans-Ro-Bold.ttf", "NotoSans", "bold");
-  } else {
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
-  }
+  // Folosim acelasi fisier si pentru bold (fontul nu are variant bold separat,
+  // dar nu apare spatiat — singura diferenta vizibila e ca "bold" e mai subtire decat Helvetica Bold).
+  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
 }
 
 // t() — text helper: lasa textul neschimbat daca avem font roman, altfel ro()
