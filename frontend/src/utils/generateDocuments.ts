@@ -15,6 +15,9 @@ import {
   drawHeader, drawCompanyBlock, drawClientBlock,
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
 } from "./pdf";
+// Importat ca asset Vite → primeste hash in nume la build, deci nu mai sufera de
+// cache stale la nivel de nginx/CDN cand schimbam continutul fontului.
+import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -94,11 +97,9 @@ async function enableRomanianFont(doc: any): Promise<() => void> {
 
 // ─── Romanian font loader ─────────────────────────────────────────────────────
 
-// v4: subset cu unitsPerEm=1000 (jsPDF nu scaleaza corect upem=2048 → spatii intre litere).
-// Bump key cand schimbam .ttf-ul, ca sa invalidam cache-ul localStorage al userilor.
-const _FONT_CACHE_KEY = "bs_ro_font_b64_v4";
-const _FONT_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 zile
-
+// Fontul e importat ca asset Vite (roFontUrl) → URL-ul are hash in nume, deci
+// invalidarea cache-ului se face automat la fiecare schimbare de continut.
+// Tinem cache-ul in memorie (per sesiune) ca sa nu re-incarcam la fiecare PDF.
 let _roFontB64: string | null | false = false; // false = neincercat, null = esec
 
 function _bufToB64(buf: ArrayBuffer): string {
@@ -112,35 +113,17 @@ function _bufToB64(buf: ArrayBuffer): string {
 
 async function loadRoFontBase64(): Promise<string | null> {
   if (_roFontB64 !== false) return _roFontB64;
-
-  // 1. Cache localStorage
   try {
-    const cached = localStorage.getItem(_FONT_CACHE_KEY);
-    if (cached) {
-      const { ts, b64 } = JSON.parse(cached);
-      if (Date.now() - ts < _FONT_CACHE_TTL && typeof b64 === "string" && b64.length > 5_000) {
-        _roFontB64 = b64;
-        return b64;
-      }
-    }
-  } catch {}
-
-  // 2. Font local (subset NotoSans cu diacritice romanesti, upem=1000)
-  // ?v=4 = cache-bust pentru nginx-ul de prod care serveste .ttf cu `Cache-Control: immutable` 1 an
-  // (altfel browserii cu fontul rupt v3/upem=2048 il pastreaza in cache si dupa redeploy).
-  try {
-    const resp = await fetch("/fonts/NotoSans-Ro.ttf?v=4");
+    const resp = await fetch(roFontUrl);
     if (resp.ok) {
       const buf = await resp.arrayBuffer();
       if (buf.byteLength > 5_000) {
         const b64 = _bufToB64(buf);
         _roFontB64 = b64;
-        try { localStorage.setItem(_FONT_CACHE_KEY, JSON.stringify({ ts: Date.now(), b64 })); } catch {}
         return b64;
       }
     }
   } catch {}
-
   _roFontB64 = null;
   return null;
 }
