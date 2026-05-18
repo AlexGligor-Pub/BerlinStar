@@ -126,8 +126,10 @@ async function loadRoFontBase64(): Promise<string | null> {
   } catch {}
 
   // 2. Font local (subset NotoSans cu diacritice romanesti, upem=1000)
+  // ?v=4 = cache-bust pentru nginx-ul de prod care serveste .ttf cu `Cache-Control: immutable` 1 an
+  // (altfel browserii cu fontul rupt v3/upem=2048 il pastreaza in cache si dupa redeploy).
   try {
-    const resp = await fetch("/fonts/NotoSans-Ro.ttf");
+    const resp = await fetch("/fonts/NotoSans-Ro.ttf?v=4");
     if (resp.ok) {
       const buf = await resp.arrayBuffer();
       if (buf.byteLength > 5_000) {
