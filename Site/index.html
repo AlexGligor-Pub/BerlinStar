@@ -4,16 +4,16 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="theme-color" content="#0B1120" />
-<meta name="description" content="Berlin Star — Software dedicat pentru vulcanizări și service-uri auto din România. eFactura ANAF automată, Hotel Anvelope, programări și gestiune stocuri într-o singură aplicație." />
-<meta name="keywords" content="software vulcanizare, software service auto, eFactura, ANAF, hotel anvelope, programari service auto, gestiune stocuri vulcanizare" />
-<meta property="og:title" content="Berlin Star — Software dedicat vulcanizărilor și service-urilor auto" />
-<meta property="og:description" content="eFactura ANAF automată + Hotel Anvelope + Programări + Stocuri. Construit special pentru vulcanizări și service auto din România." />
+<meta name="description" content="Professor Prime — dezvoltator de soluții software pentru industria auto. Berlin Star, produsul nostru pentru vulcanizări și service-uri auto, include eFactura ANAF, Hotel Anvelope, programări și gestiune stocuri." />
+<meta name="keywords" content="professor prime, berlin star, software vulcanizare, software service auto, eFactura, ANAF, hotel anvelope, programari service auto" />
+<meta property="og:title" content="Professor Prime — Berlin Star · Software pentru vulcanizări și service auto" />
+<meta property="og:description" content="Berlin Star, produsul Professor Prime, este software-ul dedicat vulcanizărilor și service-urilor auto din România." />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="ro_RO" />
 <link rel="icon" type="image/png" href="images/logo.png" />
 <link rel="shortcut icon" type="image/png" href="images/logo.png" />
 <link rel="apple-touch-icon" href="images/logo.png" />
-<title>Berlin Star — Software dedicat pentru vulcanizări și service auto | eFactura ANAF inclusă</title>
+<title>Professor Prime — Berlin Star · Software pentru vulcanizări și service auto</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -150,12 +150,20 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: #fff;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 800;
-  font-size: 1.25rem;
   letter-spacing: -0.02em;
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-name { font-weight: 800; font-size: 1.1rem; color: #fff; }
+.brand-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 .brand-logo {
   width: 38px; height: 38px;
@@ -910,8 +918,10 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 @media (max-width: 859px) {
   .hamburger { display: inline-flex; }
   .nav-inner { height: 60px; }
-  .brand { font-size: 1.05rem; gap: 8px; }
+  .brand { gap: 10px; }
   .brand-logo { width: 34px; height: 34px; }
+  .brand-name { font-size: 0.95rem; }
+  .brand-sub { font-size: 0.62rem; margin-top: 1px; }
   .nav-links {
     position: absolute;
     top: 100%; left: 0; right: 0;
@@ -971,9 +981,12 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 <!-- =================== NAV =================== -->
 <nav class="nav" id="nav">
   <div class="container nav-inner">
-    <a href="#top" class="brand" aria-label="Berlin Star - Acasă">
-      <span class="brand-logo"><img src="images/logo.png" alt="Berlin Star logo" /></span>
-      <span>Berlin Star</span>
+    <a href="#top" class="brand" aria-label="Professor Prime - Acasă">
+      <span class="brand-logo"><img src="images/logo.png" alt="Professor Prime logo" /></span>
+      <span class="brand-text">
+        <span class="brand-name">Professor Prime</span>
+        <span class="brand-sub">Berlin Star</span>
+      </span>
     </a>
 
     <button class="hamburger" id="hamburger" aria-label="Meniu" aria-expanded="false">
@@ -1516,7 +1529,7 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
         <div class="plan-name">Abonament Berlin Star</div>
         <h3>Pentru vulcanizări și service-uri auto</h3>
         <div class="price"><span class="currency">€</span> 700 <span class="period">/ an</span></div>
-        <p class="desc">≈ 58 € / lună · fără TVA · facturare anuală</p>
+        <p class="desc">≈ 58 € / lună · preț final · facturare anuală</p>
         <ul class="features-list">
           <li><strong>eFactura ANAF automată</strong>, nelimitat</li>
           <li><strong>Hotel Anvelope</strong> cu locație fizică și istoric</li>
@@ -1538,8 +1551,8 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
       </div>
     </div>
 
-    <p class="text-center" style="margin-top: 24px; color: var(--slate-500); font-size: 14px; max-width: 540px; margin-left: auto; margin-right: auto;">
-      Preț afișat în Euro, fără TVA. Facturarea se face anual. Fără contract pe termen lung — la următoarea reînnoire decizi singur dacă continui. Demo gratuit la cerere.
+    <p class="text-center" style="margin-top: 24px; color: var(--slate-500); font-size: 14px; max-width: 600px; margin-left: auto; margin-right: auto;">
+      <strong>Professor Prime S.R.L. este companie neplătitoare de TVA</strong> — prețul de 700 € este final, nu se adaugă TVA pe factură. Facturarea se face anual. Fără contract pe termen lung — la următoarea reînnoire decizi singur dacă continui. Demo gratuit la cerere.
     </p>
   </div>
 </section>
@@ -1673,12 +1686,15 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
     <div class="footer-grid">
       <div class="footer-col">
         <div class="brand">
-          <span class="brand-logo"><img src="images/logo.png" alt="Berlin Star logo" /></span>
-          <span>Berlin Star</span>
+          <span class="brand-logo"><img src="images/logo.png" alt="Professor Prime logo" /></span>
+          <span class="brand-text">
+            <span class="brand-name">Professor Prime</span>
+            <span class="brand-sub">Berlin Star</span>
+          </span>
         </div>
-        <p style="margin-top: 6px; max-width: 340px;">
-          Software dedicat pentru vulcanizări și service-uri auto din România.
-          Construit local, gândit pentru legislația și fluxul de lucru românesc.
+        <p style="margin-top: 12px; max-width: 340px;">
+          <strong style="color: #fff;">Professor Prime S.R.L.</strong> — dezvoltator de software pentru industria auto din România.
+          <strong style="color: var(--gold);">Berlin Star</strong> este produsul nostru dedicat vulcanizărilor și service-urilor auto.
         </p>
         <div style="margin-top: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
           <a href="mailto:contact@professorprime.ro" style="display: inline-flex; align-items: center; gap: 8px;">

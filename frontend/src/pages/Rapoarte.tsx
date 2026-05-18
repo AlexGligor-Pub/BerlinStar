@@ -3,7 +3,7 @@ import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 import { generalSettings } from "../store/generalSettingsStore";
-import { toNumber, fmtMoney, todayISO, fmtRoDate } from "./rapoarte/format";
+import { toNumber, fmtMoney, todayISO, fmtRoDate, toLocalISO } from "./rapoarte/format";
 import {
   persistedSignal,
   periodFrom,
@@ -17,8 +17,10 @@ import { PALETTE, colorByIndex, PAY_COLORS, RO_DOW } from "./rapoarte/constants"
 import {
   drawLine, drawDonut, drawBar, drawGroupedBars,
   drawMonthlyBars, drawMonthlyDualBars, drawMonthlySeriesBars, drawHeatmap,
+  drawYoYBars,
   type DailyTotal, type DonutItem, type BarItem, type GroupedBarItem,
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
+  type YoYBucket,
 } from "./rapoarte/charts";
 import StocuriSection from "./rapoarte/StocuriSection";
 import ReportsGate from "./rapoarte/ReportsGate";
@@ -49,6 +51,7 @@ interface EmployeeReport {
 const SECTIONS = [
   { id: "target-angajati", label: "Target Angajați" },
   { id: "locatii", label: "Locații" },
+  { id: "comparare-yoy", label: "Comparare YoY" },
   { id: "produse-servicii", label: "Produse / Servicii" },
   { id: "angajati", label: "Angajați" },
   { id: "hotel-anvelope", label: "Hotel Anvelope" },
@@ -145,7 +148,7 @@ function PanelHeader(props: { title: string }) {
 
 // ───── PERIOD SLICER ──────────────────────────────────────────────────────────
 
-type QuickKey = "today" | "7d" | "30d" | "mtd" | "qtd" | "ytd" | "12m";
+type QuickKey = "today" | "7d" | "last_week" | "30d" | "mtd" | "qtd" | "ytd" | "12m";
 
 function PeriodSlicer() {
   const [activeQuick, setActiveQuick] = persistedSignal<QuickKey | null>("rapoarte_quick_key", "mtd");
@@ -167,7 +170,7 @@ function PeriodSlicer() {
   function dateFromPct(pct: number): string {
     const d = new Date(yearStart);
     d.setDate(d.getDate() + Math.round((pct / 100) * totalDays));
-    return d.toISOString().slice(0, 10);
+    return toLocalISO(d);
   }
 
   const [sliderMin, setSliderMin] = createSignal(pctOf(draftFrom()));
@@ -176,7 +179,7 @@ function PeriodSlicer() {
   function applyQuick(key: QuickKey) {
     const now = new Date();
     let from = new Date(now);
-    const to = new Date(now);
+    let to = new Date(now);
     let label = "";
     if (key === "today") { label = "Azi"; }
     else if (key === "7d") {
@@ -186,6 +189,15 @@ function PeriodSlicer() {
       from.setDate(from.getDate() - daysFromMonday);
       label = "Săptămâna curentă";
     }
+    else if (key === "last_week") {
+      // Săptămâna trecută: luni → duminică din săptămâna anterioară
+      const dow = now.getDay();
+      const daysFromMonday = (dow + 6) % 7;
+      from.setDate(from.getDate() - daysFromMonday - 7);
+      to = new Date(from);
+      to.setDate(to.getDate() + 6);
+      label = "Săptămâna trecută";
+    }
     else if (key === "30d") { from.setDate(from.getDate() - 29); label = "Ultimele 30 zile"; }
     else if (key === "mtd") { from = new Date(now.getFullYear(), now.getMonth(), 1); label = "Luna aceasta"; }
     else if (key === "qtd") {
@@ -194,8 +206,8 @@ function PeriodSlicer() {
     }
     else if (key === "ytd") { from = new Date(now.getFullYear(), 0, 1); label = "An curent"; }
     else if (key === "12m") { from.setFullYear(from.getFullYear() - 1); label = "12 luni"; }
-    const f = from.toISOString().slice(0, 10);
-    const t = to.toISOString().slice(0, 10);
+    const f = toLocalISO(from);
+    const t = toLocalISO(to);
     setDraftFrom(f); setDraftTo(t);
     setSliderMin(pctOf(f)); setSliderMax(pctOf(t));
     setActiveQuick(key);
@@ -242,6 +254,7 @@ function PeriodSlicer() {
       <div class="slicer-quick-btns">
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "today" }} onClick={() => applyQuick("today")}>Azi</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "7d" }} onClick={() => applyQuick("7d")}>Săptămâna curentă</button>
+        <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "last_week" }} onClick={() => applyQuick("last_week")}>Săptămâna trecută</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "30d" }} onClick={() => applyQuick("30d")}>30 zile</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "mtd" }} onClick={() => applyQuick("mtd")}>Luna aceasta</button>
         <button class="slicer-qbtn" classList={{ "slicer-qbtn--active": activeQuick() === "qtd" }} onClick={() => applyQuick("qtd")}>Trim. curent</button>
@@ -523,6 +536,334 @@ function LocatiiPanel() {
           </Show>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ───── COMPARARE YoY PANEL ────────────────────────────────────────────────────
+
+interface YoYBucketAPI {
+  month?: number;
+  quarter?: number;
+  location_id?: number | null;
+  location_name?: string;
+  value_a: string | number;
+  value_b: string | number;
+  delta_abs: string | number;
+  delta_pct: number | null;
+}
+
+interface YoYSummaryAPI {
+  year_a: number;
+  year_b: number;
+  metric: string;
+  total_a: string | number;
+  total_b: string | number;
+  delta_abs: string | number;
+  delta_pct: number | null;
+  monthly: YoYBucketAPI[];
+  quarterly: YoYBucketAPI[];
+  per_location: YoYBucketAPI[];
+}
+
+type YoYMetric = "sum_total" | "sum_paid" | "count_total";
+
+const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Noi","Dec"];
+
+function CompareYoYPanel() {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  const [yearA, setYearA] = persistedSignal<number>("rapoarte_yoy_year_a", currentYear);
+  const [yearB, setYearB] = persistedSignal<number>("rapoarte_yoy_year_b", currentYear - 1);
+  const [metric, setMetric] = persistedSignal<YoYMetric>("rapoarte_yoy_metric", "sum_total");
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>("rapoarte_yoy_loc_ids", []);
+  const [data, setData] = createSignal<YoYSummaryAPI | null>(null);
+  const [, setLoading] = createSignal(true);
+
+  let monthlyRef: HTMLDivElement | undefined;
+  let quarterlyRef: HTMLDivElement | undefined;
+  let perLocRef: HTMLDivElement | undefined;
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        year_a: String(yearA()),
+        year_b: String(yearB()),
+        metric: metric(),
+      });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await reportsApiFetch(`/api/reports/locatii-yoy?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului YoY.`, "error");
+        return;
+      }
+      setData(await res.json());
+    } catch {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(ensureLocationsLoaded);
+
+  createEffect(() => {
+    // reîncărcăm la orice schimbare de an / metrică / locații
+    yearA(); yearB(); metric(); selectedLocIds();
+    void load();
+  });
+
+  const unit = () => metric() === "count_total" ? "buc" as const : "lei" as const;
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !monthlyRef) return;
+    const items: YoYBucket[] = d.monthly.map((m) => ({
+      label: RO_MONTHS_SHORT[(m.month || 1) - 1],
+      value_a: toNumber(m.value_a),
+      value_b: toNumber(m.value_b),
+      delta_pct: m.delta_pct,
+    }));
+    drawYoYBars(monthlyRef, items, d.year_a, d.year_b, unit());
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !quarterlyRef) return;
+    const items: YoYBucket[] = d.quarterly.map((q) => ({
+      label: `Q${q.quarter ?? "?"}`,
+      value_a: toNumber(q.value_a),
+      value_b: toNumber(q.value_b),
+      delta_pct: q.delta_pct,
+    }));
+    drawYoYBars(quarterlyRef, items, d.year_a, d.year_b, unit());
+  });
+
+  createEffect(() => {
+    const d = data();
+    if (!d || !perLocRef) return;
+    const items: YoYBucket[] = d.per_location.map((l) => ({
+      label: l.location_name || "Fără locație",
+      value_a: toNumber(l.value_a),
+      value_b: toNumber(l.value_b),
+      delta_pct: l.delta_pct,
+    }));
+    drawYoYBars(perLocRef, items, d.year_a, d.year_b, unit());
+  });
+
+  function shiftPair(deltaYears: number) {
+    setYearA(yearA() + deltaYears);
+    setYearB(yearB() + deltaYears);
+  }
+  function presetCurrentVsPrev() { setYearA(currentYear); setYearB(currentYear - 1); }
+  function presetPrevVsTwoBack() { setYearA(currentYear - 1); setYearB(currentYear - 2); }
+
+  const metricLabel = () => {
+    if (metric() === "sum_paid") return "Venit încasat";
+    if (metric() === "count_total") return "Număr de bonuri";
+    return "Venit total facturat";
+  };
+  const unitLabel = () => unit() === "lei" ? "lei" : "buc";
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Comparare Year-over-Year" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Comparație cap-la-cap între doi ani: defalcare lunară, trimestrială și pe
+          locații. Implicit afișează <strong>anul curent vs anul trecut</strong>,
+          dar poți alege orice combinație (de ex. <em>anul trecut vs acum doi ani</em>).
+          Δ% deasupra fiecărei perechi de bare indică variația anului A față de anul B
+          (verde = creștere, roșu = scădere).
+        </p>
+      </Show>
+
+      {/* Controale: ani + metrică + preset-uri */}
+      <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:14px">
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-muted,#8b90a0)">
+          <span>Anul A (referința „curentă")</span>
+          <input
+            type="number"
+            min={2000}
+            max={2100}
+            value={yearA()}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (!Number.isNaN(v)) setYearA(v);
+            }}
+            style="width:96px;padding:6px 8px;border-radius:6px;border:1px solid var(--border,#2a3045);background:var(--surface,#1e2330);color:var(--text,#e8eaf0)"
+          />
+        </label>
+        <span style="font-weight:700;font-size:1.1rem;padding-bottom:8px">vs</span>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-muted,#8b90a0)">
+          <span>Anul B (comparator)</span>
+          <input
+            type="number"
+            min={2000}
+            max={2100}
+            value={yearB()}
+            onChange={(e) => {
+              const v = Number(e.currentTarget.value);
+              if (!Number.isNaN(v)) setYearB(v);
+            }}
+            style="width:96px;padding:6px 8px;border-radius:6px;border:1px solid var(--border,#2a3045);background:var(--surface,#1e2330);color:var(--text,#e8eaf0)"
+          />
+        </label>
+        <div style="display:flex;flex-direction:column;gap:4px;font-size:0.8rem;color:var(--text-muted,#8b90a0)">
+          <span>Metrică</span>
+          <select
+            value={metric()}
+            onChange={(e) => setMetric(e.currentTarget.value as YoYMetric)}
+            style="padding:6px 8px;border-radius:6px;border:1px solid var(--border,#2a3045);background:var(--surface,#1e2330);color:var(--text,#e8eaf0)"
+          >
+            <option value="sum_total">Venit total facturat (lei)</option>
+            <option value="sum_paid">Venit încasat (lei)</option>
+            <option value="count_total">Număr de bonuri</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="loc-chip" onClick={presetCurrentVsPrev}>An curent vs an trecut</button>
+          <button type="button" class="loc-chip" onClick={presetPrevVsTwoBack}>An trecut vs acum 2 ani</button>
+          <button type="button" class="loc-chip" title="Mută ambii ani cu -1" onClick={() => shiftPair(-1)}>← 1 an</button>
+          <button type="button" class="loc-chip" title="Mută ambii ani cu +1" onClick={() => shiftPair(1)}>1 an →</button>
+        </div>
+      </div>
+
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
+
+      {/* KPI rezumat */}
+      <Show when={data()}>
+        {(d) => (
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:14px 0">
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Total {d().year_a} ({metricLabel()})</span>
+              <span class="locatii-kpi__value">{fmtMoney(toNumber(d().total_a))} {unitLabel()}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Total {d().year_b}</span>
+              <span class="locatii-kpi__value" style="color:var(--text-muted,#8b90a0)">{fmtMoney(toNumber(d().total_b))} {unitLabel()}</span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Diferență absolută</span>
+              <span class="locatii-kpi__value" style={`color:${toNumber(d().delta_abs) >= 0 ? "#3ea96a" : "#ef4444"}`}>
+                {toNumber(d().delta_abs) >= 0 ? "+" : ""}{fmtMoney(toNumber(d().delta_abs))} {unitLabel()}
+              </span>
+            </div>
+            <div class="locatii-kpi">
+              <span class="locatii-kpi__label">Variație YoY</span>
+              <Show when={d().delta_pct !== null} fallback={
+                <span class="locatii-kpi__value" style="color:var(--text-muted,#8b90a0)">—</span>
+              }>
+                <span class="locatii-kpi__value" style={`color:${(d().delta_pct ?? 0) >= 0 ? "#3ea96a" : "#ef4444"}`}>
+                  {(d().delta_pct ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(d().delta_pct ?? 0).toFixed(1)}%
+                </span>
+              </Show>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* Charts */}
+      <div class="locatii-charts">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Comparație lunară</div>
+          <div class="locatii-chart-subtitle">
+            {metricLabel()} · {yearA()} vs {yearB()} · Δ% afișat deasupra fiecărei perechi de bare
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Pentru fiecare lună sunt afișate două bare: <strong>anul A</strong> (culoare accent)
+              și <strong>anul B</strong> (gri). Δ% de deasupra reprezintă variația procentuală a anului A
+              față de anul B. Util pentru a vedea trendul sezonier și efectele
+              promoționale lunare.
+            </p>
+          </Show>
+          <div ref={monthlyRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Comparație trimestrială</div>
+          <div class="locatii-chart-subtitle">
+            {metricLabel()} · {yearA()} vs {yearB()} · agregat pe trimestre
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Aceleași date agregate pe trimestre (Q1 = ian-mar, Q2 = apr-iun, Q3 = iul-sep, Q4 = oct-dec).
+              Util pentru a vedea sezonalitatea anuală fără zgomotul fluctuațiilor lunare.
+            </p>
+          </Show>
+          <div ref={quarterlyRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0">
+          <div class="locatii-chart-title">Per locație</div>
+          <div class="locatii-chart-subtitle">
+            {metricLabel()} pe întreg anul · sortat descrescător după {yearA()}
+          </div>
+          <Show when={!hideExplanations()}>
+            <p class="chart-explanation">
+              Comparație totală anuală per locație. Δ% indică creșterea/scăderea fiecărei locații
+              de la anul B la anul A. Aplică filtrul de locații de mai sus pentru a vedea
+              doar locațiile relevante.
+            </p>
+          </Show>
+          <div ref={perLocRef} style="margin-top:8px" />
+        </div>
+      </div>
+
+      {/* Tabel detaliat lunar */}
+      <Show when={data()}>
+        {(d) => (
+          <div class="locatii-chart-card" style="margin-top:14px">
+            <div class="locatii-chart-title">Detaliu lunar</div>
+            <div class="locatii-chart-subtitle">Toate cele 12 luni, cu Δ absolut și Δ procentual</div>
+            <div class="rapoarte-table-scroll" style="margin-top:10px">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="text-align:left">Luna</th>
+                    <th class="num">{d().year_a}</th>
+                    <th class="num">{d().year_b}</th>
+                    <th class="num">Δ absolut</th>
+                    <th class="num">Δ %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={d().monthly}>
+                    {(m) => {
+                      const va = toNumber(m.value_a);
+                      const vb = toNumber(m.value_b);
+                      const da = toNumber(m.delta_abs);
+                      const positive = da >= 0;
+                      return (
+                        <tr>
+                          <td class="nowrap">{RO_MONTHS_SHORT[(m.month || 1) - 1]}</td>
+                          <td class="num">{fmtMoney(va)}</td>
+                          <td class="num" style="color:var(--text-muted,#8b90a0)">{fmtMoney(vb)}</td>
+                          <td class="num" style={`color:${positive ? "#3ea96a" : "#ef4444"};font-weight:600`}>
+                            {positive ? "+" : ""}{fmtMoney(da)}
+                          </td>
+                          <td class="num" style={`color:${m.delta_pct === null ? "var(--text-muted,#8b90a0)" : (m.delta_pct >= 0 ? "#3ea96a" : "#ef4444")};font-weight:600`}>
+                            <Show when={m.delta_pct !== null} fallback="—">
+                              {(m.delta_pct ?? 0) >= 0 ? "▲" : "▼"} {Math.abs(m.delta_pct ?? 0).toFixed(1)}%
+                            </Show>
+                          </td>
+                        </tr>
+                      );
+                    }}
+                  </For>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </Show>
     </div>
   );
 }
@@ -2537,6 +2878,7 @@ export default function Rapoarte() {
           <Switch>
             <Match when={active() === "target-angajati"}><TargetAngajatiPanel /></Match>
             <Match when={active() === "locatii"}><LocatiiPanel /></Match>
+            <Match when={active() === "comparare-yoy"}><CompareYoYPanel /></Match>
             <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
             <Match when={active() === "angajati"}><AngajatiPanel /></Match>
             <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>

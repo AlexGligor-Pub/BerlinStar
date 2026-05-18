@@ -17,7 +17,6 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.efactura import oauth_service, service as efactura_service
 from app.efactura.anaf_client import AnafEFacturaClient
-from app.efactura.crypto import encrypt, is_configured as fernet_configured
 from app.efactura.exceptions import (
     AnafAuthError,
     AnafConfigError,
@@ -82,15 +81,12 @@ def _settings_to_out(row: AnafSettings) -> AnafSettingsOut:
         id=row.id,
         company_id=row.company_id,
         use_test_env=row.use_test_env,
-        client_id=row.client_id,
-        redirect_uri=row.redirect_uri,
         payment_terms_days=row.payment_terms_days,
         default_invoice_type=row.default_invoice_type,
         auto_upload=row.auto_upload,
         auto_upload_delay_minutes=row.auto_upload_delay_minutes,
         deadline_alert_email=row.deadline_alert_email,
         validate_schematron=row.validate_schematron,
-        has_client_secret=bool(row.client_secret_enc),
         last_sync_at=row.last_sync_at,
     )
 
@@ -196,18 +192,6 @@ async def update_my_company_settings(
         await db.flush()
 
     data = body.model_dump(exclude_unset=True)
-    if "client_secret" in data:
-        secret = data.pop("client_secret")
-        if secret:
-            if not fernet_configured():
-                raise HTTPException(
-                    500,
-                    "Cheia Fernet nu este configurata global. Contacteaza administratorul.",
-                )
-            row.client_secret_enc = encrypt(secret)
-        else:
-            row.client_secret_enc = None
-
     for k, v in data.items():
         if hasattr(row, k):
             setattr(row, k, v)
@@ -689,6 +673,73 @@ async def list_received_invoices(
         }
         for r in rows
     ]
+
+
+@router.post("/companies/{company_id}/received/sync")
+async def sync_received_for_company(
+    company_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sincronizeaza facturile primite din SPV ANAF pentru aceasta companie (manual trigger).
+
+    Pentru job-ul automat (la 60 min) vezi efactura/scheduler.job_sync_received.
+    """
+    await _require_company_access(db, company_id, account_id)
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    token = (
+        await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
+    ).scalar_one_or_none()
+    if token is None:
+        raise HTTPException(400, "Compania nu este conectata la ANAF. Apasa Connect cu USB-ul plugat.")
+    settings = (
+        await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
+    ).scalar_one_or_none()
+    if settings is None:
+        raise HTTPException(400, "Lipsesc setarile ANAF pentru aceasta companie.")
+
+    try:
+        access_token = await oauth_service.get_valid_access_token(db, company_id)
+    except AnafTokenMissing:
+        raise HTTPException(401, "Token ANAF inexistent.")
+    except AnafTokenExpired:
+        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+    except AnafConfigError as exc:
+        raise HTTPException(400, str(exc))
+
+    client = AnafEFacturaClient(access_token, str(token.cui), use_test=settings.use_test_env)
+    try:
+        resp = await client.list_messages(days=60, filtru="P")
+    except EFacturaError as exc:
+        raise HTTPException(502, str(exc))
+
+    messages = resp.get("mesaje") or resp.get("mesajeFactura") or []
+    inserted = 0
+    for m in messages:
+        id_sol = m.get("id_solicitare") or m.get("id")
+        if not id_sol:
+            continue
+        stmt = pg_insert(EFacturaReceivedIndex).values(
+            company_id=company_id,
+            cui=str(token.cui),
+            id_solicitare=int(id_sol),
+            tip=m.get("tip"),
+            data_creare=m.get("data_creare"),
+            cif_emitent=m.get("cif_emitent") or m.get("cui"),
+            nume_emitent=m.get("nume_emitent"),
+            cif_beneficiar=m.get("cif_beneficiar"),
+            nume_beneficiar=m.get("nume_beneficiar"),
+            detalii=m.get("detalii"),
+            raw_payload=m,
+        ).on_conflict_do_nothing(index_elements=["company_id", "id_solicitare"])
+        result = await db.execute(stmt)
+        if result.rowcount:
+            inserted += int(result.rowcount)
+
+    settings.last_sync_at = datetime.now(timezone.utc)
+    await db.commit()
+    return {"ok": True, "messages": len(messages), "inserted": inserted}
 
 
 @router.get("/companies/{company_id}/pending-deadlines", response_model=list[EFacturaRecordOut])

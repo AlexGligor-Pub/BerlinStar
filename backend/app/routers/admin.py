@@ -14,6 +14,12 @@ from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.account import Account
 from app.rate_limit import limiter
+from app.services.demo_seeder import (
+    DEMO_PASSWORD,
+    DEMO_USERNAME,
+    delete_demo_account,
+    seed_demo_account,
+)
 
 log = logging.getLogger("berlinstar")
 
@@ -93,6 +99,82 @@ async def _require_super_admin(
     if account is None:
         raise HTTPException(403, "Acces interzis: este necesar contul administrator.")
     return account
+
+
+class SeedDemoResponse(BaseModel):
+    ok: bool = True
+    username: str
+    password: str
+    duration_seconds: float
+    receipts: int
+    receipt_items: int
+    stock_movements: int
+    programari: int
+    cazari: int
+    clients: int
+
+
+@router.post("/seed-demo", response_model=SeedDemoResponse)
+@limiter.limit("2/hour")
+async def seed_demo(
+    request: Request,
+    admin: Account = Depends(_require_super_admin),
+):
+    """Creeaza contul demo "ProfessorPrimeDemo" cu ~2 ani de date populate.
+
+    Refuza daca username-ul exista deja (HTTP 409). Operatia dureaza
+    cateva minute — clientul trebuie sa astepte raspunsul.
+    """
+    try:
+        summary = await seed_demo_account(force=False)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except Exception as exc:
+        log.exception("Demo seed failed admin_id=%s", admin.id)
+        raise HTTPException(status_code=500, detail=f"Seed esuat: {exc}")
+
+    return SeedDemoResponse(
+        username=DEMO_USERNAME,
+        password=DEMO_PASSWORD,
+        duration_seconds=summary["duration_seconds"],
+        receipts=summary["receipts"],
+        receipt_items=summary["receipt_items"],
+        stock_movements=summary["stock_movements"],
+        programari=summary["programari"],
+        cazari=summary["cazari"],
+        clients=summary["clients"],
+    )
+
+
+class DeleteDemoResponse(BaseModel):
+    ok: bool = True
+    existed: bool
+    account_id: int | None = None
+    counts: dict[str, int]
+
+
+@router.delete("/seed-demo", response_model=DeleteDemoResponse)
+@limiter.limit("5/hour")
+async def delete_demo(
+    request: Request,
+    admin: Account = Depends(_require_super_admin),
+):
+    """Hard-delete pentru contul "ProfessorPrimeDemo" si toate datele asociate.
+
+    Util pentru cleanup dupa un seed esuat partial sau pentru a regenera datele.
+    Daca contul nu exista, intoarce existed=False fara modificari.
+    """
+    try:
+        result = await delete_demo_account()
+    except Exception as exc:
+        log.exception("Demo delete failed admin_id=%s", admin.id)
+        raise HTTPException(status_code=500, detail=f"Stergere esuata: {exc}")
+
+    return DeleteDemoResponse(
+        existed=result["existed"],
+        account_id=result.get("account_id"),
+        counts=result["counts"],
+    )
 
 
 @router.post("/accounts/{account_id}/impersonate", response_model=ImpersonateResponse)

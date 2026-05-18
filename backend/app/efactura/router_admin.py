@@ -60,15 +60,12 @@ def _settings_to_out(row: AnafSettings) -> AnafSettingsOut:
         id=row.id,
         company_id=row.company_id,
         use_test_env=row.use_test_env,
-        client_id=row.client_id,
-        redirect_uri=row.redirect_uri,
         payment_terms_days=row.payment_terms_days,
         default_invoice_type=row.default_invoice_type,
         auto_upload=row.auto_upload,
         auto_upload_delay_minutes=row.auto_upload_delay_minutes,
         deadline_alert_email=row.deadline_alert_email,
         validate_schematron=row.validate_schematron,
-        has_client_secret=bool(row.client_secret_enc),
         last_sync_at=row.last_sync_at,
     )
 
@@ -166,18 +163,6 @@ async def update_company_settings(
 
     row = await _get_or_create_settings(db, company_id)
     data = body.model_dump(exclude_unset=True)
-
-    if "client_secret" in data:
-        secret = data.pop("client_secret")
-        if secret:
-            if not fernet_configured():
-                raise HTTPException(
-                    500,
-                    "ANAF_FERNET_KEY nu este setat in env. Nu se poate cripta client_secret.",
-                )
-            row.client_secret_enc = encrypt(secret)
-        else:
-            row.client_secret_enc = None
 
     for k, v in data.items():
         if hasattr(row, k):
@@ -295,6 +280,8 @@ def _global_to_out(row: EFacturaGlobalSettings, *, scheduler_running: bool) -> E
         frontend_callback_redirect=cfg.frontend_callback_redirect,
         scheduler_enabled=row.scheduler_enabled,
         scheduler_running=scheduler_running,
+        oauth_client_id=row.oauth_client_id,
+        has_oauth_client_secret=bool(row.oauth_client_secret_enc),
         updated_at=row.updated_at,
     )
 
@@ -339,6 +326,22 @@ async def update_global_settings(
             except Exception as exc:  # noqa: BLE001
                 raise HTTPException(400, f"Cheia Fernet introdusa este invalida: {exc}")
             row.fernet_key = new_key
+
+    # OAuth client_secret: cripteaza inainte de stocare (necesita Fernet)
+    if "oauth_client_secret" in data:
+        secret = data.pop("oauth_client_secret")
+        if secret:
+            if not fernet_configured() and not row.fernet_key:
+                raise HTTPException(
+                    400,
+                    "Cheia Fernet nu este configurata. Salveaza intai cheia Fernet, apoi client_secret.",
+                )
+            # Daca tocmai am setat fernet_key in acest request, foloseste-o pentru encrypt
+            if row.fernet_key:
+                set_fernet_key(row.fernet_key)
+            row.oauth_client_secret_enc = encrypt(secret)
+        else:
+            row.oauth_client_secret_enc = None
 
     for k, v in data.items():
         if hasattr(row, k):
@@ -412,17 +415,27 @@ async def test_global_setup(
     checks.append(await _ping("ANAF API Test", cfg.anaf_api_base_test))
     checks.append(await _ping("ANAF API Prod", cfg.anaf_api_base_prod))
 
-    # 3. Numar companii cu setari OAuth
-    rows = (await db.execute(select(AnafSettings))).scalars().all()
-    configured = sum(1 for s in rows if s.client_id and s.client_secret_enc and s.redirect_uri)
-    total = (
-        await db.execute(select(func.count(Company.id)).where(Company.is_deleted == False))
-    ).scalar_one()
-    checks.append(TestCheck(
-        name="Companii cu OAuth complet",
-        ok=configured > 0,
-        detail=f"{configured} din {int(total)} companii au client_id + secret + redirect setate.",
-    ))
+    # 3. OAuth global ANAF (aplicatie BerlinStar)
+    if cfg.oauth_client_id and cfg.oauth_client_secret_enc:
+        checks.append(TestCheck(
+            name="OAuth ANAF global",
+            ok=True,
+            detail="client_id + client_secret + redirect_uri setate global.",
+        ))
+    else:
+        missing: list[str] = []
+        if not cfg.oauth_client_id:
+            missing.append("client_id")
+        if not cfg.oauth_client_secret_enc:
+            missing.append("client_secret")
+        checks.append(TestCheck(
+            name="OAuth ANAF global",
+            ok=False,
+            detail=(
+                "Lipseste: " + ", ".join(missing) +
+                ". Configureaza in AdminV2 -> eFactura -> Configurare globala."
+            ),
+        ))
 
     # 4. Scheduler
     sched = efactura_scheduler.get_scheduler()

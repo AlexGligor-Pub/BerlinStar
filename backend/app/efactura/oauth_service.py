@@ -89,9 +89,23 @@ async def _get_company(db: AsyncSession, company_id: int) -> Company:
     return row
 
 
-async def _get_redirect_uri(db: AsyncSession, settings: AnafSettings) -> str:
+async def _get_redirect_uri(db: AsyncSession) -> str:
     cfg = await runtime_config.load(db)
-    return (settings.redirect_uri or cfg.default_redirect_uri).strip()
+    return cfg.default_redirect_uri.strip()
+
+
+async def _get_oauth_credentials(db: AsyncSession) -> tuple[str, str]:
+    """Returneaza (client_id, client_secret) globale ANAF, in clar.
+
+    Ridica AnafConfigError daca lipsesc.
+    """
+    cfg = await runtime_config.load(db)
+    if not cfg.oauth_client_id or not cfg.oauth_client_secret_enc:
+        raise AnafConfigError(
+            "OAuth ANAF nu este configurat global. Administratorul BerlinStar trebuie "
+            "sa seteze client_id si client_secret in AdminV2 -> eFactura -> Configurare globala."
+        )
+    return cfg.oauth_client_id, decrypt(cfg.oauth_client_secret_enc)
 
 
 # ---------- Public API ----------
@@ -101,19 +115,16 @@ async def build_authorize_url(db: AsyncSession, company_id: int) -> str:
     if not fernet_configured():
         raise AnafConfigError("Cheia Fernet nu este configurata. AdminV2 -> eFactura -> Configurare globala.")
 
-    settings = await _get_settings(db, company_id)
-    if not settings.client_id or not settings.client_secret_enc:
-        raise AnafConfigError(
-            "client_id si client_secret trebuie configurate inainte de Connect."
-        )
+    await _get_settings(db, company_id)  # asigura ca exista setari per-companie
+    client_id, _ = await _get_oauth_credentials(db)
 
     cfg = await runtime_config.load(db)
     state = _encode_state(company_id)
-    redirect_uri = await _get_redirect_uri(db, settings)
+    redirect_uri = await _get_redirect_uri(db)
 
     params = {
         "response_type": "code",
-        "client_id": settings.client_id,
+        "client_id": client_id,
         "redirect_uri": redirect_uri,
         "state": state,
         # ANAF nu cere scope explicit pentru e-Factura
@@ -125,14 +136,11 @@ async def build_authorize_url(db: AsyncSession, company_id: int) -> str:
 async def handle_callback(db: AsyncSession, code: str, state: str) -> AnafToken:
     """Schimba authorization code cu access+refresh tokens si le salveaza criptat."""
     company_id = _decode_state(state)
-    settings = await _get_settings(db, company_id)
+    await _get_settings(db, company_id)
     company = await _get_company(db, company_id)
 
-    if not settings.client_id or not settings.client_secret_enc:
-        raise AnafConfigError("Setari ANAF incomplete (client_id/secret).")
-
-    client_secret = decrypt(settings.client_secret_enc)
-    redirect_uri = await _get_redirect_uri(db, settings)
+    client_id, client_secret = await _get_oauth_credentials(db)
+    redirect_uri = await _get_redirect_uri(db)
     cfg = await runtime_config.load(db)
 
     async with httpx.AsyncClient(timeout=30.0) as http:
@@ -141,7 +149,7 @@ async def handle_callback(db: AsyncSession, code: str, state: str) -> AnafToken:
             data={
                 "grant_type": "authorization_code",
                 "code": code,
-                "client_id": settings.client_id,
+                "client_id": client_id,
                 "client_secret": client_secret,
                 "redirect_uri": redirect_uri,
                 "token_content_type": "jwt",
@@ -200,11 +208,7 @@ async def handle_callback(db: AsyncSession, code: str, state: str) -> AnafToken:
 
 async def _refresh_token(db: AsyncSession, token: AnafToken) -> AnafToken:
     """Cere un nou access_token folosind refresh_token-ul existent."""
-    settings = await _get_settings(db, token.company_id)
-    if not settings.client_id or not settings.client_secret_enc:
-        raise AnafConfigError("Setari ANAF incomplete pentru refresh.")
-
-    client_secret = decrypt(settings.client_secret_enc)
+    client_id, client_secret = await _get_oauth_credentials(db)
     refresh_token = decrypt(token.refresh_token_enc)
     cfg = await runtime_config.load(db)
 
@@ -214,7 +218,7 @@ async def _refresh_token(db: AsyncSession, token: AnafToken) -> AnafToken:
             data={
                 "grant_type": "refresh_token",
                 "refresh_token": refresh_token,
-                "client_id": settings.client_id,
+                "client_id": client_id,
                 "client_secret": client_secret,
                 "token_content_type": "jwt",
             },

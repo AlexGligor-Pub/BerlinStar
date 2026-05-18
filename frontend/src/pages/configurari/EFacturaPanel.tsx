@@ -18,15 +18,12 @@ interface AnafSettings {
   id: number;
   company_id: number;
   use_test_env: boolean;
-  client_id: string | null;
-  redirect_uri: string | null;
   payment_terms_days: number;
   default_invoice_type: "380" | "381" | "386" | "751";
   auto_upload: boolean;
   auto_upload_delay_minutes: number;
   deadline_alert_email: string | null;
   validate_schematron: boolean;
-  has_client_secret: boolean;
   last_sync_at: string | null;
 }
 
@@ -87,9 +84,9 @@ export default function EFacturaPanel() {
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.55">
         <p style="margin:0 0 6px;font-weight:600">Configurare RO e-Factura per companie</p>
         <p style="margin:0;color:var(--text-muted)">
-          Aici configurezi credențialele OAuth ANAF (client_id, client_secret) primite la înregistrarea aplicației pe
-          <a href="https://www.anaf.ro/InregOauth" target="_blank" rel="noopener" style="margin-left:4px">anaf.ro/InregOauth</a>
-          și conectezi compania la ANAF folosind USB-ul cu certificatul digital.
+          Credențialele OAuth ANAF (client_id, client_secret) sunt gestionate global de administratorul BerlinStar —
+          tu nu trebuie să te înregistrezi separat pe anaf.ro. Conectarea companiei la ANAF se face folosind
+          USB-ul cu certificatul digital al companiei.
         </p>
         <p style="margin:8px 0 0;color:var(--text-muted)">
           💡 <strong>USB necesar la primul connect și la fiecare 90 de zile.</strong> Refresh-ul automat al token-ului în
@@ -174,9 +171,6 @@ function CompanyCard(props: {
 function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) {
   const s = props.company.settings;
   const [useTestEnv, setUseTestEnv] = createSignal<boolean>(s?.use_test_env ?? true);
-  const [clientId, setClientId] = createSignal<string>(s?.client_id ?? "");
-  const [clientSecret, setClientSecret] = createSignal<string>("");
-  const [redirectUri, setRedirectUri] = createSignal<string>(s?.redirect_uri ?? "");
   const [paymentTermsDays, setPaymentTermsDays] = createSignal<number>(s?.payment_terms_days ?? 30);
   const [defaultInvoiceType, setDefaultInvoiceType] = createSignal<"380" | "381" | "386" | "751">(
     s?.default_invoice_type ?? "380"
@@ -192,22 +186,18 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
     try {
       const body: Record<string, unknown> = {
         use_test_env: useTestEnv(),
-        client_id: clientId() || null,
-        redirect_uri: redirectUri() || null,
         payment_terms_days: paymentTermsDays(),
         default_invoice_type: defaultInvoiceType(),
         auto_upload: autoUpload(),
         auto_upload_delay_minutes: autoUploadDelay(),
         deadline_alert_email: deadlineEmail() || null,
       };
-      if (clientSecret()) body.client_secret = clientSecret();
       const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/settings`, {
         method: "PATCH",
         body: JSON.stringify(body),
       });
       if (res.ok) {
         notify("Setări salvate.", "success");
-        setClientSecret("");
         props.onSaved();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -221,12 +211,6 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
   }
 
   async function connect() {
-    if (!clientId() || !props.company.settings?.has_client_secret) {
-      const ok = window.confirm(
-        "Asigură-te că ai salvat client_id și client_secret înainte de Connect.\n\nContinui oricum?"
-      );
-      if (!ok) return;
-    }
     try {
       const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/connect`, {
         method: "POST",
@@ -312,47 +296,6 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
             >
               🟢 Producție
             </button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">client_id OAuth ANAF</label>
-          <input
-            class="input"
-            type="text"
-            placeholder="primit la inregistrarea aplicatiei pe anaf.ro"
-            value={clientId()}
-            onInput={(e) => setClientId(e.currentTarget.value)}
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">
-            client_secret {props.company.settings?.has_client_secret && (
-              <span style="font-size:11px;color:var(--success);margin-left:6px">✓ setat</span>
-            )}
-          </label>
-          <input
-            class="input"
-            type="password"
-            placeholder={props.company.settings?.has_client_secret ? "•••••••• (lasa gol pentru a pastra)" : "client_secret"}
-            value={clientSecret()}
-            onInput={(e) => setClientSecret(e.currentTarget.value)}
-            autocomplete="new-password"
-          />
-        </div>
-
-        <div class="form-group">
-          <label class="form-label">redirect_uri</label>
-          <input
-            class="input"
-            type="text"
-            placeholder="https://app.berlinstar.ro/api/efactura/callback"
-            value={redirectUri()}
-            onInput={(e) => setRedirectUri(e.currentTarget.value)}
-          />
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-            Trebuie să fie identic cu cel înregistrat la ANAF pe contul OAuth.
           </div>
         </div>
 

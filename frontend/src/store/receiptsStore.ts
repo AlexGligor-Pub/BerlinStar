@@ -310,6 +310,25 @@ export async function updateMetodaPlata(id: string, metodaPlata: string | null, 
   localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 }
 
+export async function assignFacturaNumber(id: string, locationId: number): Promise<{ serie: string; nr: number }> {
+  const res = await apiFetch(`/api/receipts/${id}/assign-number`, {
+    method: "POST",
+    body: JSON.stringify({ doc_type: "factura", location_id: locationId }),
+  });
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  const data: { serie: string; nr: number } = await res.json();
+  const next = receipts().map((r) =>
+    r.id === id ? { ...r, facturaSerie: data.serie, facturaNr: data.nr } : r
+  );
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  return { serie: data.serie, nr: data.nr };
+}
+
 export async function deleteReceipt(id: string) {
   await apiFetch(`/api/receipts/${id}`, { method: "DELETE" });
   const updated = receipts().filter((r) => r.id !== id);

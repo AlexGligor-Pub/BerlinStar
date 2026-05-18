@@ -42,6 +42,8 @@ class ResolvedConfig:
     default_redirect_uri: str
     frontend_callback_redirect: str
     scheduler_enabled: bool
+    oauth_client_id: str | None
+    oauth_client_secret_enc: str | None
 
     def api_base(self, use_test: bool) -> str:
         return self.anaf_api_base_test if use_test else self.anaf_api_base_prod
@@ -63,6 +65,8 @@ def _resolve(row: EFacturaGlobalSettings | None) -> ResolvedConfig:
         default_redirect_uri=(row.default_redirect_uri if row else None) or os.getenv("ANAF_DEFAULT_REDIRECT_URI") or DEFAULT_REDIRECT_URI,
         frontend_callback_redirect=(row.frontend_callback_redirect if row else None) or os.getenv("ANAF_FRONTEND_CALLBACK_REDIRECT") or DEFAULT_FRONTEND_CALLBACK,
         scheduler_enabled=bool(row.scheduler_enabled if row else (os.getenv("EFACTURA_SCHEDULER_ENABLED") == "1")),
+        oauth_client_id=(row.oauth_client_id if row else None) or None,
+        oauth_client_secret_enc=(row.oauth_client_secret_enc if row else None) or None,
     )
 
 

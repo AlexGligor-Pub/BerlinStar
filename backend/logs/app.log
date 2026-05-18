@@ -6224,3 +6224,889 @@ smtp_password
 2026-05-18T13:28:53 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
 2026-05-18T13:28:53 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
 2026-05-18T13:28:53 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T13:38:30 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T13:38:30 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T13:38:30 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T13:40:13 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T13:40:13 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T13:40:14 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T13:40:14 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T13:40:14 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T13:40:14 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T13:40:14 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T13:40:14 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=67415aa3  ip=127.0.0.1
+2026-05-18T13:40:15 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=67415aa3  status=200  124.6ms
+2026-05-18T13:40:45 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=47f03d39  ip=127.0.0.1
+2026-05-18T13:40:46 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=26124ee4  ip=127.0.0.1
+2026-05-18T13:40:46 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=47f03d39  status=200  109.8ms
+2026-05-18T13:40:46 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=26124ee4  status=200  38.9ms
+2026-05-18T13:41:13 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T13:41:13 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T13:41:13 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T13:42:08 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T13:42:08 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T13:42:08 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T13:42:08 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T13:42:08 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T13:42:08 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T13:42:08 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T13:45:00 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=82d393e4  ip=127.0.0.1
+2026-05-18T13:45:00 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=82d393e4  status=200  212.2ms
+2026-05-18T13:45:57 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=1b911212  ip=127.0.0.1
+2026-05-18T13:45:57 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=1b911212  status=200  156.7ms
+2026-05-18T13:45:58 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=aaa3cdf4  ip=127.0.0.1
+2026-05-18T13:45:58 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=aaa3cdf4  status=200  12.0ms
+2026-05-18T13:46:00 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=60fd67d8  ip=127.0.0.1
+2026-05-18T13:46:00 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=60fd67d8  status=200  151.2ms
+2026-05-18T13:46:02 [INFO    ] berlinstar.http: → PATCH /api/general-settings  rid=733604b4  ip=127.0.0.1
+2026-05-18T13:46:02 [INFO    ] berlinstar.http: ← PATCH /api/general-settings  rid=733604b4  status=200  40.5ms
+2026-05-18T13:46:09 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=274210ca  ip=127.0.0.1
+2026-05-18T13:46:09 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=2ed242a8  ip=127.0.0.1
+2026-05-18T13:46:09 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=274210ca  status=200  9.8ms
+2026-05-18T13:46:09 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=2ed242a8  status=200  28.5ms
+2026-05-18T13:46:10 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=d19d5006  ip=127.0.0.1
+2026-05-18T13:46:10 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=d19d5006  status=200  4.0ms
+2026-05-18T13:46:11 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=10059fea  ip=127.0.0.1
+2026-05-18T13:46:11 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=10059fea  status=200  4.3ms
+2026-05-18T13:46:13 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=adeb486f  ip=127.0.0.1
+2026-05-18T13:46:13 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=adeb486f  status=200  7.2ms
+2026-05-18T13:46:28 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T13:46:28 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T13:46:28 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T13:55:59 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T13:55:59 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T13:55:59 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T13:55:59 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T13:55:59 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T13:55:59 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T13:55:59 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T13:55:59 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T13:55:59 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T13:55:59 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T13:57:52 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T13:57:52 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T13:57:52 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T13:57:52 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T13:57:52 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T13:57:52 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T13:57:52 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T13:57:52 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=526064e8  ip=127.0.0.1
+2026-05-18T13:57:52 [INFO    ] berlinstar.http: → GET /api/receipts  rid=c242d857  ip=127.0.0.1
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=ba94ba49  ip=127.0.0.1
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=36e9a944  ip=127.0.0.1
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=2ea20638  ip=127.0.0.1
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=ba94ba49  status=200  183.4ms
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=526064e8  status=200  391.0ms
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=36e9a944  status=200  245.8ms
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=2ea20638  status=200  196.6ms
+2026-05-18T13:57:53 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=c242d857  status=200  511.4ms
+2026-05-18T14:00:00 [INFO    ] apscheduler.executors.default: Running job "run_all (trigger: cron[day_of_week='mon-sat', hour='8-20/2', minute='0'], next run at: 2026-05-18 16:00:00 EEST)" (scheduled at 2026-05-18 14:00:00+03:00)
+2026-05-18T14:00:00 [INFO    ] berlinstar.reports: Raportul receipts_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T14:02:57 [INFO    ] berlinstar.reports: Raportul employee_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T14:05:53 [INFO    ] berlinstar.reports: Raportul cazari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T14:08:49 [INFO    ] berlinstar.reports: Raportul clients_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T14:11:45 [INFO    ] berlinstar.reports: Raportul programari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T14:12:16 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T14:12:16 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T14:12:16 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T14:12:16 [ERROR   ] apscheduler.executors.default: Job "run_all (trigger: cron[day_of_week='mon-sat', hour='8-20/2', minute='0'], next run at: 2026-05-18 16:00:00 EEST)" raised an exception
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/apscheduler/executors/base.py", line 181, in run_coroutine_job
+    retval = await job.func(*job.args, **job.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/reports/manager.py", line 281, in run_all
+    await asyncio.sleep(stagger_seconds)
+  File "/usr/lib/python3.12/asyncio/tasks.py", line 665, in sleep
+    return await future
+           ^^^^^^^^^^^^
+asyncio.exceptions.CancelledError
+2026-05-18T14:13:47 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T14:13:47 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T14:13:47 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T14:13:47 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T14:13:47 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T14:13:47 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T14:13:47 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T14:14:06 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=c5a523e7  ip=127.0.0.1
+2026-05-18T14:14:06 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=c5a523e7  status=200  55.8ms
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=364d71f7  ip=127.0.0.1
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: → GET /api/receipts  rid=078657f3  ip=127.0.0.1
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=b819a404  ip=127.0.0.1
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=b819a404  status=200  13.3ms
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=364d71f7  status=200  173.1ms
+2026-05-18T14:52:35 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=078657f3  status=200  136.7ms
+2026-05-18T14:53:10 [INFO    ] berlinstar.http: → GET /api/accounts  rid=dc26de63  ip=127.0.0.1
+2026-05-18T14:53:10 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=dc26de63  status=200  129.3ms
+2026-05-18T14:53:45 [INFO    ] berlinstar.http: → POST /api/admin/seed-demo  rid=149625b8  ip=127.0.0.1
+2026-05-18T14:53:58 [INFO    ] berlinstar: demo-seed: pornit pentru cont 'ProfessorPrimeDemo'
+2026-05-18T14:53:58 [INFO    ] berlinstar: demo-seed: master data OK
+2026-05-18T14:53:59 [INFO    ] berlinstar: demo-seed: 30/748 zile (4%), 1704 receipts
+2026-05-18T14:54:00 [INFO    ] berlinstar: demo-seed: 60/748 zile (8%), 3307 receipts
+2026-05-18T14:54:01 [INFO    ] berlinstar: demo-seed: 90/748 zile (12%), 4596 receipts
+2026-05-18T14:54:02 [INFO    ] berlinstar: demo-seed: 120/748 zile (16%), 6094 receipts
+2026-05-18T14:54:02 [INFO    ] berlinstar: demo-seed: 150/748 zile (20%), 7828 receipts
+2026-05-18T14:54:03 [INFO    ] berlinstar: demo-seed: 180/748 zile (24%), 9494 receipts
+2026-05-18T14:54:04 [INFO    ] berlinstar: demo-seed: 210/748 zile (28%), 11176 receipts
+2026-05-18T14:54:05 [INFO    ] berlinstar: demo-seed: 240/748 zile (32%), 12694 receipts
+2026-05-18T14:54:05 [INFO    ] berlinstar: demo-seed: 270/748 zile (36%), 13846 receipts
+2026-05-18T14:54:06 [INFO    ] berlinstar: demo-seed: 300/748 zile (40%), 15067 receipts
+2026-05-18T14:54:07 [INFO    ] berlinstar: demo-seed: 330/748 zile (44%), 16573 receipts
+2026-05-18T14:54:08 [INFO    ] berlinstar: demo-seed: 360/748 zile (48%), 18301 receipts
+2026-05-18T14:54:08 [INFO    ] berlinstar: demo-seed: 390/748 zile (52%), 19992 receipts
+2026-05-18T14:54:09 [INFO    ] berlinstar: demo-seed: 420/748 zile (56%), 21653 receipts
+2026-05-18T14:54:10 [INFO    ] berlinstar: demo-seed: 450/748 zile (60%), 23081 receipts
+2026-05-18T14:54:11 [INFO    ] berlinstar: demo-seed: 480/748 zile (64%), 24491 receipts
+2026-05-18T14:54:11 [INFO    ] berlinstar: demo-seed: 510/748 zile (68%), 26089 receipts
+2026-05-18T14:54:12 [INFO    ] berlinstar: demo-seed: 540/748 zile (72%), 27951 receipts
+2026-05-18T14:54:13 [INFO    ] berlinstar: demo-seed: 570/748 zile (76%), 29682 receipts
+2026-05-18T14:54:14 [INFO    ] berlinstar: demo-seed: 600/748 zile (80%), 31195 receipts
+2026-05-18T14:54:14 [INFO    ] berlinstar: demo-seed: 630/748 zile (84%), 32345 receipts
+2026-05-18T14:54:15 [INFO    ] berlinstar: demo-seed: 660/748 zile (88%), 33590 receipts
+2026-05-18T14:54:16 [INFO    ] berlinstar: demo-seed: 690/748 zile (92%), 35087 receipts
+2026-05-18T14:54:17 [INFO    ] berlinstar: demo-seed: 720/748 zile (96%), 36770 receipts
+2026-05-18T14:54:18 [ERROR   ] berlinstar: Demo seed failed admin_id=4
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/admin.py", line 124, in seed_demo
+    summary = await seed_demo_account(force=False)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 141, in seed_demo_account
+    await _generate_receipts(ctx)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 809, in _generate_receipts
+    await _persist_stock_cache(ctx)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 907, in _persist_stock_cache
+    await ctx.db.execute(stmt, updates[i:i+chunk])
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 190, in greenlet_spawn
+    result = context.switch(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/bulk_persistence.py", line 1629, in orm_execute_statement
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: bulk synchronize of persistent objects not supported when using bulk update with additional WHERE criteria right now.  add synchronize_session=None execution option to bypass synchronize of persistent objects.
+2026-05-18T14:54:19 [WARNING ] berlinstar.http: ← POST /api/admin/seed-demo  rid=149625b8  status=500  35036.6ms
+2026-05-18T14:56:01 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=51649818  ip=127.0.0.1
+2026-05-18T14:56:01 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=e7b38069  ip=127.0.0.1
+2026-05-18T14:56:01 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=51649818  status=200  138.4ms
+2026-05-18T14:56:01 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=e7b38069  status=200  19.9ms
+2026-05-18T14:56:16 [INFO    ] berlinstar.http: → POST /api/auth/reports/set-password  rid=8d03300a  ip=127.0.0.1
+2026-05-18T14:56:16 [INFO    ] berlinstar.http: ← POST /api/auth/reports/set-password  rid=8d03300a  status=200  234.7ms
+2026-05-18T14:56:29 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=d7e18e66  ip=127.0.0.1
+2026-05-18T14:56:29 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=d7e18e66  status=200  3.6ms
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: → POST /api/auth/reports/verify  rid=d2b73a38  ip=127.0.0.1
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: ← POST /api/auth/reports/verify  rid=d2b73a38  status=200  222.4ms
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: → GET /api/locations  rid=353aa805  ip=127.0.0.1
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: ← GET /api/locations  rid=353aa805  status=200  160.7ms
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: → GET /api/reports/produse-servicii  rid=1bac0a40  ip=127.0.0.1
+2026-05-18T14:56:35 [INFO    ] berlinstar.http: ← GET /api/reports/produse-servicii  rid=1bac0a40  status=200  126.1ms
+2026-05-18T14:56:39 [INFO    ] berlinstar.http: → GET /api/reports/contributii-angajati  rid=9b8b658f  ip=127.0.0.1
+2026-05-18T14:56:39 [INFO    ] berlinstar.http: ← GET /api/reports/contributii-angajati  rid=9b8b658f  status=200  19.3ms
+2026-05-18T14:56:52 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=1ac26608  ip=127.0.0.1
+2026-05-18T14:56:52 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=1ac26608  status=200  14.9ms
+2026-05-18T14:58:03 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T14:58:03 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T14:58:03 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T14:59:52 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T14:59:52 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T14:59:52 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T14:59:52 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T14:59:52 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T14:59:52 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T14:59:52 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T15:00:34 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=9e570adf  ip=127.0.0.1
+2026-05-18T15:00:34 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=9e570adf  status=200  175.4ms
+2026-05-18T15:04:44 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T15:04:44 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T15:04:44 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T15:06:20 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:06:20 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:06:20 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:06:20 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:06:20 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:09:42 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:09:42 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:09:42 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:09:42 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:09:42 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:14:38 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:14:38 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:14:38 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:14:38 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:14:38 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:25:55 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:25:55 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:25:55 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:25:55 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:25:55 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:29:01 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:29:01 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:29:01 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:29:01 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:29:01 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:40:10 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:40:10 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:40:10 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:40:10 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:40:10 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T15:51:34 [WARNING ] berlinstar: eFactura bootstrap esuat: (sqlalchemy.dialects.postgresql.asyncpg.ProgrammingError) <class 'asyncpg.exceptions.UndefinedColumnError'>: column efactura_global_settings.oauth_client_id does not exist
+[SQL: SELECT efactura_global_settings.id, efactura_global_settings.fernet_key, efactura_global_settings.anaf_auth_url, efactura_global_settings.anaf_token_url, efactura_global_settings.anaf_api_base_prod, efactura_global_settings.anaf_api_base_test, efactura_global_settings.default_redirect_uri, efactura_global_settings.frontend_callback_redirect, efactura_global_settings.oauth_client_id, efactura_global_settings.oauth_client_secret_enc, efactura_global_settings.scheduler_enabled, efactura_global_settings.created_at, efactura_global_settings.updated_at 
+FROM efactura_global_settings 
+ LIMIT $1::INTEGER]
+[parameters: (1,)]
+(Background on this error at: https://sqlalche.me/e/20/f405) — folosesc fallback env vars.
+2026-05-18T15:51:34 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T15:51:34 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T15:51:34 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T15:51:34 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T16:19:25 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T16:19:25 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T16:19:25 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T16:19:25 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T16:19:25 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T16:19:25 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T16:19:25 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T16:19:34 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=2630a8d6  ip=127.0.0.1
+2026-05-18T16:19:34 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=2630a8d6  status=200  174.2ms
+2026-05-18T16:19:34 [INFO    ] berlinstar.http: → GET /api/accounts  rid=a6690a3d  ip=127.0.0.1
+2026-05-18T16:19:35 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=a6690a3d  status=200  133.5ms
+2026-05-18T16:19:52 [INFO    ] berlinstar.http: → DELETE /api/admin/seed-demo  rid=f7006992  ip=127.0.0.1
+2026-05-18T16:31:57 [INFO    ] berlinstar.http: → GET /api/accounts  rid=d77006c7  ip=127.0.0.1
+2026-05-18T16:31:57 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=d77006c7  status=200  33.8ms
+2026-05-18T16:34:04 [INFO    ] berlinstar.http: → GET /api/accounts  rid=40e6c01a  ip=127.0.0.1
+2026-05-18T16:34:04 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=40e6c01a  status=200  2.7ms
+2026-05-18T16:37:09 [ERROR   ] berlinstar: Demo delete failed admin_id=4
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 550, in _prepare_and_execute
+    self._rows = deque(await prepared_stmt.fetch(*parameters))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 177, in fetch
+    data = await self.__bind_execute(args, 0, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 268, in __bind_execute
+    data, status, _ = await self.__do_execute(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/prepared_stmt.py", line 257, in __do_execute
+    return await executor(protocol)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "asyncpg/protocol/protocol.pyx", line 205, in bind_execute
+asyncpg.exceptions.ConnectionDoesNotExistError: connection was closed in the middle of operation
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+    self._adapt_connection.await_(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.Error: <class 'asyncpg.exceptions.ConnectionDoesNotExistError'>: connection was closed in the middle of operation
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/admin.py", line 168, in delete_demo
+    result = await delete_demo_account()
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/cleanup.py", line 67, in delete_demo_account
+    res = await db.execute(
+          ^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2258, in _execute_internal
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1419, in execute
+    return meth(
+           ^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/sql/elements.py", line 527, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 952, in do_execute
+    cursor.execute(statement, parameters)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 585, in execute
+    self._adapt_connection.await_(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 563, in _prepare_and_execute
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 513, in _handle_exception
+    self._adapt_connection._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.DBAPIError: (sqlalchemy.dialects.postgresql.asyncpg.Error) <class 'asyncpg.exceptions.ConnectionDoesNotExistError'>: connection was closed in the middle of operation
+[SQL: DELETE FROM receipts WHERE account_id = $1]
+[parameters: (12,)]
+(Background on this error at: https://sqlalche.me/e/20/dbapi)
+2026-05-18T16:37:10 [ERROR   ] berlinstar.http: !! DELETE /api/admin/seed-demo  rid=f7006992  1072806.9ms  UNHANDLED: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.rollback(): the underlying connection is closed
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 881, in rollback
+    self.await_(self._rollback_and_discard())
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 862, in _rollback_and_discard
+    await self._transaction.rollback()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connresource.py", line 19, in _check
+    self._check_conn_validity(meth.__name__)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/asyncpg/connresource.py", line 41, in _check_conn_validity
+    raise exceptions.InterfaceError(
+asyncpg.exceptions._base.InterfaceError: cannot call Transaction.rollback(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 887, in rollback
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.dialects.postgresql.asyncpg.AsyncAdapt_asyncpg_dbapi.InterfaceError: <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.rollback(): the underlying connection is closed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 116, in app
+    async with AsyncExitStack() as request_stack:
+  File "/usr/lib/python3.12/contextlib.py", line 754, in __aexit__
+    raise exc_details[1]
+  File "/usr/lib/python3.12/contextlib.py", line 737, in __aexit__
+    cb_suppress = await cb(*exc_details)
+                  ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/contextlib.py", line 231, in __aexit__
+    await self.gen.athrow(value)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/database.py", line 39, in get_db
+    async with AsyncSessionLocal() as session:
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 1071, in __aexit__
+    await asyncio.shield(task)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 1016, in close
+    await greenlet_spawn(self.sync_session.close)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2507, in close
+    self._close_impl(invalidate=False)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2576, in _close_impl
+    transaction.close(invalidate)
+  File "<string>", line 2, in close
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+                ^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 1417, in close
+    transaction.close()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2597, in close
+    self._do_close()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2735, in _do_close
+    self._close_impl()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2721, in _close_impl
+    self._connection_rollback_impl()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2713, in _connection_rollback_impl
+    self.connection._rollback_impl()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1130, in _rollback_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/engine/default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 887, in rollback
+    self._handle_exception(error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 797, in _handle_exception
+    raise translated_error from error
+sqlalchemy.exc.InterfaceError: (sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: cannot call Transaction.rollback(): the underlying connection is closed
+(Background on this error at: https://sqlalche.me/e/20/rvf5)
+2026-05-18T16:38:41 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T16:38:41 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T16:38:41 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T16:40:17 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T16:40:17 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T16:40:17 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T16:40:17 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T16:40:17 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T16:40:17 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T16:40:17 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T16:45:54 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=73f58c3b  ip=127.0.0.1
+2026-05-18T16:45:54 [INFO    ] berlinstar.http: → GET /api/accounts  rid=973a7f8f  ip=127.0.0.1
+2026-05-18T16:45:54 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=73f58c3b  status=200  294.9ms
+2026-05-18T16:45:54 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=973a7f8f  status=200  159.1ms
+2026-05-18T16:45:58 [INFO    ] berlinstar.http: → GET /api/global-settings/hotel-anvelope  rid=29f3aae0  ip=127.0.0.1
+2026-05-18T16:45:58 [INFO    ] berlinstar.http: ← GET /api/global-settings/hotel-anvelope  rid=29f3aae0  status=200  2.4ms
+2026-05-18T16:46:05 [INFO    ] berlinstar.http: → GET /api/global-settings/montare-roti  rid=876fbb51  ip=127.0.0.1
+2026-05-18T16:46:05 [INFO    ] berlinstar.http: ← GET /api/global-settings/montare-roti  rid=876fbb51  status=200  25.9ms
+2026-05-18T16:46:08 [INFO    ] berlinstar.http: → GET /api/email-settings/smtp  rid=5e8c8de0  ip=127.0.0.1
+2026-05-18T16:46:08 [ERROR   ] berlinstar.http: !! GET /api/email-settings/smtp  rid=5e8c8de0  112.9ms  UNHANDLED: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/middleware.py", line 29, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 168, in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/base.py", line 144, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 660, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 680, in app
+    await route.handle(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/routing.py", line 276, in handle
+    await self.app(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 674, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/fastapi/routing.py", line 328, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/email_settings.py", line 40, in get_smtp
+    data = SmtpSettingsRead.model_validate(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/pydantic/main.py", line 732, in model_validate
+    return cls.__pydantic_validator__.validate_python(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for SmtpSettingsRead
+smtp_password
+  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]
+    For further information visit https://errors.pydantic.dev/2.13/v/string_type
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=0b43fbed  ip=127.0.0.1
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=0b43fbed  status=200  13.3ms
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: → GET /api/email-settings/templates  rid=0b06f81b  ip=127.0.0.1
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: ← GET /api/email-settings/templates  rid=0b06f81b  status=200  14.5ms
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: → GET /api/accounts  rid=0a3e7ff0  ip=127.0.0.1
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=0a3e7ff0  status=200  3.1ms
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: → GET /api/email-settings/logs  rid=c3b1af48  ip=127.0.0.1
+2026-05-18T16:46:09 [INFO    ] berlinstar.http: ← GET /api/email-settings/logs  rid=c3b1af48  status=200  4.0ms
+2026-05-18T16:53:48 [INFO    ] berlinstar.http: → GET /api/accounts  rid=c8d2904b  ip=127.0.0.1
+2026-05-18T16:53:48 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=c8d2904b  status=200  25.1ms
+2026-05-18T16:53:57 [INFO    ] berlinstar.http: → POST /api/admin/accounts/12/impersonate  rid=9ee8fa87  ip=127.0.0.1
+2026-05-18T16:53:57 [WARNING ] berlinstar: Admin impersonation: admin_id=4 target_id=12 username=ProfessorPrimeDemo
+2026-05-18T16:53:57 [INFO    ] berlinstar.http: ← POST /api/admin/accounts/12/impersonate  rid=9ee8fa87  status=200  145.7ms
+2026-05-18T16:53:57 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=099b06dd  ip=127.0.0.1
+2026-05-18T16:53:57 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=099b06dd  status=200  106.3ms
+2026-05-18T16:53:58 [INFO    ] berlinstar.http: → GET /api/locations  rid=e82041f3  ip=127.0.0.1
+2026-05-18T16:53:58 [INFO    ] berlinstar.http: ← GET /api/locations  rid=e82041f3  status=200  140.4ms
+2026-05-18T16:53:58 [INFO    ] berlinstar.http: → GET /api/departments  rid=7c2669eb  ip=127.0.0.1
+2026-05-18T16:53:58 [INFO    ] berlinstar.http: → GET /api/items  rid=bdbd15fa  ip=127.0.0.1
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: → GET /api/employees  rid=4fb26ea8  ip=127.0.0.1
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=64bbf482  ip=127.0.0.1
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=64bbf482  status=200  132.9ms
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: ← GET /api/departments  rid=7c2669eb  status=200  532.3ms
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: ← GET /api/employees  rid=4fb26ea8  status=200  300.7ms
+2026-05-18T16:53:59 [INFO    ] berlinstar.http: ← GET /api/items  rid=bdbd15fa  status=200  443.9ms
+2026-05-18T16:54:01 [INFO    ] berlinstar.http: → POST /api/devices  rid=4cbf6745  ip=127.0.0.1
+2026-05-18T16:54:01 [INFO    ] berlinstar.http: ← POST /api/devices  rid=4cbf6745  status=201  153.2ms
+2026-05-18T16:54:19 [INFO    ] berlinstar.http: → GET /api/programari  rid=7f73be7b  ip=127.0.0.1
+2026-05-18T16:54:19 [INFO    ] berlinstar.http: ← GET /api/programari  rid=7f73be7b  status=200  142.0ms
+2026-05-18T16:54:20 [INFO    ] berlinstar.http: → GET /api/programari  rid=b6777c4e  ip=127.0.0.1
+2026-05-18T16:54:20 [INFO    ] berlinstar.http: ← GET /api/programari  rid=b6777c4e  status=200  18.3ms
+2026-05-18T16:54:21 [INFO    ] berlinstar.http: → GET /api/programari  rid=8288e8c6  ip=127.0.0.1
+2026-05-18T16:54:21 [INFO    ] berlinstar.http: ← GET /api/programari  rid=8288e8c6  status=200  22.2ms
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: → GET /api/programari  rid=24f3b1a2  ip=127.0.0.1
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: ← GET /api/programari  rid=24f3b1a2  status=200  3.6ms
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: → GET /api/programari  rid=350b85ae  ip=127.0.0.1
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: ← GET /api/programari  rid=350b85ae  status=200  3.4ms
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: → GET /api/programari  rid=f1210f76  ip=127.0.0.1
+2026-05-18T16:54:22 [INFO    ] berlinstar.http: ← GET /api/programari  rid=f1210f76  status=200  4.0ms
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: → GET /api/programari  rid=50f1920c  ip=127.0.0.1
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: ← GET /api/programari  rid=50f1920c  status=200  4.4ms
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: → GET /api/programari  rid=cdda4e7a  ip=127.0.0.1
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: ← GET /api/programari  rid=cdda4e7a  status=200  3.8ms
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: → GET /api/programari  rid=0291c02d  ip=127.0.0.1
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: ← GET /api/programari  rid=0291c02d  status=200  4.0ms
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: → GET /api/programari  rid=0be8e21f  ip=127.0.0.1
+2026-05-18T16:54:24 [INFO    ] berlinstar.http: ← GET /api/programari  rid=0be8e21f  status=200  4.2ms
+2026-05-18T16:54:26 [INFO    ] berlinstar.http: → GET /api/items  rid=24b5708f  ip=127.0.0.1
+2026-05-18T16:54:26 [INFO    ] berlinstar.http: ← GET /api/items  rid=24b5708f  status=200  16.5ms
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: → GET /api/employees  rid=b5d6d984  ip=127.0.0.1
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: → GET /api/departments  rid=29357bd5  ip=127.0.0.1
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: ← GET /api/departments  rid=29357bd5  status=200  8.2ms
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: ← GET /api/employees  rid=b5d6d984  status=200  13.6ms
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=f16b4323  ip=127.0.0.1
+2026-05-18T16:54:27 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=f16b4323  status=200  1.5ms
+2026-05-18T16:54:31 [INFO    ] berlinstar.http: → GET /api/clienti  rid=2fd466e0  ip=127.0.0.1
+2026-05-18T16:54:31 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=2fd466e0  status=200  110.0ms
+2026-05-18T16:54:44 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=99cbb63b  ip=127.0.0.1
+2026-05-18T16:54:45 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=99cbb63b  status=200  20.8ms
+2026-05-18T16:54:52 [INFO    ] berlinstar.http: → GET /api/clienti  rid=5014c69b  ip=127.0.0.1
+2026-05-18T16:54:52 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=5014c69b  status=200  6.1ms
+2026-05-18T16:54:59 [INFO    ] berlinstar.http: → GET /api/clienti  rid=cec61904  ip=127.0.0.1
+2026-05-18T16:54:59 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=cec61904  status=200  4.4ms
+2026-05-18T16:55:01 [INFO    ] berlinstar.http: → GET /api/clienti  rid=ac6c1a88  ip=127.0.0.1
+2026-05-18T16:55:01 [INFO    ] berlinstar.http: ← GET /api/clienti  rid=ac6c1a88  status=200  5.0ms
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: → GET /api/clienti/2850  rid=1bb6d69e  ip=127.0.0.1
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: → GET /api/clienti/2850/receipts-summary  rid=2829868d  ip=127.0.0.1
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: ← GET /api/clienti/2850  rid=1bb6d69e  status=200  22.5ms
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: ← GET /api/clienti/2850/receipts-summary  rid=2829868d  status=200  36.2ms
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: → GET /api/receipts  rid=92765388  ip=127.0.0.1
+2026-05-18T16:55:09 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=92765388  status=200  122.6ms
+2026-05-18T16:55:33 [INFO    ] berlinstar.http: → GET /api/items  rid=9fb3dd2c  ip=127.0.0.1
+2026-05-18T16:55:33 [INFO    ] berlinstar.http: ← GET /api/items  rid=9fb3dd2c  status=200  5.7ms
+2026-05-18T16:55:33 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=9308a556  ip=127.0.0.1
+2026-05-18T16:55:33 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=9308a556  status=200  1.3ms
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=f20d5b2d  ip=127.0.0.1
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: → GET /api/receipts  rid=ff71ad74  ip=127.0.0.1
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=b05b1681  ip=127.0.0.1
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=b05b1681  status=200  1.1ms
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=f20d5b2d  status=200  141.1ms
+2026-05-18T16:55:37 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=ff71ad74  status=200  37.6ms
+2026-05-18T16:56:05 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=a4167223  ip=127.0.0.1
+2026-05-18T16:56:05 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=c70ee157  ip=127.0.0.1
+2026-05-18T16:56:05 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=c70ee157  status=200  124.4ms
+2026-05-18T16:56:05 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=a4167223  status=200  249.4ms
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: → GET /api/items  rid=05bc1790  ip=127.0.0.1
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=e0593404  ip=127.0.0.1
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=e0593404  status=200  4.0ms
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: ← GET /api/items  rid=05bc1790  status=200  17.7ms
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=2d5cad29  ip=127.0.0.1
+2026-05-18T16:56:16 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=2d5cad29  status=200  0.7ms
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: → GET /api/receipts  rid=e9dde5f6  ip=127.0.0.1
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=0a864225  ip=127.0.0.1
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=0a864225  status=200  4.3ms
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=e9dde5f6  status=200  42.5ms
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=37b4048a  ip=127.0.0.1
+2026-05-18T16:56:21 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=37b4048a  status=200  0.7ms
+2026-05-18T16:56:25 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=441efb05  ip=127.0.0.1
+2026-05-18T16:56:25 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=5db98b2b  ip=127.0.0.1
+2026-05-18T16:56:25 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=441efb05  status=200  15.3ms
+2026-05-18T16:56:25 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=5db98b2b  status=200  18.2ms
+2026-05-18T16:56:29 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=2478c3d4  ip=127.0.0.1
+2026-05-18T16:56:29 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=183a9b29  ip=127.0.0.1
+2026-05-18T16:56:29 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=2478c3d4  status=200  10.2ms
+2026-05-18T16:56:29 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=183a9b29  status=200  10.9ms
+2026-05-18T16:56:32 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=8914bb17  ip=127.0.0.1
+2026-05-18T16:56:32 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=2c4520b5  ip=127.0.0.1
+2026-05-18T16:56:32 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=8914bb17  status=200  7.5ms
+2026-05-18T16:56:32 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=2c4520b5  status=200  5.4ms
+2026-05-18T16:57:05 [INFO    ] berlinstar.http: → GET /api/efactura/my-companies  rid=226a550a  ip=127.0.0.1
+2026-05-18T16:57:05 [INFO    ] berlinstar.http: ← GET /api/efactura/my-companies  rid=226a550a  status=200  148.6ms
+2026-05-18T16:57:14 [INFO    ] berlinstar.http: → GET /api/efactura/companies/15/received  rid=4ca433eb  ip=127.0.0.1
+2026-05-18T16:57:14 [INFO    ] berlinstar.http: ← GET /api/efactura/companies/15/received  rid=4ca433eb  status=200  18.2ms
+2026-05-18T17:02:15 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T17:02:15 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T17:02:15 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T17:04:06 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T17:04:06 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T17:04:06 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T17:04:06 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T17:04:06 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T17:04:06 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T17:04:06 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T17:04:06 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=efcf7f19  ip=127.0.0.1
+2026-05-18T17:04:06 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=efcf7f19  status=200  46.5ms
+2026-05-18T17:04:11 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T17:04:11 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T17:04:11 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T17:05:50 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T17:05:50 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T17:05:50 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T17:05:50 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T17:05:50 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T17:05:50 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T17:05:50 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T17:06:24 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=ea9df28d  ip=127.0.0.1
+2026-05-18T17:06:23 [WARNING ] berlinstar.http: ← POST /api/auth/login  rid=ea9df28d  status=401  296.4ms
+2026-05-18T17:06:48 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=2804fd6c  ip=127.0.0.1
+2026-05-18T17:06:49 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=2804fd6c  status=200  217.4ms
+2026-05-18T17:06:49 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=992f0292  ip=127.0.0.1
+2026-05-18T17:06:49 [INFO    ] berlinstar.http: → GET /api/locations  rid=443fa173  ip=127.0.0.1
+2026-05-18T17:06:49 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=992f0292  status=200  177.6ms
+2026-05-18T17:06:49 [INFO    ] berlinstar.http: ← GET /api/locations  rid=443fa173  status=200  155.9ms
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=01653a2e  ip=127.0.0.1
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: → GET /api/locations  rid=e336534d  ip=127.0.0.1
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=01653a2e  status=200  9.6ms
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: ← GET /api/locations  rid=e336534d  status=200  12.9ms
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: → POST /api/devices  rid=d188c702  ip=127.0.0.1
+2026-05-18T17:06:50 [INFO    ] berlinstar.http: → GET /api/items  rid=593f8cc3  ip=127.0.0.1
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: → GET /api/departments  rid=f356c32b  ip=127.0.0.1
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: → GET /api/employees  rid=d2111baa  ip=127.0.0.1
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: ← GET /api/departments  rid=f356c32b  status=200  155.2ms
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: ← GET /api/employees  rid=d2111baa  status=200  95.6ms
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: ← POST /api/devices  rid=d188c702  status=201  293.9ms
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: ← GET /api/items  rid=593f8cc3  status=200  245.3ms
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=4a6f66e5  ip=127.0.0.1
+2026-05-18T17:06:51 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=4a6f66e5  status=200  53.5ms
+2026-05-18T17:07:19 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=f6878521  ip=127.0.0.1
+2026-05-18T17:07:19 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=f6878521  status=200  63.0ms
+2026-05-18T17:07:20 [INFO    ] berlinstar.http: → GET /api/accounts  rid=ec2b3ced  ip=127.0.0.1
+2026-05-18T17:07:20 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=ec2b3ced  status=200  128.2ms
+2026-05-18T17:07:29 [INFO    ] berlinstar.http: → POST /api/admin/seed-demo  rid=6f94f329  ip=127.0.0.1
+2026-05-18T17:07:56 [INFO    ] berlinstar: demo-seed: pornit pentru cont 'ProfessorPrimeDemo'
+2026-05-18T17:07:56 [INFO    ] berlinstar: demo-seed: master data OK
+2026-05-18T17:07:56 [INFO    ] berlinstar: demo-seed: 30/748 zile (4%), 1704 receipts
+2026-05-18T17:07:57 [INFO    ] berlinstar: demo-seed: 60/748 zile (8%), 3307 receipts
+2026-05-18T17:07:58 [INFO    ] berlinstar: demo-seed: 90/748 zile (12%), 4596 receipts
+2026-05-18T17:07:59 [INFO    ] berlinstar: demo-seed: 120/748 zile (16%), 6094 receipts
+2026-05-18T17:07:59 [INFO    ] berlinstar: demo-seed: 150/748 zile (20%), 7828 receipts
+2026-05-18T17:08:00 [INFO    ] berlinstar: demo-seed: 180/748 zile (24%), 9494 receipts
+2026-05-18T17:08:01 [INFO    ] berlinstar: demo-seed: 210/748 zile (28%), 11176 receipts
+2026-05-18T17:08:02 [INFO    ] berlinstar: demo-seed: 240/748 zile (32%), 12694 receipts
+2026-05-18T17:08:02 [INFO    ] berlinstar: demo-seed: 270/748 zile (36%), 13846 receipts
+2026-05-18T17:08:05 [INFO    ] berlinstar: demo-seed: 300/748 zile (40%), 15067 receipts
+2026-05-18T17:08:07 [INFO    ] berlinstar: demo-seed: 330/748 zile (44%), 16573 receipts
+2026-05-18T17:08:08 [INFO    ] berlinstar: demo-seed: 360/748 zile (48%), 18301 receipts
+2026-05-18T17:08:09 [INFO    ] berlinstar: demo-seed: 390/748 zile (52%), 19992 receipts
+2026-05-18T17:08:10 [INFO    ] berlinstar: demo-seed: 420/748 zile (56%), 21653 receipts
+2026-05-18T17:08:12 [INFO    ] berlinstar: demo-seed: 450/748 zile (60%), 23081 receipts
+2026-05-18T17:08:13 [INFO    ] berlinstar: demo-seed: 480/748 zile (64%), 24491 receipts
+2026-05-18T17:08:14 [INFO    ] berlinstar: demo-seed: 510/748 zile (68%), 26089 receipts
+2026-05-18T17:08:15 [INFO    ] berlinstar: demo-seed: 540/748 zile (72%), 27951 receipts
+2026-05-18T17:08:17 [INFO    ] berlinstar: demo-seed: 570/748 zile (76%), 29682 receipts
+2026-05-18T17:08:18 [INFO    ] berlinstar: demo-seed: 600/748 zile (80%), 31195 receipts
+2026-05-18T17:08:19 [INFO    ] berlinstar: demo-seed: 630/748 zile (84%), 32345 receipts
+2026-05-18T17:08:20 [INFO    ] berlinstar: demo-seed: 660/748 zile (88%), 33590 receipts
+2026-05-18T17:08:21 [INFO    ] berlinstar: demo-seed: 690/748 zile (92%), 35087 receipts
+2026-05-18T17:08:23 [INFO    ] berlinstar: demo-seed: 720/748 zile (96%), 36770 receipts
+2026-05-18T17:08:24 [ERROR   ] berlinstar: Demo seed failed admin_id=4
+Traceback (most recent call last):
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/routers/admin.py", line 129, in seed_demo
+    summary = await seed_demo_account(force=False)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 141, in seed_demo_account
+    await _generate_receipts(ctx)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 809, in _generate_receipts
+    await _persist_stock_cache(ctx)
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/app/services/demo_seeder/seeder.py", line 908, in _persist_stock_cache
+    await ctx.db.execute(stmt, updates[i:i+chunk])
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/ext/asyncio/session.py", line 449, in execute
+    result = await greenlet_spawn(
+             ^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 190, in greenlet_spawn
+    result = context.switch(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2351, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/session.py", line 2249, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/bulk_persistence.py", line 1639, in orm_execute_statement
+    result = _bulk_update(
+             ^^^^^^^^^^^^^
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/bulk_persistence.py", line 357, in _bulk_update
+    persistence._emit_update_statements(
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 778, in _emit_update_statements
+    for (
+  File "/mnt/c/Users/dan-alexandru.gligor/berlinStar/BerlinStar/backend/venv/lib/python3.12/site-packages/sqlalchemy/orm/persistence.py", line 560, in _collect_update_commands
+    raise sa_exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: No primary key value supplied for column(s) stocks.id; per-row ORM Bulk UPDATE by Primary Key requires that records contain primary key values (Background on this error at: https://sqlalche.me/e/20/bupq)
+2026-05-18T17:08:25 [WARNING ] berlinstar.http: ← POST /api/admin/seed-demo  rid=6f94f329  status=500  57541.0ms
+2026-05-18T17:14:05 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T17:14:05 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T17:14:05 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T17:15:42 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T17:15:42 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T17:15:41 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T17:15:41 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T17:15:41 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T17:15:41 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T17:15:41 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T17:39:46 [INFO    ] berlinstar: BerlinStar POS API shutting down
+2026-05-18T17:39:46 [INFO    ] berlinstar.reports: Scheduler rapoarte oprit.
+2026-05-18T17:39:47 [INFO    ] apscheduler.scheduler: Scheduler has been shut down
+2026-05-18T17:43:01 [INFO    ] berlinstar: eFactura: config initializat (Fernet=set, scheduler=off, prod_url=https://api.anaf.ro/prod/FCTEL/rest)
+2026-05-18T17:43:01 [INFO    ] apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+2026-05-18T17:43:01 [INFO    ] apscheduler.scheduler: Added job "run_all" to job store "default"
+2026-05-18T17:43:01 [INFO    ] apscheduler.scheduler: Scheduler started
+2026-05-18T17:43:01 [INFO    ] berlinstar.reports: Scheduler rapoarte pornit (timezone=Europe/Bucharest). Job: luni-sambata 08:00-20:00 / 2h, stagger 180s intre rapoarte.
+2026-05-18T17:43:01 [INFO    ] berlinstar.efactura.scheduler: scheduler_enabled=false in efactura_global_settings — scheduler-ul NU porneste.
+2026-05-18T17:43:01 [INFO    ] berlinstar: BerlinStar POS API starting up
+2026-05-18T18:00:00 [INFO    ] apscheduler.executors.default: Running job "run_all (trigger: cron[day_of_week='mon-sat', hour='8-20/2', minute='0'], next run at: 2026-05-18 20:00:00 EEST)" (scheduled at 2026-05-18 18:00:00+03:00)
+2026-05-18T18:00:00 [INFO    ] berlinstar.reports: Raportul receipts_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:02:56 [INFO    ] berlinstar.reports: Raportul employee_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:05:53 [INFO    ] berlinstar.reports: Raportul cazari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:08:49 [INFO    ] berlinstar.reports: Raportul clients_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:11:47 [INFO    ] berlinstar.reports: Raportul programari_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:14:03 [INFO    ] berlinstar.http: → GET /api/accounts  rid=7bac812b  ip=127.0.0.1
+2026-05-18T18:14:03 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=7bac812b  status=200  352.5ms
+2026-05-18T18:14:43 [INFO    ] berlinstar.reports: Raportul stock_movements_daily nu are perioadă de procesat (mode=incremental).
+2026-05-18T18:14:43 [INFO    ] apscheduler.executors.default: Job "run_all (trigger: cron[day_of_week='mon-sat', hour='8-20/2', minute='0'], next run at: 2026-05-18 20:00:00 EEST)" executed successfully
+2026-05-18T18:15:26 [INFO    ] berlinstar.http: → GET /api/items  rid=e639635d  ip=127.0.0.1
+2026-05-18T18:15:26 [INFO    ] berlinstar.http: → GET /api/departments  rid=71b541fd  ip=127.0.0.1
+2026-05-18T18:15:26 [INFO    ] berlinstar.http: → GET /api/employees  rid=e4d26234  ip=127.0.0.1
+2026-05-18T18:15:27 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=5d3e2e22  ip=127.0.0.1
+2026-05-18T18:15:27 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=5d3e2e22  status=200  302.7ms
+2026-05-18T18:15:27 [INFO    ] berlinstar.http: ← GET /api/departments  rid=71b541fd  status=200  990.8ms
+2026-05-18T18:15:27 [INFO    ] berlinstar.http: ← GET /api/employees  rid=e4d26234  status=200  723.6ms
+2026-05-18T18:15:27 [INFO    ] berlinstar.http: ← GET /api/items  rid=e639635d  status=200  1281.3ms
+2026-05-18T18:15:41 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=8ed4a8c0  ip=127.0.0.1
+2026-05-18T18:15:42 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=8ed4a8c0  status=200  811.2ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=05160c18  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/locations  rid=9697693e  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/items  rid=906c6d52  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/departments  rid=d954a026  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/employees  rid=8d1ba867  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=d610f91d  ip=127.0.0.1
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=d610f91d  status=200  10.8ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=05160c18  status=200  397.8ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/employees  rid=8d1ba867  status=200  128.6ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/locations  rid=9697693e  status=200  387.6ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/departments  rid=d954a026  status=200  161.0ms
+2026-05-18T18:15:44 [INFO    ] berlinstar.http: ← GET /api/items  rid=906c6d52  status=200  204.0ms
+2026-05-18T18:15:48 [INFO    ] berlinstar.http: → POST /api/devices  rid=bef5c7ac  ip=127.0.0.1
+2026-05-18T18:15:48 [INFO    ] berlinstar.http: ← POST /api/devices  rid=bef5c7ac  status=201  386.3ms
+2026-05-18T18:16:08 [INFO    ] berlinstar.http: → GET /api/receipts  rid=2704e709  ip=127.0.0.1
+2026-05-18T18:16:08 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=ee60889c  ip=127.0.0.1
+2026-05-18T18:16:08 [INFO    ] berlinstar.http: → GET /api/receipts/events  rid=c7752ef4  ip=127.0.0.1
+2026-05-18T18:16:08 [INFO    ] berlinstar.http: ← GET /api/receipts/events  rid=c7752ef4  status=200  4.4ms
+2026-05-18T18:16:08 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=ee60889c  status=200  360.7ms
+2026-05-18T18:16:09 [INFO    ] berlinstar.http: ← GET /api/receipts  rid=2704e709  status=200  879.9ms
+2026-05-18T18:16:12 [INFO    ] berlinstar.http: → GET /api/montaj-roti  rid=9d258603  ip=127.0.0.1
+2026-05-18T18:16:12 [INFO    ] berlinstar.http: → GET /api/cazare-anvelope  rid=974dec0c  ip=127.0.0.1
+2026-05-18T18:16:13 [INFO    ] berlinstar.http: ← GET /api/cazare-anvelope  rid=974dec0c  status=200  285.8ms
+2026-05-18T18:16:13 [INFO    ] berlinstar.http: ← GET /api/montaj-roti  rid=9d258603  status=200  550.4ms
+2026-05-18T18:16:27 [INFO    ] berlinstar.http: → POST /api/auth/login  rid=a73a11f5  ip=127.0.0.1
+2026-05-18T18:16:27 [INFO    ] berlinstar.http: ← POST /api/auth/login  rid=a73a11f5  status=200  336.8ms
+2026-05-18T18:16:43 [INFO    ] berlinstar.http: → GET /api/general-settings  rid=090aaee1  ip=127.0.0.1
+2026-05-18T18:16:43 [INFO    ] berlinstar.http: ← GET /api/general-settings  rid=090aaee1  status=200  7.3ms
+2026-05-18T18:16:47 [INFO    ] berlinstar.http: → GET /api/auth/me  rid=e71a5e29  ip=127.0.0.1
+2026-05-18T18:16:47 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=7899b4ae  ip=127.0.0.1
+2026-05-18T18:16:47 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=7899b4ae  status=200  47.7ms
+2026-05-18T18:16:47 [INFO    ] berlinstar.http: ← GET /api/auth/me  rid=e71a5e29  status=200  81.1ms
+2026-05-18T18:16:55 [INFO    ] berlinstar.http: → POST /api/auth/reports/set-password  rid=1cb7add7  ip=127.0.0.1
+2026-05-18T18:16:55 [INFO    ] berlinstar.http: ← POST /api/auth/reports/set-password  rid=1cb7add7  status=200  405.6ms
+2026-05-18T18:18:05 [INFO    ] berlinstar.http: → GET /api/auth/reports/status  rid=b680947a  ip=127.0.0.1
+2026-05-18T18:18:05 [INFO    ] berlinstar.http: ← GET /api/auth/reports/status  rid=b680947a  status=200  8.7ms
+2026-05-18T18:18:10 [INFO    ] berlinstar.http: → POST /api/auth/reports/verify  rid=a3d2fb2d  ip=127.0.0.1
+2026-05-18T18:18:11 [INFO    ] berlinstar.http: ← POST /api/auth/reports/verify  rid=a3d2fb2d  status=200  391.9ms
+2026-05-18T18:18:11 [INFO    ] berlinstar.http: → GET /api/reports/contributii-angajati  rid=18a24d1c  ip=127.0.0.1
+2026-05-18T18:18:11 [INFO    ] berlinstar.http: ← GET /api/reports/contributii-angajati  rid=18a24d1c  status=200  250.4ms
+2026-05-18T18:18:18 [INFO    ] berlinstar.http: → GET /api/reports/locatii  rid=007fb4f8  ip=127.0.0.1
+2026-05-18T18:18:18 [INFO    ] berlinstar.http: → GET /api/locations  rid=a5a1a3a4  ip=127.0.0.1
+2026-05-18T18:18:18 [INFO    ] berlinstar.http: ← GET /api/locations  rid=a5a1a3a4  status=200  33.1ms
+2026-05-18T18:18:18 [INFO    ] berlinstar.http: ← GET /api/reports/locatii  rid=007fb4f8  status=200  100.7ms
+2026-05-18T18:18:22 [INFO    ] berlinstar.http: → GET /api/reports/locatii-yoy  rid=6003d309  ip=127.0.0.1
+2026-05-18T18:18:22 [INFO    ] berlinstar.http: ← GET /api/reports/locatii-yoy  rid=6003d309  status=200  56.4ms
+2026-05-18T18:18:58 [INFO    ] berlinstar.http: → POST /api/admin/verify  rid=e434a10a  ip=127.0.0.1
+2026-05-18T18:18:59 [INFO    ] berlinstar.http: ← POST /api/admin/verify  rid=e434a10a  status=200  161.4ms
+2026-05-18T18:18:59 [INFO    ] berlinstar.http: → GET /api/accounts  rid=72605730  ip=127.0.0.1
+2026-05-18T18:18:59 [INFO    ] berlinstar.http: ← GET /api/accounts  rid=72605730  status=200  7.6ms
+2026-05-18T18:19:03 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=4bc9f330  ip=127.0.0.1
+2026-05-18T18:19:04 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=4bc9f330  status=200  296.2ms
+2026-05-18T18:19:13 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=ba45bccb  ip=127.0.0.1
+2026-05-18T18:19:13 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=ba45bccb  status=200  22.8ms
+2026-05-18T18:19:23 [INFO    ] berlinstar.http: → GET /api/admin/reports  rid=d4ca5d08  ip=127.0.0.1
+2026-05-18T18:19:23 [INFO    ] berlinstar.http: ← GET /api/admin/reports  rid=d4ca5d08  status=200  9.5ms

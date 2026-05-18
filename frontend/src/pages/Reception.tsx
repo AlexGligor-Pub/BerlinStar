@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow, CazareSection } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
@@ -584,6 +584,21 @@ function ReceiptCard(props: { receipt: Receipt }) {
   }
 
 
+  async function handleFactureaza() {
+    setDocError(null);
+    const locationId = device()?.locationId;
+    if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
+    if (!window.confirm(`Generezi factura din devizul D${r.devizSerie}${r.devizNr}?\n\nDupă confirmare, se va aloca un număr de factură din registru (acțiunea nu este reversibilă).`)) return;
+    setDocLoading("factureaza");
+    try {
+      await assignFacturaNumber(r.id, locationId);
+    } catch (e: any) {
+      setDocError(e?.message ?? "Eroare la alocarea numărului de factură.");
+    } finally {
+      setDocLoading(null);
+    }
+  }
+
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta" | "deviz_operatii") {
     setDocError(null);
     const locationId = device()?.locationId;
@@ -808,6 +823,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 {docLoading() === "deviz_operatii" ? "..." : "Deviz + Op."}
               </button>
               <Show when={generalSettings()?.useFactura !== false}>
+                <Show when={r.devizNr > 0 && r.facturaNr === 0}>
+                  <button
+                    class="btn btn-primary btn-sm"
+                    disabled={docLoading() !== null}
+                    onClick={handleFactureaza}
+                    title="Alocă număr de factură pe baza devizului existent"
+                  >
+                    {docLoading() === "factureaza" ? "..." : "Facturează"}
+                  </button>
+                </Show>
                 <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
                   {docLoading() === "factura" ? "..." : "Factura"}
                 </button>

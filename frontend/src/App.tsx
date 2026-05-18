@@ -23,6 +23,7 @@ const Programari = lazy(() => import("./pages/Programari"));
 const NoAccess = lazy(() => import("./pages/NoAccess"));
 const AdminV2 = lazy(() => import("./pages/AdminV2"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
+const EFacturaPrimite = lazy(() => import("./pages/EFacturaPrimite"));
 
 function PageSuspense(props: { children: any }) {
   return (
@@ -101,6 +102,11 @@ export default function App() {
         <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
         <Route path="/programari" component={() => <Protected component={Programari} />} />
         <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
+        <Route path="/efactura-primite" component={() => (
+          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+            <Protected component={EFacturaPrimite} />
+          </Show>
+        )} />
       </Router>
     </AppErrorBoundary>
   );

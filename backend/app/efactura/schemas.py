@@ -11,8 +11,6 @@ from pydantic import BaseModel, Field
 
 class AnafSettingsBase(BaseModel):
     use_test_env: bool = True
-    client_id: str | None = None
-    redirect_uri: str | None = None
     payment_terms_days: int = Field(default=30, ge=0, le=365)
     default_invoice_type: Literal["380", "381", "386", "751"] = "380"
     auto_upload: bool = False
@@ -24,7 +22,6 @@ class AnafSettingsBase(BaseModel):
 class AnafSettingsOut(AnafSettingsBase):
     id: int
     company_id: int
-    has_client_secret: bool = False
     last_sync_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -32,9 +29,6 @@ class AnafSettingsOut(AnafSettingsBase):
 
 class AnafSettingsUpdate(BaseModel):
     use_test_env: bool | None = None
-    client_id: str | None = None
-    client_secret: str | None = None  # plain — server criptează
-    redirect_uri: str | None = None
     payment_terms_days: int | None = None
     default_invoice_type: Literal["380", "381", "386", "751"] | None = None
     auto_upload: bool | None = None
@@ -128,6 +122,8 @@ class EFacturaGlobalSettingsOut(BaseModel):
     frontend_callback_redirect: str
     scheduler_enabled: bool
     scheduler_running: bool = False
+    oauth_client_id: str | None = None
+    has_oauth_client_secret: bool = False
     updated_at: datetime | None = None
 
 
@@ -140,6 +136,8 @@ class EFacturaGlobalSettingsUpdate(BaseModel):
     default_redirect_uri: str | None = None
     frontend_callback_redirect: str | None = None
     scheduler_enabled: bool | None = None
+    oauth_client_id: str | None = None
+    oauth_client_secret: str | None = None  # plain — server cripteaza
 
 
 class TestCheck(BaseModel):

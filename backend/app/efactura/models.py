@@ -27,9 +27,6 @@ class AnafSettings(Base):
         Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, unique=True
     )
     use_test_env: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    client_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    redirect_uri: Mapped[str | None] = mapped_column(String(500), nullable=True)
     payment_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     default_invoice_type: Mapped[str] = mapped_column(String(5), nullable=False, default="380")
     auto_upload: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -134,6 +131,11 @@ class EFacturaGlobalSettings(Base):
         String(500), nullable=False,
         default="http://localhost:2000/adminv2?section=efactura",
     )
+    # OAuth ANAF credentials — globale pentru toata platforma BerlinStar.
+    # BerlinStar se inregistreaza O DATA la https://www.anaf.ro/InregOauth si
+    # toate companiile clientilor folosesc aceste credentiale.
+    oauth_client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    oauth_client_secret_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     scheduler_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

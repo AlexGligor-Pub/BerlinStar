@@ -12,13 +12,22 @@ export function fmtMoneyInt(n: number): string {
   return Math.round(n).toLocaleString("ro-RO", { maximumFractionDigits: 0 });
 }
 
+export function toLocalISO(d: Date): string {
+  // YYYY-MM-DD in fusul orar local — evita ofsetul UTC din toISOString()
+  // care, in Romania (UTC+2/+3), face ca "azi" la 01:00 noaptea sa devina "ieri".
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function firstOfMonthISO(): string {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return toLocalISO(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalISO(new Date());
 }
 
 export function fmtRoDate(iso: string): string {

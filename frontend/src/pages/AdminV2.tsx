@@ -10,8 +10,9 @@ import EmailSection from "./adminv2/EmailSection";
 import ReportsSection from "./adminv2/ReportsSection";
 import EFacturaSection from "./adminv2/EFacturaSection";
 import LegacyImportSection from "./adminv2/LegacyImportSection";
+import DemoSeedSection from "./adminv2/DemoSeedSection";
 
-type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "import-legacy";
+type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "import-legacy" | "demo-seed";
 
 const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: "conturi", label: "Conturi", icon: "👥" },
@@ -21,6 +22,7 @@ const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: "rapoarte", label: "Rapoarte", icon: "📊" },
   { id: "efactura", label: "eFactura ANAF", icon: "📄" },
   { id: "import-legacy", label: "Import Legacy", icon: "🗃️" },
+  { id: "demo-seed", label: "Demo Seeder", icon: "🌱" },
 ];
 
 // La mount, daca avem un token persistat valid (<24h) sarim peste ecranul de logare.
@@ -192,6 +194,9 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "import-legacy"}>
               <LegacyImportSection />
+            </Show>
+            <Show when={section() === "demo-seed"}>
+              <DemoSeedSection />
             </Show>
           </main>
         </div>

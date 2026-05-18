@@ -18,15 +18,12 @@ interface AnafSettings {
   id: number;
   company_id: number;
   use_test_env: boolean;
-  client_id: string | null;
-  redirect_uri: string | null;
   payment_terms_days: number;
   default_invoice_type: "380" | "381" | "386" | "751";
   auto_upload: boolean;
   auto_upload_delay_minutes: number;
   deadline_alert_email: string | null;
   validate_schematron: boolean;
-  has_client_secret: boolean;
   last_sync_at: string | null;
 }
 
@@ -184,6 +181,8 @@ interface GlobalSettings {
   frontend_callback_redirect: string;
   scheduler_enabled: boolean;
   scheduler_running: boolean;
+  oauth_client_id: string | null;
+  has_oauth_client_secret: boolean;
   updated_at: string | null;
 }
 
@@ -215,6 +214,8 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
   const [redirectUri, setRedirectUri] = createSignal("");
   const [frontendCallback, setFrontendCallback] = createSignal("");
   const [schedulerEnabled, setSchedulerEnabled] = createSignal(false);
+  const [oauthClientId, setOauthClientId] = createSignal("");
+  const [oauthClientSecret, setOauthClientSecret] = createSignal("");
 
   async function loadGlobal() {
     setLoadingGs(true);
@@ -233,6 +234,8 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
       setRedirectUri(data.default_redirect_uri);
       setFrontendCallback(data.frontend_callback_redirect);
       setSchedulerEnabled(data.scheduler_enabled);
+      setOauthClientId(data.oauth_client_id ?? "");
+      setOauthClientSecret("");
       setFernetKey("");
     } catch {
       notify("Eroare de rețea la încărcarea setărilor.", "error");
@@ -254,7 +257,9 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
         default_redirect_uri: redirectUri(),
         frontend_callback_redirect: frontendCallback(),
         scheduler_enabled: schedulerEnabled(),
+        oauth_client_id: oauthClientId() || null,
       };
+      if (oauthClientSecret()) body.oauth_client_secret = oauthClientSecret();
       const fk = fernetKey().trim();
       if (fk) body.fernet_key = fk;
       const res = await adminFetch("/api/admin/efactura/global", {
@@ -432,7 +437,7 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
             <div class="account-card" style="padding:14px 16px;margin-bottom:14px">
               <h3 style="margin:0 0 10px;font-size:14px">🌐 URL-uri redirect</h3>
               <div class="form-group">
-                <label class="form-label">Default redirect URI (callback ANAF)</label>
+                <label class="form-label">redirect_uri OAuth ANAF (global)</label>
                 <input
                   class="input"
                   type="text"
@@ -441,7 +446,7 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
                   placeholder="https://app.berlinstar.ro/api/efactura/callback"
                 />
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-                  Se folosește dacă o companie nu are propriul redirect_uri setat.
+                  Trebuie să fie identic cu cel înregistrat la ANAF pe contul OAuth al BerlinStar.
                 </div>
               </div>
               <div class="form-group" style="margin-top:8px">
@@ -453,6 +458,44 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
                   onInput={(e) => setFrontendCallback(e.currentTarget.value)}
                   placeholder="http://localhost:2000/adminv2?section=efactura"
                 />
+              </div>
+            </div>
+
+            {/* OAuth ANAF (aplicatie BerlinStar) */}
+            <div class="account-card" style="padding:14px 16px;margin-bottom:14px">
+              <h3 style="margin:0 0 10px;font-size:14px">🔑 OAuth ANAF (aplicație BerlinStar)</h3>
+              <p style="margin:0 0 10px;font-size:12px;color:var(--text-muted)">
+                Credențialele OAuth obținute la înregistrarea BerlinStar pe
+                <a href="https://www.anaf.ro/InregOauth" target="_blank" rel="noopener" style="margin-left:4px">anaf.ro/InregOauth</a>.
+                Sunt globale — toate companiile clienților folosesc aceleași credențiale.
+              </p>
+              <div class="form-group">
+                <label class="form-label">oauth_client_id</label>
+                <input
+                  class="input"
+                  type="text"
+                  placeholder="ex. 6f8a..."
+                  value={oauthClientId()}
+                  onInput={(e) => setOauthClientId(e.currentTarget.value)}
+                />
+              </div>
+              <div class="form-group" style="margin-top:8px">
+                <label class="form-label">
+                  oauth_client_secret {gs()?.has_oauth_client_secret && (
+                    <span style="font-size:11px;color:var(--success);margin-left:6px">✓ setat</span>
+                  )}
+                </label>
+                <input
+                  class="input"
+                  type="password"
+                  placeholder={gs()?.has_oauth_client_secret ? "•••••••• (lasă gol pentru a păstra)" : "client_secret"}
+                  value={oauthClientSecret()}
+                  onInput={(e) => setOauthClientSecret(e.currentTarget.value)}
+                  autocomplete="new-password"
+                />
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                  Criptat cu Fernet la salvare. Necesită cheie Fernet configurată mai sus.
+                </div>
               </div>
             </div>
 
@@ -638,9 +681,6 @@ function CompanyCard(props: {
 function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) {
   const s = props.company.settings;
   const [useTestEnv, setUseTestEnv] = createSignal<boolean>(s?.use_test_env ?? true);
-  const [clientId, setClientId] = createSignal<string>(s?.client_id ?? "");
-  const [clientSecret, setClientSecret] = createSignal<string>("");
-  const [redirectUri, setRedirectUri] = createSignal<string>(s?.redirect_uri ?? "");
   const [paymentTermsDays, setPaymentTermsDays] = createSignal<number>(s?.payment_terms_days ?? 30);
   const [defaultInvoiceType, setDefaultInvoiceType] = createSignal<"380" | "381" | "386" | "751">(
     s?.default_invoice_type ?? "380"
@@ -656,8 +696,6 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
     try {
       const body: Record<string, unknown> = {
         use_test_env: useTestEnv(),
-        client_id: clientId() || null,
-        redirect_uri: redirectUri() || null,
         payment_terms_days: paymentTermsDays(),
         default_invoice_type: defaultInvoiceType(),
         auto_upload: autoUpload(),
@@ -665,14 +703,12 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
         deadline_alert_email: deadlineEmail() || null,
         validate_schematron: validateSchematron(),
       };
-      if (clientSecret()) body.client_secret = clientSecret();
       const res = await adminFetch(
         `/api/admin/efactura/companies/${props.company.company_id}/settings`,
         { method: "PATCH", body: JSON.stringify(body) }
       );
       if (res.ok) {
         notify("Setări ANAF salvate.", "success");
-        setClientSecret("");
         props.onSaved();
       } else {
         const d = await res.json().catch(() => ({}));
@@ -762,42 +798,6 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
             🟢 Producție
           </button>
         </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">client_id (OAuth ANAF)</label>
-        <input
-          class="input"
-          type="text"
-          placeholder="ex. 6f8a..."
-          value={clientId()}
-          onInput={(e) => setClientId(e.currentTarget.value)}
-        />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">
-          client_secret {props.company.settings?.has_client_secret && <span style="font-size:11px;color:var(--success)">(setat)</span>}
-        </label>
-        <input
-          class="input"
-          type="password"
-          placeholder={props.company.settings?.has_client_secret ? "•••••••• (lasă gol pentru a păstra)" : "introdu secret-ul"}
-          value={clientSecret()}
-          onInput={(e) => setClientSecret(e.currentTarget.value)}
-          autocomplete="new-password"
-        />
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">redirect_uri</label>
-        <input
-          class="input"
-          type="text"
-          placeholder="https://app.berlinstar.ro/api/efactura/callback"
-          value={redirectUri()}
-          onInput={(e) => setRedirectUri(e.currentTarget.value)}
-        />
       </div>
 
       <div class="form-group">

@@ -208,6 +208,200 @@ async def reports_locatii(
     )
 
 
+class YoYMonthBucket(BaseModel):
+    month: int  # 1..12
+    value_a: Decimal
+    value_b: Decimal
+    delta_abs: Decimal
+    delta_pct: float | None
+
+
+class YoYQuarterBucket(BaseModel):
+    quarter: int  # 1..4
+    value_a: Decimal
+    value_b: Decimal
+    delta_abs: Decimal
+    delta_pct: float | None
+
+
+class YoYLocationBucket(BaseModel):
+    location_id: int | None
+    location_name: str
+    value_a: Decimal
+    value_b: Decimal
+    delta_abs: Decimal
+    delta_pct: float | None
+
+
+class YoYSummary(BaseModel):
+    year_a: int
+    year_b: int
+    metric: str  # "sum_total" | "sum_paid" | "count_total"
+    total_a: Decimal
+    total_b: Decimal
+    delta_abs: Decimal
+    delta_pct: float | None
+    monthly: list[YoYMonthBucket]
+    quarterly: list[YoYQuarterBucket]
+    per_location: list[YoYLocationBucket]
+
+
+_YOY_METRIC_COLS = {
+    "sum_total": "sum_total",
+    "sum_paid": "sum_paid",
+    "count_total": "count_total",
+}
+
+
+def _yoy_delta_pct(a: Decimal, b: Decimal) -> float | None:
+    """Procentul de creștere de la B (referință) la A. None dacă B=0."""
+    if b == 0:
+        return None
+    return float((a - b) / b * 100)
+
+
+@router.get("/locatii-yoy", response_model=YoYSummary)
+async def reports_locatii_yoy(
+    year_a: int = Query(..., ge=2000, le=2100),
+    year_b: int = Query(..., ge=2000, le=2100),
+    metric: str = Query("sum_total"),
+    location_ids: list[int] | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Comparare Year-over-Year per locație: defalcare lunară, trimestrială și
+    per locație pentru două ani aleși (year_a = anul curent, year_b = referință).
+
+    Parametri:
+    - year_a: anul afișat ca „referință curentă" (de obicei anul curent)
+    - year_b: anul față de care se face comparația (de obicei anul trecut)
+    - metric: ce agregăm — `sum_total` (default), `sum_paid` sau `count_total`
+    - location_ids: filtru opțional pe locații
+    """
+    metric_col = _YOY_METRIC_COLS.get(metric)
+    if metric_col is None:
+        metric = "sum_total"
+        metric_col = "sum_total"
+
+    params: dict = {
+        "acc": account_id,
+        "ya": year_a,
+        "yb": year_b,
+    }
+    loc_filter = ""
+    if location_ids:
+        params["loc_ids"] = list(location_ids)
+        loc_filter = "AND location_id = ANY(:loc_ids)"
+
+    # Monthly: 12 luni × 2 ani
+    monthly_rows = (await db.execute(
+        text(f"""
+            SELECT EXTRACT(MONTH FROM report_date)::int AS m,
+                   EXTRACT(YEAR  FROM report_date)::int AS y,
+                   COALESCE(SUM({metric_col}), 0) AS v
+            FROM report_receipts_daily
+            WHERE account_id = :acc
+              AND EXTRACT(YEAR FROM report_date) IN (:ya, :yb)
+              {loc_filter}
+            GROUP BY m, y
+        """),
+        params,
+    )).all()
+
+    monthly_map_a: dict[int, Decimal] = {}
+    monthly_map_b: dict[int, Decimal] = {}
+    for r in monthly_rows:
+        if r.y == year_a:
+            monthly_map_a[r.m] = r.v or Decimal("0")
+        elif r.y == year_b:
+            monthly_map_b[r.m] = r.v or Decimal("0")
+
+    monthly: list[YoYMonthBucket] = []
+    for mo in range(1, 13):
+        a = monthly_map_a.get(mo, Decimal("0"))
+        b = monthly_map_b.get(mo, Decimal("0"))
+        monthly.append(YoYMonthBucket(
+            month=mo,
+            value_a=a,
+            value_b=b,
+            delta_abs=a - b,
+            delta_pct=_yoy_delta_pct(a, b),
+        ))
+
+    # Quarterly = agregat din monthly (1..3=Q1, etc.)
+    quarterly: list[YoYQuarterBucket] = []
+    for q in range(1, 5):
+        months_in_q = range((q - 1) * 3 + 1, q * 3 + 1)
+        a = sum((monthly_map_a.get(m, Decimal("0")) for m in months_in_q), Decimal("0"))
+        b = sum((monthly_map_b.get(m, Decimal("0")) for m in months_in_q), Decimal("0"))
+        quarterly.append(YoYQuarterBucket(
+            quarter=q,
+            value_a=a,
+            value_b=b,
+            delta_abs=a - b,
+            delta_pct=_yoy_delta_pct(a, b),
+        ))
+
+    # Per location: total an A vs total an B
+    loc_rows = (await db.execute(
+        text(f"""
+            SELECT r.location_id,
+                   COALESCE(l.name, 'Fără locație') AS location_name,
+                   EXTRACT(YEAR FROM r.report_date)::int AS y,
+                   COALESCE(SUM(r.{metric_col}), 0) AS v
+            FROM report_receipts_daily r
+            LEFT JOIN locations l ON l.id = r.location_id
+            WHERE r.account_id = :acc
+              AND EXTRACT(YEAR FROM r.report_date) IN (:ya, :yb)
+              {('AND r.location_id = ANY(:loc_ids)') if location_ids else ''}
+            GROUP BY r.location_id, l.name, y
+        """),
+        params,
+    )).all()
+
+    loc_agg: dict[int | None, dict] = {}
+    for r in loc_rows:
+        slot = loc_agg.setdefault(
+            r.location_id,
+            {"name": r.location_name or "Fără locație", "a": Decimal("0"), "b": Decimal("0")},
+        )
+        if r.y == year_a:
+            slot["a"] = (slot["a"] or Decimal("0")) + (r.v or Decimal("0"))
+        elif r.y == year_b:
+            slot["b"] = (slot["b"] or Decimal("0")) + (r.v or Decimal("0"))
+
+    per_location: list[YoYLocationBucket] = []
+    for loc_id, slot in loc_agg.items():
+        a = slot["a"]
+        b = slot["b"]
+        per_location.append(YoYLocationBucket(
+            location_id=loc_id,
+            location_name=slot["name"],
+            value_a=a,
+            value_b=b,
+            delta_abs=a - b,
+            delta_pct=_yoy_delta_pct(a, b),
+        ))
+    # Sortăm descrescător după valoarea anului A
+    per_location.sort(key=lambda x: x.value_a, reverse=True)
+
+    total_a = sum((m.value_a for m in monthly), Decimal("0"))
+    total_b = sum((m.value_b for m in monthly), Decimal("0"))
+
+    return YoYSummary(
+        year_a=year_a,
+        year_b=year_b,
+        metric=metric,
+        total_a=total_a,
+        total_b=total_b,
+        delta_abs=total_a - total_b,
+        delta_pct=_yoy_delta_pct(total_a, total_b),
+        monthly=monthly,
+        quarterly=quarterly,
+        per_location=per_location,
+    )
+
+
 class DepartmentTotal(BaseModel):
     department_id: int | None
     department_name: str

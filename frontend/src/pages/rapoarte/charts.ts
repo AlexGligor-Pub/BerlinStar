@@ -1054,3 +1054,199 @@ export function drawHeatmap(container: HTMLDivElement, cells: ProgramariHeatmapC
     }
   }
 }
+
+// ──── YEAR-OVER-YEAR CHARTS ──────────────────────────────────────────────────
+
+export interface YoYBucket {
+  label: string;     // ex: "Ian", "Q1", "Pipera"
+  value_a: number;   // anul curent / referința
+  value_b: number;   // anul comparator
+  delta_pct: number | null;
+}
+
+/**
+ * Bar chart grupat YoY: per bucket (lună, trimestru, locație) afișează două bare
+ * (anul A vs anul B) și deasupra delta procentuală. Valorile sunt formatate ca
+ * sume monetare.
+ */
+export function drawYoYBars(
+  container: HTMLDivElement,
+  items: YoYBucket[],
+  yearA: number,
+  yearB: number,
+  unit: "lei" | "buc" = "lei",
+) {
+  d3.select(container).selectAll("*").remove();
+  if (items.length === 0 || items.every((it) => it.value_a === 0 && it.value_b === 0)) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const colorA = PALETTE[0];
+  const colorB = "#8b90a0";
+
+  const w = container.clientWidth || 720;
+  const isNarrow = w < 480;
+  const rotateX = isNarrow || items.length > 6;
+  const h = rotateX ? 320 : 290;
+  const margin = {
+    top: 36,
+    right: isNarrow ? 10 : 20,
+    bottom: rotateX ? 70 : 40,
+    left: 60,
+  };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  d3.select(container).style("position", "relative");
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("width", w)
+    .attr("height", h)
+    .attr("viewBox", `0 0 ${w} ${h}`);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x0 = d3.scaleBand<string>()
+    .domain(items.map((d) => d.label))
+    .range([0, iw])
+    .padding(0.22);
+  const x1 = d3.scaleBand<string>()
+    .domain(["A", "B"])
+    .range([0, x0.bandwidth()])
+    .padding(0.08);
+
+  const maxV = Math.max(1, d3.max(items, (d) => Math.max(d.value_a, d.value_b)) ?? 1);
+  const y = d3.scaleLinear().domain([0, maxV * 1.18]).range([ih, 0]);
+
+  // X axis
+  g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x0))
+    .selectAll("text")
+    .style("font-size", isNarrow ? "10px" : "11px")
+    .style("fill", "var(--text-muted, #8b90a0)")
+    .attr("transform", rotateX ? "rotate(-30) translate(-6,0)" : null)
+    .style("text-anchor", rotateX ? "end" : "middle");
+
+  // Y axis
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat((d) => fmtMoneyInt(Number(d))))
+    .selectAll("text")
+    .style("font-size", "10px")
+    .style("fill", "var(--text-muted, #8b90a0)");
+
+  // Tooltip
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "6px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("transition", "opacity 0.12s");
+
+  function fmt(v: number): string {
+    return unit === "lei" ? `${fmtMoney(v)} lei` : `${Math.round(v)} buc`;
+  }
+
+  // Bars + delta label
+  for (const it of items) {
+    const xb = x0(it.label) ?? 0;
+
+    // Year A bar
+    g.append("rect")
+      .attr("x", xb + (x1("A") ?? 0))
+      .attr("y", y(it.value_a))
+      .attr("width", x1.bandwidth())
+      .attr("height", ih - y(it.value_a))
+      .attr("fill", colorA)
+      .attr("rx", 3)
+      .style("cursor", "pointer")
+      .on("mouseover", function (event) {
+        const rect = container.getBoundingClientRect();
+        tooltip.style("opacity", 1)
+          .style("left", (event.clientX - rect.left + 14) + "px")
+          .style("top", (event.clientY - rect.top - 10) + "px")
+          .html(`<strong style="display:block;color:${colorA}">${it.label} · ${yearA}</strong>${fmt(it.value_a)}`);
+      })
+      .on("mousemove", function (event) {
+        const rect = container.getBoundingClientRect();
+        tooltip.style("left", (event.clientX - rect.left + 14) + "px")
+          .style("top", (event.clientY - rect.top - 10) + "px");
+      })
+      .on("mouseout", () => tooltip.style("opacity", 0));
+
+    // Year B bar
+    g.append("rect")
+      .attr("x", xb + (x1("B") ?? 0))
+      .attr("y", y(it.value_b))
+      .attr("width", x1.bandwidth())
+      .attr("height", ih - y(it.value_b))
+      .attr("fill", colorB)
+      .attr("rx", 3)
+      .style("cursor", "pointer")
+      .on("mouseover", function (event) {
+        const rect = container.getBoundingClientRect();
+        tooltip.style("opacity", 1)
+          .style("left", (event.clientX - rect.left + 14) + "px")
+          .style("top", (event.clientY - rect.top - 10) + "px")
+          .html(`<strong style="display:block;color:${colorB}">${it.label} · ${yearB}</strong>${fmt(it.value_b)}`);
+      })
+      .on("mousemove", function (event) {
+        const rect = container.getBoundingClientRect();
+        tooltip.style("left", (event.clientX - rect.left + 14) + "px")
+          .style("top", (event.clientY - rect.top - 10) + "px");
+      })
+      .on("mouseout", () => tooltip.style("opacity", 0));
+
+    // Delta % deasupra grupului
+    const groupTop = Math.min(y(it.value_a), y(it.value_b));
+    if (it.delta_pct !== null) {
+      const positive = it.delta_pct >= 0;
+      const color = positive ? "#3ea96a" : "#ef4444";
+      g.append("text")
+        .attr("x", xb + x0.bandwidth() / 2)
+        .attr("y", groupTop - 8)
+        .attr("text-anchor", "middle")
+        .attr("fill", color)
+        .style("font-size", "10.5px")
+        .style("font-weight", 700)
+        .text(`${positive ? "▲" : "▼"} ${Math.abs(it.delta_pct).toFixed(1)}%`);
+    } else if (it.value_a > 0) {
+      g.append("text")
+        .attr("x", xb + x0.bandwidth() / 2)
+        .attr("y", groupTop - 8)
+        .attr("text-anchor", "middle")
+        .attr("fill", "var(--text-muted, #8b90a0)")
+        .style("font-size", "10px")
+        .text("—");
+    }
+  }
+
+  // Legend
+  const legend = d3.select(container)
+    .append("div")
+    .style("display", "flex")
+    .style("gap", "14px")
+    .style("flex-wrap", "wrap")
+    .style("margin-top", "8px")
+    .style("font-size", "0.8rem");
+  legend.append("div").html(
+    `<span style="display:inline-block;width:10px;height:10px;background:${colorA};border-radius:2px;margin-right:6px"></span>${yearA}`,
+  );
+  legend.append("div").html(
+    `<span style="display:inline-block;width:10px;height:10px;background:${colorB};border-radius:2px;margin-right:6px"></span>${yearB}`,
+  );
+}
