@@ -381,16 +381,68 @@ async def ensure_received_downloaded(
     zip_bytes = await client.download_response(int(idx.id_solicitare))
 
     if not _looks_like_zip(zip_bytes):
-        # ANAF a raspuns 200 dar continutul nu e ZIP (de obicei XML "id invalid"
-        # sau "factura nu exista"). Nu arhivam in S3 ca sa nu poluam cache-ul.
-        excerpt = _anaf_error_excerpt(zip_bytes)
-        log.warning(
-            "ANAF /descarcare?id=%s a returnat non-ZIP pentru received %s: %s",
-            idx.id_solicitare, idx.id, excerpt,
-        )
-        raise EFacturaError(
-            f"ANAF nu a returnat ZIP pentru id={idx.id_solicitare}. Raspuns: {excerpt}"
-        )
+        # Self-heal pentru bug-ul vechi: id_solicitare a fost setat din m["id_solicitare"]
+        # (id-ul incarcarii expeditorului) in loc de m["id"] (download id). Daca avem
+        # raw_payload cu un `id` diferit, retry cu valoarea corecta si corectam randul.
+        retry_id: int | None = None
+        if isinstance(idx.raw_payload, dict):
+            raw_id = idx.raw_payload.get("id")
+            try:
+                raw_id_int = int(raw_id) if raw_id is not None else None
+            except (TypeError, ValueError):
+                raw_id_int = None
+            if raw_id_int and raw_id_int != int(idx.id_solicitare):
+                retry_id = raw_id_int
+
+        if retry_id is not None:
+            log.info(
+                "Retry ANAF /descarcare cu download id=%s (raw_payload.id) pentru "
+                "received %s — id_solicitare=%s nu era valid.",
+                retry_id, idx.id, idx.id_solicitare,
+            )
+            zip_bytes_retry = await client.download_response(retry_id)
+            if _looks_like_zip(zip_bytes_retry):
+                # Evitam coliziunea pe (company_id, id_solicitare) — daca un sync
+                # ulterior (cu fix-ul) a inserat deja un rand cu id_solicitare=retry_id,
+                # pastram vechea valoare in DB si returnam ZIP-ul fara update.
+                existing_dup = (
+                    await db.execute(
+                        select(EFacturaReceivedIndex.id).where(
+                            EFacturaReceivedIndex.company_id == idx.company_id,
+                            EFacturaReceivedIndex.id_solicitare == retry_id,
+                            EFacturaReceivedIndex.id != idx.id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if existing_dup is None:
+                    idx.id_solicitare = retry_id
+                else:
+                    log.warning(
+                        "Self-heal received %s: download id=%s exista deja pe randul %s "
+                        "— pastram id_solicitare vechi, dar returnam ZIP-ul corect.",
+                        idx.id, retry_id, existing_dup,
+                    )
+                zip_bytes = zip_bytes_retry
+            else:
+                excerpt = _anaf_error_excerpt(zip_bytes_retry)
+                log.warning(
+                    "ANAF /descarcare?id=%s (retry) tot non-ZIP pentru received %s: %s",
+                    retry_id, idx.id, excerpt,
+                )
+                raise EFacturaError(
+                    f"ANAF nu a returnat ZIP pentru id={retry_id}. Raspuns: {excerpt}"
+                )
+        else:
+            # ANAF a raspuns 200 dar continutul nu e ZIP (de obicei XML "id invalid"
+            # sau "factura nu exista"). Nu arhivam in S3 ca sa nu poluam cache-ul.
+            excerpt = _anaf_error_excerpt(zip_bytes)
+            log.warning(
+                "ANAF /descarcare?id=%s a returnat non-ZIP pentru received %s: %s",
+                idx.id_solicitare, idx.id, excerpt,
+            )
+            raise EFacturaError(
+                f"ANAF nu a returnat ZIP pentru id={idx.id_solicitare}. Raspuns: {excerpt}"
+            )
 
     s3_key = await _archive_received_zip_to_s3(idx.company_id, idx.id, zip_bytes)
     idx.downloaded = True

@@ -945,7 +945,10 @@ async def sync_received_for_company(
     messages = resp.get("mesaje") or resp.get("mesajeFactura") or []
     inserted = 0
     for m in messages:
-        id_sol = m.get("id_solicitare") or m.get("id")
+        # ANAF /descarcare?id=... foloseste campul `id` din mesaj (download id),
+        # nu `id_solicitare` (care e id-ul incarcarii expeditorului). Fallback doar
+        # daca lipseste `id`, pentru compatibilitate cu payload-uri vechi.
+        id_sol = m.get("id") or m.get("id_solicitare")
         if not id_sol:
             continue
         stmt = pg_insert(EFacturaReceivedIndex).values(

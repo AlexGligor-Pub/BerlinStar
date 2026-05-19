@@ -283,7 +283,8 @@ async def job_sync_received() -> None:
 
             messages = resp.get("mesaje") or resp.get("mesajeFactura") or []
             for m in messages:
-                id_sol = m.get("id_solicitare") or m.get("id")
+                # /descarcare foloseste `id` din mesaj (download id), nu `id_solicitare`.
+                id_sol = m.get("id") or m.get("id_solicitare")
                 if not id_sol:
                     continue
                 stmt = pg_insert(EFacturaReceivedIndex).values(
