@@ -17,7 +17,7 @@ import { PALETTE, colorByIndex, PAY_COLORS, RO_DOW } from "./rapoarte/constants"
 import {
   drawLine, drawDonut, drawBar, drawGroupedBars,
   drawMonthlyBars, drawMonthlyDualBars, drawMonthlySeriesBars, drawHeatmap,
-  drawYoYBars, drawMultiLine, attachMultiLineResize,
+  drawYoYBars, attachMultiLineResize,
   type DailyTotal, type DonutItem, type BarItem, type GroupedBarItem,
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
   type YoYBucket, type MultiLineSeries,
