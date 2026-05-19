@@ -28,8 +28,35 @@ DEFAULT_ANAF_AUTH_URL = "https://logincert.anaf.ro/anaf-oauth2/v1/authorize"
 DEFAULT_ANAF_TOKEN_URL = "https://logincert.anaf.ro/anaf-oauth2/v1/token"
 DEFAULT_ANAF_API_BASE_PROD = "https://api.anaf.ro/prod/FCTEL/rest"
 DEFAULT_ANAF_API_BASE_TEST = "https://api.anaf.ro/test/FCTEL/rest"
-DEFAULT_REDIRECT_URI = "http://localhost:8000/api/efactura/callback"
-DEFAULT_FRONTEND_CALLBACK = "http://localhost:2000/adminv2?section=efactura"
+_FALLBACK_BACKEND_CALLBACK = "http://localhost:8000/api/efactura/callback"
+_FALLBACK_FRONTEND_CALLBACK = "http://localhost:2000/adminv2?section=efactura"
+
+
+def _public_base_url() -> str | None:
+    """URL public sub care ruleaza appul (ex: `https://professorprime.ro/berlinstar`).
+
+    Daca e setat in env, derivam automat redirect URI-urile ANAF din el la
+    startup, astfel incat in prod nu mai e nevoie de configurare manuala in UI.
+    """
+    raw = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    return raw or None
+
+
+def derived_redirect_uri() -> str:
+    """Backend OAuth callback derivat din PUBLIC_BASE_URL, sau fallback dev."""
+    base = _public_base_url()
+    return f"{base}/api/efactura/callback" if base else _FALLBACK_BACKEND_CALLBACK
+
+
+def derived_frontend_callback() -> str:
+    """Frontend redirect dupa callback derivat din PUBLIC_BASE_URL, sau fallback dev."""
+    base = _public_base_url()
+    return f"{base}/adminv2?section=efactura" if base else _FALLBACK_FRONTEND_CALLBACK
+
+
+# Pastram aliasurile vechi (folosite in alte module) pentru compatibilitate.
+DEFAULT_REDIRECT_URI = derived_redirect_uri()
+DEFAULT_FRONTEND_CALLBACK = derived_frontend_callback()
 
 
 @dataclass
@@ -103,12 +130,37 @@ async def ensure_initialized(db: AsyncSession) -> EFacturaGlobalSettings:
     if not row.anaf_api_base_test:
         row.anaf_api_base_test = DEFAULT_ANAF_API_BASE_TEST
         changed = True
-    if not row.default_redirect_uri:
-        row.default_redirect_uri = DEFAULT_REDIRECT_URI
-        changed = True
-    if not row.frontend_callback_redirect:
-        row.frontend_callback_redirect = DEFAULT_FRONTEND_CALLBACK
-        changed = True
+
+    # Redirect URI-uri ANAF: daca PUBLIC_BASE_URL e setat in env, derivam si
+    # SUPRASCRIEM DB-ul la fiecare startup. Asta face ca prod sa se auto-configureze
+    # din cod: e suficient sa setezi PUBLIC_BASE_URL in .env.prod si la urmatorul
+    # restart URL-urile sunt corecte fara sa atingi UI-ul admin.
+    # Daca PUBLIC_BASE_URL NU e setat (dev), pastram orice valoare a editat admin-ul
+    # manual si doar facem backfill cand e NULL.
+    if _public_base_url():
+        target_redirect = derived_redirect_uri()
+        target_frontend = derived_frontend_callback()
+        if row.default_redirect_uri != target_redirect:
+            log.info(
+                "Auto-config: default_redirect_uri %r -> %r (PUBLIC_BASE_URL)",
+                row.default_redirect_uri, target_redirect,
+            )
+            row.default_redirect_uri = target_redirect
+            changed = True
+        if row.frontend_callback_redirect != target_frontend:
+            log.info(
+                "Auto-config: frontend_callback_redirect %r -> %r (PUBLIC_BASE_URL)",
+                row.frontend_callback_redirect, target_frontend,
+            )
+            row.frontend_callback_redirect = target_frontend
+            changed = True
+    else:
+        if not row.default_redirect_uri:
+            row.default_redirect_uri = derived_redirect_uri()
+            changed = True
+        if not row.frontend_callback_redirect:
+            row.frontend_callback_redirect = derived_frontend_callback()
+            changed = True
 
     # Auto-generare Fernet key la primul startup (deci tokeni se pot stoca imediat)
     if not row.fernet_key:

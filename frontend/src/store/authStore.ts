@@ -14,6 +14,18 @@ interface AuthState {
 
 const STORAGE_KEY = "bs_auth";
 
+// Vite serveste appul sub `base` (in productie `/berlinstar/`). Router-ul stie
+// de base, dar `window.location.assign` interpreteaza caile absolute fata de
+// origin, deci `/login` ar duce la `https://host/login` in loc de
+// `https://host/berlinstar/login`. Prefixam manual base-ul pentru hard reloads.
+function withBase(path: string): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  if (!base) return path;
+  if (!path.startsWith("/") || path.startsWith("//")) return path;
+  if (path === base || path.startsWith(base + "/")) return path;
+  return base + path;
+}
+
 function loadAuth(): AuthState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -61,7 +73,7 @@ export function loginAndRedirect(
   setAuth(next);
   persist(next);
   // Hard reload pentru ca toate store-urile Solid sa se reinitializeze de la zero.
-  window.location.assign(target);
+  window.location.assign(withBase(target));
 }
 
 // Folosita de AdminV2 la "Ofera support tehnic" — logheaza super-adminul ca user
@@ -89,7 +101,7 @@ export function loginAsImpersonatedUser(
   } catch {
     // storage quota/disabled — ignoram, userul oricum poate activa manual.
   }
-  window.location.assign(target);
+  window.location.assign(withBase(target));
 }
 
 export function logout(redirectTo: string | null = "/login") {
@@ -102,7 +114,7 @@ export function logout(redirectTo: string | null = "/login") {
   clearAllStorage();
   if (redirectTo) {
     // Hard reload pentru a sterge si starea in-memory a store-urilor Solid.
-    window.location.assign(redirectTo);
+    window.location.assign(withBase(redirectTo));
   }
 }
 

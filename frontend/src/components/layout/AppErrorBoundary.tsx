@@ -13,7 +13,7 @@ function fallback(err: unknown, reset: () => void): JSX.Element {
         <button
           type="button"
           class="btn btn-ghost btn-sm"
-          onClick={() => { window.location.href = "/"; }}
+          onClick={() => { window.location.href = import.meta.env.BASE_URL; }}
         >
           Mergi la pagina principală
         </button>

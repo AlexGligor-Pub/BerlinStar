@@ -5,7 +5,6 @@ Mount: /api/efactura/*
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
@@ -15,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_account_id
-from app.efactura import oauth_service, service as efactura_service
+from app.efactura import oauth_service, runtime_config, service as efactura_service
 from app.efactura.anaf_client import AnafEFacturaClient
 from app.efactura.exceptions import (
     AnafAuthError,
@@ -53,10 +52,10 @@ log = logging.getLogger("berlinstar.efactura")
 router = APIRouter()
 
 
-# Front-end redirect after callback — set in env, fallback to localhost dev
-_FRONTEND_CALLBACK_REDIRECT = os.getenv(
-    "ANAF_FRONTEND_CALLBACK_REDIRECT", "http://localhost:2000/adminv2?section=efactura"
-)
+def _append_query(base: str, extra: str) -> str:
+    """Append `extra` (key=val&key=val) to `base`, picking the right separator."""
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}{extra}"
 
 
 async def _require_company_access(
@@ -256,22 +255,24 @@ async def oauth_callback(
     Acest endpoint NU este protejat cu JWT — securitatea vine prin state JWT semnat
     pe care l-am generat la /connect.
     """
+    cfg = await runtime_config.load(db)
+    frontend_cb = cfg.frontend_callback_redirect
     try:
         token = await oauth_service.handle_callback(db, code=code, state=state)
     except AnafAuthError as exc:
         log.warning("OAuth callback failed: %s", exc)
         return RedirectResponse(
-            f"{_FRONTEND_CALLBACK_REDIRECT}&anaf_status=error&anaf_msg={str(exc)[:200]}",
+            _append_query(frontend_cb, f"anaf_status=error&anaf_msg={str(exc)[:200]}"),
             status_code=302,
         )
     except AnafConfigError as exc:
         log.warning("OAuth callback config error: %s", exc)
         return RedirectResponse(
-            f"{_FRONTEND_CALLBACK_REDIRECT}&anaf_status=config_error&anaf_msg={str(exc)[:200]}",
+            _append_query(frontend_cb, f"anaf_status=config_error&anaf_msg={str(exc)[:200]}"),
             status_code=302,
         )
     return RedirectResponse(
-        f"{_FRONTEND_CALLBACK_REDIRECT}&anaf_status=ok&anaf_company_id={token.company_id}",
+        _append_query(frontend_cb, f"anaf_status=ok&anaf_company_id={token.company_id}"),
         status_code=302,
     )
 
