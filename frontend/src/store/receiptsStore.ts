@@ -45,6 +45,8 @@ export interface Receipt {
   efacturaLocked: boolean;
   efacturaError: string | null;
   efacturaIndexIncarcare: number | null;
+  source?: string;
+  dueDate?: string | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -60,6 +62,7 @@ interface RawReceiptItem {
   employee_target_pct?: number | null;
   item_id?: number | null;
   item_type?: string | null;
+  vat_percent?: string | number | null;
 }
 
 interface RawReceiptVehicol {
@@ -103,6 +106,8 @@ interface RawReceipt {
   efactura_locked?: boolean;
   efactura_error?: string | null;
   efactura_index_incarcare?: number | null;
+  source?: string;
+  due_date?: string | null;
 }
 
 function mapFromApi(r: RawReceipt): Receipt {
@@ -134,6 +139,7 @@ function mapFromApi(r: RawReceipt): Receipt {
       employeeTargetPct: i.employee_target_pct ?? null,
       itemId: i.item_id ?? null,
       itemType: i.item_type ?? null,
+      vatPercent: i.vat_percent != null ? (typeof i.vat_percent === "number" ? i.vat_percent : parseFloat(i.vat_percent)) : null,
     })),
     total: typeof r.total === "number" ? r.total : parseFloat(r.total),
     devizSerie: r.deviz_serie ?? "",
@@ -157,6 +163,8 @@ function mapFromApi(r: RawReceipt): Receipt {
     efacturaLocked: r.efactura_locked ?? false,
     efacturaError: r.efactura_error ?? null,
     efacturaIndexIncarcare: r.efactura_index_incarcare ?? null,
+    source: r.source ?? "reception",
+    dueDate: r.due_date ?? null,
   };
 }
 
@@ -257,13 +265,16 @@ export async function loadMoreReceipts() {
 export type ReceiptInput = Omit<Receipt, "id" | "efacturaStatus" | "efacturaLocked" | "efacturaError" | "efacturaIndexIncarcare">;
 
 export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
-  const body = {
+  const body: Record<string, unknown> = {
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
     pay_method: receipt.metodaPlata ?? "Neplatit",
     programare_id: receipt.programareId ?? null,
     location_id: receipt.locationId ?? null,
+    client_id: receipt.clientId ?? null,
+    source: receipt.source ?? "reception",
+    due_date: receipt.dueDate ?? null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),
@@ -272,6 +283,7 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
       employee_id: i.employeeId ?? null,
       item_id: i.itemId ?? null,
       item_type: i.itemType ?? null,
+      vat_percent: i.vatPercent != null ? String(i.vatPercent) : null,
     })),
     total: receipt.total.toFixed(2),
   };
@@ -293,10 +305,11 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
 }
 
 export async function updateReceiptContent(id: string, receipt: ReceiptInput): Promise<Receipt> {
-  const body = {
+  const body: Record<string, unknown> = {
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
+    due_date: receipt.dueDate ?? null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),
@@ -305,6 +318,7 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
       employee_id: i.employeeId ?? null,
       item_id: i.itemId ?? null,
       item_type: i.itemType ?? null,
+      vat_percent: i.vatPercent != null ? String(i.vatPercent) : null,
     })),
     total: receipt.total.toFixed(2),
   };

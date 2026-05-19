@@ -220,6 +220,7 @@ async def list_receipts(
     unpaid_days: int | None = None,
     location_id: int | None = None,
     client_id: int | None = None,
+    source: str | None = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
@@ -240,6 +241,8 @@ async def list_receipts(
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
     if client_id is not None:
         stmt = stmt.where(Receipt.client_id == client_id)
+    if source is not None:
+        stmt = stmt.where(Receipt.source == source)
 
     # Filtru dupa data cu OR pentru neplatite recente
     date_conditions = []
@@ -294,6 +297,8 @@ async def create_receipt(
         total=body.total,
         pay_method=body.pay_method,
         partial_pay=body.partial_pay,
+        source=body.source,
+        due_date=body.due_date,
     )
     db.add(receipt)
     await db.flush()
@@ -312,6 +317,7 @@ async def create_receipt(
             employee_id=it.employee_id,
             item_id=item_id,
             item_type=item_type,
+            vat_percent=it.vat_percent,
         ))
 
     await db.commit()
@@ -493,6 +499,8 @@ async def patch_receipt_content(
     receipt.descriere = body.descriere
     receipt.date_tehn = body.date_tehn
     receipt.total = body.total
+    if body.due_date is not None:
+        receipt.due_date = body.due_date
     receipt.updated_at = datetime.now(timezone.utc)
 
     await db.execute(delete(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id))
@@ -513,6 +521,7 @@ async def patch_receipt_content(
             employee_id=item.employee_id,
             item_id=item_id,
             item_type=item_type,
+            vat_percent=item.vat_percent,
         ))
         if item.employee_id:
             new_emp_ids.add(item.employee_id)

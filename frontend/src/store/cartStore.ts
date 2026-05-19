@@ -14,6 +14,7 @@ export interface CartItem {
   employeeTargetPct: number | null;
   itemId: number | null;        // FK către items.id în backend (null pentru itemi manuali)
   itemType: string | null;      // "Produs" | "Service" — snapshot din POS pentru rapoarte
+  vatPercent?: number | null;   // TVA per linie (folosit de Factura Rapida pentru ANAF)
 }
 
 interface CartState {

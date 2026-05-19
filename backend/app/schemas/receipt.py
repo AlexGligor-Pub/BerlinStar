@@ -1,10 +1,14 @@
 from __future__ import annotations
 from datetime import datetime, date
 from decimal import Decimal
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 from app.models.receipt import PayMethod
 from app.models.item import ItemType
 from app.schemas.vehicol import VehicolRead
+
+
+ReceiptSource = Literal["pos", "reception", "rapida"]
 
 
 class CazareBasicRead(BaseModel):
@@ -23,6 +27,7 @@ class ReceiptItemCreate(BaseModel):
     employee_id: int | None = None
     item_id: int | None = None
     item_type: ItemType | None = None
+    vat_percent: Decimal | None = None
 
 
 class ReceiptCreate(BaseModel):
@@ -42,6 +47,8 @@ class ReceiptCreate(BaseModel):
     factura_nr: int = 0
     chitanta_serie: str = ""
     chitanta_nr: int = 0
+    source: ReceiptSource = "reception"
+    due_date: date | None = None
 
 
 class ReceiptItemRead(BaseModel):
@@ -57,6 +64,7 @@ class ReceiptItemRead(BaseModel):
     employee_target_pct: float | None = None
     item_id: int | None = None
     item_type: ItemType | None = None
+    vat_percent: Decimal | None = None
 
     @classmethod
     def from_orm_item(cls, item: object) -> "ReceiptItemRead":
@@ -76,6 +84,7 @@ class ReceiptItemRead(BaseModel):
             "employee_target_pct": pct,
             "item_id": getattr(item, "item_id", None),
             "item_type": getattr(item, "item_type", None),
+            "vat_percent": getattr(item, "vat_percent", None),
         })
 
 
@@ -90,6 +99,7 @@ class ReceiptContentPatch(BaseModel):
     date_tehn: str | None = None
     items: list[ReceiptItemCreate]
     total: Decimal = Field(..., decimal_places=2)
+    due_date: date | None = None
 
 
 class ReceiptClientPatch(BaseModel):
@@ -145,3 +155,5 @@ class ReceiptRead(BaseModel):
     efactura_locked: bool = False
     efactura_error: str | None = None
     efactura_index_incarcare: int | None = None
+    source: str = "reception"
+    due_date: date | None = None

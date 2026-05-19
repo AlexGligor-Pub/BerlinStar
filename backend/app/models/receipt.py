@@ -61,6 +61,7 @@ class Receipt(Base):
     parent_receipt_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("receipts.id", ondelete="SET NULL"), nullable=True
     )
+    source: Mapped[str] = mapped_column(String(20), nullable=False, server_default="reception")
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
