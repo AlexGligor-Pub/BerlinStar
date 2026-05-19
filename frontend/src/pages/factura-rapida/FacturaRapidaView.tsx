@@ -64,7 +64,11 @@ export default function FacturaRapidaView(props: Props) {
             onClick={handleDownload}
             disabled={downloading() || !props.receipt}
           >
-            {downloading() ? "..." : "Descarca PDF"}
+            {downloading()
+              ? "..."
+              : props.receipt?.facturaNr === 0
+                ? "Finalizeaza si descarca"
+                : "Descarca PDF"}
           </button>
           <button type="button" class="btn btn-ghost btn-sm" onClick={props.onClose}>
             Inchide
@@ -75,6 +79,12 @@ export default function FacturaRapidaView(props: Props) {
       <Show when={props.receipt}>
         {(r) => (
           <div style="display:flex;flex-direction:column;gap:14px;font-size:14px">
+            <Show when={r().facturaNr === 0}>
+              <div style="padding:8px 12px;background:rgba(245,158,11,.1);border:1px solid #d97706;border-radius:6px;color:#92400e;font-size:13px">
+                Aceasta factura nu are inca numar alocat. Apasa <strong>Finalizeaza si descarca</strong> pentru a aloca numarul si genera PDF-ul.
+              </div>
+            </Show>
+
             <div style="display:flex;justify-content:space-between;align-items:center">
               <div style="color:var(--text-muted);font-size:12px">Status e-factura</div>
               <EFacturaStatusBadge status={r().efacturaStatus} />

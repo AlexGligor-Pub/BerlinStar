@@ -1,4 +1,4 @@
-import { Show, createSignal, createMemo, createEffect } from "solid-js";
+import { Show, For, createSignal, createMemo, createEffect } from "solid-js";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
 import { apiFetch } from "../../utils/api";
@@ -18,6 +18,19 @@ import { newLine, sumGross, todayPlusDaysISO } from "./types";
 
 const PAYMENT_TERM_DAYS = 7;
 
+const PAY_METHOD_OPTIONS = [
+  { value: "Neplatit", label: "Neplatit (pe scadenta)" },
+  { value: "Platit cash", label: "Cash" },
+  { value: "Platit cu cardul", label: "Card" },
+  { value: "Platit prin OP", label: "OP / Transfer bancar" },
+] as const;
+
+function defaultVatForCompany(c: CompanyMeta | null | undefined): number {
+  if (!c) return 19;
+  if (c.is_vat_payer === false) return 0;
+  return c.tva_percentage ?? 19;
+}
+
 interface Props {
   open: boolean;
   companies: CompanyMeta[];
@@ -32,6 +45,7 @@ export default function FacturaRapidaForm(props: Props) {
   const [client, setClient] = createSignal<ClientLite | null>(null);
   const [tab, setTab] = createSignal<"search" | "anaf">("search");
   const [dueDate, setDueDate] = createSignal(todayPlusDaysISO(PAYMENT_TERM_DAYS));
+  const [payMethod, setPayMethod] = createSignal<string>("Neplatit");
   const [lines, setLines] = createSignal<QuickInvoiceLine[]>([newLine()]);
   const [errors, setErrors] = createSignal<Record<string, string>>({});
   const [submitting, setSubmitting] = createSignal(false);
@@ -47,16 +61,18 @@ export default function FacturaRapidaForm(props: Props) {
       setCompanyId(owning?.company_id ?? null);
       setLocationId(editing.locationId ?? null);
       setDueDate(editing.dueDate ?? todayPlusDaysISO(PAYMENT_TERM_DAYS));
+      setPayMethod(editing.metodaPlata ?? "Neplatit");
+      const fallbackVat = defaultVatForCompany(owning);
       setLines(
         editing.items.length === 0
-          ? [newLine()]
+          ? [{ ...newLine(), vatPercent: fallbackVat }]
           : editing.items.map((it, idx) => ({
               lineId: `e_${idx}_${it.id}`,
               name: it.name,
               qty: it.qty,
               unit: it.unit,
               price: it.price,
-              vatPercent: it.vatPercent ?? selectedCompany()?.tva_percentage ?? 19,
+              vatPercent: it.vatPercent ?? fallbackVat,
             }))
       );
       if (editing.clientId) {
@@ -80,7 +96,8 @@ export default function FacturaRapidaForm(props: Props) {
       setLocationId(firstCompany?.locations[0]?.id ?? null);
       setClient(null);
       setDueDate(todayPlusDaysISO(PAYMENT_TERM_DAYS));
-      setLines([newLine()]);
+      setPayMethod("Neplatit");
+      setLines([{ ...newLine(), vatPercent: defaultVatForCompany(firstCompany) }]);
     }
     setErrors({});
     setTab("search");
@@ -131,7 +148,7 @@ export default function FacturaRapidaForm(props: Props) {
         clientNumarMasina: c.numar_masina,
         descriere: undefined,
         dateTehn: undefined,
-        metodaPlata: undefined,
+        metodaPlata: payMethod(),
         partialPay: undefined,
         items: lines().map((l, idx) => ({
           id: -(idx + 1),
@@ -171,6 +188,16 @@ export default function FacturaRapidaForm(props: Props) {
             method: "PATCH",
             body: JSON.stringify({ client_id: c.id }),
           });
+        }
+        // pay_method nu trece prin /content — PATCH separat daca s-a schimbat
+        if (props.editing.metodaPlata !== payMethod()) {
+          const payRes = await apiFetch(`/api/receipts/${saved.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ pay_method: payMethod(), partial_pay: null }),
+          });
+          if (payRes.ok) {
+            saved = { ...saved, metodaPlata: payMethod() };
+          }
         }
       } else {
         saved = await saveReceipt(baseInput);
@@ -272,12 +299,26 @@ export default function FacturaRapidaForm(props: Props) {
           </Show>
         </div>
 
-        <Input
-          label={`Data scadenta (default ${PAYMENT_TERM_DAYS} zile)`}
-          type="date"
-          value={dueDate()}
-          onInput={(v) => setDueDate(v)}
-        />
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <Input
+            label={`Data scadenta (default ${PAYMENT_TERM_DAYS} zile)`}
+            type="date"
+            value={dueDate()}
+            onInput={(v) => setDueDate(v)}
+          />
+          <div class="field">
+            <label class="field-label">Modalitate plata</label>
+            <select
+              class="input"
+              value={payMethod()}
+              onChange={(e) => setPayMethod(e.currentTarget.value)}
+            >
+              <For each={PAY_METHOD_OPTIONS}>
+                {(opt) => <option value={opt.value}>{opt.label}</option>}
+              </For>
+            </select>
+          </div>
+        </div>
 
         <ItemsEditor lines={lines()} onChange={setLines} errors={errors()} />
       </div>

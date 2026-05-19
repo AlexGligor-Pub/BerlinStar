@@ -27,7 +27,8 @@ class ReceiptItemCreate(BaseModel):
     employee_id: int | None = None
     item_id: int | None = None
     item_type: ItemType | None = None
-    vat_percent: Decimal | None = None
+    # TVA acceptata 0..30 ca sa permita cote viitoare RO fara migrare; UI limiteaza la enum.
+    vat_percent: Decimal | None = Field(None, ge=0, le=30, decimal_places=2)
 
 
 class ReceiptCreate(BaseModel):

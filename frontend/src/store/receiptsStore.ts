@@ -51,7 +51,7 @@ export interface Receipt {
 
 const CACHE_KEY = "bs_receipts";
 
-interface RawReceiptItem {
+export interface RawReceiptItem {
   id: number;
   name: string;
   price: string | number;
@@ -74,7 +74,7 @@ interface RawReceiptVehicol {
   observatii?: string | null;
 }
 
-interface RawReceipt {
+export interface RawReceipt {
   id: number | string;
   created_at: string;
   titlu: string;
@@ -108,6 +108,10 @@ interface RawReceipt {
   efactura_index_incarcare?: number | null;
   source?: string;
   due_date?: string | null;
+}
+
+export function mapReceiptFromApi(r: RawReceipt): Receipt {
+  return mapFromApi(r);
 }
 
 function mapFromApi(r: RawReceipt): Receipt {

@@ -55,6 +55,8 @@ export interface ReceiptItemForTable {
   price: number;
   unit: string;
   employeeName?: string | null;
+  // TVA per linie (Factura Rapida). Cand e setat, suprascrie tvaPct global din PDF.
+  vatPercent?: number | null;
 }
 
 export interface ReceiptTotals {
@@ -197,9 +199,22 @@ export function drawItemsTable(
   showTehnician = false,
 ): number {
   const rows = items.map((item, idx) => {
-    const total = item.price * item.qty;
-    const net = total / (1 + tvaPct / 100);
-    const tva = total - net;
+    // Linie cu TVA propriu (Factura Rapida) ⇒ pretul e net si totalul = net*(1+vat).
+    // Linie clasica (POS/recepție) ⇒ pretul e gross cu TVA-ul firmei inclus.
+    const itemVat = item.vatPercent ?? null;
+    const subtotal = item.price * item.qty;
+    let net: number;
+    let total: number;
+    let tva: number;
+    if (itemVat != null) {
+      net = subtotal;
+      tva = subtotal * (itemVat / 100);
+      total = net + tva;
+    } else {
+      total = subtotal;
+      net = total / (1 + tvaPct / 100);
+      tva = total - net;
+    }
     const row: string[] = [String(idx + 1), t(item.name)];
     if (showTehnician) {
       const teh = item.employeeName ? t(item.employeeName).slice(0, 15) : "";
@@ -271,20 +286,38 @@ export function drawItemsTable(
   return lastTableY(doc) + 3;
 }
 
-/** Sectiune totale — TVA afisat intotdeauna (0% daca nu e platitor TVA). */
+/** Sectiune totale — TVA afisat intotdeauna (0% daca nu e platitor TVA).
+ *
+ *  Daca `items` e trimis si fiecare linie are `vatPercent`, recalculam net/TVA per
+ *  linie (Factura Rapida cu cote mixte). Altfel folosim `tvaPct` global pe total.
+ */
 export function drawTotals(
   doc: jsPDF,
   totals: ReceiptTotals,
   y: number,
   tvaPct: number | null | undefined,
+  items?: ReceiptItemForTable[],
 ): number {
   const rightX = PAGE_W - MR;
   const labelX = rightX - 60;
 
   const pct = tvaPct ?? 0;
   const totalFinal = totals.total;
-  const net = totalFinal / (1 + pct / 100);
-  const tvaAmt = totalFinal - net;
+  let net: number;
+  let tvaAmt: number;
+  const allLinesHaveVat = items != null && items.length > 0 && items.every((it) => it.vatPercent != null);
+  if (allLinesHaveVat) {
+    net = 0;
+    tvaAmt = 0;
+    for (const it of items!) {
+      const sub = it.price * it.qty;
+      net += sub;
+      tvaAmt += sub * ((it.vatPercent ?? 0) / 100);
+    }
+  } else {
+    net = totalFinal / (1 + pct / 100);
+    tvaAmt = totalFinal - net;
+  }
 
   hline(doc, y, COLORS.lightGray, 0.2);
   y += 4;
@@ -297,7 +330,12 @@ export function drawTotals(
   doc.text(lei(net), rightX, y, { align: "right" });
   y += 4.5;
 
-  doc.text(`TVA ${pct}%:`, labelX, y);
+  // Pentru linii cu cote diferite afisam un total agregat; defalcatul pe rate ramane in tabel.
+  const distinctVats = allLinesHaveVat
+    ? Array.from(new Set(items!.map((it) => it.vatPercent ?? 0)))
+    : [pct];
+  const vatLabel = distinctVats.length === 1 ? `TVA ${distinctVats[0]}%:` : "TVA (cote multiple):";
+  doc.text(vatLabel, labelX, y);
   doc.text(lei(tvaAmt), rightX, y, { align: "right" });
   y += 4.5;
 

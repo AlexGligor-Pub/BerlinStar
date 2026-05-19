@@ -34,6 +34,30 @@ from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
 
 router = APIRouter()
 
+# Toleranta pentru recalculul de control al totalului pe factura rapida — rotunjirile
+# se aplica per linie inainte de sumare; mai mult de 0.05 RON inseamna client compromis.
+_TOTAL_VARIANCE_RON = Decimal("0.05")
+
+
+def _verify_total_against_items(items: list, claimed_total: Decimal) -> None:
+    """Recalculeaza totalul gross din linii cand fiecare linie are vat_percent setat.
+
+    Daca cel putin o linie nu are vat_percent (cazul POS/reception clasic), sare
+    peste verificare — acolo totalul se calculeaza diferit (TVA global pe firma).
+    """
+    if any(it.vat_percent is None for it in items):
+        return
+    computed = Decimal("0.00")
+    for it in items:
+        net = it.price * it.qty
+        gross = net * (Decimal(1) + (it.vat_percent or Decimal(0)) / Decimal(100))
+        computed += gross.quantize(Decimal("0.01"))
+    if abs(computed - claimed_total) > _TOTAL_VARIANCE_RON:
+        raise HTTPException(
+            422,
+            f"Total incoerent cu liniile: trimis {claimed_total}, recalculat {computed}.",
+        )
+
 
 async def _resolve_item_link(
     db: AsyncSession,
@@ -286,6 +310,7 @@ async def create_receipt(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
+    _verify_total_against_items(body.items, body.total)
     receipt = Receipt(
         account_id=account_id,
         titlu=body.titlu,
@@ -482,6 +507,8 @@ async def patch_receipt_content(
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
+
+    _verify_total_against_items(body.items, body.total)
 
     old_emp_ids = {
         eid for eid in

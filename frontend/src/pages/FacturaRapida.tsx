@@ -1,94 +1,12 @@
 import { Show, For, createSignal, onMount, onCleanup } from "solid-js";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
-import { uploadToSpv, deleteReceipt, type Receipt } from "../store/receiptsStore";
+import { uploadToSpv, deleteReceipt, mapReceiptFromApi, type Receipt, type RawReceipt } from "../store/receiptsStore";
 import Modal from "../components/ui/Modal";
 import FacturaRapidaForm from "./factura-rapida/FacturaRapidaForm";
 import FacturaRapidaView from "./factura-rapida/FacturaRapidaView";
 import { EFacturaStatusBadge, RowKebab } from "./factura-rapida/components";
 import type { CompanyMeta } from "./factura-rapida/types";
-
-interface RawListItem {
-  id: number | string;
-  created_at: string;
-  due_date: string | null;
-  titlu: string;
-  factura_serie: string;
-  factura_nr: number;
-  total: string | number;
-  client_id: number | null;
-  client_nume: string | null;
-  client_cui: string | null;
-  client_adresa: string | null;
-  client_telefon: string | null;
-  client_tip: string | null;
-  client_reprezentant: string | null;
-  client_numar_masina: string | null;
-  efactura_status: string | null;
-  efactura_locked: boolean;
-  efactura_error: string | null;
-  efactura_index_incarcare: number | null;
-  receipt_items: Array<{
-    id: number;
-    name: string;
-    price: string | number;
-    qty: number;
-    unit: string;
-    vat_percent?: string | number | null;
-  }>;
-  location_id: number | null;
-}
-
-function mapToReceipt(r: RawListItem): Receipt {
-  return {
-    id: String(r.id),
-    date: r.created_at,
-    titlu: r.titlu,
-    clientId: r.client_id,
-    clientNume: r.client_nume,
-    clientCui: r.client_cui,
-    clientAdresa: r.client_adresa,
-    clientTelefon: r.client_telefon,
-    clientTip: r.client_tip,
-    clientReprezentant: r.client_reprezentant,
-    clientNumarMasina: r.client_numar_masina,
-    descriere: undefined,
-    dateTehn: undefined,
-    metodaPlata: undefined,
-    partialPay: undefined,
-    items: r.receipt_items.map((i) => ({
-      id: i.id,
-      lineId: `${i.id}_`,
-      name: i.name,
-      price: typeof i.price === "number" ? i.price : parseFloat(i.price),
-      qty: i.qty,
-      unit: i.unit,
-      employeeId: null,
-      employeeName: null,
-      employeeTargetPct: null,
-      itemId: null,
-      itemType: null,
-      vatPercent: i.vat_percent != null ? (typeof i.vat_percent === "number" ? i.vat_percent : parseFloat(i.vat_percent)) : null,
-    })),
-    total: typeof r.total === "number" ? r.total : parseFloat(r.total),
-    devizSerie: "",
-    devizNr: 0,
-    facturaSerie: r.factura_serie ?? "",
-    facturaNr: r.factura_nr ?? 0,
-    chitantaSerie: "",
-    chitantaNr: 0,
-    programareId: null,
-    locationId: r.location_id ?? null,
-    vehicol: null,
-    updatedAt: null,
-    efacturaStatus: r.efactura_status,
-    efacturaLocked: r.efactura_locked ?? false,
-    efacturaError: r.efactura_error,
-    efacturaIndexIncarcare: r.efactura_index_incarcare,
-    source: "rapida",
-    dueDate: r.due_date,
-  };
-}
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
@@ -130,7 +48,7 @@ export default function FacturaRapida() {
       const res = await apiFetch("/api/receipts?limit=50&source=rapida&sort=-id");
       if (res.ok) {
         const data = await res.json();
-        setItems((data.items as RawListItem[]).map(mapToReceipt));
+        setItems((data.items as RawReceipt[]).map(mapReceiptFromApi));
       }
     } catch {
       notify("Nu am putut incarca istoricul.", "error");
@@ -179,6 +97,9 @@ export default function FacturaRapida() {
   }
 
   function canSend(r: Receipt): boolean {
+    // `accepted`/`in_prelucrare`/`pending_upload` semnaleaza ca SPV-ul are deja bonul;
+    // un retry doar duplica. `rejected`/`error` raman trimisibile (intentionat — userul
+    // poate corecta si retrimite). facturaNr=0 = orphan, trebuie finalizat din View.
     if (r.efacturaStatus === "in_prelucrare") return false;
     if (r.efacturaStatus === "accepted") return false;
     if (r.efacturaStatus === "pending_upload") return false;
@@ -220,8 +141,11 @@ export default function FacturaRapida() {
                 <div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface1)">
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
                     <div>
-                      <div style="font-weight:600">
-                        {r.facturaSerie}{r.facturaNr || "—"}
+                      <div style="font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                        <span>{r.facturaSerie}{r.facturaNr || "—"}</span>
+                        <Show when={r.facturaNr === 0}>
+                          <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(245,158,11,.15);color:#d97706;border:1px solid #d97706">Incomplet</span>
+                        </Show>
                       </div>
                       <div style="font-size:12px;color:var(--text-muted)">{fmtDate(r.date)}</div>
                     </div>

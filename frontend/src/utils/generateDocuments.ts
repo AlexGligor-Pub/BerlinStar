@@ -306,13 +306,21 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   y += 4;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
-  y = drawTotals(doc, r, y, tvaPct);
+  y = drawTotals(doc, r, y, tvaPct, r.items);
 
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(...C.black);
     doc.text(`Modalitate plata: ${ro(r.metodaPlata)}`, ML, y);
+    y += 5;
+  }
+
+  if (r.dueDate) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.black);
+    doc.text(`Data scadenta: ${fmtDate(r.dueDate)}`, ML, y);
     y += 5;
   }
 
