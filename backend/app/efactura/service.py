@@ -116,24 +116,59 @@ async def prepare_and_upload(
     *,
     archive_xml: bool = True,
 ) -> EFacturaRecord:
-    """Genereaza XML, valideaza, urca la ANAF si actualizeaza EFacturaRecord."""
+    """Genereaza XML, valideaza, urca la ANAF si actualizeaza EFacturaRecord.
+
+    Inainte de a apela acest helper, recomandam apelarea `mark_pending_upload(...)` care
+    creeaza/actualizeaza EFacturaRecord cu status='pending_upload' si permite UI-ului sa
+    afiseze instant statusul. Acest helper ramane re-entrant prin `get_or_create_record`.
+
+    In caz de eroare la validare/build XML, status='error' este scris pe record inainte de
+    a re-arunca exceptia, ca sa nu lasam record-ul blocat in pending_upload.
+    """
     company = await _resolve_company_for_receipt(db, receipt)
     if company is None:
+        # Daca exista deja un record pending_upload, marcheaza-l ca error ca sa se deblocheze UI-ul.
+        existing = (await db.execute(
+            select(EFacturaRecord).where(
+                EFacturaRecord.receipt_id == receipt.id,
+                EFacturaRecord.direction == "sent",
+            )
+        )).scalar_one_or_none()
+        if existing is not None and existing.status == "pending_upload":
+            existing.status = "error"
+            existing.anaf_error_message = "Nu am gasit compania emitenta a facturii."
+            existing.last_attempt_at = datetime.now(timezone.utc)
+            await db.commit()
         raise AnafConfigError("Nu am gasit compania emitenta a facturii.")
 
     settings = await _get_settings(db, company.id)
 
-    payload = build_invoice_payload(
-        receipt, company, receipt.client, payment_terms_days=settings.payment_terms_days
-    )
-    xml = build_xml(payload)
-
-    if settings.validate_schematron:
-        issues = validate_schematron(xml)
-        if issues:
-            raise AnafValidationError(issues)
-
+    # Asiguram ca record-ul exista inainte de validare, ca sa-l putem actualiza pe error path.
     rec = await get_or_create_record(db, receipt, company)
+
+    try:
+        payload = build_invoice_payload(
+            receipt, company, receipt.client, payment_terms_days=settings.payment_terms_days
+        )
+        xml = build_xml(payload)
+
+        if settings.validate_schematron:
+            issues = validate_schematron(xml)
+            if issues:
+                raise AnafValidationError(issues)
+    except AnafValidationError as exc:
+        rec.status = "error"
+        rec.anaf_error_message = ("Validare esuata: " + "; ".join(exc.issues))[:2000]
+        rec.last_attempt_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise
+    except Exception as exc:  # noqa: BLE001
+        rec.status = "error"
+        rec.anaf_error_message = f"Eroare la generarea XML: {exc}"[:2000]
+        rec.last_attempt_at = datetime.now(timezone.utc)
+        await db.commit()
+        raise
+
     rec.invoice_type = payload.invoice_type_code
     rec.upload_attempts = (rec.upload_attempts or 0) + 1
     rec.last_attempt_at = datetime.now(timezone.utc)
@@ -161,7 +196,9 @@ async def prepare_and_upload(
     try:
         result = await client.upload_invoice(xml, standard="UBL", extern=receipt.is_extern)
     except AnafUploadError as exc:
-        rec.status = "rejected"
+        # ANAF a primit cererea dar a respins-o sincron. Tratam ca eroare pre-ANAF
+        # (fara index_incarcare) — bonul redevine editabil.
+        rec.status = "error"
         rec.anaf_stare = "nok"
         rec.anaf_error_message = str(exc)[:2000]
         await db.commit()
@@ -181,6 +218,64 @@ async def prepare_and_upload(
         receipt.id, rec.index_incarcare, settings.use_test_env,
     )
     return rec
+
+
+async def mark_pending_upload(db: AsyncSession, receipt: Receipt) -> EFacturaRecord:
+    """Creeaza/actualizeaza EFacturaRecord cu status='pending_upload' fara a face upload.
+
+    Folosit ca sa marcam imediat bonul ca "in coada" cand userul apasa Trimite in SPV;
+    upload-ul efectiv se face apoi asincron prin `upload_to_anaf_async`.
+    """
+    company = await _resolve_company_for_receipt(db, receipt)
+    if company is None:
+        raise AnafConfigError("Nu am gasit compania emitenta a facturii.")
+    rec = await get_or_create_record(db, receipt, company)
+    rec.status = "pending_upload"
+    rec.anaf_error_message = None
+    rec.last_attempt_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(rec)
+    return rec
+
+
+async def upload_to_anaf_async(receipt_id: int, account_id: int) -> None:
+    """Background task: deschide propria sesiune si efectueaza upload-ul.
+
+    Nu raise — orice exceptie e logata, iar starea record-ului ramane reflectata in DB.
+    Notifica broadcasterul la final ca SSE sa actualizeze UI-ul.
+    """
+    from app.database import AsyncSessionLocal
+    from app.broadcaster import broadcaster
+
+    async with AsyncSessionLocal() as db:
+        try:
+            receipt = (await db.execute(
+                select(Receipt).where(
+                    Receipt.id == receipt_id,
+                    Receipt.account_id == account_id,
+                )
+            )).scalar_one_or_none()
+            if receipt is None:
+                log.warning("upload_to_anaf_async: receipt %s not found", receipt_id)
+                return
+            try:
+                await prepare_and_upload(db, receipt)
+            except (AnafConfigError, AnafTokenMissing, AnafValidationError,
+                    AnafUploadError, EFacturaError) as exc:
+                log.info(
+                    "upload_to_anaf_async: receipt=%s terminat cu eroare (%s)",
+                    receipt_id, exc,
+                )
+            except Exception as exc:  # noqa: BLE001
+                log.exception(
+                    "upload_to_anaf_async: receipt=%s exceptie neasteptata: %s",
+                    receipt_id, exc,
+                )
+        finally:
+            try:
+                broadcaster.notify(account_id)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("broadcaster.notify failed: %s", exc)
 
 
 async def poll_status(db: AsyncSession, rec: EFacturaRecord) -> EFacturaRecord:

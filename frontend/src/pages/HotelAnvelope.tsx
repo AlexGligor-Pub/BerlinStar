@@ -1051,7 +1051,7 @@ export default function HotelAnvelope() {
         setCombinedErr(err.detail ?? "Eroare la scoatere din depozit.");
         return;
       }
-      const updatedCheckout: Cazare = await checkoutRes.json().then((d: any) => mapCazare(d));
+      await checkoutRes.json();
 
       // POST new cazare
       const newBody: Record<string, any> = {
@@ -1081,20 +1081,7 @@ export default function HotelAnvelope() {
         setCombinedErr(err.detail ?? "Eroare la salvare cazare nouă.");
         return;
       }
-      const newCazareData: Cazare = await newCazareRes.json().then((d: any) => mapCazare(d));
-
-      // Generate combined PDF
-      await loadHotelImages();
-      const combinedVehicle = await getVehiculForCazare(updatedCheckout);
-      await generateCazareScoatereIntroducere(
-        updatedCheckout,
-        newCazareData,
-        companyData(),
-        checkoutDate(),
-        newMontatePeMasina(),
-        buildHotelImageProxyUrls(),
-        combinedVehicle,
-      );
+      await newCazareRes.json();
 
       setCombinedCazare(null);
       await fetchCazari();
@@ -1225,11 +1212,8 @@ export default function HotelAnvelope() {
         body: JSON.stringify(checkoutBody),
       });
       if (!res.ok) return;
-      const updated: Cazare = await res.json().then((d: any) => mapCazare(d));
+      await res.json();
       setCheckoutCazare(null);
-      await loadHotelImages();
-      const checkoutVehicle = await getVehiculForCazare(updated);
-      await generateCazareCheckout(updated, companyData(), buildHotelImageProxyUrls(), checkoutVehicle);
       await fetchCazari();
       if (andNew && c.clientId) {
         setClientAnvelope([]);

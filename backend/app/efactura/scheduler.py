@@ -20,6 +20,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 
+from app.broadcaster import broadcaster
 from app.database import AsyncSessionLocal
 from app.efactura import runtime_config
 from app.efactura import service as efactura_service
@@ -87,6 +88,7 @@ async def job_upload_pending() -> None:
             )
         ).scalars().all()
         log.info("efactura_upload_pending: %d facturi de procesat", len(rows))
+        accounts_to_notify: set[int] = set()
         for rec in rows:
             try:
                 receipt = (
@@ -97,11 +99,17 @@ async def job_upload_pending() -> None:
                     rec.anaf_error_message = "Receipt-ul aferent a fost sters."
                     await db.commit()
                     continue
+                accounts_to_notify.add(receipt.account_id)
                 await efactura_service.prepare_and_upload(db, receipt)
             except (AnafTokenMissing, AnafTokenExpired, AnafConfigError) as exc:
                 log.warning("Upload blocat pentru rec=%s: %s", rec.id, exc)
             except EFacturaError as exc:
                 log.warning("Upload esuat pentru rec=%s: %s", rec.id, exc)
+        for aid in accounts_to_notify:
+            try:
+                broadcaster.notify(aid)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("broadcaster.notify(%s) failed: %s", aid, exc)
 
 
 # ---------- Job: poll status ----------
@@ -118,13 +126,26 @@ async def job_poll_status() -> None:
             )
         ).scalars().all()
         log.info("efactura_poll_status: %d facturi de verificat", len(rows))
+        accounts_to_notify: set[int] = set()
         for rec in rows:
             if rec.next_retry_at and rec.next_retry_at.replace(tzinfo=timezone.utc) > now:
                 continue
             try:
+                prev_status = rec.status
                 await efactura_service.poll_status(db, rec)
+                if rec.status != prev_status and rec.receipt_id is not None:
+                    receipt = (
+                        await db.execute(select(Receipt).where(Receipt.id == rec.receipt_id))
+                    ).scalar_one_or_none()
+                    if receipt is not None:
+                        accounts_to_notify.add(receipt.account_id)
             except (AnafAuthError, EFacturaError) as exc:
                 log.warning("poll_status esuat pentru rec=%s: %s", rec.id, exc)
+        for aid in accounts_to_notify:
+            try:
+                broadcaster.notify(aid)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("broadcaster.notify(%s) failed: %s", aid, exc)
 
 
 # ---------- Job: download responses ----------
@@ -141,11 +162,23 @@ async def job_download_responses() -> None:
             )
         ).scalars().all()
         log.info("efactura_download_responses: %d zip-uri de descarcat", len(rows))
+        accounts_to_notify: set[int] = set()
         for rec in rows:
             try:
                 await efactura_service.download_and_archive(db, rec)
+                if rec.receipt_id is not None:
+                    receipt = (
+                        await db.execute(select(Receipt).where(Receipt.id == rec.receipt_id))
+                    ).scalar_one_or_none()
+                    if receipt is not None:
+                        accounts_to_notify.add(receipt.account_id)
             except EFacturaError as exc:
                 log.warning("Download esuat pentru rec=%s: %s", rec.id, exc)
+        for aid in accounts_to_notify:
+            try:
+                broadcaster.notify(aid)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("broadcaster.notify(%s) failed: %s", aid, exc)
 
 
 # ---------- Job: deadline alert ----------

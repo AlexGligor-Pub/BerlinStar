@@ -166,6 +166,8 @@ class ReceivedRowOut(BaseModel):
     downloaded: bool
     is_read: bool
     read_at: datetime | None = None
+    paid: bool = False
+    paid_at: datetime | None = None
     response_zip_s3_key: str | None = None
     created_at: datetime | None = None
 
@@ -245,3 +247,13 @@ class MarkReadOut(BaseModel):
     ok: bool = True
     is_read: bool
     read_at: datetime | None = None
+
+
+class MarkPaidIn(BaseModel):
+    paid: bool = True
+
+
+class MarkPaidOut(BaseModel):
+    ok: bool = True
+    paid: bool
+    paid_at: datetime | None = None

@@ -14,6 +14,8 @@ export interface ReceivedSummary {
   detalii: string | null;
   is_read: boolean;
   downloaded: boolean;
+  paid: boolean;
+  paid_at: string | null;
 }
 
 export interface SentSummary {
@@ -39,6 +41,7 @@ interface PropsReceived {
   row: ReceivedSummary | null;
   onClose: () => void;
   onMarkedRead?: (id: number) => void;
+  onMarkedPaid?: (id: number, paid: boolean, paid_at: string | null) => void;
 }
 
 interface PropsSent {
@@ -91,6 +94,41 @@ function ReceivedDetails(props: PropsReceived) {
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
   const [markedRead, setMarkedRead] = createSignal(false);
+  const [showHelp, setShowHelp] = createSignal(false);
+  const [paid, setPaid] = createSignal(false);
+  const [paidAt, setPaidAt] = createSignal<string | null>(null);
+  const [paying, setPaying] = createSignal(false);
+
+  createEffect(() => {
+    const r = props.row;
+    if (r) { setPaid(r.paid); setPaidAt(r.paid_at); }
+  });
+
+  async function togglePaid() {
+    const r = props.row;
+    if (!r || paying()) return;
+    const next = !paid();
+    setPaying(true);
+    try {
+      const res = await apiFetch(
+        `/api/efactura/companies/${props.companyId}/received/${r.id}/mark-paid`,
+        { method: "POST", body: JSON.stringify({ paid: next }) },
+      );
+      if (!res.ok) {
+        notify("Nu am putut actualiza starea de plată.", "error");
+        return;
+      }
+      const data = (await res.json()) as { paid: boolean; paid_at: string | null };
+      setPaid(data.paid);
+      setPaidAt(data.paid_at);
+      props.onMarkedPaid?.(r.id, data.paid, data.paid_at);
+      notify(data.paid ? "Marcată ca plătită." : "Marcare plată anulată.", "success");
+    } catch {
+      notify("Eroare de rețea.", "error");
+    } finally {
+      setPaying(false);
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -172,10 +210,20 @@ function ReceivedDetails(props: PropsReceived) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;width:100%">
           <button
             class="btn btn-ghost"
-            disabled
-            title="În curând: tracking plăți cu istoric"
+            onClick={() => setShowHelp((v) => !v)}
+            title="Arată / ascunde descrierea butoanelor"
+            aria-expanded={showHelp()}
           >
-            💰 Marchează plata
+            ℹ️ Info
+          </button>
+          <button
+            class="btn btn-ghost"
+            onClick={togglePaid}
+            disabled={paying()}
+            style={paid() ? "background:rgba(34,197,94,0.15);color:var(--success);border-color:var(--success);font-weight:600" : ""}
+            title={paid() ? `Marcată plătită${paidAt() ? " (" + paidAt() + ")" : ""} — click pentru a anula` : "Marchează factura ca plătită"}
+          >
+            {paid() ? "✓ Plătită" : "💰 Marchează plata"}
           </button>
           <button
             class="btn btn-ghost"
@@ -332,6 +380,41 @@ function ReceivedDetails(props: PropsReceived) {
             </div>
           </div>
         )}
+      </Show>
+
+      <Show when={showHelp()}>
+        <div
+          style="margin-top:14px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);padding:12px 14px;font-size:12.5px;line-height:1.55"
+          role="region"
+          aria-label="Descriere butoane"
+        >
+          <div style="font-weight:600;font-size:12px;text-transform:uppercase;color:var(--text-muted);letter-spacing:.05em;margin-bottom:8px">
+            Ce face fiecare buton
+          </div>
+          <ul style="margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px">
+            <li>
+              <strong>ℹ️ Info</strong> — afișează / ascunde acest panou cu descrierea butoanelor.
+            </li>
+            <li>
+              <strong>💰 Marchează plata</strong> — marchează factura ca plătită (apare ca "✓ Plătită" în tabel și pe acest dialog). Click din nou anulează marcarea. Data marcării se reține automat.
+            </li>
+            <li>
+              <strong>⏰ Reminder scadență</strong> <em style="color:var(--text-muted)">(în curând)</em> — va trimite o alertă pe email cu N zile înainte de scadență ca să previi întârzierile.
+            </li>
+            <li>
+              <strong>📊 Export contabilitate</strong> <em style="color:var(--text-muted)">(în curând)</em> — va exporta factura în format CSV / SAGA / ContaB pentru import direct în programul de contabilitate.
+            </li>
+            <li>
+              <strong>📄 Descarcă XML</strong> — descarcă fișierul XML UBL original primit de la ANAF, util pentru arhivare sau import în alt sistem.
+            </li>
+            <li>
+              <strong>🖨️ Printează PDF</strong> — generează un PDF lizibil al facturii (emitent, beneficiar, linii produs, TVA, total) pe care îl poți tipări sau salva local.
+            </li>
+            <li>
+              <strong>Închide</strong> — închide fereastra de detalii fără să modifice nimic. Factura rămâne marcată ca citită dacă a fost deschisă cu succes.
+            </li>
+          </ul>
+        </div>
       </Show>
     </Modal>
   );

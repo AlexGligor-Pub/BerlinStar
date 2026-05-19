@@ -24,6 +24,7 @@ from app.models.disclaimer import Disclaimer
 from app.models.vehicol import Vehicol
 from app.models.client_vehicol import ClientVehicol
 from app.models.cazare_anvelope import CazareAnvelope
+from app.efactura.models import EFacturaRecord
 from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
@@ -109,7 +110,51 @@ async def _ensure_client_vehicol(db: AsyncSession, account_id: int, client_id: i
         ))
 
 
-def _serialize(receipt: Receipt) -> dict:
+# Status-uri care blocheaza editarea bonului. 'error' fara index_incarcare = upload-ul nu a ajuns
+# la ANAF, deci bonul redevine editabil.
+_EFACTURA_LOCKING_STATUSES = {"pending_upload", "in_prelucrare", "accepted", "rejected"}
+
+
+def _efactura_lock_from_record(rec: EFacturaRecord | None) -> tuple[str | None, bool, str | None, int | None]:
+    if rec is None:
+        return None, False, None, None
+    status = rec.status
+    locked = status in _EFACTURA_LOCKING_STATUSES or (status == "error" and rec.index_incarcare is not None)
+    return status, locked, rec.anaf_error_message, rec.index_incarcare
+
+
+async def _load_efactura_records_for(db: AsyncSession, receipt_ids: list[int]) -> dict[int, EFacturaRecord]:
+    if not receipt_ids:
+        return {}
+    rows = (await db.execute(
+        select(EFacturaRecord).where(
+            EFacturaRecord.receipt_id.in_(receipt_ids),
+            EFacturaRecord.direction == "sent",
+        )
+    )).scalars().all()
+    return {r.receipt_id: r for r in rows if r.receipt_id is not None}
+
+
+async def _load_efactura_record_for(db: AsyncSession, receipt_id: int) -> EFacturaRecord | None:
+    return (await db.execute(
+        select(EFacturaRecord).where(
+            EFacturaRecord.receipt_id == receipt_id,
+            EFacturaRecord.direction == "sent",
+        )
+    )).scalar_one_or_none()
+
+
+async def _assert_not_locked(db: AsyncSession, receipt_id: int) -> None:
+    rec = await _load_efactura_record_for(db, receipt_id)
+    status, locked, _, _ = _efactura_lock_from_record(rec)
+    if locked:
+        raise HTTPException(
+            423,
+            f"Bonul a fost trimis la ANAF (status: {status}) si nu mai poate fi modificat decat metoda de plata."
+        )
+
+
+def _serialize(receipt: Receipt, efactura_rec: EFacturaRecord | None = None) -> dict:
     data = ReceiptRead.model_validate(receipt).model_dump()
     data["receipt_items"] = [
         ReceiptItemRead.from_orm_item(it).model_dump() for it in receipt.receipt_items
@@ -134,6 +179,11 @@ def _serialize(receipt: Receipt) -> dict:
         for caz in (receipt.cazari_anvelope or [])
         if not caz.is_deleted
     ]
+    status, locked, err, idx = _efactura_lock_from_record(efactura_rec)
+    data["efactura_status"] = status
+    data["efactura_locked"] = locked
+    data["efactura_error"] = err
+    data["efactura_index_incarcare"] = idx
     return data
 
 
@@ -200,7 +250,11 @@ async def list_receipts(
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
-    return {"items": [_serialize(r) for r in page], "next_cursor": page[-1].id if has_more else None}
+    efactura_map = await _load_efactura_records_for(db, [r.id for r in page])
+    return {
+        "items": [_serialize(r, efactura_map.get(r.id)) for r in page],
+        "next_cursor": page[-1].id if has_more else None,
+    }
 
 
 @router.post("", response_model=ReceiptRead, status_code=201)
@@ -327,7 +381,8 @@ async def get_receipt(
     )).scalar_one_or_none()
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
-    return _serialize(receipt)
+    rec = await _load_efactura_record_for(db, receipt.id)
+    return _serialize(receipt, rec)
 
 
 @router.patch("/{receipt_id}", response_model=ReceiptRead)
@@ -340,6 +395,8 @@ async def patch_receipt(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+    # NOTA: NU se aplica _assert_not_locked aici — pay_method/partial_pay sunt explicit
+    # permise dupa trimitere la ANAF.
 
     emp_id_rows = (await db.execute(
         select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
@@ -372,7 +429,8 @@ async def patch_receipt(
     )).scalar_one()
 
     broadcaster.notify(account_id)
-    return _serialize(result)
+    rec = await _load_efactura_record_for(db, receipt_id)
+    return _serialize(result, rec)
 
 
 @router.patch("/{receipt_id}/content", response_model=ReceiptRead)
@@ -385,6 +443,7 @@ async def patch_receipt_content(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+    await _assert_not_locked(db, receipt_id)
 
     old_emp_ids = {
         eid for eid in
@@ -446,7 +505,8 @@ async def patch_receipt_content(
     )).scalar_one()
 
     broadcaster.notify(account_id)
-    return _serialize(result)
+    rec = await _load_efactura_record_for(db, receipt_id)
+    return _serialize(result, rec)
 
 
 @router.patch("/{receipt_id}/client", response_model=ReceiptRead)
@@ -459,6 +519,7 @@ async def patch_receipt_client(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost găsit.")
+    await _assert_not_locked(db, receipt_id)
     receipt.client_id = body.client_id
     if body.client_id:
         vehicol = (await db.execute(
@@ -476,7 +537,8 @@ async def patch_receipt_client(
         .where(Receipt.id == receipt_id)
     )
     receipt = result.scalar_one()
-    return _serialize(receipt)
+    rec = await _load_efactura_record_for(db, receipt_id)
+    return _serialize(receipt, rec)
 
 
 @router.post("/{receipt_id}/assign-number", response_model=AssignNumberResponse)
@@ -494,6 +556,11 @@ async def assign_number(
     doc_type = body.doc_type
     if doc_type not in ("deviz", "factura", "chitanta"):
         raise HTTPException(400, "doc_type invalid.")
+
+    # Daca bonul e blocat (trimis la ANAF), nu mai permitem alocarea unui nou nr de factura.
+    # Devizul/chitanta pot fi re-emise pentru ca nu schimba datele bonului.
+    if doc_type == "factura":
+        await _assert_not_locked(db, receipt_id)
 
     # Load location
     location = (await db.execute(
@@ -582,6 +649,7 @@ async def upsert_vehicol(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+    await _assert_not_locked(db, receipt_id)
 
     existing = (await db.execute(
         select(Vehicol).where(Vehicol.receipt_id == receipt_id)
@@ -621,6 +689,7 @@ async def delete_receipt(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+    await _assert_not_locked(db, receipt_id)
 
     emp_id_rows = (await db.execute(
         select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)

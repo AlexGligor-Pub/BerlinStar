@@ -23,9 +23,14 @@ interface ReceivedRow {
   downloaded: boolean;
   is_read: boolean;
   read_at: string | null;
+  paid: boolean;
+  paid_at: string | null;
   response_zip_s3_key: string | null;
   created_at: string | null;
 }
+
+type SortDir = "asc" | "desc";
+interface SortState { col: string; dir: SortDir; }
 
 interface PaginatedResp {
   items: ReceivedRow[];
@@ -54,6 +59,21 @@ export default function EFacturaReceived() {
   const [search, setSearch] = createSignal("");
   const [readFilter, setReadFilter] = createSignal<"all" | "unread" | "read">("all");
   const [selected, setSelected] = createSignal<ReceivedRow | null>(null);
+  const [sort, setSort] = createSignal<SortState>({ col: "id", dir: "desc" });
+
+  // Coloanele unde sortarea pe server are sens. Vezi _RECEIVED_SORT_COLUMNS in router.
+  const SORTABLE_COLS = new Set([
+    "nume_emitent", "data_creare", "tip", "detalii", "downloaded", "is_read", "paid",
+  ]);
+
+  function toggleSort(col: string) {
+    if (!SORTABLE_COLS.has(col)) return;
+    setSort((s) => {
+      if (s.col === col) return { col, dir: s.dir === "asc" ? "desc" : "asc" };
+      return { col, dir: "asc" };
+    });
+    pag.setPage(1);
+  }
 
   async function load() {
     const cid = ctx.companyId();
@@ -67,6 +87,8 @@ export default function EFacturaReceived() {
       if (search().trim()) params.set("search", search().trim());
       if (readFilter() === "read") params.set("is_read", "true");
       else if (readFilter() === "unread") params.set("is_read", "false");
+      const s = sort();
+      if (s.col) params.set("sort", `${s.col}:${s.dir}`);
       const res = await apiFetch(`/api/efactura/companies/${cid}/received?${params}`);
       if (res.ok) {
         const data: PaginatedResp = await res.json();
@@ -84,8 +106,8 @@ export default function EFacturaReceived() {
   }
 
   createEffect(() => {
-    // Reactive dependencies: companyId, page, pageSize, filters
-    ctx.companyId(); pag.page(); pag.pageSize(); readFilter();
+    // Reactive dependencies: companyId, page, pageSize, filters, sort
+    ctx.companyId(); pag.page(); pag.pageSize(); readFilter(); sort();
     void load();
   });
 
@@ -106,6 +128,10 @@ export default function EFacturaReceived() {
     ctx.setUnreadCount(Math.max(0, ctx.unreadCount() - 1));
   }
 
+  function handleMarkedPaid(id: number, paid: boolean, paid_at: string | null) {
+    setRows((prev) => prev.map((r) => r.id === id ? { ...r, paid, paid_at } : r));
+  }
+
   const columns = createMemo<ColumnDef<ReceivedRow>[]>(() => [
     {
       id: "read_indicator",
@@ -117,6 +143,7 @@ export default function EFacturaReceived() {
         />
       ),
       size: 30,
+      meta: { sortKey: "is_read" },
     },
     {
       accessorKey: "nume_emitent",
@@ -130,13 +157,14 @@ export default function EFacturaReceived() {
           </div>
         );
       },
+      meta: { sortKey: "nume_emitent" },
     },
     {
       accessorKey: "data_creare",
       header: "Data",
       cell: (info) => fmtANAFDate(info.getValue<string | null>()),
       size: 130,
-      meta: { hideOnMobile: true },
+      meta: { hideOnMobile: true, sortKey: "data_creare" },
     },
     {
       accessorKey: "tip",
@@ -147,7 +175,7 @@ export default function EFacturaReceived() {
         </span>
       ),
       size: 90,
-      meta: { hideOnMobile: true },
+      meta: { hideOnMobile: true, sortKey: "tip" },
     },
     {
       accessorKey: "detalii",
@@ -158,11 +186,11 @@ export default function EFacturaReceived() {
         const truncated = v.length > 60 ? v.slice(0, 60) + "…" : v;
         return <span title={v}>{truncated}</span>;
       },
-      meta: { hideOnMobile: true },
+      meta: { hideOnMobile: true, sortKey: "detalii" },
     },
     {
       id: "status",
-      header: "Status",
+      header: "Descărcare",
       cell: (info) => (
         <Show
           when={info.row.original.downloaded}
@@ -178,7 +206,30 @@ export default function EFacturaReceived() {
         </Show>
       ),
       size: 120,
-      meta: { hideOnMobile: true },
+      meta: { hideOnMobile: true, sortKey: "downloaded" },
+    },
+    {
+      id: "paid",
+      header: "Plătit",
+      cell: (info) => (
+        <Show
+          when={info.row.original.paid}
+          fallback={
+            <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--surface2);color:var(--text-muted);border:1px solid var(--border)">
+              Neplătită
+            </span>
+          }
+        >
+          <span
+            title={info.row.original.paid_at ? `Marcată plătită la ${fmtANAFDate(info.row.original.paid_at)}` : "Marcată plătită"}
+            style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(34,197,94,0.15);color:var(--success);font-weight:600"
+          >
+            ✓ Plătită
+          </span>
+        </Show>
+      ),
+      size: 100,
+      meta: { sortKey: "paid" },
     },
     {
       id: "actions",
@@ -208,6 +259,7 @@ export default function EFacturaReceived() {
       id: r.id, id_solicitare: r.id_solicitare, tip: r.tip,
       data_creare: r.data_creare, cif_emitent: r.cif_emitent, nume_emitent: r.nume_emitent,
       detalii: r.detalii, is_read: r.is_read, downloaded: r.downloaded,
+      paid: r.paid, paid_at: r.paid_at,
     };
   });
 
@@ -263,13 +315,24 @@ export default function EFacturaReceived() {
                     <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
                       <For each={headerGroup.headers}>
                         {(header) => {
-                          const hideOnMobile = (header.column.columnDef.meta as any)?.hideOnMobile;
+                          const meta = (header.column.columnDef.meta as any) || {};
+                          const hideOnMobile = !!meta.hideOnMobile;
+                          const sortKey: string | undefined = meta.sortKey;
+                          const isSortable = !!sortKey && SORTABLE_COLS.has(sortKey);
+                          const current = sort();
+                          const isActive = isSortable && current.col === sortKey;
+                          const indicator = isActive
+                            ? (current.dir === "asc" ? " ↑" : " ↓")
+                            : (isSortable ? " ↕" : "");
                           return (
                             <th
-                              classList={{ "hide-mobile": !!hideOnMobile }}
-                              style={`padding:10px 8px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;${header.column.columnDef.size ? `width:${header.column.columnDef.size}px` : ""}`}
+                              classList={{ "hide-mobile": hideOnMobile }}
+                              onClick={isSortable ? () => toggleSort(sortKey!) : undefined}
+                              style={`padding:10px 8px;text-align:left;font-weight:600;color:${isActive ? "var(--text)" : "var(--text-muted)"};font-size:11px;text-transform:uppercase;letter-spacing:.04em;${isSortable ? "cursor:pointer;user-select:none;" : ""}${header.column.columnDef.size ? `width:${header.column.columnDef.size}px` : ""}`}
+                              title={isSortable ? "Click pentru sortare" : undefined}
                             >
                               {flexRender(header.column.columnDef.header, header.getContext())}
+                              <span style={`opacity:${isActive ? "1" : "0.45"};font-size:10px`}>{indicator}</span>
                             </th>
                           );
                         }}
@@ -318,6 +381,7 @@ export default function EFacturaReceived() {
         row={selectedSummary()}
         onClose={() => setSelected(null)}
         onMarkedRead={handleMarkedRead}
+        onMarkedPaid={handleMarkedPaid}
       />
     </Show>
   );

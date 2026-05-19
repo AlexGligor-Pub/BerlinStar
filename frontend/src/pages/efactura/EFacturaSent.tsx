@@ -106,6 +106,33 @@ export default function EFacturaSent() {
     searchTimer = window.setTimeout(() => { pag.setPage(1); void load(); }, 350);
   }
 
+  // Status-uri pentru care e disponibil retry-ul (eroare pre-ANAF sau respins).
+  function canRetry(row: SentRow): boolean {
+    if (row.status === "draft") return true;
+    if (row.status === "rejected") return true;
+    if (row.status === "error") return true;
+    return false;
+  }
+
+  async function handleRetry(row: SentRow) {
+    if (row.receipt_id == null) {
+      notify("Nu se poate retrimite — receipt_id lipseste.", "warn");
+      return;
+    }
+    try {
+      const res = await apiFetch(`/api/efactura/receipts/${row.receipt_id}/retry`, { method: "POST" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        notify(j.detail ?? `Eroare ${res.status}`, "error");
+        return;
+      }
+      notify("Factura a fost retrimisa catre ANAF.", "info");
+      void load();
+    } catch {
+      notify("Eroare de retea la retrimitere.", "error");
+    }
+  }
+
   const columns = createMemo<ColumnDef<SentRow>[]>(() => [
     {
       id: "status",
@@ -164,15 +191,29 @@ export default function EFacturaSent() {
     {
       id: "actions",
       header: "",
-      cell: (info) => (
-        <button
-          class="btn btn-ghost btn-sm"
-          onClick={(e) => { e.stopPropagation(); setSelected(info.row.original); }}
-        >
-          Vezi
-        </button>
-      ),
-      size: 80,
+      cell: (info) => {
+        const row = info.row.original;
+        return (
+          <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+            <Show when={canRetry(row)}>
+              <button
+                class={row.status === "draft" ? "btn btn-spv btn-sm" : "btn btn-danger btn-sm"}
+                onClick={(e) => { e.stopPropagation(); void handleRetry(row); }}
+                title={row.status === "draft" ? "Trimite factura catre ANAF" : "Reincearca trimiterea"}
+              >
+                {row.status === "draft" ? "Trimite" : "Reincearca"}
+              </button>
+            </Show>
+            <button
+              class="btn btn-ghost btn-sm"
+              onClick={(e) => { e.stopPropagation(); setSelected(row); }}
+            >
+              Vezi
+            </button>
+          </div>
+        );
+      },
+      size: 140,
     },
   ]);
 

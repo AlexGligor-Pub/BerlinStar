@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow, CazareSection } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
@@ -148,8 +148,9 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
   );
 }
 
-function ClientSection(props: { receipt: Receipt }) {
+function ClientSection(props: { receipt: Receipt; readOnly?: boolean }) {
   const r = () => props.receipt;
+  const readOnly = () => props.readOnly === true;
   const [tipFilter, setTipFilter] = createSignal<"fizic" | "juridic" | null>(null);
   const [searchCui, setSearchCui] = createSignal("");
   const [searchNume, setSearchNume] = createSignal("");
@@ -281,14 +282,16 @@ function ClientSection(props: { receipt: Receipt }) {
           <div class="rclient-name">
             {r().clientNume}
           </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
-            <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={remove}>✕ Elimină</button>
-          </div>
+          <Show when={!readOnly()}>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={() => { clearSearch(); setEditing(true); }}>✎ Schimbă</button>
+              <button class="btn btn-ghost btn-sm" style="font-size:0.72rem;padding:2px 8px" onClick={remove}>✕ Elimină</button>
+            </div>
+          </Show>
         </div>
       </Show>
 
-      <Show when={r().clientId === null || editing()}>
+      <Show when={!readOnly() && (r().clientId === null || editing())}>
         <div class="rclient-search-wrap">
 
           {/* Toggle tip persoana */}
@@ -471,8 +474,40 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const [showFactureazaModal, setShowFactureazaModal] = createSignal(false);
   const [factureazaPending, setFactureazaPending] = createSignal(false);
   const [factureazaError, setFactureazaError] = createSignal<string | null>(null);
+  const [showSpvModal, setShowSpvModal] = createSignal(false);
+  const [spvPending, setSpvPending] = createSignal(false);
+  const [spvError, setSpvError] = createSignal<string | null>(null);
   const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
   const r = props.receipt;
+  const live = createMemo<Receipt>(() => receipts().find((x) => x.id === r.id) ?? r);
+
+  function openSpvModal() {
+    setSpvError(null);
+    setShowSpvModal(true);
+  }
+
+  async function handleSpvConfirm() {
+    setSpvError(null);
+    setSpvPending(true);
+    try {
+      await uploadToSpv(r.id);
+      setShowSpvModal(false);
+      // SSE-ul va reincarca statusul; intre timp, marcam optimist statusul
+      // ca sa se actualizeze instant butonul.
+    } catch (e: any) {
+      setSpvError(e?.message ?? "Eroare la trimiterea in SPV.");
+    } finally {
+      setSpvPending(false);
+    }
+  }
+
+  async function handleSpvRetry() {
+    try {
+      await retryEFactura(r.id);
+    } catch (e: any) {
+      setDocError(e?.message ?? "Eroare la reincercare.");
+    }
+  }
 
   async function handleMontajPdf() {
     if (montajPdfLoading()) return;
@@ -624,6 +659,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
+      applyDocNumber(r.id, apiDocType as "deviz" | "factura" | "chitanta", ctx.serie, ctx.nr);
       if (docType === "deviz") await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true);
       else if (docType === "factura") await generateFactura(r, ctx);
       else if (docType === "chitanta") await generateChitanta(r, ctx);
@@ -732,14 +768,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <Show when={r.clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
             </Show>
-            <Show when={r.devizNr > 0}>
-              <span class="rcard-doc-tag rcard-doc-tag--deviz">D {r.devizSerie}{r.devizNr}</span>
+            <Show when={live().devizNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--deviz">D {live().devizSerie}{live().devizNr}</span>
             </Show>
-            <Show when={r.facturaNr > 0}>
-              <span class="rcard-doc-tag rcard-doc-tag--factura">F {r.facturaSerie}{r.facturaNr}</span>
+            <Show when={live().facturaNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--factura">F {live().facturaSerie}{live().facturaNr}</span>
             </Show>
-            <Show when={r.chitantaNr > 0}>
-              <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {r.chitantaSerie}{r.chitantaNr}</span>
+            <Show when={live().chitantaNr > 0}>
+              <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {live().chitantaSerie}{live().chitantaNr}</span>
             </Show>
           </div>
           <span class="rcard-meta">
@@ -756,7 +792,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
               {r.metodaPlata ?? "Neplatit"}
             </span>
           </div>
-          <Show when={!r.metodaPlata}>
+          <Show when={!live().metodaPlata && !live().efacturaLocked}>
             <button
               class="btn btn-sm btn-primary rcard-continua-btn"
               onClick={(e) => {
@@ -819,7 +855,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="receipt-divider receipt-divider--dashed" />
 
             <div class="receipt-actions">
-              <Show when={adminVisible()}>
+              <Show when={adminVisible() && !live().efacturaLocked}>
                 <button class="btn btn-danger btn-sm" onClick={handleDeleteClick}>
                   Sterge
                 </button>
@@ -831,7 +867,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 {docLoading() === "deviz_operatii" ? "..." : "Deviz + Op."}
               </button>
               <Show when={generalSettings()?.useFactura !== false}>
-                <Show when={r.devizNr > 0 && r.facturaNr === 0}>
+                <Show when={live().devizNr > 0 && live().facturaNr === 0}>
                   <button
                     class="btn btn-primary btn-sm"
                     disabled={docLoading() !== null}
@@ -847,8 +883,54 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
                   {docLoading() === "chitanta" ? "..." : "Chitanta"}
                 </button>
+
+                {/* Buton Trimite in SPV — apare doar daca factura e alocata */}
+                <Show when={live().facturaNr > 0}>
+                  {/* Starea 1: nu s-a trimis niciodata sau a esuat pre-ANAF -> Trimite */}
+                  <Show when={live().efacturaStatus === null || (live().efacturaStatus === "error" && live().efacturaIndexIncarcare === null)}>
+                    <button
+                      class="btn btn-spv btn-sm"
+                      onClick={openSpvModal}
+                      title="Trimite factura electronica catre ANAF SPV"
+                    >
+                      Trimite in SPV
+                    </button>
+                  </Show>
+                  {/* Starea 2: pending — se trimite */}
+                  <Show when={live().efacturaStatus === "pending_upload"}>
+                    <span class="rcard-spv-badge rcard-spv-badge--pending" title="Upload in curs catre ANAF">
+                      Se trimite...
+                    </span>
+                  </Show>
+                  {/* Starea 3: in_prelucrare — ANAF proceseaza */}
+                  <Show when={live().efacturaStatus === "in_prelucrare"}>
+                    <span class="rcard-spv-badge rcard-spv-badge--info" title="ANAF a primit factura si o valideaza">
+                      In procesare ANAF
+                    </span>
+                  </Show>
+                  {/* Starea 4: accepted */}
+                  <Show when={live().efacturaStatus === "accepted"}>
+                    <span class="rcard-spv-badge rcard-spv-badge--success" title="Factura acceptata de ANAF">
+                      Acceptat ANAF
+                    </span>
+                  </Show>
+                  {/* Starea 5: rejected — buton de retry */}
+                  <Show when={live().efacturaStatus === "rejected"}>
+                    <span class="rcard-spv-badge rcard-spv-badge--danger" title={live().efacturaError ?? "Factura respinsa de ANAF"}>
+                      Respins ANAF
+                    </span>
+                    <button class="btn btn-danger btn-sm" onClick={handleSpvRetry}>
+                      Reincearca
+                    </button>
+                  </Show>
+                </Show>
               </Show>
             </div>
+            <Show when={live().efacturaStatus === "error" && live().efacturaError}>
+              <p class="cfg-error" role="alert" style="margin-top:6px">
+                Eroare ANAF: {live().efacturaError}
+              </p>
+            </Show>
             <Show when={docError()}>
               <p class="cfg-error" role="alert" style="margin-top:6px">{docError()}</p>
             </Show>
@@ -857,7 +939,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
           {/* Coloana dreapta */}
           <div class="rcard-extra-col">
-            <ClientSection receipt={r} />
+            <ClientSection receipt={r} readOnly={live().efacturaLocked} />
             {/* Status plata */}
             <div class="rcard-extra-card">
               <div class="rcard-extra-title">Status plata</div>
@@ -1096,42 +1178,120 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 onClick={() => setShowFactureazaModal(false)}
               >✕</button>
             </div>
+            <Show
+              when={live().clientId !== null}
+              fallback={
+                <>
+                  <div style="padding:0 16px 8px;font-size:0.88rem">
+                    <p class="cfg-error" role="alert" style="margin:0 0 10px">
+                      Nu poți emite o factură fără client.
+                    </p>
+                    <p style="margin:0 0 10px">
+                      Bonul <strong>{r.titlu}</strong> nu are un client asociat. O factură fiscală
+                      trebuie să conțină datele cumpărătorului (nume, CUI/CNP, adresă).
+                    </p>
+                    <p style="margin:0;color:var(--text-muted)">
+                      Pentru a continua, extinde cardul bonului și folosește secțiunea
+                      <strong> „Client" </strong> pentru a căuta sau adăuga un client. După
+                      asociere, revino aici și apasă din nou <strong>Facturează</strong>.
+                    </p>
+                  </div>
+                  <div class="sl-modal-footer">
+                    <button
+                      class="btn btn-primary btn-sm"
+                      onClick={() => setShowFactureazaModal(false)}
+                    >Am înțeles</button>
+                  </div>
+                </>
+              }
+            >
+              <div style="padding:0 16px 8px;font-size:0.88rem">
+                <p style="margin-bottom:10px">
+                  Se va aloca un număr nou de factură din registrul locației pentru bonul:
+                </p>
+                <ul style="margin:0 0 12px 16px;padding:0">
+                  <li><strong>{r.titlu}</strong></li>
+                  <li>
+                    Deviz:&nbsp;
+                    <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
+                      D {live().devizSerie}{live().devizNr}
+                    </span>
+                  </li>
+                  <li>Client: <strong>{live().clientNume}</strong></li>
+                  <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
+                </ul>
+                <p style="color:var(--text-muted);margin:0">
+                  După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
+                  numărul de factură nu poate fi reutilizat.
+                </p>
+                <Show when={factureazaError()}>
+                  <p class="cfg-error" role="alert" style="margin-top:10px">{factureazaError()}</p>
+                </Show>
+              </div>
+              <div class="sl-modal-footer">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  disabled={factureazaPending()}
+                  onClick={() => setShowFactureazaModal(false)}
+                >Anulează</button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  disabled={factureazaPending()}
+                  onClick={handleFactureazaConfirm}
+                >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
+              </div>
+            </Show>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Trimite în SPV */}
+      <Show when={showSpvModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Trimite factura în SPV (ANAF)</span>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={spvPending()}
+                onClick={() => setShowSpvModal(false)}
+              >✕</button>
+            </div>
             <div style="padding:0 16px 8px;font-size:0.88rem">
               <p style="margin-bottom:10px">
-                Se va aloca un număr nou de factură din registrul locației pentru bonul:
+                Se va trimite factura electronică (UBL 2.1) către ANAF — Spațiul Privat Virtual.
               </p>
               <ul style="margin:0 0 12px 16px;padding:0">
                 <li><strong>{r.titlu}</strong></li>
                 <li>
-                  Deviz:&nbsp;
-                  <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
-                    D {r.devizSerie}{r.devizNr}
+                  Factura:&nbsp;
+                  <span class="rcard-doc-tag rcard-doc-tag--factura" style="display:inline-block">
+                    F {live().facturaSerie}{live().facturaNr}
                   </span>
                 </li>
-                <Show when={r.clientNume}>
-                  <li>Client: <strong>{r.clientNume}</strong></li>
-                </Show>
+                <li>Client: <strong>{live().clientNume ?? "—"}</strong></li>
                 <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
               </ul>
               <p style="color:var(--text-muted);margin:0">
-                După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
-                numărul de factură nu poate fi reutilizat.
+                După trimitere, bonul va fi <strong>blocat</strong> — nu va mai putea fi editat
+                (cu excepția metodei de plată). Procesarea ANAF durează între câteva secunde și câteva
+                minute; status-ul se actualizează automat.
               </p>
-              <Show when={factureazaError()}>
-                <p class="cfg-error" role="alert" style="margin-top:10px">{factureazaError()}</p>
+              <Show when={spvError()}>
+                <p class="cfg-error" role="alert" style="margin-top:10px">{spvError()}</p>
               </Show>
             </div>
             <div class="sl-modal-footer">
               <button
                 class="btn btn-ghost btn-sm"
-                disabled={factureazaPending()}
-                onClick={() => setShowFactureazaModal(false)}
+                disabled={spvPending()}
+                onClick={() => setShowSpvModal(false)}
               >Anulează</button>
               <button
                 class="btn btn-primary btn-sm"
-                disabled={factureazaPending()}
-                onClick={handleFactureazaConfirm}
-              >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
+                disabled={spvPending()}
+                onClick={handleSpvConfirm}
+              >{spvPending() ? "Se trimite..." : "Confirmă trimiterea"}</button>
             </div>
           </div>
         </div>

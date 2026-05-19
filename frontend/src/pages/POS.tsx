@@ -38,7 +38,7 @@ export default function POS() {
   const unpaidFiltered = createMemo(() => {
     const q = devizSearch().toLowerCase().trim();
     return receipts()
-      .filter((r) => r.metodaPlata === undefined)
+      .filter((r) => r.metodaPlata === undefined && !r.efacturaLocked)
       .filter((r) => !q || r.titlu.toLowerCase().includes(q));
   });
 

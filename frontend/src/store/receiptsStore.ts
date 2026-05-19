@@ -2,6 +2,7 @@ import { createSignal } from "solid-js";
 import { apiFetch, API_BASE } from "../utils/api";
 import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
+import { notify } from "./notificationsStore";
 
 export interface VehicolData {
   numarMasina: string;
@@ -40,6 +41,10 @@ export interface Receipt {
   locationId: number | null;
   vehicol?: VehicolData | null;
   updatedAt?: string | null;
+  efacturaStatus: string | null;
+  efacturaLocked: boolean;
+  efacturaError: string | null;
+  efacturaIndexIncarcare: number | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -94,6 +99,10 @@ interface RawReceipt {
   location_id?: number | null;
   vehicol?: RawReceiptVehicol | null;
   updated_at?: string | null;
+  efactura_status?: string | null;
+  efactura_locked?: boolean;
+  efactura_error?: string | null;
+  efactura_index_incarcare?: number | null;
 }
 
 function mapFromApi(r: RawReceipt): Receipt {
@@ -144,6 +153,10 @@ function mapFromApi(r: RawReceipt): Receipt {
       observatii: r.vehicol.observatii ?? null,
     } : null,
     updatedAt: r.updated_at ?? null,
+    efacturaStatus: r.efactura_status ?? null,
+    efacturaLocked: r.efactura_locked ?? false,
+    efacturaError: r.efactura_error ?? null,
+    efacturaIndexIncarcare: r.efactura_index_incarcare ?? null,
   };
 }
 
@@ -156,6 +169,24 @@ function loadCache(): Receipt[] {
 }
 
 const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
+
+function _diffAndNotifyEfacturaStatus(prev: Receipt[], next: Receipt[]): void {
+  const prevMap = new Map(prev.map((r) => [r.id, r.efacturaStatus]));
+  for (const r of next) {
+    const old = prevMap.get(r.id);
+    if (old === undefined) continue;
+    if (old === r.efacturaStatus) continue;
+    if (r.efacturaStatus === "in_prelucrare" && old === "pending_upload") {
+      notify(`Factura ${r.titlu}: in procesare ANAF`, "info");
+    } else if (r.efacturaStatus === "accepted") {
+      notify(`Factura ${r.titlu} a fost acceptata de ANAF`, "success");
+    } else if (r.efacturaStatus === "rejected") {
+      notify(`Factura ${r.titlu} a fost respinsa de ANAF`, "warn");
+    } else if (r.efacturaStatus === "error" && r.efacturaIndexIncarcare === null) {
+      notify(`Factura ${r.titlu}: eroare la trimitere — ${r.efacturaError ?? "verifica setarile"}`, "error");
+    }
+  }
+}
 
 // Parametrii ultimului load — folositi de SSE scheduleReload
 let _lastDateFrom: string | null = null;
@@ -188,6 +219,7 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
     const mapped: Receipt[] = data.items.map(mapFromApi);
     _nextCursor = data.next_cursor ?? null;
     setHasMore(_nextCursor !== null);
+    _diffAndNotifyEfacturaStatus(receipts(), mapped);
     setReceipts(mapped);
     localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
   } catch {
@@ -329,6 +361,22 @@ export async function assignFacturaNumber(id: string, locationId: number): Promi
   return { serie: data.serie, nr: data.nr };
 }
 
+export function applyDocNumber(
+  id: string,
+  docType: "deviz" | "factura" | "chitanta",
+  serie: string,
+  nr: number,
+) {
+  const next = receipts().map((r) => {
+    if (r.id !== id) return r;
+    if (docType === "deviz") return { ...r, devizSerie: serie, devizNr: nr };
+    if (docType === "factura") return { ...r, facturaSerie: serie, facturaNr: nr };
+    return { ...r, chitantaSerie: serie, chitantaNr: nr };
+  });
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
 export async function deleteReceipt(id: string) {
   await apiFetch(`/api/receipts/${id}`, { method: "DELETE" });
   const updated = receipts().filter((r) => r.id !== id);
@@ -372,6 +420,25 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
   const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
+async function _readApiError(res: Response, fallback: string): Promise<string> {
+  try {
+    const j = await res.json();
+    return j.detail ?? j.message ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export async function uploadToSpv(receiptId: string): Promise<void> {
+  const res = await apiFetch(`/api/efactura/receipts/${receiptId}/upload`, { method: "POST" });
+  if (!res.ok) throw new Error(await _readApiError(res, "Eroare la trimiterea in SPV."));
+}
+
+export async function retryEFactura(receiptId: string): Promise<void> {
+  const res = await apiFetch(`/api/efactura/receipts/${receiptId}/retry`, { method: "POST" });
+  if (!res.ok) throw new Error(await _readApiError(res, "Eroare la reincercare."));
 }
 
 export { receipts };

@@ -141,3 +141,7 @@ class ReceiptRead(BaseModel):
     receipt_items: list[ReceiptItemRead]
     vehicol: VehicolRead | None = None
     cazari_anvelope: list[CazareBasicRead] = []
+    efactura_status: str | None = None
+    efactura_locked: bool = False
+    efactura_error: str | None = None
+    efactura_index_incarcare: int | None = None

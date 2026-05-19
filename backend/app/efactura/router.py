@@ -4,10 +4,13 @@ Mount: /api/efactura/*
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+
+from app.broadcaster import broadcaster
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +38,8 @@ from app.efactura.schemas import (
     EFacturaRecordOut,
     InvoiceDetailsOutSchema,
     MappingAuditEntry,
+    MarkPaidIn,
+    MarkPaidOut,
     MarkReadOut,
     PaginatedReceivedOut,
     PaginatedRecordsOut,
@@ -485,9 +490,16 @@ async def upload_receipt(
     account_id: int = Depends(get_account_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Genereaza XML pentru receipt si il transmite la ANAF.
+    """Marcheaza bonul ca pending_upload si lanseaza upload-ul asincron in background.
 
-    Returneaza EFacturaRecord cu index_incarcare daca uploadul reuseste.
+    Endpoint-ul returneaza in <200ms cu status='pending_upload'. Upload-ul efectiv catre
+    ANAF se face printr-un background task (`asyncio.create_task`) care:
+      - construieste XML, valideaza, obtine OAuth token, face POST la ANAF
+      - actualizeaza EFacturaRecord (status=in_prelucrare / rejected / error)
+      - notifica frontend-ul via SSE (broadcaster.notify)
+
+    Daca factura a fost trimisa deja (status NOT in {error fara index}), endpoint-ul
+    refuza retrimiterea pentru a evita dubluri (foloseste /retry pentru reincercari).
     """
     receipt = (
         await db.execute(
@@ -496,22 +508,34 @@ async def upload_receipt(
     ).scalar_one_or_none()
     if receipt is None:
         raise HTTPException(404, "Receipt-ul nu exista.")
+    if receipt.factura_nr == 0:
+        raise HTTPException(400, "Bonul nu are numar de factura alocat. Apasa 'Factureaza' mai intai.")
+    if receipt.client_id is None:
+        raise HTTPException(400, "Bonul nu are client asociat. Aloca un client inainte de trimitere.")
+
+    existing = (
+        await db.execute(
+            select(EFacturaRecord).where(
+                EFacturaRecord.receipt_id == receipt_id,
+                EFacturaRecord.direction == "sent",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None and existing.status in ("pending_upload", "in_prelucrare", "accepted", "rejected"):
+        raise HTTPException(
+            409,
+            f"Factura este deja in flux ANAF (status: {existing.status}). Foloseste /retry pentru reincercare.",
+        )
 
     try:
-        rec = await efactura_service.prepare_and_upload(db, receipt)
-    except AnafValidationError as exc:
-        raise HTTPException(422, "Validare esuata: " + "; ".join(exc.issues))
-    except AnafUploadError as exc:
-        raise HTTPException(400, f"ANAF a respins factura: {exc}")
-    except AnafTokenMissing as exc:
-        raise HTTPException(401, str(exc))
-    except AnafTokenExpired as exc:
-        raise HTTPException(401, f"Token expirat: {exc}. Reconnect cu USB necesar.")
+        rec = await efactura_service.mark_pending_upload(db, receipt)
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
 
+    asyncio.create_task(efactura_service.upload_to_anaf_async(receipt_id, account_id))
+    broadcaster.notify(account_id)
     return rec
 
 
@@ -555,7 +579,7 @@ async def retry_receipt(
     account_id: int = Depends(get_account_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reincearca uploadul unei facturi respinse/erronate."""
+    """Reincearca uploadul unei facturi respinse/erronate (asincron in background)."""
     receipt = (
         await db.execute(
             select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
@@ -565,15 +589,14 @@ async def retry_receipt(
         raise HTTPException(404, "Receipt-ul nu exista.")
 
     try:
-        rec = await efactura_service.prepare_and_upload(db, receipt)
-    except AnafValidationError as exc:
-        raise HTTPException(422, "Validare esuata: " + "; ".join(exc.issues))
-    except AnafUploadError as exc:
-        raise HTTPException(400, f"ANAF a respins factura: {exc}")
-    except (AnafConfigError, AnafTokenMissing) as exc:
+        rec = await efactura_service.mark_pending_upload(db, receipt)
+    except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
+
+    asyncio.create_task(efactura_service.upload_to_anaf_async(receipt_id, account_id))
+    broadcaster.notify(account_id)
     return rec
 
 
@@ -684,6 +707,21 @@ async def list_company_records(
     )
 
 
+_RECEIVED_SORT_COLUMNS = {
+    "id": EFacturaReceivedIndex.id,
+    "nume_emitent": EFacturaReceivedIndex.nume_emitent,
+    "cif_emitent": EFacturaReceivedIndex.cif_emitent,
+    "data_creare": EFacturaReceivedIndex.data_creare,
+    "tip": EFacturaReceivedIndex.tip,
+    "detalii": EFacturaReceivedIndex.detalii,
+    "downloaded": EFacturaReceivedIndex.downloaded,
+    "is_read": EFacturaReceivedIndex.is_read,
+    "paid": EFacturaReceivedIndex.paid,
+    "paid_at": EFacturaReceivedIndex.paid_at,
+    "created_at": EFacturaReceivedIndex.created_at,
+}
+
+
 @router.get("/companies/{company_id}/received", response_model=PaginatedReceivedOut)
 async def list_received_invoices(
     company_id: int = Path(..., gt=0),
@@ -692,11 +730,17 @@ async def list_received_invoices(
     page_size: int = Query(default=25, ge=1, le=200),
     search: str | None = Query(default=None),
     is_read: bool | None = Query(default=None),
+    paid: bool | None = Query(default=None),
     date_from: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
     date_to: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
+    sort: str | None = Query(
+        default=None,
+        description="Ordonare: <coloana>:<asc|desc>. Coloane permise: id, nume_emitent, "
+        "cif_emitent, data_creare, tip, detalii, downloaded, is_read, paid, paid_at, created_at.",
+    ),
     db: AsyncSession = Depends(get_db),
 ):
-    """Listeaza facturile primite din SPV (paginat, cu filtre)."""
+    """Listeaza facturile primite din SPV (paginat, cu filtre + sortare)."""
     from sqlalchemy import func, or_
 
     await _require_company_access(db, company_id, account_id)
@@ -714,6 +758,8 @@ async def list_received_invoices(
         )
     if is_read is not None:
         base = base.where(EFacturaReceivedIndex.is_read == is_read)
+    if paid is not None:
+        base = base.where(EFacturaReceivedIndex.paid == paid)
     if date_from:
         df = date_from.replace("-", "")[:8]
         if df:
@@ -722,6 +768,17 @@ async def list_received_invoices(
         dt = date_to.replace("-", "")[:8]
         if dt:
             base = base.where(func.substr(EFacturaReceivedIndex.data_creare, 1, 8) <= dt)
+
+    # Sortare: <col>:<asc|desc>. Fallback la id DESC daca lipseste sau e invalid.
+    order_clause = EFacturaReceivedIndex.id.desc()
+    if sort:
+        col_name, _, direction = sort.partition(":")
+        col = _RECEIVED_SORT_COLUMNS.get(col_name.strip())
+        if col is not None:
+            order_clause = col.asc() if direction.strip().lower() == "asc" else col.desc()
+            # tie-breaker stabil pe id pentru pagini consistente
+            if col_name.strip() != "id":
+                order_clause = (order_clause, EFacturaReceivedIndex.id.desc())
 
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
     unread_count = (
@@ -735,11 +792,12 @@ async def list_received_invoices(
         )
     ).scalar_one()
     offset = (page - 1) * page_size
-    rows = (
-        await db.execute(
-            base.order_by(EFacturaReceivedIndex.id.desc()).offset(offset).limit(page_size)
-        )
-    ).scalars().all()
+    query = base.offset(offset).limit(page_size)
+    if isinstance(order_clause, tuple):
+        query = query.order_by(*order_clause)
+    else:
+        query = query.order_by(order_clause)
+    rows = (await db.execute(query)).scalars().all()
 
     return PaginatedReceivedOut(
         items=[
@@ -756,6 +814,8 @@ async def list_received_invoices(
                 "downloaded": r.downloaded,
                 "is_read": r.is_read,
                 "read_at": r.read_at,
+                "paid": r.paid,
+                "paid_at": r.paid_at,
                 "response_zip_s3_key": r.response_zip_s3_key,
                 "created_at": r.created_at,
             }
@@ -858,6 +918,39 @@ async def mark_received_read(
     if idx is None:
         raise HTTPException(404, "Factura primita inexistenta.")
     return MarkReadOut(ok=True, is_read=idx.is_read, read_at=idx.read_at)
+
+
+@router.post(
+    "/companies/{company_id}/received/{received_id}/mark-paid",
+    response_model=MarkPaidOut,
+)
+async def mark_received_paid(
+    company_id: int = Path(..., gt=0),
+    received_id: int = Path(..., gt=0),
+    body: MarkPaidIn | None = None,
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Marcheaza/demarcheaza factura primita ca platita.
+
+    Default `paid=true`. Trimite `{"paid": false}` ca sa anulezi marcarea.
+    """
+    await _require_company_access(db, company_id, account_id)
+    target = True if body is None else bool(body.paid)
+    now = datetime.now(timezone.utc)
+    res = await db.execute(
+        update(EFacturaReceivedIndex)
+        .where(
+            EFacturaReceivedIndex.id == received_id,
+            EFacturaReceivedIndex.company_id == company_id,
+        )
+        .values(paid=target, paid_at=(now if target else None))
+        .returning(EFacturaReceivedIndex.id)
+    )
+    if res.scalar_one_or_none() is None:
+        raise HTTPException(404, "Factura primita inexistenta.")
+    await db.commit()
+    return MarkPaidOut(ok=True, paid=target, paid_at=(now if target else None))
 
 
 @router.get("/companies/{company_id}/received/{received_id}/xml")
