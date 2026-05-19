@@ -252,7 +252,11 @@ export async function loadMoreReceipts() {
   }
 }
 
-export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt> {
+// Input type pentru save/update content: campurile efactura sunt server-side (derivate
+// din EFacturaSentRecord), deci nu trebuie pasate de caller la create/update content.
+export type ReceiptInput = Omit<Receipt, "id" | "efacturaStatus" | "efacturaLocked" | "efacturaError" | "efacturaIndexIncarcare">;
+
+export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
   const body = {
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
@@ -288,7 +292,7 @@ export async function saveReceipt(receipt: Omit<Receipt, "id">): Promise<Receipt
   return created;
 }
 
-export async function updateReceiptContent(id: string, receipt: Omit<Receipt, "id">): Promise<Receipt> {
+export async function updateReceiptContent(id: string, receipt: ReceiptInput): Promise<Receipt> {
   const body = {
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
