@@ -11,8 +11,10 @@ import ReportsSection from "./adminv2/ReportsSection";
 import EFacturaSection from "./adminv2/EFacturaSection";
 import LegacyImportSection from "./adminv2/LegacyImportSection";
 import DemoSeedSection from "./adminv2/DemoSeedSection";
+import SubscriptionSettingsSection from "./adminv2/SubscriptionSettingsSection";
+import SubscriptionAccountsSection from "./adminv2/SubscriptionAccountsSection";
 
-type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "import-legacy" | "demo-seed";
+type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
 
 const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: "conturi", label: "Conturi", icon: "👥" },
@@ -21,6 +23,8 @@ const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
   { id: "email", label: "Email", icon: "✉️" },
   { id: "rapoarte", label: "Rapoarte", icon: "📊" },
   { id: "efactura", label: "eFactura ANAF", icon: "📄" },
+  { id: "abonament-setari", label: "Abonament — Setări", icon: "💳" },
+  { id: "abonament-conturi", label: "Abonament — Conturi", icon: "📅" },
   { id: "import-legacy", label: "Import Legacy", icon: "🗃️" },
   { id: "demo-seed", label: "Demo Seeder", icon: "🌱" },
 ];
@@ -191,6 +195,12 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "efactura"}>
               <EFacturaSection />
+            </Show>
+            <Show when={section() === "abonament-setari"}>
+              <SubscriptionSettingsSection />
+            </Show>
+            <Show when={section() === "abonament-conturi"}>
+              <SubscriptionAccountsSection />
             </Show>
             <Show when={section() === "import-legacy"}>
               <LegacyImportSection />

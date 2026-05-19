@@ -22,7 +22,7 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription
 from app.services.reports import start_scheduler, stop_scheduler
 from app.efactura import router_admin as efactura_admin
 from app.efactura import router as efactura_user
@@ -152,6 +152,9 @@ app.include_router(reports.router,          prefix="/api/reports",             t
 app.include_router(stocuri.router,          prefix="/api/stocuri",             tags=["stocuri"])
 app.include_router(efactura_admin.router,   prefix="/api/admin/efactura",      tags=["admin-efactura"])
 app.include_router(efactura_user.router,    prefix="/api/efactura",            tags=["efactura"])
+app.include_router(subscription.router,     prefix="/api/subscription",        tags=["subscription"])
+app.include_router(subscription_webhook.router, prefix="/api/subscription",    tags=["subscription-webhook"])
+app.include_router(admin_subscription.router,   prefix="/api/admin/subscription", tags=["admin-subscription"])
 
 
 @app.get("/api/health")

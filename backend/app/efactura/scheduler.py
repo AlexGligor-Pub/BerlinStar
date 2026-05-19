@@ -283,6 +283,108 @@ async def job_token_expiry_alert() -> None:
 
 # ---------- Job: sync received ----------
 
+# ---------- Job: subscription lock expired ----------
+
+async def job_subscription_lock_expired() -> None:
+    """Blocheaza conturile cu abonament expirat (next_payment_date < azi)."""
+    from datetime import date as _date
+
+    from sqlalchemy import update
+    from app.models.account import Account
+    from app.models.subscription import AccountSubscription
+
+    async with AsyncSessionLocal() as db:
+        today = _date.today()
+        sub_rows = (
+            await db.execute(
+                select(AccountSubscription.account_id).where(
+                    AccountSubscription.next_payment_date < today
+                )
+            )
+        ).scalars().all()
+        if not sub_rows:
+            return
+        result = await db.execute(
+            update(Account)
+            .where(
+                Account.id.in_(sub_rows),
+                Account.is_locked == False,  # noqa: E712
+                Account.is_deleted == False,  # noqa: E712
+                Account.username != "admin",
+            )
+            .values(is_locked=True, locked_at=datetime.now(timezone.utc))
+        )
+        await db.commit()
+        if result.rowcount:
+            log.info("subscription_lock_expired: %d conturi blocate", result.rowcount)
+
+
+# ---------- Job: subscription renewal email (7 days) ----------
+
+async def job_subscription_renewal_email() -> None:
+    """Trimite un email cu 7 zile inainte de scadenta (o singura data per perioada)."""
+    from datetime import date as _date
+
+    from app.models.account import Account
+    from app.models.subscription import AccountSubscription
+
+    async with AsyncSessionLocal() as db:
+        today = _date.today()
+        target = today + timedelta(days=7)
+        rows = (
+            await db.execute(
+                select(AccountSubscription, Account)
+                .join(Account, Account.id == AccountSubscription.account_id)
+                .where(
+                    AccountSubscription.next_payment_date == target,
+                    Account.is_deleted == False,  # noqa: E712
+                )
+            )
+        ).all()
+        for sub, acc in rows:
+            if sub.renewal_email_sent_for == sub.next_payment_date:
+                continue
+            if not acc.email:
+                continue
+            subject = "[BerlinStar] Abonamentul tau expira saptamana viitoare"
+            body = (
+                f"<p>Buna, {acc.name},</p>"
+                f"<p>Abonamentul tau BerlinStar expira pe "
+                f"<strong>{sub.next_payment_date.isoformat()}</strong> (peste 7 zile).</p>"
+                f"<p>Reinnoieste-l din Configurari -> Abonament inainte de scadenta "
+                f"pentru a evita blocarea contului.</p>"
+                f"<p>— BerlinStar</p>"
+            )
+            await _send_alert_email(db, subject, body, acc.email)
+            sub.renewal_email_sent_for = sub.next_payment_date
+        await db.commit()
+
+
+# ---------- Job: subscription SPV poll ----------
+
+async def job_subscription_anaf_poll() -> None:
+    """Polling status SPV pentru facturile de abonament aflate in_prelucrare."""
+    from app.models.subscription import SubscriptionPayment
+    from app.subscriptions import invoice_service
+
+    async with AsyncSessionLocal() as db:
+        rows = (
+            await db.execute(
+                select(SubscriptionPayment).where(
+                    SubscriptionPayment.anaf_status == "in_prelucrare",
+                    SubscriptionPayment.anaf_index_incarcare.isnot(None),
+                )
+            )
+        ).scalars().all()
+        for payment in rows:
+            try:
+                await invoice_service.poll_anaf_status(db, payment)
+                if payment.anaf_status in ("accepted", "rejected") and payment.anaf_download_id:
+                    await invoice_service.download_anaf_zip(db, payment)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("subscription_anaf_poll esuat pentru payment=%s: %s", payment.id, exc)
+
+
 async def job_sync_received() -> None:
     """Sincronizeaza /listaMesajeFactura?filtru=P pentru toate companiile conectate."""
     from app.efactura import oauth_service
@@ -404,6 +506,30 @@ async def start_scheduler() -> None:
         coalesce=True,
         max_instances=1,
     )
+    _scheduler.add_job(
+        job_subscription_lock_expired,
+        CronTrigger(hour=0, minute=5, timezone=_BUCHAREST_TZ),
+        id="subscription_lock_expired",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    _scheduler.add_job(
+        job_subscription_renewal_email,
+        CronTrigger(hour=8, minute=15, timezone=_BUCHAREST_TZ),
+        id="subscription_renewal_email",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
+    _scheduler.add_job(
+        job_subscription_anaf_poll,
+        IntervalTrigger(minutes=15, timezone=_BUCHAREST_TZ),
+        id="subscription_anaf_poll",
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+    )
 
     _scheduler.start()
     log.info("Scheduler eFactura pornit (timezone=%s).", _BUCHAREST_TZ)
@@ -427,6 +553,9 @@ _JOB_FN_MAP = {
     "efactura_deadline_alert": job_deadline_alert,
     "efactura_token_expiry_alert": job_token_expiry_alert,
     "efactura_sync_received": job_sync_received,
+    "subscription_lock_expired": job_subscription_lock_expired,
+    "subscription_renewal_email": job_subscription_renewal_email,
+    "subscription_anaf_poll": job_subscription_anaf_poll,
 }
 
 

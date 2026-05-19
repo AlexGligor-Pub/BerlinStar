@@ -8,6 +8,7 @@ import DeviceSetupModal from "./components/DeviceSetupModal";
 import Login from "./pages/Login";
 import AppErrorBoundary from "./components/layout/AppErrorBoundary";
 import Notifications from "./components/layout/Notifications";
+import SubscriptionBanner from "./components/layout/SubscriptionBanner";
 
 // Lazy-load route pages to enable per-route code-splitting.
 const POS = lazy(() => import("./pages/POS"));
@@ -57,6 +58,7 @@ function Protected(props: { component: () => any }) {
   return (
     <Show when={auth.token} fallback={<Login />}>
       <div class="app-shell">
+        <SubscriptionBanner />
         <NavBar />
         <PageSuspense>
           {props.component()}

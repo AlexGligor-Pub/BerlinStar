@@ -55,6 +55,19 @@ async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple
         account.password = hash_password(password)
         await db.commit()
 
+    # Auto-lock daca abonamentul a expirat (in caz ca jobul de scheduler nu
+    # a rulat inca). Contul admin (username=='admin') este exceptat.
+    if account.username != "admin":
+        from datetime import date as _date
+        from app.models.subscription import AccountSubscription
+        sub = (await db.execute(
+            select(AccountSubscription).where(AccountSubscription.account_id == account.id)
+        )).scalar_one_or_none()
+        if sub is not None and sub.next_payment_date < _date.today() and not account.is_locked:
+            account.is_locked = True
+            account.locked_at = datetime.now(timezone.utc)
+            await db.commit()
+
     expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
     payload = {"sub": str(account.id), "name": account.name, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
