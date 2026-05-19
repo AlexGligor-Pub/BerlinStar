@@ -1262,13 +1262,22 @@ export interface MultiLineSeries {
  * Multi-line chart pentru comparare timeseries (ex: servicii diferite).
  * Toate seriile sunt randate pe acelasi axis. Domeniul X = [date_from, date_to]
  * (luat din container.dataset.dateFrom/dateTo daca exista, altfel din puncte).
+ *
+ * Atasaza un ResizeObserver pe container ca sa redeseneze la resize (mobile
+ * orientation change, breakpoint shifts). Observer-ul anterior e curatat
+ * inainte de a fi inlocuit, pentru ca apelurile repetate sa nu acumuleze
+ * listeners.
  */
 export function drawMultiLine(
   container: HTMLDivElement,
   series: MultiLineSeries[],
   opts?: { dateFrom?: string; dateTo?: string },
 ) {
+  // Cleanup ResizeObserver anterior + DOM-ul din container.
+  const prev = (container as any).__multiLineResizeObs as ResizeObserver | undefined;
+  if (prev) { prev.disconnect(); delete (container as any).__multiLineResizeObs; }
   d3.select(container).selectAll("*").remove();
+
   if (series.length === 0) {
     d3.select(container).append("div")
       .style("padding", "32px 0")
@@ -1279,8 +1288,11 @@ export function drawMultiLine(
   }
 
   const w = container.clientWidth || 600;
-  const h = 320;
-  const margin = { top: 16, right: 24, bottom: 36, left: 64 };
+  const isNarrow = w < 520;
+  const h = isNarrow ? 240 : 320;
+  const margin = isNarrow
+    ? { top: 12, right: 12, bottom: 32, left: 44 }
+    : { top: 16, right: 24, bottom: 36, left: 64 };
   const iw = w - margin.left - margin.right;
   const ih = h - margin.top - margin.bottom;
 
@@ -1413,48 +1425,106 @@ export function drawMultiLine(
     .attr("stroke-dasharray", "3 3")
     .style("opacity", 0);
 
-  svg.append("rect")
+  const overlay = svg.append("rect")
     .attr("x", margin.left)
     .attr("y", margin.top)
     .attr("width", iw)
     .attr("height", ih)
     .attr("fill", "transparent")
+    .style("touch-action", "pan-y");
+
+  function showAt(clientX: number, clientY: number, localX: number) {
+    const xp = localX - margin.left;
+    const xDate = x.invert(xp);
+    // Pentru fiecare serie, gaseste cel mai apropiat punct.
+    // Snap pe punctul cel mai apropiat de cursor (peste toate seriile),
+    // nu pe prima serie cu date — astfel scroll-ul orizontal pe mobil/touch
+    // urmareste exact ce vede userul.
+    const bisect = d3.bisector<{ date: Date; value: number }, Date>((d) => d.date).left;
+    const rows: { color: string; label: string; value: number; date: Date }[] = [];
+    let snapDate: Date | null = null;
+    let snapDist = Infinity;
+    seriesParsed.forEach((s) => {
+      if (s.points.length === 0) return;
+      const i = Math.min(s.points.length - 1, Math.max(0, bisect(s.points, xDate)));
+      const a = s.points[i];
+      const b = s.points[Math.max(0, i - 1)];
+      const p = (Math.abs(a.date.getTime() - xDate.getTime()) < Math.abs(b.date.getTime() - xDate.getTime())) ? a : b;
+      rows.push({ color: s.color, label: s.label, value: p.value, date: p.date });
+      const dist = Math.abs(p.date.getTime() - xDate.getTime());
+      if (dist < snapDist) { snapDist = dist; snapDate = p.date; }
+    });
+    if (!snapDate) return;
+    verticalLine
+      .attr("x1", x(snapDate))
+      .attr("x2", x(snapDate))
+      .style("opacity", 1);
+    const fmtMoneyLocal = (n: number) => n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const lines = rows
+      .sort((a, b) => b.value - a.value)
+      .map((r) => `<div style="display:flex;justify-content:space-between;gap:12px"><span><span style="display:inline-block;width:8px;height:8px;background:${r.color};border-radius:2px;margin-right:6px"></span>${r.label}</span><strong>${fmtMoneyLocal(r.value)} lei</strong></div>`)
+      .join("");
+    const rect = container.getBoundingClientRect();
+    // Pe mobil tinem tooltip-ul intern pe ecran (max 280px wide la stanga snap-ului)
+    const tipW = isNarrow ? 240 : 320;
+    let leftPx = clientX - rect.left + 14;
+    if (leftPx + tipW > rect.width) leftPx = Math.max(4, clientX - rect.left - tipW - 8);
+    tooltip
+      .style("opacity", 1)
+      .style("left", leftPx + "px")
+      .style("top", Math.max(4, clientY - rect.top - 10) + "px")
+      .html(`<strong style="display:block;margin-bottom:4px;color:var(--accent,#5b7cfa)">${d3.timeFormat("%d %b %Y")(snapDate)}</strong>${lines}`);
+  }
+
+  function hide() {
+    verticalLine.style("opacity", 0);
+    tooltip.style("opacity", 0);
+  }
+
+  overlay
     .on("mousemove", function (event) {
       const [mx] = d3.pointer(event, this);
-      const xp = mx - margin.left;
-      const xDate = x.invert(xp);
-      // Pentru fiecare serie, gaseste cel mai apropiat punct
-      const bisect = d3.bisector<{ date: Date; value: number }, Date>((d) => d.date).left;
-      const rows: { color: string; label: string; value: number; date: Date }[] = [];
-      let snapDate: Date | null = null;
-      seriesParsed.forEach((s) => {
-        if (s.points.length === 0) return;
-        const i = Math.min(s.points.length - 1, Math.max(0, bisect(s.points, xDate)));
-        const a = s.points[i];
-        const b = s.points[Math.max(0, i - 1)];
-        const p = (Math.abs(a.date.getTime() - xDate.getTime()) < Math.abs(b.date.getTime() - xDate.getTime())) ? a : b;
-        rows.push({ color: s.color, label: s.label, value: p.value, date: p.date });
-        if (!snapDate) snapDate = p.date;
-      });
-      if (!snapDate) return;
-      verticalLine
-        .attr("x1", x(snapDate))
-        .attr("x2", x(snapDate))
-        .style("opacity", 1);
-      const fmtMoneyLocal = (n: number) => n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      const lines = rows
-        .sort((a, b) => b.value - a.value)
-        .map((r) => `<div style="display:flex;justify-content:space-between;gap:12px"><span><span style="display:inline-block;width:8px;height:8px;background:${r.color};border-radius:2px;margin-right:6px"></span>${r.label}</span><strong>${fmtMoneyLocal(r.value)} lei</strong></div>`)
-        .join("");
-      const rect = container.getBoundingClientRect();
-      tooltip
-        .style("opacity", 1)
-        .style("left", (event.clientX - rect.left + 14) + "px")
-        .style("top", (event.clientY - rect.top - 10) + "px")
-        .html(`<strong style="display:block;margin-bottom:4px;color:var(--accent,#5b7cfa)">${d3.timeFormat("%d %b %Y")(snapDate)}</strong>${lines}`);
+      showAt(event.clientX, event.clientY, mx);
     })
-    .on("mouseout", () => {
-      verticalLine.style("opacity", 0);
-      tooltip.style("opacity", 0);
-    });
+    .on("mouseout", hide)
+    .on("touchstart", function (event: TouchEvent) {
+      if (!event.touches.length) return;
+      const t = event.touches[0];
+      const [mx] = d3.pointer(t, this);
+      showAt(t.clientX, t.clientY, mx);
+    }, { passive: true } as any)
+    .on("touchmove", function (event: TouchEvent) {
+      if (!event.touches.length) return;
+      const t = event.touches[0];
+      const [mx] = d3.pointer(t, this);
+      showAt(t.clientX, t.clientY, mx);
+    }, { passive: true } as any)
+    .on("touchend", hide);
+}
+
+/**
+ * Wrapper care attachează un ResizeObserver pe container, ca să apelăm
+ * `drawMultiLine` din nou la fiecare schimbare de lățime (rotire telefon,
+ * sidebar deschis/închis etc.). Apelarea repetată e safe: cleanup-ul din
+ * drawMultiLine șterge orice DOM/observer anterior.
+ */
+export function attachMultiLineResize(
+  container: HTMLDivElement,
+  series: MultiLineSeries[],
+  opts?: { dateFrom?: string; dateTo?: string },
+) {
+  drawMultiLine(container, series, opts);
+  const prev = (container as any).__multiLineResizeObs as ResizeObserver | undefined;
+  if (prev) prev.disconnect();
+  let lastW = container.clientWidth;
+  let raf = 0;
+  const obs = new ResizeObserver(() => {
+    const w = container.clientWidth;
+    if (w === lastW) return;
+    lastW = w;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => drawMultiLine(container, series, opts));
+  });
+  obs.observe(container);
+  (container as any).__multiLineResizeObs = obs;
 }

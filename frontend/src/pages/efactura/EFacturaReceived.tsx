@@ -125,7 +125,7 @@ export default function EFacturaReceived() {
         const r = info.row.original;
         return (
           <div>
-            <div style={`font-weight:${r.is_read ? "400" : "600"}`}>{r.nume_emitent ?? "—"}</div>
+            <div style={`font-weight:${r.is_read ? "400" : "600"};word-break:break-word`}>{r.nume_emitent ?? "—"}</div>
             <div style="font-size:11px;color:var(--text-muted)">CIF {r.cif_emitent ?? "—"} • #{r.id_solicitare}</div>
           </div>
         );
@@ -136,6 +136,7 @@ export default function EFacturaReceived() {
       header: "Data",
       cell: (info) => fmtANAFDate(info.getValue<string | null>()),
       size: 130,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "tip",
@@ -146,6 +147,7 @@ export default function EFacturaReceived() {
         </span>
       ),
       size: 90,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "detalii",
@@ -156,6 +158,7 @@ export default function EFacturaReceived() {
         const truncated = v.length > 60 ? v.slice(0, 60) + "…" : v;
         return <span title={v}>{truncated}</span>;
       },
+      meta: { hideOnMobile: true },
     },
     {
       id: "status",
@@ -175,6 +178,7 @@ export default function EFacturaReceived() {
         </Show>
       ),
       size: 120,
+      meta: { hideOnMobile: true },
     },
     {
       id: "actions",
@@ -216,10 +220,10 @@ export default function EFacturaReceived() {
         </div>
       }
     >
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <div class="efactura-toolbar">
         <input
           class="input"
-          style="max-width:280px"
+          style="max-width:280px;flex:1 1 200px"
           type="search"
           placeholder="Caută după emitent, CIF, detalii…"
           value={search()}
@@ -236,7 +240,7 @@ export default function EFacturaReceived() {
           <option value="read">Doar citite</option>
         </select>
         <div style="flex:1" />
-        <span style="font-size:12px;color:var(--text-muted)">
+        <span class="efactura-toolbar-count" style="font-size:12px;color:var(--text-muted)">
           {total()} facturi • {ctx.unreadCount()} necitite
         </span>
       </div>
@@ -251,18 +255,24 @@ export default function EFacturaReceived() {
           </div>
         </Show>
         <Show when={rows().length > 0}>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <div class="efactura-table-wrap">
+            <table>
               <thead>
                 <For each={table.getHeaderGroups()}>
                   {(headerGroup) => (
                     <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
                       <For each={headerGroup.headers}>
-                        {(header) => (
-                          <th style={`padding:10px 8px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;${header.column.columnDef.size ? `width:${header.column.columnDef.size}px` : ""}`}>
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </th>
-                        )}
+                        {(header) => {
+                          const hideOnMobile = (header.column.columnDef.meta as any)?.hideOnMobile;
+                          return (
+                            <th
+                              classList={{ "hide-mobile": !!hideOnMobile }}
+                              style={`padding:10px 8px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;${header.column.columnDef.size ? `width:${header.column.columnDef.size}px` : ""}`}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </th>
+                          );
+                        }}
                       </For>
                     </tr>
                   )}
@@ -276,11 +286,17 @@ export default function EFacturaReceived() {
                       onClick={() => setSelected(row.original)}
                     >
                       <For each={row.getVisibleCells()}>
-                        {(cell) => (
-                          <td style="padding:10px 8px;vertical-align:middle">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        )}
+                        {(cell) => {
+                          const hideOnMobile = (cell.column.columnDef.meta as any)?.hideOnMobile;
+                          return (
+                            <td
+                              classList={{ "hide-mobile": !!hideOnMobile }}
+                              style="padding:10px 8px;vertical-align:middle"
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          );
+                        }}
                       </For>
                     </tr>
                   )}

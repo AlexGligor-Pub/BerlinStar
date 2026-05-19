@@ -129,10 +129,8 @@ export default function EFacturaLayout(props: { children?: JSX.Element }) {
         </Show>
 
         <Show when={!loading() && companies().length > 0}>
-          <div style="display:grid;grid-template-columns:220px 1fr;gap:16px;align-items:flex-start">
-            <aside
-              style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:4px;position:sticky;top:8px"
-            >
+          <div class="efactura-layout">
+            <aside class="efactura-sidebar">
               <SidebarLink
                 href="/efactura/primite"
                 label="Facturi primite"
@@ -146,12 +144,12 @@ export default function EFacturaLayout(props: { children?: JSX.Element }) {
                 icon="📤"
                 isActive={location.pathname.startsWith("/efactura/trimise")}
               />
-              <div style="margin-top:8px;padding:8px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted);line-height:1.5">
+              <div class="efactura-sidebar-hint">
                 Sync automat: <strong>60 min</strong>.<br />
                 Folosește <em>Sincronizează acum</em> pentru update instant.
               </div>
             </aside>
-            <main>{props.children}</main>
+            <main style="min-width:0">{props.children}</main>
           </div>
         </Show>
       </div>
@@ -160,16 +158,8 @@ export default function EFacturaLayout(props: { children?: JSX.Element }) {
 }
 
 function SidebarLink(props: { href: string; label: string; icon: string; badge?: string | null; isActive: boolean }) {
-  const active = () => props.isActive;
   return (
-    <A
-      href={props.href}
-      style={`display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:${
-        active() ? "600" : "500"
-      };background:${active() ? "var(--surface)" : "transparent"};color:${
-        active() ? "var(--accent)" : "var(--text)"
-      };border:1px solid ${active() ? "var(--border)" : "transparent"}`}
-    >
+    <A href={props.href} class="efactura-sidebar-link" classList={{ "is-active": props.isActive }}>
       <span>{props.icon}</span>
       <span style="flex:1">{props.label}</span>
       <Show when={props.badge}>

@@ -225,12 +225,12 @@ function ReceivedDetails(props: PropsReceived) {
           <div style="display:flex;flex-direction:column;gap:14px;font-size:13px">
             <Suggestions details={d()} />
 
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div class="invoice-party-grid">
               <PartyCard label="EMITENT" p={d().supplier} />
               <PartyCard label="BENEFICIAR" p={d().customer} />
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px">
+            <div class="invoice-meta-grid">
               <Field label="Tip">{d().doc_type === "CreditNote" ? "Notă credit" : "Factură"}</Field>
               <Field label="Număr">{d().invoice_number ?? "—"}</Field>
               <Field label="Data emiterii">{d().issue_date ?? "—"}</Field>
@@ -374,7 +374,7 @@ function SentDetails(props: PropsSent) {
       }
     >
       <div style="display:flex;flex-direction:column;gap:12px;font-size:13px">
-        <div style="display:grid;grid-template-columns:repeat(3,minmax(140px,1fr));gap:10px">
+        <div class="invoice-sent-grid">
           <Field label="Status intern">{row().status}</Field>
           <Field label="Stare ANAF">{row().anaf_stare ?? "—"}</Field>
           <Field label="Index încărcare">{row().index_incarcare ?? "—"}</Field>

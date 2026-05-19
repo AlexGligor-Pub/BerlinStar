@@ -1,4 +1,4 @@
-import { For, Show, Switch, Match, createSignal, onMount, createMemo, createEffect } from "solid-js";
+import { For, Show, Switch, Match, createSignal, onMount, createMemo, createEffect, onCleanup } from "solid-js";
 import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
@@ -17,7 +17,7 @@ import { PALETTE, colorByIndex, PAY_COLORS, RO_DOW } from "./rapoarte/constants"
 import {
   drawLine, drawDonut, drawBar, drawGroupedBars,
   drawMonthlyBars, drawMonthlyDualBars, drawMonthlySeriesBars, drawHeatmap,
-  drawYoYBars, drawMultiLine,
+  drawYoYBars, drawMultiLine, attachMultiLineResize,
   type DailyTotal, type DonutItem, type BarItem, type GroupedBarItem,
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
   type YoYBucket, type MultiLineSeries,
@@ -1280,25 +1280,27 @@ function CompareServicesBlock(props: { selectedLocIds: () => number[] }) {
     return catalog().filter((it) => ids.has(it.item_id));
   });
 
-  // Render chart
+  // Render chart cu ResizeObserver atasat (redraw la rotire/resize)
   createEffect(() => {
     if (!chartRef) return;
     const s = series();
-    if (s.length === 0) {
-      drawMultiLine(chartRef, [], { dateFrom: periodFrom(), dateTo: periodTo() });
-      return;
-    }
-    const mlSeries: MultiLineSeries[] = s.map((srv, i) => ({
+    const mlSeries: MultiLineSeries[] = s.length === 0 ? [] : s.map((srv, i) => ({
       key: String(srv.item_id),
       label: srv.item_name,
       color: colorByIndex(i),
       points: srv.points.map((p) => ({ date: p.report_date, value: toNumber(p.total) })),
     }));
-    drawMultiLine(chartRef, mlSeries, { dateFrom: periodFrom(), dateTo: periodTo() });
+    attachMultiLineResize(chartRef, mlSeries, { dateFrom: periodFrom(), dateTo: periodTo() });
+  });
+
+  onCleanup(() => {
+    if (!chartRef) return;
+    const obs = (chartRef as any).__multiLineResizeObs as ResizeObserver | undefined;
+    if (obs) { obs.disconnect(); delete (chartRef as any).__multiLineResizeObs; }
   });
 
   return (
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:12px;align-items:start">
+    <div class="compare-services-grid">
       {/* Stânga: chart + legendă */}
       <div class="locatii-chart-card" style="min-width:0">
         <div class="locatii-chart-title">Evoluţie zilnică · {periodLabel()}</div>
@@ -1342,8 +1344,8 @@ function CompareServicesBlock(props: { selectedLocIds: () => number[] }) {
         </Show>
       </div>
 
-      {/* Dreapta: filtre + listă selectabilă */}
-      <div class="locatii-chart-card" style="display:flex;flex-direction:column;gap:10px">
+      {/* Dreapta: filtre + listă selectabilă (pe mobil apare deasupra prin order:-1) */}
+      <div class="locatii-chart-card compare-services-filters" style="display:flex;flex-direction:column;gap:10px">
         <div class="locatii-chart-title">Filtrare servicii</div>
 
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -1399,7 +1401,7 @@ function CompareServicesBlock(props: { selectedLocIds: () => number[] }) {
         </div>
 
         <Show when={loadingCatalog()} fallback={
-          <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px">
+          <div class="compare-services-list" style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px">
             <Show when={filteredItems().length === 0}>
               <div style="padding:18px;text-align:center;color:var(--text-muted);font-size:0.85rem">Niciun serviciu nu corespunde filtrelor.</div>
             </Show>

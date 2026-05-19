@@ -118,30 +118,35 @@ export default function EFacturaSent() {
       header: "CUI emitent",
       cell: (info) => info.getValue<string>(),
       size: 110,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "receipt_id",
       header: "Receipt #",
       cell: (info) => info.getValue<number | null>() ?? "—",
       size: 90,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "invoice_type",
       header: "Tip",
       cell: (info) => info.getValue<string>(),
       size: 70,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "index_incarcare",
       header: "Index ANAF",
       cell: (info) => info.getValue<number | null>() ?? "—",
       size: 120,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "invoice_issue_date",
       header: "Data emiterii",
       cell: (info) => info.getValue<string>(),
       size: 110,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "deadline_transmit",
@@ -198,10 +203,10 @@ export default function EFacturaSent() {
         </div>
       }
     >
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <div class="efactura-toolbar">
         <input
           class="input"
-          style="max-width:280px"
+          style="max-width:280px;flex:1 1 200px"
           type="search"
           placeholder="Caută după index, status, stare ANAF…"
           value={search()}
@@ -222,7 +227,7 @@ export default function EFacturaSent() {
           <option value="error">Eroare</option>
         </select>
         <div style="flex:1" />
-        <span style="font-size:12px;color:var(--text-muted)">{total()} facturi trimise</span>
+        <span class="efactura-toolbar-count" style="font-size:12px;color:var(--text-muted)">{total()} facturi trimise</span>
       </div>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden">
@@ -235,18 +240,24 @@ export default function EFacturaSent() {
           </div>
         </Show>
         <Show when={rows().length > 0}>
-          <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <div class="efactura-table-wrap">
+            <table>
               <thead>
                 <For each={table.getHeaderGroups()}>
                   {(headerGroup) => (
                     <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
                       <For each={headerGroup.headers}>
-                        {(header) => (
-                          <th style="padding:10px 8px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </th>
-                        )}
+                        {(header) => {
+                          const hideOnMobile = (header.column.columnDef.meta as any)?.hideOnMobile;
+                          return (
+                            <th
+                              classList={{ "hide-mobile": !!hideOnMobile }}
+                              style="padding:10px 8px;text-align:left;font-weight:600;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em"
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                            </th>
+                          );
+                        }}
                       </For>
                     </tr>
                   )}
@@ -260,11 +271,17 @@ export default function EFacturaSent() {
                       onClick={() => setSelected(row.original)}
                     >
                       <For each={row.getVisibleCells()}>
-                        {(cell) => (
-                          <td style="padding:10px 8px;vertical-align:middle">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        )}
+                        {(cell) => {
+                          const hideOnMobile = (cell.column.columnDef.meta as any)?.hideOnMobile;
+                          return (
+                            <td
+                              classList={{ "hide-mobile": !!hideOnMobile }}
+                              style="padding:10px 8px;vertical-align:middle"
+                            >
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          );
+                        }}
                       </For>
                     </tr>
                   )}

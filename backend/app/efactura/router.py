@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -829,8 +829,23 @@ async def mark_received_read(
     account_id: int = Depends(get_account_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Marcheaza factura primita ca citita (idempotent)."""
+    """Marcheaza factura primita ca citita (idempotent, atomic)."""
     await _require_company_access(db, company_id, account_id)
+    now = datetime.now(timezone.utc)
+    res = await db.execute(
+        update(EFacturaReceivedIndex)
+        .where(
+            EFacturaReceivedIndex.id == received_id,
+            EFacturaReceivedIndex.company_id == company_id,
+            EFacturaReceivedIndex.is_read == False,  # noqa: E712
+        )
+        .values(is_read=True, read_at=now)
+        .returning(EFacturaReceivedIndex.id)
+    )
+    if res.scalar_one_or_none() is not None:
+        await db.commit()
+        return MarkReadOut(ok=True, is_read=True, read_at=now)
+
     idx = (
         await db.execute(
             select(EFacturaReceivedIndex).where(
@@ -841,11 +856,6 @@ async def mark_received_read(
     ).scalar_one_or_none()
     if idx is None:
         raise HTTPException(404, "Factura primita inexistenta.")
-    if not idx.is_read:
-        idx.is_read = True
-        idx.read_at = datetime.now(timezone.utc)
-        await db.commit()
-        await db.refresh(idx)
     return MarkReadOut(ok=True, is_read=idx.is_read, read_at=idx.read_at)
 
 
