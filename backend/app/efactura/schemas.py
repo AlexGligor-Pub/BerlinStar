@@ -149,3 +149,99 @@ class TestCheck(BaseModel):
 class GlobalTestResult(BaseModel):
     ok: bool
     checks: list[TestCheck]
+
+
+# ---------- Received (SPV cache) ----------
+
+class ReceivedRowOut(BaseModel):
+    id: int
+    id_solicitare: int
+    tip: str | None = None
+    data_creare: str | None = None
+    cif_emitent: str | None = None
+    nume_emitent: str | None = None
+    cif_beneficiar: str | None = None
+    nume_beneficiar: str | None = None
+    detalii: str | None = None
+    downloaded: bool
+    is_read: bool
+    read_at: datetime | None = None
+    response_zip_s3_key: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class PaginatedReceivedOut(BaseModel):
+    items: list[ReceivedRowOut]
+    total: int
+    page: int
+    page_size: int
+    unread_count: int = 0
+
+
+class PaginatedRecordsOut(BaseModel):
+    items: list[EFacturaRecordOut]
+    total: int
+    page: int
+    page_size: int
+
+
+# ---------- Invoice details (parser UBL) ----------
+
+class PartyInfoOut(BaseModel):
+    name: str | None = None
+    cui: str | None = None
+    registration_id: str | None = None
+    address_line: str | None = None
+    city: str | None = None
+    country_subentity: str | None = None
+    country_code: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+
+
+class InvoiceLineOutSchema(BaseModel):
+    line_id: str | None = None
+    description: str | None = None
+    quantity: str | None = None
+    unit_code: str | None = None
+    unit_price: str | None = None
+    line_net: str | None = None
+    vat_percent: str | None = None
+    vat_category: str | None = None
+
+
+class TaxSubtotalOutSchema(BaseModel):
+    taxable_amount: str | None = None
+    tax_amount: str | None = None
+    percent: str | None = None
+    category: str | None = None
+
+
+class InvoiceDetailsOutSchema(BaseModel):
+    doc_type: str
+    invoice_number: str | None = None
+    issue_date: str | None = None
+    due_date: str | None = None
+    currency: str | None = None
+    invoice_type_code: str | None = None
+    note: str | None = None
+    supplier: PartyInfoOut
+    customer: PartyInfoOut
+    payment_iban: str | None = None
+    payment_bank: str | None = None
+    payment_terms: str | None = None
+    lines: list[InvoiceLineOutSchema] = []
+    tax_breakdown: list[TaxSubtotalOutSchema] = []
+    total_without_vat: str | None = None
+    total_vat: str | None = None
+    total_with_vat: str | None = None
+    payable_amount: str | None = None
+    prepaid_amount: str | None = None
+
+
+class MarkReadOut(BaseModel):
+    ok: bool = True
+    is_read: bool
+    read_at: datetime | None = None

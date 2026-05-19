@@ -34,7 +34,11 @@ from app.efactura.schemas import (
     AnafTokenStatus,
     CompanyEFacturaSummary,
     EFacturaRecordOut,
+    InvoiceDetailsOutSchema,
     MappingAuditEntry,
+    MarkReadOut,
+    PaginatedReceivedOut,
+    PaginatedRecordsOut,
     ValidationIssue,
     ValidationResult,
 )
@@ -622,57 +626,270 @@ async def download_response_zip(
     )
 
 
-@router.get("/companies/{company_id}/records", response_model=list[EFacturaRecordOut])
+@router.get("/companies/{company_id}/records", response_model=PaginatedRecordsOut)
 async def list_company_records(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_account_id),
-    limit: int = Query(default=100, ge=1, le=500),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     status_filter: str | None = Query(default=None, alias="status"),
+    search: str | None = Query(default=None),
+    date_from: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
+    date_to: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Listeaza transmiterile companiei (sortat descrescator dupa data)."""
+    """Listeaza transmiterile companiei (paginat, sortat descrescator dupa id)."""
+    from sqlalchemy import func, or_, cast, String
+
     await _require_company_access(db, company_id, account_id)
-    q = select(EFacturaRecord).where(EFacturaRecord.company_id == company_id)
+    base = select(EFacturaRecord).where(EFacturaRecord.company_id == company_id)
+
     if status_filter:
-        q = q.where(EFacturaRecord.status == status_filter)
-    q = q.order_by(EFacturaRecord.id.desc()).limit(limit)
-    return (await db.execute(q)).scalars().all()
+        base = base.where(EFacturaRecord.status == status_filter)
+    if search:
+        like = f"%{search.strip()}%"
+        base = base.where(
+            or_(
+                cast(EFacturaRecord.index_incarcare, String).ilike(like),
+                EFacturaRecord.anaf_stare.ilike(like),
+                EFacturaRecord.status.ilike(like),
+            )
+        )
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d").date()
+            base = base.where(EFacturaRecord.invoice_issue_date >= df)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+            base = base.where(EFacturaRecord.invoice_issue_date <= dt)
+        except ValueError:
+            pass
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    offset = (page - 1) * page_size
+    rows = (
+        await db.execute(
+            base.order_by(EFacturaRecord.id.desc()).offset(offset).limit(page_size)
+        )
+    ).scalars().all()
+    return PaginatedRecordsOut(
+        items=[EFacturaRecordOut.model_validate(r) for r in rows],
+        total=int(total),
+        page=page,
+        page_size=page_size,
+    )
 
 
-@router.get("/companies/{company_id}/received")
+@router.get("/companies/{company_id}/received", response_model=PaginatedReceivedOut)
 async def list_received_invoices(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_account_id),
-    limit: int = Query(default=100, ge=1, le=500),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    search: str | None = Query(default=None),
+    is_read: bool | None = Query(default=None),
+    date_from: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
+    date_to: str | None = Query(default=None, description="ISO yyyy-mm-dd"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Listeaza facturile primite din SPV (cache din efactura_received_index)."""
+    """Listeaza facturile primite din SPV (paginat, cu filtre)."""
+    from sqlalchemy import func, or_
+
     await _require_company_access(db, company_id, account_id)
+
+    base = select(EFacturaReceivedIndex).where(EFacturaReceivedIndex.company_id == company_id)
+
+    if search:
+        like = f"%{search.strip()}%"
+        base = base.where(
+            or_(
+                EFacturaReceivedIndex.nume_emitent.ilike(like),
+                EFacturaReceivedIndex.cif_emitent.ilike(like),
+                EFacturaReceivedIndex.detalii.ilike(like),
+            )
+        )
+    if is_read is not None:
+        base = base.where(EFacturaReceivedIndex.is_read == is_read)
+    if date_from:
+        df = date_from.replace("-", "")[:8]
+        if df:
+            base = base.where(func.substr(EFacturaReceivedIndex.data_creare, 1, 8) >= df)
+    if date_to:
+        dt = date_to.replace("-", "")[:8]
+        if dt:
+            base = base.where(func.substr(EFacturaReceivedIndex.data_creare, 1, 8) <= dt)
+
+    total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    unread_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(EFacturaReceivedIndex)
+            .where(
+                EFacturaReceivedIndex.company_id == company_id,
+                EFacturaReceivedIndex.is_read == False,  # noqa: E712
+            )
+        )
+    ).scalar_one()
+    offset = (page - 1) * page_size
     rows = (
         await db.execute(
-            select(EFacturaReceivedIndex)
-            .where(EFacturaReceivedIndex.company_id == company_id)
-            .order_by(EFacturaReceivedIndex.id.desc())
-            .limit(limit)
+            base.order_by(EFacturaReceivedIndex.id.desc()).offset(offset).limit(page_size)
         )
     ).scalars().all()
-    return [
-        {
-            "id": r.id,
-            "id_solicitare": r.id_solicitare,
-            "tip": r.tip,
-            "data_creare": r.data_creare,
-            "cif_emitent": r.cif_emitent,
-            "nume_emitent": r.nume_emitent,
-            "cif_beneficiar": r.cif_beneficiar,
-            "nume_beneficiar": r.nume_beneficiar,
-            "detalii": r.detalii,
-            "downloaded": r.downloaded,
-            "response_zip_s3_key": r.response_zip_s3_key,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
+
+    return PaginatedReceivedOut(
+        items=[
+            {
+                "id": r.id,
+                "id_solicitare": r.id_solicitare,
+                "tip": r.tip,
+                "data_creare": r.data_creare,
+                "cif_emitent": r.cif_emitent,
+                "nume_emitent": r.nume_emitent,
+                "cif_beneficiar": r.cif_beneficiar,
+                "nume_beneficiar": r.nume_beneficiar,
+                "detalii": r.detalii,
+                "downloaded": r.downloaded,
+                "is_read": r.is_read,
+                "read_at": r.read_at,
+                "response_zip_s3_key": r.response_zip_s3_key,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+        total=int(total),
+        page=page,
+        page_size=page_size,
+        unread_count=int(unread_count),
+    )
+
+
+@router.get(
+    "/companies/{company_id}/received/{received_id}/details",
+    response_model=InvoiceDetailsOutSchema,
+)
+async def get_received_details(
+    company_id: int = Path(..., gt=0),
+    received_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Returneaza detaliile parsate ale unei facturi primite.
+
+    Daca ZIP-ul nu este in S3, il descarca de la ANAF mai intai.
+    """
+    from app.efactura.received_parser import (
+        UBLParseError,
+        extract_invoice_xml_from_zip,
+        parse_ubl_invoice,
+    )
+
+    await _require_company_access(db, company_id, account_id)
+    idx = (
+        await db.execute(
+            select(EFacturaReceivedIndex).where(
+                EFacturaReceivedIndex.id == received_id,
+                EFacturaReceivedIndex.company_id == company_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if idx is None:
+        raise HTTPException(404, "Factura primita inexistenta.")
+
+    try:
+        zip_bytes = await efactura_service.ensure_received_downloaded(db, idx)
+    except AnafTokenMissing:
+        raise HTTPException(401, "Token ANAF inexistent.")
+    except AnafTokenExpired:
+        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+    except AnafConfigError as exc:
+        raise HTTPException(400, str(exc))
+    except EFacturaError as exc:
+        raise HTTPException(502, str(exc))
+
+    try:
+        xml_bytes = extract_invoice_xml_from_zip(zip_bytes)
+        details = parse_ubl_invoice(xml_bytes)
+    except UBLParseError as exc:
+        raise HTTPException(422, f"XML factura ilizibil: {exc}")
+
+    return details.to_dict()
+
+
+@router.post(
+    "/companies/{company_id}/received/{received_id}/mark-read",
+    response_model=MarkReadOut,
+)
+async def mark_received_read(
+    company_id: int = Path(..., gt=0),
+    received_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Marcheaza factura primita ca citita (idempotent)."""
+    await _require_company_access(db, company_id, account_id)
+    idx = (
+        await db.execute(
+            select(EFacturaReceivedIndex).where(
+                EFacturaReceivedIndex.id == received_id,
+                EFacturaReceivedIndex.company_id == company_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if idx is None:
+        raise HTTPException(404, "Factura primita inexistenta.")
+    if not idx.is_read:
+        idx.is_read = True
+        idx.read_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(idx)
+    return MarkReadOut(ok=True, is_read=idx.is_read, read_at=idx.read_at)
+
+
+@router.get("/companies/{company_id}/received/{received_id}/xml")
+async def download_received_xml(
+    company_id: int = Path(..., gt=0),
+    received_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Descarca XML-ul raw al facturii primite (extras din ZIP-ul ANAF)."""
+    from app.efactura.received_parser import UBLParseError, extract_invoice_xml_from_zip
+
+    await _require_company_access(db, company_id, account_id)
+    idx = (
+        await db.execute(
+            select(EFacturaReceivedIndex).where(
+                EFacturaReceivedIndex.id == received_id,
+                EFacturaReceivedIndex.company_id == company_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if idx is None:
+        raise HTTPException(404, "Factura primita inexistenta.")
+
+    try:
+        zip_bytes = await efactura_service.ensure_received_downloaded(db, idx)
+        xml_bytes = extract_invoice_xml_from_zip(zip_bytes)
+    except (AnafTokenMissing, AnafTokenExpired) as exc:
+        raise HTTPException(401, str(exc))
+    except UBLParseError as exc:
+        raise HTTPException(422, str(exc))
+    except EFacturaError as exc:
+        raise HTTPException(502, str(exc))
+
+    from io import BytesIO
+
+    return StreamingResponse(
+        BytesIO(xml_bytes),
+        media_type="application/xml",
+        headers={
+            "Content-Disposition": f'attachment; filename="factura_{idx.id_solicitare}.xml"'
+        },
+    )
 
 
 @router.post("/companies/{company_id}/received/sync")

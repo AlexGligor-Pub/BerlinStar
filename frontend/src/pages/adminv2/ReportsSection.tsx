@@ -181,7 +181,7 @@ export default function ReportsSection() {
         <div>
           <h1 class="page-title">Rapoarte globale</h1>
           <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px">
-            Worker luni–sâmbătă, 08:00–20:00, din 2 în 2 ore (Europe/Bucharest). Toate rapoartele rulează secvențial, cu pauză de 3 minute între ele. Trigger manual cu cooldown 5min.
+            Worker luni–sâmbătă, 08:00–20:00, din 2 în 2 ore (Europe/Bucharest). La fiecare slot se reconstruiește ziua curentă cu datele acumulate până atunci (rebuild idempotent). Toate rapoartele rulează secvențial, cu pauză de 3 minute între ele. Trigger manual cu cooldown 5min.
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">

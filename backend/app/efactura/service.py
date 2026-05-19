@@ -21,7 +21,7 @@ from app.efactura.exceptions import (
     EFacturaError,
 )
 from app.efactura.mapping import build_invoice_payload
-from app.efactura.models import AnafSettings, EFacturaRecord
+from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFacturaReceivedIndex
 from app.efactura.xml_builder import build_xml
 from app.efactura.xml_validator import validate_schematron
 from app.models.client import Client
@@ -284,3 +284,86 @@ async def _archive_zip_to_s3(company_id: int, record_id: int, zip_bytes: bytes) 
     except Exception as exc:  # noqa: BLE001
         log.warning("Nu am putut arhiva ZIP in S3: %s", exc)
         return ""
+
+
+async def _archive_received_zip_to_s3(company_id: int, received_id: int, zip_bytes: bytes) -> str:
+    try:
+        from app.utils.storage import _s3_client  # type: ignore[attr-defined]
+    except ImportError:
+        return ""
+    bucket = os.getenv("S3_BUCKET", "professorprimedev")
+    year = datetime.now(timezone.utc).year
+    key = f"efactura/companies/{company_id}/received/{year}/{received_id}.zip"
+    try:
+        s3 = _s3_client()
+        s3.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=zip_bytes,
+            ContentType="application/zip",
+            ACL="private",
+        )
+        return key
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Nu am putut arhiva ZIP primit in S3: %s", exc)
+        return ""
+
+
+async def _load_zip_from_s3(s3_key: str) -> bytes | None:
+    """Reincarca un ZIP din S3 ca bytes. Returneaza None daca cheia lipseste/eroare."""
+    if not s3_key:
+        return None
+    try:
+        from app.utils.storage import _s3_client  # type: ignore[attr-defined]
+    except ImportError:
+        return None
+    bucket = os.getenv("S3_BUCKET", "professorprimedev")
+    import asyncio
+
+    def _get() -> bytes | None:
+        try:
+            s3 = _s3_client()
+            obj = s3.get_object(Bucket=bucket, Key=s3_key)
+            return obj["Body"].read()
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Nu am putut citi ZIP din S3 (%s): %s", s3_key, exc)
+            return None
+
+    return await asyncio.to_thread(_get)
+
+
+async def ensure_received_downloaded(
+    db: AsyncSession, idx: EFacturaReceivedIndex
+) -> bytes:
+    """Asigura ca ZIP-ul facturii primite este descarcat (S3 cache) si returneaza bytes.
+
+    1. Daca avem deja un s3 key valid -> citim din S3.
+    2. Daca nu, descarcam de la ANAF, salvam in S3, marcam downloaded=True.
+    """
+    if idx.response_zip_s3_key:
+        zip_bytes = await _load_zip_from_s3(idx.response_zip_s3_key)
+        if zip_bytes:
+            return zip_bytes
+        # S3 key invalid -> retry de la ANAF
+        log.warning(
+            "Cheie S3 invalida pentru received %s, redescarcam de la ANAF.", idx.id
+        )
+
+    token = (
+        await db.execute(select(AnafToken).where(AnafToken.company_id == idx.company_id))
+    ).scalar_one_or_none()
+    if token is None:
+        raise EFacturaError("Compania nu are token ANAF (deconectata).")
+    settings = await _get_settings(db, idx.company_id)
+
+    access_token = await oauth_service.get_valid_access_token(db, idx.company_id)
+    client = AnafEFacturaClient(access_token, str(token.cui), use_test=settings.use_test_env)
+    zip_bytes = await client.download_response(int(idx.id_solicitare))
+
+    s3_key = await _archive_received_zip_to_s3(idx.company_id, idx.id, zip_bytes)
+    idx.downloaded = True
+    if s3_key:
+        idx.response_zip_s3_key = s3_key
+    await db.commit()
+    await db.refresh(idx)
+    return zip_bytes

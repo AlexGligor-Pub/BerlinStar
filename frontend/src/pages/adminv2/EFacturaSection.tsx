@@ -941,11 +941,13 @@ function StatusTab(props: { companies: CompanySummary[] }) {
     if (!cid) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "100" });
+      const params = new URLSearchParams({ page: "1", page_size: "100" });
       if (statusFilter()) params.append("status", statusFilter());
       const res = await adminFetch(`/api/efactura/companies/${cid}/records?${params}`);
-      if (res.ok) setRecords(await res.json());
-      else notify("Nu am putut încărca transmiterile.", "error");
+      if (res.ok) {
+        const data = await res.json();
+        setRecords(Array.isArray(data) ? data : data.items ?? []);
+      } else notify("Nu am putut încărca transmiterile.", "error");
     } catch {
       notify("Eroare de rețea.", "error");
     } finally {
@@ -1195,9 +1197,11 @@ function ReceivedTab(props: { companies: CompanySummary[] }) {
     if (!cid) return;
     setLoading(true);
     try {
-      const res = await adminFetch(`/api/efactura/companies/${cid}/received?limit=200`);
-      if (res.ok) setRows(await res.json());
-      else notify("Eroare la facturi primite.", "error");
+      const res = await adminFetch(`/api/efactura/companies/${cid}/received?page=1&page_size=200`);
+      if (res.ok) {
+        const data = await res.json();
+        setRows(Array.isArray(data) ? data : data.items ?? []);
+      } else notify("Eroare la facturi primite.", "error");
     } catch {
       notify("Eroare de rețea.", "error");
     } finally {

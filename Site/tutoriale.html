@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0B1120" />
+<meta name="description" content="Tutoriale video Berlin Star — deviz, rapoarte, hotel anvelope, activitate clienți. Învață rapid cum să folosești fiecare modul." />
+<meta property="og:title" content="Tutoriale video — Berlin Star" />
+<meta property="og:description" content="Vezi cum se face în Berlin Star: deviz cu cazare, rapoarte, hotel anvelope, activitate clienți și deviz rapid." />
+<meta property="og:type" content="website" />
+<meta property="og:locale" content="ro_RO" />
+<link rel="icon" type="image/png" href="images/logo.png" />
+<link rel="shortcut icon" type="image/png" href="images/logo.png" />
+<link rel="apple-touch-icon" href="images/logo.png" />
+<title>Tutoriale video — Berlin Star · Professor Prime</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="preconnect" href="https://i.ytimg.com" />
+<link rel="preconnect" href="https://www.youtube-nocookie.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #1E293B;
+  background: #FFFFFF;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+:root {
+  --navy: #0B1120;
+  --navy-2: #111827;
+  --navy-soft: #1E293B;
+  --gold: #FBBF24;
+  --gold-dark: #F59E0B;
+  --gold-soft: #FEF3C7;
+  --slate-50: #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-500: #64748B;
+  --slate-700: #334155;
+  --green: #10B981;
+  --red: #FF0033;
+  --container: 1100px;
+}
+
+.container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 20px; }
+.eyebrow {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--gold-dark);
+  background: var(--gold-soft);
+  padding: 6px 14px;
+  border-radius: 999px;
+  margin-bottom: 16px;
+}
+.eyebrow.dark { background: rgba(251,191,36,.15); color: var(--gold); }
+h1, h2, h3, h4 { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; line-height: 1.15; color: var(--navy); letter-spacing: -0.02em; }
+h1 { font-size: clamp(2rem, 5.5vw, 3.2rem); font-weight: 800; }
+h2 { font-size: clamp(1.4rem, 3.5vw, 1.9rem); font-weight: 800; margin-bottom: 14px; }
+h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+p.lead { font-size: clamp(1.05rem, 2.5vw, 1.18rem); color: var(--slate-700); max-width: 720px; }
+
+.btn {
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+  transition: transform .15s, box-shadow .2s;
+  white-space: nowrap;
+  min-height: 48px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+  color: var(--navy);
+  box-shadow: 0 8px 20px -6px rgba(245,158,11,.55);
+}
+.btn-primary:hover { transform: translateY(-2px); }
+.btn-secondary {
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,.18);
+}
+.btn-secondary:hover { background: rgba(255,255,255,.14); }
+.btn-yt {
+  background: var(--red);
+  color: #fff;
+  box-shadow: 0 8px 20px -6px rgba(255,0,51,.55);
+}
+.btn-yt:hover { transform: translateY(-2px); }
+
+/* NAV */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(11,17,32,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.nav-inner {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 68px;
+}
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  color: #fff;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  letter-spacing: -0.02em;
+}
+.brand-text { display: flex; flex-direction: column; line-height: 1.1; }
+.brand-name { font-weight: 800; font-size: 1.1rem; color: #fff; }
+.brand-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+@media (max-width: 859px) {
+  .brand { gap: 10px; }
+  .brand-name { font-size: 0.95rem; }
+  .brand-sub { font-size: 0.62rem; margin-top: 1px; }
+}
+.brand-logo {
+  width: 38px; height: 38px;
+  border-radius: 10px;
+  background: #fff;
+  display: grid; place-items: center;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+.brand-logo img { width: 100%; height: 100%; object-fit: cover; }
+.nav-links { display: flex; align-items: center; gap: 28px; }
+.nav-links a {
+  color: rgba(255,255,255,.78);
+  font-size: 14px; font-weight: 500;
+}
+.nav-links a:hover { color: var(--gold); }
+.nav-cta { margin-left: 8px; }
+.hamburger {
+  display: none;
+  width: 44px; height: 44px;
+  align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.hamburger span {
+  display: block; width: 20px; height: 2px;
+  background: #fff; position: relative;
+  transition: transform .25s, opacity .25s;
+}
+.hamburger span::before, .hamburger span::after {
+  content: ''; position: absolute; left: 0; width: 100%; height: 2px;
+  background: #fff; transition: transform .25s;
+}
+.hamburger span::before { top: -7px; }
+.hamburger span::after { top: 7px; }
+.hamburger.open span { background: transparent; }
+.hamburger.open span::before { transform: translateY(7px) rotate(45deg); }
+.hamburger.open span::after { transform: translateY(-7px) rotate(-45deg); }
+
+/* HERO */
+.hero {
+  position: relative;
+  background: radial-gradient(ellipse at top right, #1E293B 0%, var(--navy) 45%, #050810 100%);
+  color: #fff;
+  padding: 140px 0 70px;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(251,191,36,.12), transparent 35%),
+    radial-gradient(circle at 80% 70%, rgba(255,0,51,.08), transparent 40%);
+  pointer-events: none;
+}
+.hero h1 { color: #fff; max-width: 760px; }
+.hero h1 .accent {
+  background: linear-gradient(135deg, var(--gold) 0%, #FCD34D 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.hero p.lead { color: rgba(255,255,255,.78); margin-top: 16px; }
+.hero-stats {
+  display: flex; gap: 28px; flex-wrap: wrap;
+  margin-top: 36px;
+  color: rgba(255,255,255,.85);
+}
+.hero-stat .num {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1.6rem; font-weight: 800; color: var(--gold);
+  line-height: 1;
+}
+.hero-stat .lbl {
+  font-size: 12px; text-transform: uppercase;
+  letter-spacing: 1px; color: rgba(255,255,255,.6);
+  margin-top: 6px;
+}
+
+/* SECTIONS */
+.section { padding: 64px 0; }
+@media (min-width: 640px) { .section { padding: 80px 0; } }
+@media (min-width: 960px) { .section { padding: 96px 0; } }
+
+/* TUTORIAL GRID */
+.tut-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 22px;
+  margin-top: 40px;
+}
+@media (min-width: 720px) { .tut-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1024px) { .tut-grid { grid-template-columns: repeat(3, 1fr); } }
+
+.tut-card {
+  background: #fff;
+  border: 1px solid var(--slate-200);
+  border-radius: 22px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  transition: transform .2s, box-shadow .2s, border-color .2s;
+}
+.tut-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 25px 50px -12px rgba(15,23,42,.18);
+  border-color: var(--gold);
+}
+
+.lite-yt {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  cursor: pointer;
+  overflow: hidden;
+}
+.lite-yt img.thumb {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transition: transform .35s, filter .25s;
+}
+.lite-yt:hover img.thumb { transform: scale(1.04); filter: brightness(.85); }
+.lite-yt .play-btn {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--red);
+  display: grid; place-items: center;
+  box-shadow: 0 12px 28px -6px rgba(0,0,0,.5);
+  transition: transform .2s, background .2s;
+}
+.lite-yt:hover .play-btn { transform: translate(-50%, -50%) scale(1.08); background: #E60023; }
+.lite-yt .play-btn svg { color: #fff; }
+.lite-yt .duration {
+  position: absolute;
+  bottom: 10px; right: 10px;
+  background: rgba(0,0,0,.85);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 6px;
+  letter-spacing: .3px;
+}
+.lite-yt .index-badge {
+  position: absolute;
+  top: 12px; left: 12px;
+  background: var(--gold);
+  color: var(--navy);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.25);
+}
+.lite-yt iframe {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+
+.tut-body {
+  padding: 22px;
+  display: flex; flex-direction: column;
+  flex: 1;
+}
+.tut-body h3 {
+  font-size: 1.1rem;
+  color: var(--navy);
+  margin-bottom: 8px;
+}
+.tut-body p {
+  color: var(--slate-500);
+  font-size: 14px;
+  margin-bottom: 18px;
+  flex: 1;
+}
+.tut-actions {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.tut-actions a {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--slate-700);
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--slate-100);
+  transition: background .15s, color .15s;
+}
+.tut-actions a:hover { background: var(--gold-soft); color: var(--gold-dark); }
+
+/* CTA STRIP */
+.cta-strip {
+  background:
+    radial-gradient(ellipse at top, rgba(255,0,51,.10), transparent 60%),
+    linear-gradient(135deg, #0B1120 0%, #1E293B 100%);
+  color: #fff;
+  border-radius: 28px;
+  padding: 48px 32px;
+  text-align: center;
+  margin-top: 56px;
+  border: 1px solid rgba(255,0,51,.18);
+  position: relative;
+  overflow: hidden;
+}
+.cta-strip h2 { color: #fff; max-width: 620px; margin: 0 auto 14px; }
+.cta-strip p { color: rgba(255,255,255,.78); max-width: 540px; margin: 0 auto 28px; }
+.cta-strip .yt-icon {
+  display: inline-grid; place-items: center;
+  width: 72px; height: 72px; border-radius: 18px;
+  background: var(--red);
+  color: #fff;
+  margin-bottom: 22px;
+  box-shadow: 0 16px 36px -8px rgba(255,0,51,.55);
+}
+
+/* FOOTER */
+.footer {
+  background: #050810;
+  color: rgba(255,255,255,.6);
+  padding: 40px 0 24px;
+  font-size: 14px;
+}
+.footer-bottom {
+  display: flex; flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: rgba(255,255,255,.5);
+}
+.flag-ro {
+  display: inline-flex; height: 12px; border-radius: 2px; overflow: hidden;
+  border: 1px solid rgba(255,255,255,.1);
+}
+.flag-ro span { display: block; width: 6px; height: 12px; }
+.flag-ro .b1 { background: #002B7F; }
+.flag-ro .b2 { background: #FCD116; }
+.flag-ro .b3 { background: #CE1126; }
+.made { display: flex; align-items: center; gap: 6px; }
+
+/* FAB */
+.fab {
+  position: fixed;
+  bottom: 20px; right: 20px;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: #25D366;
+  color: #fff;
+  display: grid; place-items: center;
+  box-shadow: 0 12px 28px -6px rgba(37,211,102,.55);
+  z-index: 90;
+  transition: transform .2s;
+}
+.fab:hover { transform: scale(1.08); }
+.fab-pulse {
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: #25D366;
+  opacity: .4;
+  animation: fab-ring 2s infinite;
+  pointer-events: none;
+}
+@keyframes fab-ring {
+  0% { transform: scale(1); opacity: .5; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+.fab svg { position: relative; z-index: 1; }
+
+/* Mobile menu */
+@media (max-width: 859px) {
+  .hamburger { display: inline-flex; }
+  .nav-links {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    background: rgba(11,17,32,.98);
+    backdrop-filter: blur(12px);
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 20px 24px;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height .25s ease, padding .25s ease;
+  }
+  .nav-links.open { max-height: 480px; padding: 16px 20px 24px; }
+  .nav-links a { padding: 12px 0; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .nav-links a:last-of-type { border-bottom: 0; }
+  .nav-cta { margin: 12px 0 0; }
+}
+
+/* Reveal */
+.reveal { opacity: 0; transform: translateY(20px); transition: opacity .6s, transform .6s; }
+.reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- =================== NAV =================== -->
+<nav class="nav">
+  <div class="container nav-inner">
+    <a href="index.html" class="brand" aria-label="Professor Prime - Acasă">
+      <span class="brand-logo"><img src="images/logo.png" alt="Professor Prime logo" /></span>
+      <span class="brand-text">
+        <span class="brand-name">Professor Prime</span>
+        <span class="brand-sub">Berlin Star</span>
+      </span>
+    </a>
+
+    <button class="hamburger" id="hamburger" aria-label="Meniu" aria-expanded="false">
+      <span></span>
+    </button>
+
+    <div class="nav-links" id="navLinks">
+      <a href="index.html">Acasă</a>
+      <a href="index.html#features">Funcționalități</a>
+      <a href="index.html#anaf">eFactura</a>
+      <a href="index.html#pricing">Prețuri</a>
+      <a href="tutoriale.html" style="color: var(--gold);">Tutoriale</a>
+      <a href="support.html">Suport</a>
+      <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary nav-cta">Intră în sistem</a>
+    </div>
+  </div>
+</nav>
+
+<!-- =================== HERO =================== -->
+<header class="hero">
+  <div class="container">
+    <span class="eyebrow dark">Învață rapid Berlin Star</span>
+    <h1>Tutoriale video pentru utilizatorii <span class="accent">Berlin Star.</span></h1>
+    <p class="lead">
+      Pași clari, scurți, filmați direct din aplicație. De la primul deviz cu cazare și montaj, până la rapoarte și hotel anvelope — afli în 1-7 minute exact ce ai nevoie.
+    </p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="num" id="stat-count">5</div>
+        <div class="lbl">Tutoriale disponibile</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">~10<span style="font-size:1rem">min</span></div>
+        <div class="lbl">Durata totală</div>
+      </div>
+      <div class="hero-stat">
+        <div class="num">100%</div>
+        <div class="lbl">În limba română</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- =================== TUTORIAL CARDS =================== -->
+<section class="section">
+  <div class="container">
+    <div style="max-width: 720px;">
+      <span class="eyebrow">Lecții video</span>
+      <h2>Apasă pe un tutorial. Se redă direct aici, fără să ieși din site.</h2>
+      <p class="lead">Toate tutorialele sunt înregistrate de echipa Professor Prime pe versiunea actuală Berlin Star. Dacă ai o întrebare după ce ai văzut un tutorial, scrie-ne pe WhatsApp.</p>
+    </div>
+
+    <div class="tut-grid" id="tutGrid">
+
+      <article class="tut-card reveal">
+        <div class="lite-yt" data-video="-S5JcDXs9Os" data-title="Berlin Star - Deviz nou cu cazare și montare">
+          <img class="thumb" src="https://i.ytimg.com/vi/-S5JcDXs9Os/hqdefault.jpg" alt="Berlin Star - Deviz nou cu cazare și montare" loading="lazy" />
+          <span class="index-badge">01</span>
+          <span class="duration">7:31</span>
+          <span class="play-btn" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </div>
+        <div class="tut-body">
+          <h3>Deviz nou cu cazare și montare</h3>
+          <p>Cum creezi un deviz complet care include cazarea anvelopelor (hotel anvelope) și manopera de montaj — pas cu pas.</p>
+          <div class="tut-actions">
+            <a href="https://www.youtube.com/watch?v=-S5JcDXs9Os" target="_blank" rel="noopener" aria-label="Deschide pe YouTube">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              YouTube
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <article class="tut-card reveal">
+        <div class="lite-yt" data-video="j0xnJRIirgE" data-title="Berlin Star - Rapoarte">
+          <img class="thumb" src="https://i.ytimg.com/vi/j0xnJRIirgE/hqdefault.jpg" alt="Berlin Star - Rapoarte" loading="lazy" />
+          <span class="index-badge">02</span>
+          <span class="duration">2:16</span>
+          <span class="play-btn" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </div>
+        <div class="tut-body">
+          <h3>Rapoarte</h3>
+          <p>Cum generezi și interpretezi rapoartele Berlin Star: vânzări, profit, activitate și ce poți exporta în Excel.</p>
+          <div class="tut-actions">
+            <a href="https://www.youtube.com/watch?v=j0xnJRIirgE" target="_blank" rel="noopener" aria-label="Deschide pe YouTube">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              YouTube
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <article class="tut-card reveal">
+        <div class="lite-yt" data-video="1YStVCu2h-w" data-title="Berlin Star - Activitate Clienți">
+          <img class="thumb" src="https://i.ytimg.com/vi/1YStVCu2h-w/hqdefault.jpg" alt="Berlin Star - Activitate Clienți" loading="lazy" />
+          <span class="index-badge">03</span>
+          <span class="duration">0:35</span>
+          <span class="play-btn" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </div>
+        <div class="tut-body">
+          <h3>Activitate clienți</h3>
+          <p>Cum vezi istoricul complet al unui client: deviz-uri, plăți, servicii efectuate și anvelope aflate la cazare.</p>
+          <div class="tut-actions">
+            <a href="https://www.youtube.com/watch?v=1YStVCu2h-w" target="_blank" rel="noopener" aria-label="Deschide pe YouTube">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              YouTube
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <article class="tut-card reveal">
+        <div class="lite-yt" data-video="ZtC0Fdp_su0" data-title="Berlin Star - Hotel Anvelope - Scoatere și cazare nouă">
+          <img class="thumb" src="https://i.ytimg.com/vi/ZtC0Fdp_su0/hqdefault.jpg" alt="Berlin Star - Hotel Anvelope - Scoatere și cazare nouă" loading="lazy" />
+          <span class="index-badge">04</span>
+          <span class="duration">1:23</span>
+          <span class="play-btn" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </div>
+        <div class="tut-body">
+          <h3>Hotel anvelope: scoatere și cazare nouă</h3>
+          <p>Cum scoți o cazare existentă pentru a o monta și cum înregistrezi imediat anvelopele noi la hotel — într-o singură vizită.</p>
+          <div class="tut-actions">
+            <a href="https://www.youtube.com/watch?v=ZtC0Fdp_su0" target="_blank" rel="noopener" aria-label="Deschide pe YouTube">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              YouTube
+            </a>
+          </div>
+        </div>
+      </article>
+
+      <article class="tut-card reveal">
+        <div class="lite-yt" data-video="3jkaqEMuFMI" data-title="Berlin Star - Deviz Nou rapid">
+          <img class="thumb" src="https://i.ytimg.com/vi/3jkaqEMuFMI/hqdefault.jpg" alt="Berlin Star - Deviz Nou rapid" loading="lazy" />
+          <span class="index-badge">05</span>
+          <span class="duration">1:10</span>
+          <span class="play-btn" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+        </div>
+        <div class="tut-body">
+          <h3>Deviz nou rapid</h3>
+          <p>Versiunea express: cum emiți un deviz simplu în mai puțin de un minut, fără să intri în detaliile avansate.</p>
+          <div class="tut-actions">
+            <a href="https://www.youtube.com/watch?v=3jkaqEMuFMI" target="_blank" rel="noopener" aria-label="Deschide pe YouTube">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              YouTube
+            </a>
+          </div>
+        </div>
+      </article>
+
+    </div>
+
+    <!-- CTA strip -->
+    <div class="cta-strip reveal">
+      <div class="yt-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      </div>
+      <span class="eyebrow dark">Toate tutorialele într-un singur loc</span>
+      <h2>Urmărește playlist-ul complet pe YouTube</h2>
+      <p>Vrei să te abonezi și să primești notificare la fiecare tutorial nou? Deschide playlist-ul direct pe canalul nostru YouTube.</p>
+      <a href="https://www.youtube.com/playlist?list=PLq9mFOaKsb5GG-93M980QkgMuui8wFpYi" target="_blank" rel="noopener" class="btn btn-yt" style="font-size: 16px;">
+        Deschide playlist-ul pe YouTube
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- =================== FOOTER =================== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-bottom">
+      <span>© <span id="year">2026</span> Professor Prime S.R.L. Toate drepturile rezervate.</span>
+      <span class="made">
+        <span class="flag-ro"><span class="b1"></span><span class="b2"></span><span class="b3"></span></span>
+        Made with ★ in Romania
+      </span>
+    </div>
+  </div>
+</footer>
+
+<!-- =================== FLOATING WHATSAPP =================== -->
+<a class="fab" href="https://web.whatsapp.com/send?phone=40744138843&text=Salut!%20Am%20o%20intrebare%20despre%20un%20tutorial%20Berlin Star." target="_blank" rel="noopener" aria-label="Scrie-ne pe WhatsApp">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.099-.471-.15-.67.15-.197.299-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413"/></svg>
+  <span class="fab-pulse"></span>
+</a>
+
+<script>
+// Mobile menu
+const hamburger = document.getElementById('hamburger');
+const navLinks = document.getElementById('navLinks');
+hamburger.addEventListener('click', () => {
+  const isOpen = navLinks.classList.toggle('open');
+  hamburger.classList.toggle('open', isOpen);
+  hamburger.setAttribute('aria-expanded', isOpen);
+});
+navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+  navLinks.classList.remove('open');
+  hamburger.classList.remove('open');
+}));
+
+// Lite YouTube — încarcă iframe doar la click (rapid, fără cookies inițiale)
+document.querySelectorAll('.lite-yt').forEach(box => {
+  box.addEventListener('click', () => {
+    if (box.dataset.loaded === '1') return;
+    const id = box.dataset.video;
+    const title = box.dataset.title || 'YouTube video';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('title', title);
+    iframe.setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture');
+    iframe.setAttribute('allowfullscreen', '');
+    iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&rel=0&modestbranding=1';
+    box.innerHTML = '';
+    box.appendChild(iframe);
+    box.dataset.loaded = '1';
+    box.style.cursor = 'default';
+  });
+});
+
+// Scroll reveal
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
+}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// Year
+document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 """Orchestrare run / trigger / cooldown pentru rapoarte."""
 from __future__ import annotations
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -16,6 +17,9 @@ from .builder import BUILDERS, BUCHAREST_TZ
 log = logging.getLogger("berlinstar.reports")
 
 COOLDOWN_SECONDS = 300  # 5 minute
+# Daca un raport e marcat 'running' dar nu s-a mai atins de mai mult de atat,
+# il consideram stale (workerul a fost ucis mid-run) si permitem o noua rulare.
+STALE_RUNNING_SECONDS = 1800  # 30 minute
 SUPPORTED_REPORTS = (
     "receipts_daily",
     "employee_daily",
@@ -51,9 +55,14 @@ def _compute_period(
     last_period_end: date | None,
     oldest_source_date: date | None,
 ) -> tuple[date, date] | None:
-    """Returnează (period_start, period_end) sau None dacă nu e nimic de procesat."""
+    """Returnează (period_start, period_end) sau None dacă nu e nimic de procesat.
+
+    Incremental include ziua curentă: cron-ul ruleaza la 08:00, 10:00, ..., 20:00
+    si la fiecare slot reconstruieste ziua de azi cu datele acumulate pana atunci.
+    Builderii sunt idempotenti (DELETE + INSERT pe perioada), deci rebuildul
+    zilei curente nu duplica date.
+    """
     today_buc = _bucharest_today()
-    yesterday_buc = today_buc - timedelta(days=1)
 
     if mode == "weekly_refresh":
         first_of_this_month = today_buc.replace(day=1)
@@ -65,12 +74,11 @@ def _compute_period(
     if last_period_end is None:
         if oldest_source_date is None:
             return None
-        return oldest_source_date, yesterday_buc
+        return oldest_source_date, today_buc
 
-    start = last_period_end + timedelta(days=1)
-    if start > yesterday_buc:
-        return None
-    return start, yesterday_buc
+    # Catch-up daca exista gap (last < azi-1), altfel doar reprocesam azi.
+    start = min(last_period_end + timedelta(days=1), today_buc)
+    return start, today_buc
 
 
 async def _get_oldest_source_date(db: AsyncSession, report_type: str) -> date | None:
@@ -181,8 +189,32 @@ async def run_report(
             await db.flush()
 
         if run.status == "running":
-            log.warning("Raportul %s e deja în rulare — skip.", report_type)
-            return {"skipped": True, "reason": "already_running"}
+            # Detectie stale: daca last_triggered_at e foarte vechi, workerul
+            # a fost ucis mid-run (max-requests / SIGTERM) si statusul a ramas
+            # blocat. Marcam ca failed si continuam cu o noua rulare.
+            triggered = run.last_triggered_at
+            now_utc = datetime.now(timezone.utc)
+            stale = (
+                triggered is None
+                or (now_utc - triggered).total_seconds() > STALE_RUNNING_SECONDS
+            )
+            if stale:
+                log.warning(
+                    "Raportul %s era marcat 'running' dar last_triggered_at=%s "
+                    "este stale (> %ds). Tratam ca esec si reluam.",
+                    report_type, triggered, STALE_RUNNING_SECONDS,
+                )
+                run.status = "failed"
+                run.last_error = "stale_running_recovered"
+                run.updated_at = now_utc
+                await db.commit()
+                # Re-citim randul dupa commit pentru a continua cu logica normala.
+                run = (await db.execute(
+                    select(ReportRun).where(ReportRun.report_type == report_type).with_for_update()
+                )).scalar_one()
+            else:
+                log.warning("Raportul %s e deja în rulare — skip.", report_type)
+                return {"skipped": True, "reason": "already_running"}
 
         if period_override is not None:
             period: tuple[date, date] | None = period_override
@@ -237,9 +269,18 @@ async def run_report(
             "rows": inserted,
             "duration_ms": duration_ms,
         }
-    except Exception as exc:
-        log.exception("Eroare la rularea raportului %s", report_type)
+    except (asyncio.CancelledError, Exception) as exc:
+        # CancelledError apare cand workerul gunicorn e reciclat (max-requests,
+        # SIGTERM, deploy). Trebuie sa scoatem statusul din 'running' inainte
+        # de a re-arunca, altfel raportul ramane blocat si va fi sarit la
+        # urmatoarea rulare.
+        is_cancel = isinstance(exc, asyncio.CancelledError)
+        if is_cancel:
+            log.warning("Raport %s anulat (worker shutdown / cancel).", report_type)
+        else:
+            log.exception("Eroare la rularea raportului %s", report_type)
         duration_ms = int((time.monotonic() - start_ts) * 1000)
+        err_msg = "cancelled_worker_shutdown" if is_cancel else str(exc)[:2000]
         try:
             async with AsyncSessionLocal() as upd:
                 await upd.execute(
@@ -248,7 +289,7 @@ async def run_report(
                         "last_duration_ms = :dur, updated_at = NOW() "
                         "WHERE report_type = :rt"
                     ),
-                    {"err": str(exc)[:2000], "dur": duration_ms, "rt": report_type},
+                    {"err": err_msg, "dur": duration_ms, "rt": report_type},
                 )
                 await upd.commit()
         except Exception:

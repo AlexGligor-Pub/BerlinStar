@@ -23,7 +23,9 @@ const Programari = lazy(() => import("./pages/Programari"));
 const NoAccess = lazy(() => import("./pages/NoAccess"));
 const AdminV2 = lazy(() => import("./pages/AdminV2"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
-const EFacturaPrimite = lazy(() => import("./pages/EFacturaPrimite"));
+const EFacturaLayout = lazy(() => import("./pages/efactura/EFacturaLayout"));
+const EFacturaReceived = lazy(() => import("./pages/efactura/EFacturaReceived"));
+const EFacturaSent = lazy(() => import("./pages/efactura/EFacturaSent"));
 
 function PageSuspense(props: { children: any }) {
   return (
@@ -102,11 +104,16 @@ export default function App() {
         <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
         <Route path="/programari" component={() => <Protected component={Programari} />} />
         <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
-        <Route path="/efactura-primite" component={() => (
+        <Route path="/efactura-primite" component={() => <Navigate href="/efactura/primite" />} />
+        <Route path="/efactura" component={(p: any) => (
           <Show when={adminVisible()} fallback={<Navigate href="/" />}>
-            <Protected component={EFacturaPrimite} />
+            <Protected component={() => <EFacturaLayout>{p.children}</EFacturaLayout>} />
           </Show>
-        )} />
+        )}>
+          <Route path="/" component={() => <Navigate href="/efactura/primite" />} />
+          <Route path="/primite" component={EFacturaReceived} />
+          <Route path="/trimise" component={EFacturaSent} />
+        </Route>
       </Router>
     </AppErrorBoundary>
   );

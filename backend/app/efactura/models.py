@@ -164,6 +164,8 @@ class EFacturaReceivedIndex(Base):
     raw_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     downloaded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     response_zip_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
