@@ -591,6 +591,183 @@ async def reports_produse_servicii(
     )
 
 
+# ───── Items Catalog + Timeseries (comparare servicii) ───────────────────────
+
+class CatalogItem(BaseModel):
+    item_id: int
+    item_name: str
+    item_type: str  # "Produs" sau "Service"
+    category_id: int
+    category_name: str
+    department_id: int | None
+    department_name: str
+
+
+class CatalogResponse(BaseModel):
+    items: list[CatalogItem]
+
+
+@router.get("/items-catalog", response_model=CatalogResponse)
+async def reports_items_catalog(
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Returneaza catalogul de items (servicii + produse) cu departament + categorie.
+
+    Folosit de UI-ul de comparare timeseries pentru a popula picker-ul cu filtre
+    pe departament / categorie. Itemii sterși sunt excluși.
+    """
+    rows = (await db.execute(
+        text("""
+            SELECT i.id AS item_id,
+                   i.name AS item_name,
+                   i.type::text AS item_type,
+                   c.id AS category_id,
+                   c.name AS category_name,
+                   d.id AS department_id,
+                   COALESCE(d.name, 'Fara departament') AS department_name
+            FROM items i
+            JOIN categories c ON c.id = i.category_id
+            LEFT JOIN departments d ON d.id = c.department_id
+            WHERE i.account_id = :acc
+              AND i.is_deleted = false
+            ORDER BY d.name NULLS LAST, c.name, i.name
+        """),
+        {"acc": account_id},
+    )).all()
+    return CatalogResponse(items=[
+        CatalogItem(
+            item_id=r.item_id,
+            item_name=r.item_name,
+            item_type=r.item_type,
+            category_id=r.category_id,
+            category_name=r.category_name,
+            department_id=r.department_id,
+            department_name=r.department_name,
+        )
+        for r in rows
+    ])
+
+
+class ItemSeriesPoint(BaseModel):
+    report_date: date
+    total: Decimal
+
+
+class ItemSeries(BaseModel):
+    item_id: int
+    item_name: str
+    category_name: str
+    department_name: str
+    points: list[ItemSeriesPoint]
+    total: Decimal
+
+
+class ItemsTimeseriesResponse(BaseModel):
+    series: list[ItemSeries]
+    period_start: date
+    period_end: date
+
+
+@router.get("/items-timeseries", response_model=ItemsTimeseriesResponse)
+async def reports_items_timeseries(
+    item_ids: list[int] = Query(..., description="Lista de item_id de comparat"),
+    date_from: date | None = None,
+    date_to: date | None = None,
+    location_ids: list[int] | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Timeseries zilnic per item pentru chartul de comparare servicii.
+
+    Sursa: live query pe receipts + receipt_items (nu pre-agregat la item level).
+    Pentru perioade mari si multi itemi, rezultatul ramane rezonabil pentru ca
+    grupeaza pe (zi, item) si filtreaza prin WHERE item_id = ANY(:ids).
+    """
+    if not item_ids:
+        raise HTTPException(400, "Trebuie cel putin un item_id.")
+    if len(item_ids) > 30:
+        raise HTTPException(400, "Maxim 30 servicii pot fi comparate odata.")
+    if date_from is None or date_to is None:
+        d1, d2 = _default_period()
+        date_from = date_from or d1
+        date_to = date_to or d2
+
+    loc_list: list[int] = list(location_ids) if location_ids else []
+    params: dict = {
+        "acc": account_id,
+        "d1": date_from,
+        "d2": date_to,
+        "ids": item_ids,
+    }
+    loc_filter = ""
+    if loc_list:
+        params["loc_ids"] = loc_list
+        loc_filter = "AND r.location_id = ANY(:loc_ids)"
+
+    rows = (await db.execute(
+        text(f"""
+            SELECT (r.created_at AT TIME ZONE 'Europe/Bucharest')::date AS report_date,
+                   ri.item_id AS item_id,
+                   COALESCE(SUM(ri.price * ri.qty), 0) AS total
+            FROM receipts r
+            JOIN receipt_items ri ON ri.receipt_id = r.id
+            WHERE r.is_deleted = false
+              AND ri.item_id = ANY(:ids)
+              AND (r.created_at AT TIME ZONE 'Europe/Bucharest')::date BETWEEN :d1 AND :d2
+              AND r.account_id = :acc
+              {loc_filter}
+            GROUP BY 1, 2
+            ORDER BY 2, 1
+        """),
+        params,
+    )).all()
+
+    # Metadata per item (name, category, department) pentru randare in legenda
+    meta_rows = (await db.execute(
+        text("""
+            SELECT i.id AS item_id, i.name AS item_name,
+                   c.name AS category_name,
+                   COALESCE(d.name, 'Fara departament') AS department_name
+            FROM items i
+            JOIN categories c ON c.id = i.category_id
+            LEFT JOIN departments d ON d.id = c.department_id
+            WHERE i.id = ANY(:ids) AND i.account_id = :acc
+        """),
+        {"ids": item_ids, "acc": account_id},
+    )).all()
+    meta = {m.item_id: m for m in meta_rows}
+
+    # Grupeaza rezultatele pe item_id
+    by_item: dict[int, list[ItemSeriesPoint]] = {iid: [] for iid in item_ids}
+    totals: dict[int, Decimal] = {iid: Decimal(0) for iid in item_ids}
+    for row in rows:
+        by_item.setdefault(row.item_id, []).append(
+            ItemSeriesPoint(report_date=row.report_date, total=row.total)
+        )
+        totals[row.item_id] = totals.get(row.item_id, Decimal(0)) + row.total
+
+    series: list[ItemSeries] = []
+    for iid in item_ids:
+        m = meta.get(iid)
+        if m is None:
+            continue
+        series.append(ItemSeries(
+            item_id=iid,
+            item_name=m.item_name,
+            category_name=m.category_name,
+            department_name=m.department_name,
+            points=by_item.get(iid, []),
+            total=totals.get(iid, Decimal(0)),
+        ))
+
+    return ItemsTimeseriesResponse(
+        series=series,
+        period_start=date_from,
+        period_end=date_to,
+    )
+
+
 # ───── Per Employee Detail ────────────────────────────────────────────────────
 
 class EmpDaily(BaseModel):

@@ -17,10 +17,10 @@ import { PALETTE, colorByIndex, PAY_COLORS, RO_DOW } from "./rapoarte/constants"
 import {
   drawLine, drawDonut, drawBar, drawGroupedBars,
   drawMonthlyBars, drawMonthlyDualBars, drawMonthlySeriesBars, drawHeatmap,
-  drawYoYBars,
+  drawYoYBars, drawMultiLine,
   type DailyTotal, type DonutItem, type BarItem, type GroupedBarItem,
   type MonthlyItem, type MonthlySeriesItem, type ProgramariHeatmapCell,
-  type YoYBucket,
+  type YoYBucket, type MultiLineSeries,
 } from "./rapoarte/charts";
 import StocuriSection from "./rapoarte/StocuriSection";
 import ReportsGate from "./rapoarte/ReportsGate";
@@ -1102,9 +1102,332 @@ function ProduseServiciiPanel() {
                 <div ref={empDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
               </div>
             </div>
+
+            {/* Row 4: Comparare servicii (multi-line chart) */}
+            <h3 class="locatii-section-title" style="margin-top:24px">4. Comparare servicii în timp</h3>
+            <Show when={!hideExplanations()}>
+              <p class="chart-explanation" style="max-width:820px">
+                Selectează din dreapta unul sau mai multe servicii (sau produse) pentru a vedea
+                evoluția lor pe perioada selectată în acelaşi grafic. Folosește filtrele de
+                departament şi categorie pentru a restrânge lista. Maxim 30 servicii odată.
+              </p>
+            </Show>
+            <CompareServicesBlock selectedLocIds={selectedLocIds} />
           </>
         )}
       </Show>
+    </div>
+  );
+}
+
+// ───── COMPARARE SERVICII (multi-line chart) ──────────────────────────────────
+
+interface CatalogItem {
+  item_id: number;
+  item_name: string;
+  item_type: string;
+  category_id: number;
+  category_name: string;
+  department_id: number | null;
+  department_name: string;
+}
+
+interface SeriesPoint { report_date: string; total: string | number }
+interface ApiSeries {
+  item_id: number;
+  item_name: string;
+  category_name: string;
+  department_name: string;
+  points: SeriesPoint[];
+  total: string | number;
+}
+interface TimeseriesResponse {
+  series: ApiSeries[];
+  period_start: string;
+  period_end: string;
+}
+
+function CompareServicesBlock(props: { selectedLocIds: () => number[] }) {
+  const [catalog, setCatalog] = createSignal<CatalogItem[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = createSignal(true);
+  const [selectedIds, setSelectedIds] = persistedSignal<number[]>("rapoarte_ps_compare_ids", []);
+  const [series, setSeries] = createSignal<ApiSeries[]>([]);
+  const [loadingSeries, setLoadingSeries] = createSignal(false);
+
+  const [filterDeptId, setFilterDeptId] = persistedSignal<number | null>("rapoarte_ps_compare_dept", null);
+  const [filterCatId, setFilterCatId] = persistedSignal<number | null>("rapoarte_ps_compare_cat", null);
+  const [search, setSearch] = persistedSignal<string>("rapoarte_ps_compare_search", "");
+
+  let chartRef: HTMLDivElement | undefined;
+
+  async function loadCatalog() {
+    setLoadingCatalog(true);
+    try {
+      const res = await reportsApiFetch("/api/reports/items-catalog");
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea catalogului.`, "error");
+        return;
+      }
+      const data = await res.json();
+      setCatalog(data.items as CatalogItem[]);
+    } catch {
+      notify("Eroare de reţea la încărcarea catalogului.", "error");
+    } finally {
+      setLoadingCatalog(false);
+    }
+  }
+
+  async function loadSeries() {
+    if (selectedIds().length === 0) {
+      setSeries([]);
+      return;
+    }
+    setLoadingSeries(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedIds()) qs.append("item_ids", String(id));
+      for (const id of props.selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await reportsApiFetch(`/api/reports/items-timeseries?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea seriilor.`, "error");
+        return;
+      }
+      const data = (await res.json()) as TimeseriesResponse;
+      setSeries(data.series);
+    } catch {
+      notify("Eroare de reţea la timeseries.", "error");
+    } finally {
+      setLoadingSeries(false);
+    }
+  }
+
+  onMount(() => { void loadCatalog(); });
+  createEffect(() => {
+    periodVersion();
+    selectedIds();
+    props.selectedLocIds();
+    void loadSeries();
+  });
+
+  // Resetăm filtrul de categorie dacă departamentul se schimbă
+  createEffect(() => {
+    const did = filterDeptId();
+    if (did === null) return;
+    const cid = filterCatId();
+    if (cid === null) return;
+    const cat = catalog().find((c) => c.category_id === cid);
+    if (!cat || cat.department_id !== did) setFilterCatId(null);
+  });
+
+  // Listă departamente unice (cele cu id valid; itemii fara departament intra in "Toate")
+  const departments = createMemo(() => {
+    const map = new Map<number, string>();
+    catalog().forEach((it) => {
+      if (it.department_id !== null && !map.has(it.department_id)) {
+        map.set(it.department_id, it.department_name);
+      }
+    });
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ro"));
+  });
+
+  // Listă categorii (filtrate după department dacă e selectat)
+  const categories = createMemo(() => {
+    const did = filterDeptId();
+    const seen = new Set<number>();
+    const out: { id: number; name: string; department_name: string }[] = [];
+    catalog().forEach((it) => {
+      if (did !== null && it.department_id !== did) return;
+      if (seen.has(it.category_id)) return;
+      seen.add(it.category_id);
+      out.push({ id: it.category_id, name: it.category_name, department_name: it.department_name });
+    });
+    return out.sort((a, b) => a.name.localeCompare(b.name, "ro"));
+  });
+
+  // Itemii filtraţi pentru lista de selecție
+  const filteredItems = createMemo(() => {
+    const did = filterDeptId();
+    const cid = filterCatId();
+    const q = search().trim().toLowerCase();
+    return catalog().filter((it) => {
+      if (did !== null && it.department_id !== did) return false;
+      if (cid !== null && it.category_id !== cid) return false;
+      if (q && !it.item_name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  });
+
+  function toggle(id: number) {
+    const cur = selectedIds();
+    if (cur.includes(id)) {
+      setSelectedIds(cur.filter((x) => x !== id));
+    } else {
+      if (cur.length >= 30) {
+        notify("Maxim 30 servicii pot fi comparate odată.", "warn");
+        return;
+      }
+      setSelectedIds([...cur, id]);
+    }
+  }
+
+  function clearSelection() { setSelectedIds([]); }
+
+  // Map item_id → CatalogItem pentru afișarea chip-urilor selectate
+  const selectedItems = createMemo(() => {
+    const ids = new Set(selectedIds());
+    return catalog().filter((it) => ids.has(it.item_id));
+  });
+
+  // Render chart
+  createEffect(() => {
+    if (!chartRef) return;
+    const s = series();
+    if (s.length === 0) {
+      drawMultiLine(chartRef, [], { dateFrom: periodFrom(), dateTo: periodTo() });
+      return;
+    }
+    const mlSeries: MultiLineSeries[] = s.map((srv, i) => ({
+      key: String(srv.item_id),
+      label: srv.item_name,
+      color: colorByIndex(i),
+      points: srv.points.map((p) => ({ date: p.report_date, value: toNumber(p.total) })),
+    }));
+    drawMultiLine(chartRef, mlSeries, { dateFrom: periodFrom(), dateTo: periodTo() });
+  });
+
+  return (
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;margin-top:12px;align-items:start">
+      {/* Stânga: chart + legendă */}
+      <div class="locatii-chart-card" style="min-width:0">
+        <div class="locatii-chart-title">Evoluţie zilnică · {periodLabel()}</div>
+        <div class="locatii-chart-subtitle">RON · o linie pentru fiecare serviciu selectat</div>
+
+        <Show when={loadingSeries()}>
+          <p class="cfg-hint" style="margin-top:14px">Se încarcă datele...</p>
+        </Show>
+
+        <div ref={chartRef} style="margin-top:10px;min-height:240px" />
+
+        <Show when={selectedItems().length > 0}>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:14px">
+            <For each={selectedItems()}>
+              {(it, i) => (
+                <span
+                  class="loc-chip loc-chip--active"
+                  style={`background:${colorByIndex(i())};border-color:${colorByIndex(i())};color:#fff;cursor:pointer`}
+                  title="Click pentru a deselecta"
+                  onClick={() => toggle(it.item_id)}
+                >
+                  {it.item_name} · {it.category_name}
+                </span>
+              )}
+            </For>
+            <button type="button" class="loc-chip" onClick={clearSelection}>Curăţă tot</button>
+          </div>
+        </Show>
+
+        <Show when={selectedItems().length > 0 && series().length > 0}>
+          <div style="margin-top:14px;font-size:0.85rem;color:var(--text-muted)">
+            <For each={series()}>
+              {(s) => (
+                <div style="display:flex;justify-content:space-between;gap:12px;padding:2px 0">
+                  <span>{s.item_name} <span style="opacity:0.7">· {s.category_name} · {s.department_name}</span></span>
+                  <strong>{fmtMoney(toNumber(s.total))} lei</strong>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+
+      {/* Dreapta: filtre + listă selectabilă */}
+      <div class="locatii-chart-card" style="display:flex;flex-direction:column;gap:10px">
+        <div class="locatii-chart-title">Filtrare servicii</div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:0.78rem;color:var(--text-muted)">Departament</label>
+          <select
+            class="input"
+            style="height:32px;padding:2px 8px"
+            value={filterDeptId() === null ? "" : String(filterDeptId())}
+            onChange={(e) => {
+              const v = e.currentTarget.value;
+              setFilterDeptId(v === "" ? null : Number(v));
+            }}
+          >
+            <option value="">Toate departamentele</option>
+            <For each={departments()}>
+              {(d) => <option value={String(d.id)}>{d.name}</option>}
+            </For>
+          </select>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:0.78rem;color:var(--text-muted)">Categorie</label>
+          <select
+            class="input"
+            style="height:32px;padding:2px 8px"
+            value={filterCatId() === null ? "" : String(filterCatId())}
+            onChange={(e) => {
+              const v = e.currentTarget.value;
+              setFilterCatId(v === "" ? null : Number(v));
+            }}
+          >
+            <option value="">Toate categoriile</option>
+            <For each={categories()}>
+              {(c) => <option value={String(c.id)}>{c.name}</option>}
+            </For>
+          </select>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="font-size:0.78rem;color:var(--text-muted)">Caută</label>
+          <input
+            type="search"
+            class="input"
+            style="height:32px;padding:2px 8px"
+            placeholder="nume serviciu..."
+            value={search()}
+            onInput={(e) => setSearch(e.currentTarget.value)}
+          />
+        </div>
+
+        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:4px">
+          {filteredItems().length} de servicii · {selectedIds().length}/30 selectate
+        </div>
+
+        <Show when={loadingCatalog()} fallback={
+          <div style="max-height:340px;overflow-y:auto;border:1px solid var(--border);border-radius:6px;padding:4px">
+            <Show when={filteredItems().length === 0}>
+              <div style="padding:18px;text-align:center;color:var(--text-muted);font-size:0.85rem">Niciun serviciu nu corespunde filtrelor.</div>
+            </Show>
+            <For each={filteredItems()}>
+              {(it) => {
+                const checked = () => selectedIds().includes(it.item_id);
+                return (
+                  <label style="display:flex;align-items:flex-start;gap:8px;padding:6px;border-radius:4px;cursor:pointer;font-size:0.85rem"
+                         classList={{ "compare-row--active": checked() }}>
+                    <input
+                      type="checkbox"
+                      checked={checked()}
+                      onChange={() => toggle(it.item_id)}
+                      style="margin-top:3px;flex-shrink:0"
+                    />
+                    <span style="min-width:0;flex:1">
+                      <span style="display:block">{it.item_name}</span>
+                      <span style="display:block;font-size:0.74rem;color:var(--text-muted)">{it.category_name} · {it.department_name}</span>
+                    </span>
+                  </label>
+                );
+              }}
+            </For>
+          </div>
+        }>
+          <p class="cfg-hint">Se încarcă...</p>
+        </Show>
+      </div>
     </div>
   );
 }

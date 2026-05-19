@@ -1250,3 +1250,211 @@ export function drawYoYBars(
     `<span style="display:inline-block;width:10px;height:10px;background:${colorB};border-radius:2px;margin-right:6px"></span>${yearB}`,
   );
 }
+
+export interface MultiLineSeries {
+  key: string;       // unique id (folosit la legenda + matching)
+  label: string;     // text afisat
+  color: string;
+  points: { date: string; value: number }[];
+}
+
+/**
+ * Multi-line chart pentru comparare timeseries (ex: servicii diferite).
+ * Toate seriile sunt randate pe acelasi axis. Domeniul X = [date_from, date_to]
+ * (luat din container.dataset.dateFrom/dateTo daca exista, altfel din puncte).
+ */
+export function drawMultiLine(
+  container: HTMLDivElement,
+  series: MultiLineSeries[],
+  opts?: { dateFrom?: string; dateTo?: string },
+) {
+  d3.select(container).selectAll("*").remove();
+  if (series.length === 0) {
+    d3.select(container).append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .text("Selecteaza cel putin un serviciu.");
+    return;
+  }
+
+  const w = container.clientWidth || 600;
+  const h = 320;
+  const margin = { top: 16, right: 24, bottom: 36, left: 64 };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("width", "100%")
+    .attr("height", h);
+
+  d3.select(container).style("position", "relative");
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const parseDate = d3.timeParse("%Y-%m-%d");
+
+  // Construieste mapuri si calculeaza domeniul X / Y peste toate seriile
+  const seriesParsed = series.map((s) => ({
+    ...s,
+    points: s.points
+      .map((p) => ({ date: parseDate(p.date)!, value: p.value }))
+      .filter((p) => p.date !== null)
+      .sort((a, b) => a.date.getTime() - b.date.getTime()),
+  }));
+
+  let xMin: Date | undefined;
+  let xMax: Date | undefined;
+  if (opts?.dateFrom) xMin = parseDate(opts.dateFrom) ?? undefined;
+  if (opts?.dateTo) xMax = parseDate(opts.dateTo) ?? undefined;
+  if (!xMin || !xMax) {
+    const all = seriesParsed.flatMap((s) => s.points.map((p) => p.date));
+    const ext = d3.extent(all);
+    if (ext[0] && ext[1]) {
+      if (!xMin) xMin = ext[0];
+      if (!xMax) xMax = ext[1];
+    }
+  }
+  if (!xMin || !xMax) {
+    d3.select(container).select("svg").remove();
+    d3.select(container).append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .text("Nicio vanzare in perioada selectata pentru serviciile alese.");
+    return;
+  }
+
+  const x = d3.scaleTime().domain([xMin, xMax]).range([0, iw]);
+  const yMax = d3.max(seriesParsed, (s) => d3.max(s.points, (p) => p.value)) || 100;
+  const y = d3.scaleLinear().domain([0, yMax * 1.12]).range([ih, 0]).nice();
+
+  // Grid
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickSize(-iw).tickFormat(() => ""))
+    .selectAll("line")
+    .attr("stroke", "var(--border, #2a3045)")
+    .attr("stroke-opacity", 0.4);
+  g.selectAll(".domain").remove();
+
+  // X axis
+  const tickCount = Math.min(8, Math.max(2, d3.timeDay.count(xMin, xMax)));
+  g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(tickCount).tickFormat(d3.timeFormat("%d.%m") as any))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+
+  // Y axis
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat((v) => {
+      const n = +v;
+      if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+      return String(n);
+    }))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+
+  const line = d3.line<{ date: Date; value: number }>()
+    .x((d) => x(d.date))
+    .y((d) => y(d.value))
+    .curve(d3.curveMonotoneX);
+
+  // Path-uri per serie
+  seriesParsed.forEach((s) => {
+    if (s.points.length === 0) return;
+    const path = g.append("path")
+      .datum(s.points)
+      .attr("fill", "none")
+      .attr("stroke", s.color)
+      .attr("stroke-width", 2.2)
+      .attr("d", line)
+      .attr("data-key", s.key);
+
+    const totalLen = (path.node() as SVGPathElement).getTotalLength();
+    path.attr("stroke-dasharray", totalLen)
+      .attr("stroke-dashoffset", totalLen)
+      .transition().duration(700).ease(d3.easeLinear).attr("stroke-dashoffset", 0);
+
+    // Puncte mici la fiecare valoare (pentru tooltip)
+    g.selectAll(null)
+      .data(s.points)
+      .enter()
+      .append("circle")
+      .attr("cx", (d) => x(d.date))
+      .attr("cy", (d) => y(d.value))
+      .attr("r", 2.5)
+      .attr("fill", s.color)
+      .attr("data-key", s.key);
+  });
+
+  // Hover tooltip cu toate valorile la X-ul respectiv
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "8px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("max-width", "320px")
+    .style("transition", "opacity 0.12s");
+
+  const verticalLine = g.append("line")
+    .attr("y1", 0)
+    .attr("y2", ih)
+    .attr("stroke", "var(--text-muted, #8b90a0)")
+    .attr("stroke-dasharray", "3 3")
+    .style("opacity", 0);
+
+  svg.append("rect")
+    .attr("x", margin.left)
+    .attr("y", margin.top)
+    .attr("width", iw)
+    .attr("height", ih)
+    .attr("fill", "transparent")
+    .on("mousemove", function (event) {
+      const [mx] = d3.pointer(event, this);
+      const xp = mx - margin.left;
+      const xDate = x.invert(xp);
+      // Pentru fiecare serie, gaseste cel mai apropiat punct
+      const bisect = d3.bisector<{ date: Date; value: number }, Date>((d) => d.date).left;
+      const rows: { color: string; label: string; value: number; date: Date }[] = [];
+      let snapDate: Date | null = null;
+      seriesParsed.forEach((s) => {
+        if (s.points.length === 0) return;
+        const i = Math.min(s.points.length - 1, Math.max(0, bisect(s.points, xDate)));
+        const a = s.points[i];
+        const b = s.points[Math.max(0, i - 1)];
+        const p = (Math.abs(a.date.getTime() - xDate.getTime()) < Math.abs(b.date.getTime() - xDate.getTime())) ? a : b;
+        rows.push({ color: s.color, label: s.label, value: p.value, date: p.date });
+        if (!snapDate) snapDate = p.date;
+      });
+      if (!snapDate) return;
+      verticalLine
+        .attr("x1", x(snapDate))
+        .attr("x2", x(snapDate))
+        .style("opacity", 1);
+      const fmtMoneyLocal = (n: number) => n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const lines = rows
+        .sort((a, b) => b.value - a.value)
+        .map((r) => `<div style="display:flex;justify-content:space-between;gap:12px"><span><span style="display:inline-block;width:8px;height:8px;background:${r.color};border-radius:2px;margin-right:6px"></span>${r.label}</span><strong>${fmtMoneyLocal(r.value)} lei</strong></div>`)
+        .join("");
+      const rect = container.getBoundingClientRect();
+      tooltip
+        .style("opacity", 1)
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px")
+        .html(`<strong style="display:block;margin-bottom:4px;color:var(--accent,#5b7cfa)">${d3.timeFormat("%d %b %Y")(snapDate)}</strong>${lines}`);
+    })
+    .on("mouseout", () => {
+      verticalLine.style("opacity", 0);
+      tooltip.style("opacity", 0);
+    });
+}
