@@ -332,22 +332,42 @@ async def _load_zip_from_s3(s3_key: str) -> bytes | None:
     return await asyncio.to_thread(_get)
 
 
+def _looks_like_zip(data: bytes | None) -> bool:
+    """Heuristic rapid: orice ZIP valid incepe cu `PK\\x03\\x04` (local file header)
+    sau `PK\\x05\\x06` (empty central directory) sau `PK\\x07\\x08` (spanned)."""
+    if not data or len(data) < 4:
+        return False
+    return data[:2] == b"PK" and data[2:4] in (b"\x03\x04", b"\x05\x06", b"\x07\x08")
+
+
+def _anaf_error_excerpt(data: bytes) -> str:
+    """Decodifica primii ~400 octeti ca text utilizator-friendly pentru log/eroare."""
+    try:
+        text = data[:400].decode("utf-8", errors="replace").strip()
+    except Exception:  # noqa: BLE001
+        return repr(data[:120])
+    return " ".join(text.split())[:400]
+
+
 async def ensure_received_downloaded(
     db: AsyncSession, idx: EFacturaReceivedIndex
 ) -> bytes:
     """Asigura ca ZIP-ul facturii primite este descarcat (S3 cache) si returneaza bytes.
 
-    1. Daca avem deja un s3 key valid -> citim din S3.
-    2. Daca nu, descarcam de la ANAF, salvam in S3, marcam downloaded=True.
+    1. Daca avem deja un s3 key valid -> citim din S3 (cu validare ZIP).
+    2. Daca nu / cache corupt, descarcam de la ANAF si validam ca e ZIP real
+       inainte de a-l arhiva (altfel cache-uim un XML de eroare la nesfarsit).
     """
     if idx.response_zip_s3_key:
-        zip_bytes = await _load_zip_from_s3(idx.response_zip_s3_key)
-        if zip_bytes:
-            return zip_bytes
-        # S3 key invalid -> retry de la ANAF
+        cached = await _load_zip_from_s3(idx.response_zip_s3_key)
+        if cached and _looks_like_zip(cached):
+            return cached
+        # Cache invalid (zero bytes / XML eroare arhivat anterior) -> retry ANAF
         log.warning(
-            "Cheie S3 invalida pentru received %s, redescarcam de la ANAF.", idx.id
+            "Cache S3 invalid pentru received %s (key=%s) — redescarcam de la ANAF.",
+            idx.id, idx.response_zip_s3_key,
         )
+        idx.response_zip_s3_key = None
 
     token = (
         await db.execute(select(AnafToken).where(AnafToken.company_id == idx.company_id))
@@ -359,6 +379,18 @@ async def ensure_received_downloaded(
     access_token = await oauth_service.get_valid_access_token(db, idx.company_id)
     client = AnafEFacturaClient(access_token, str(token.cui), use_test=settings.use_test_env)
     zip_bytes = await client.download_response(int(idx.id_solicitare))
+
+    if not _looks_like_zip(zip_bytes):
+        # ANAF a raspuns 200 dar continutul nu e ZIP (de obicei XML "id invalid"
+        # sau "factura nu exista"). Nu arhivam in S3 ca sa nu poluam cache-ul.
+        excerpt = _anaf_error_excerpt(zip_bytes)
+        log.warning(
+            "ANAF /descarcare?id=%s a returnat non-ZIP pentru received %s: %s",
+            idx.id_solicitare, idx.id, excerpt,
+        )
+        raise EFacturaError(
+            f"ANAF nu a returnat ZIP pentru id={idx.id_solicitare}. Raspuns: {excerpt}"
+        )
 
     s3_key = await _archive_received_zip_to_s3(idx.company_id, idx.id, zip_bytes)
     idx.downloaded = True
