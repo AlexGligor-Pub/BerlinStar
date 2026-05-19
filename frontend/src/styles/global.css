@@ -1511,6 +1511,18 @@ body {
   color: var(--accent);
 }
 
+.sl-square-btn--done {
+  background: color-mix(in srgb, var(--success) 18%, transparent);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.sl-square-btn--done:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--success) 28%, transparent);
+  border-color: var(--success);
+  color: var(--success);
+}
+
 .sl-square-btn:disabled {
   opacity: 0.6;
   cursor: default;

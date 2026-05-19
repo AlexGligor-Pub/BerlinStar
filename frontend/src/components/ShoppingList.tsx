@@ -10,7 +10,7 @@ import { savePosHotelCtx, consumePendingPosReturn } from "../store/posHotelStore
 import { notify } from "../store/notificationsStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
-import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft } from "../store/montajRotiStore";
+import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import type { TipAnvelopa } from "../store/hotelAnvelopeStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
@@ -727,6 +727,22 @@ export default function ShoppingList() {
   });
   onCleanup(() => { if (cazariAbort) cazariAbort.abort(); });
 
+  const [linkedMontaje, setLinkedMontaje] = createSignal<MontajRota[]>([]);
+  async function refreshLinkedMontaje() {
+    const rId = loadedReceiptId();
+    if (!rId) { setLinkedMontaje([]); return; }
+    try {
+      const items = await loadMontajRotiByReceipt(Number(rId));
+      setLinkedMontaje(items);
+    } catch {
+      // ignoră erori
+    }
+  }
+  createEffect(() => {
+    loadedReceiptId();
+    refreshLinkedMontaje();
+  });
+
   const [montareRotiOpen, setMontareRotiOpen] = createSignal(false);
   const [montareRotiInitial, setMontareRotiInitial] = createSignal<MontajRotaDraft[]>([]);
   const [montareRotiReceiptId, setMontareRotiReceiptId] = createSignal<number | null>(null);
@@ -1165,6 +1181,7 @@ export default function ShoppingList() {
           <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
             <button
               class="sl-square-btn"
+              classList={{ "sl-square-btn--done": linkedCazari().length > 0 }}
               disabled={goingToHotel()}
               onClick={handleGoToHotel}
             >
@@ -1173,6 +1190,7 @@ export default function ShoppingList() {
           </Show>
           <button
             class="sl-square-btn"
+            classList={{ "sl-square-btn--done": linkedMontaje().length > 0 }}
             disabled={openingMontareRoti()}
             onClick={handleMontareRoti}
           >
@@ -1196,7 +1214,7 @@ export default function ShoppingList() {
         <MontareRotiModal
           receiptId={montareRotiReceiptId()!}
           initialItems={montareRotiInitial()}
-          onSaved={() => setMontareRotiOpen(false)}
+          onSaved={() => { setMontareRotiOpen(false); refreshLinkedMontaje(); }}
           onClose={() => setMontareRotiOpen(false)}
         />
       </Show>
