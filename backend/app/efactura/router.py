@@ -56,6 +56,17 @@ log = logging.getLogger("berlinstar.efactura")
 
 router = APIRouter()
 
+# Strong refs pentru background tasks: fara asta, GC poate elimina task-ul
+# in mijlocul rularii (vezi docs asyncio.create_task). Discard on done.
+_BG_TASKS: set[asyncio.Task] = set()
+
+
+def _spawn_bg(coro) -> asyncio.Task:
+    task = asyncio.create_task(coro)
+    _BG_TASKS.add(task)
+    task.add_done_callback(_BG_TASKS.discard)
+    return task
+
 
 def _append_query(base: str, extra: str) -> str:
     """Append `extra` (key=val&key=val) to `base`, picking the right separator."""
@@ -534,7 +545,7 @@ async def upload_receipt(
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
 
-    asyncio.create_task(efactura_service.upload_to_anaf_async(receipt_id, account_id))
+    _spawn_bg(efactura_service.upload_to_anaf_async(receipt_id, account_id))
     broadcaster.notify(account_id)
     return rec
 
@@ -595,7 +606,7 @@ async def retry_receipt(
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
 
-    asyncio.create_task(efactura_service.upload_to_anaf_async(receipt_id, account_id))
+    _spawn_bg(efactura_service.upload_to_anaf_async(receipt_id, account_id))
     broadcaster.notify(account_id)
     return rec
 
@@ -707,6 +718,8 @@ async def list_company_records(
     )
 
 
+# Sursa unica de adevar pentru ce coloane pot fi sortate pe `received`. FE-ul nu mai
+# duplica lista: orice key necunoscut cade silent in fallback la id.desc() in handler.
 _RECEIVED_SORT_COLUMNS = {
     "id": EFacturaReceivedIndex.id,
     "nume_emitent": EFacturaReceivedIndex.nume_emitent,

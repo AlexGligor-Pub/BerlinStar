@@ -110,8 +110,28 @@ async def _ensure_client_vehicol(db: AsyncSession, account_id: int, client_id: i
         ))
 
 
-# Status-uri care blocheaza editarea bonului. 'error' fara index_incarcare = upload-ul nu a ajuns
-# la ANAF, deci bonul redevine editabil.
+# Campuri care raman editabile pe un bon blocat (in flux ANAF). Daca `ReceiptPatch`
+# creste cu un camp nou, decizia trebuie luata explicit: ori e adaugat aici, ori e
+# refuzat la runtime de gardul din `patch_receipt`.
+_RECEIPT_PATCH_LOCKED_ALLOWED = {"pay_method", "partial_pay"}
+
+
+# Status-uri care blocheaza editarea bonului.
+#
+# Regula: bonul e blocat daca este "in flux ANAF" — adica modificarea lui ar putea
+# duce la divergente intre datele de la noi si datele primite de ANAF.
+#
+# Concret:
+#   - pending_upload  -> e in coada catre ANAF (background task ruleaza)
+#   - in_prelucrare   -> ANAF a primit factura si o valideaza
+#   - accepted        -> factura e validata si arhivata la ANAF
+#   - rejected        -> respins asincron, dar are index_incarcare (cuplata cu factura)
+#   - error CU index_incarcare -> caz exceptional: post-upload, dar pre-ANAF response
+#     parse (rar; tratat ca locked din precautie)
+#
+# IMPORTANT: "error" fara index_incarcare NU blocheaza — upload-ul n-a ajuns la ANAF
+# (HTTP/timeout/validare schematron), deci bonul redevine editabil pentru retry.
+# Daca adaugi un status nou, decide-l aici si in `EFacturaSent.canRetry` (FE).
 _EFACTURA_LOCKING_STATUSES = {"pending_upload", "in_prelucrare", "accepted", "rejected"}
 
 
@@ -395,8 +415,20 @@ async def patch_receipt(
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
-    # NOTA: NU se aplica _assert_not_locked aici — pay_method/partial_pay sunt explicit
-    # permise dupa trimitere la ANAF.
+
+    # Pe bon blocat in ANAF, permitem doar campurile din `_RECEIPT_PATCH_LOCKED_ALLOWED`.
+    # Asta protejeaza enforcement-ul daca cineva extinde `ReceiptPatch` cu un camp nou
+    # fara sa se gandeasca la lock — request-ul va fi respins explicit cu 423.
+    efac_rec = await _load_efactura_record_for(db, receipt_id)
+    _, locked, _, _ = _efactura_lock_from_record(efac_rec)
+    if locked:
+        provided = set(body.model_fields_set)
+        forbidden = provided - _RECEIPT_PATCH_LOCKED_ALLOWED
+        if forbidden:
+            raise HTTPException(
+                423,
+                f"Bonul e in flux ANAF; aceste campuri nu pot fi modificate: {sorted(forbidden)}",
+            )
 
     emp_id_rows = (await db.execute(
         select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
@@ -429,8 +461,8 @@ async def patch_receipt(
     )).scalar_one()
 
     broadcaster.notify(account_id)
-    rec = await _load_efactura_record_for(db, receipt_id)
-    return _serialize(result, rec)
+    # Reuse efac_rec citit la inceput pt lock check — pay_method nu schimba record-ul efactura.
+    return _serialize(result, efac_rec)
 
 
 @router.patch("/{receipt_id}/content", response_model=ReceiptRead)

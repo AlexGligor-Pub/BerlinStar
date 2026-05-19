@@ -1427,12 +1427,17 @@ const _POZITIE_LABELS_PDF: Record<string, string> = {
   nespecificat: "Nespecificat",
 };
 
-/** Are macar un camp principal completat de utilizator (marca / dimensiune / profil)? */
+/** Are macar un camp completat de utilizator (marca / dimensiune / profil /
+ *  presiune / adancime / cuplu)? Bonurile importate din legacy au adesea doar
+ *  presiune/adancime/tip salvate cu defaults — vrem totusi sa apara in PDF. */
 function _montajRotaHasData(r: MontajRotaRow): boolean {
   return (
     (r.marcaNume != null && r.marcaNume !== "") ||
     (r.dimensiuneValoare != null && r.dimensiuneValoare !== "") ||
-    (r.profilValoare != null && r.profilValoare !== "")
+    (r.profilValoare != null && r.profilValoare !== "") ||
+    r.presiune != null ||
+    r.adancime != null ||
+    r.cupluStrangere != null
   );
 }
 

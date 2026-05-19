@@ -106,7 +106,11 @@ export default function EFacturaSent() {
     searchTimer = window.setTimeout(() => { pag.setPage(1); void load(); }, 350);
   }
 
-  // Status-uri pentru care e disponibil retry-ul (eroare pre-ANAF sau respins).
+  // Status-uri pentru care e disponibil retry-ul:
+  // - "draft"    = creat de get_or_create_record dar nu s-a apelat upload-ul (record
+  //   poate ramane in aceasta stare daca factura a fost emisa dar n-a fost trimisa).
+  // - "rejected" = respins asincron de ANAF (are index_incarcare; vezi poll_status).
+  // - "error"    = upload-ul n-a primit index_incarcare (HTTP/timeout/validare).
   function canRetry(row: SentRow): boolean {
     if (row.status === "draft") return true;
     if (row.status === "rejected") return true;

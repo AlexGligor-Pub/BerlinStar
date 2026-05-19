@@ -431,14 +431,37 @@ async function _readApiError(res: Response, fallback: string): Promise<string> {
   }
 }
 
+// Optimistic update: marcam local statusul efactura ca sa se ascunda butonul
+// "Trimite in SPV" instant, inainte ca SSE-ul sa re-incarce lista. Acopera
+// fereastra de race intre POST /upload si urmatorul refresh.
+export function applyEfacturaStatus(
+  id: string,
+  status: string | null,
+  opts?: { locked?: boolean; error?: string | null },
+) {
+  const next = receipts().map((r) => {
+    if (r.id !== id) return r;
+    return {
+      ...r,
+      efacturaStatus: status,
+      efacturaLocked: opts?.locked ?? r.efacturaLocked,
+      efacturaError: opts?.error ?? null,
+    };
+  });
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
 export async function uploadToSpv(receiptId: string): Promise<void> {
   const res = await apiFetch(`/api/efactura/receipts/${receiptId}/upload`, { method: "POST" });
   if (!res.ok) throw new Error(await _readApiError(res, "Eroare la trimiterea in SPV."));
+  applyEfacturaStatus(receiptId, "pending_upload", { locked: true, error: null });
 }
 
 export async function retryEFactura(receiptId: string): Promise<void> {
   const res = await apiFetch(`/api/efactura/receipts/${receiptId}/retry`, { method: "POST" });
   if (!res.ok) throw new Error(await _readApiError(res, "Eroare la reincercare."));
+  applyEfacturaStatus(receiptId, "pending_upload", { locked: true, error: null });
 }
 
 export { receipts };

@@ -61,13 +61,11 @@ export default function EFacturaReceived() {
   const [selected, setSelected] = createSignal<ReceivedRow | null>(null);
   const [sort, setSort] = createSignal<SortState>({ col: "id", dir: "desc" });
 
-  // Coloanele unde sortarea pe server are sens. Vezi _RECEIVED_SORT_COLUMNS in router.
-  const SORTABLE_COLS = new Set([
-    "nume_emitent", "data_creare", "tip", "detalii", "downloaded", "is_read", "paid",
-  ]);
+  // Single source of truth: orice coloana cu `meta.sortKey` e considerata sortabila.
+  // BE-ul (_RECEIVED_SORT_COLUMNS in router) face fallback la id DESC daca key-ul nu
+  // e recunoscut, deci nu validam aici. Vezi columns() de mai jos.
 
   function toggleSort(col: string) {
-    if (!SORTABLE_COLS.has(col)) return;
     setSort((s) => {
       if (s.col === col) return { col, dir: s.dir === "asc" ? "desc" : "asc" };
       return { col, dir: "asc" };
@@ -318,7 +316,7 @@ export default function EFacturaReceived() {
                           const meta = (header.column.columnDef.meta as any) || {};
                           const hideOnMobile = !!meta.hideOnMobile;
                           const sortKey: string | undefined = meta.sortKey;
-                          const isSortable = !!sortKey && SORTABLE_COLS.has(sortKey);
+                          const isSortable = !!sortKey;
                           const current = sort();
                           const isActive = isSortable && current.col === sortKey;
                           const indicator = isActive

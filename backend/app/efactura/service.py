@@ -196,8 +196,13 @@ async def prepare_and_upload(
     try:
         result = await client.upload_invoice(xml, standard="UBL", extern=receipt.is_extern)
     except AnafUploadError as exc:
-        # ANAF a primit cererea dar a respins-o sincron. Tratam ca eroare pre-ANAF
-        # (fara index_incarcare) — bonul redevine editabil.
+        # Contract status:
+        #   - "rejected" = ANAF a procesat asincron si a respins (rec.index_incarcare != None,
+        #     download_id setat, /stareMesaj a returnat "nok"). Set in `poll_status`.
+        #   - "error"    = upload-ul nu a ajuns sa primeasca index_incarcare (HTTP error,
+        #     timeout, parse error la response). Bonul redevine editabil pentru ca nimic
+        #     nu ramane in flux ANAF; cron-ul `job_download_responses` nu picks-up error.
+        # Aici suntem in al doilea caz: ANAF nu a returnat index_incarcare.
         rec.status = "error"
         rec.anaf_stare = "nok"
         rec.anaf_error_message = str(exc)[:2000]
