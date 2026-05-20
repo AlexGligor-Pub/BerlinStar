@@ -173,9 +173,9 @@ export default function MontareRotiModal(props: {
   function renderWheelImage(placement: "left" | "right" | "bottom", pozitie: PozitieRoata) {
     const placementStyle =
       placement === "left"
-        ? "grid-column:1;grid-row:1 / span 3;align-self:stretch"
+        ? "grid-column:1;grid-row:1 / span 4;align-self:stretch"
         : placement === "right"
-        ? "grid-column:3;grid-row:1 / span 3;align-self:stretch"
+        ? "grid-column:3;grid-row:1 / span 4;align-self:stretch"
         : "grid-column:1 / -1";
     const url = imageUrlForPozitie(pozitie);
     return (
@@ -388,7 +388,7 @@ export default function MontareRotiModal(props: {
                           </div>
                         }
                       >
-                        <div style="grid-column:1 / -1;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
+                        <div style="grid-column:span 2;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
                           <div>
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
                             <input
