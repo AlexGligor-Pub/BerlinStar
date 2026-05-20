@@ -18,6 +18,11 @@ export interface ProfilAnvelopa {
   valoare: string;
 }
 
+export interface CodDotAnvelopa {
+  id: number;
+  valoare: string;
+}
+
 export interface LocCazare {
   id: number;
   nume: string;
@@ -32,12 +37,14 @@ export interface Anvelopa {
   marcaId: number | null;
   dimensiuneId: number | null;
   profilId: number | null;
+  dotId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
   comments: string | null;
   marcaNume: string | null;
   dimensiuneValoare: string | null;
   profilValoare: string | null;
+  dotValoare: string | null;
 }
 
 export interface CazareItem {
@@ -87,12 +94,14 @@ interface RawAnvelopa {
   marca_id?: number | null;
   dimensiune_id?: number | null;
   profil_id?: number | null;
+  dot_id?: number | null;
   tip: string;
   adancime?: number | null;
   comments?: string | null;
   marca_nume?: string | null;
   dimensiune_valoare?: string | null;
   profil_valoare?: string | null;
+  dot_valoare?: string | null;
 }
 
 interface RawCazareItem {
@@ -141,12 +150,14 @@ function mapAnvelopa(a: RawAnvelopa): Anvelopa {
     marcaId: a.marca_id ?? null,
     dimensiuneId: a.dimensiune_id ?? null,
     profilId: a.profil_id ?? null,
+    dotId: a.dot_id ?? null,
     tip: a.tip as TipAnvelopa, // server enum oglindit local
     adancime: a.adancime ?? null,
     comments: a.comments ?? null,
     marcaNume: a.marca_nume ?? null,
     dimensiuneValoare: a.dimensiune_valoare ?? null,
     profilValoare: a.profil_valoare ?? null,
+    dotValoare: a.dot_valoare ?? null,
   };
 }
 
@@ -199,13 +210,14 @@ const [cazari, setCazari] = createSignal<Cazare[]>([]);
 const [marci, setMarci] = createSignal<MarcaAnvelopa[]>([]);
 const [dimensiuni, setDimensiuni] = createSignal<DimensiuneAnvelopa[]>([]);
 const [profiluri, setProfiluri] = createSignal<ProfilAnvelopa[]>([]);
+const [coduriDot, setCoduriDot] = createSignal<CodDotAnvelopa[]>([]);
 const [locuriCazare, setLocuriCazare] = createSignal<LocCazare[]>([]);
 const [cazariHasMore, setCazariHasMore] = createSignal(false);
 const [cazariLoadingMore, setCazariLoadingMore] = createSignal(false);
 const [cazariNextCursor, setCazariNextCursor] = createSignal<number | null>(null);
 const [_lastCazariParams, _setLastCazariParams] = createSignal<Parameters<typeof loadCazari>[0]>(undefined);
 
-export { cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore };
+export { cazari, marci, dimensiuni, profiluri, coduriDot, locuriCazare, cazariHasMore, cazariLoadingMore };
 
 // ─── Load functions ───────────────────────────────────────────────────────────
 
@@ -323,6 +335,7 @@ export async function loadAnvelope(clientId: number): Promise<Anvelopa[]> {
 const MARCI_CACHE_KEY = "bs_marci_anvelope";
 const DIM_CACHE_KEY = "bs_dimensiuni_anvelope";
 const PROFIL_CACHE_KEY = "bs_profiluri_anvelope";
+const DOT_CACHE_KEY = "bs_coduri_dot_anvelope";
 const LOCURI_CACHE_KEY = "bs_locuri_cazare";
 const CACHE_TTL = 10 * 60 * 1000;
 
@@ -390,6 +403,13 @@ export function loadProfil(force = false): Promise<void> {
   );
 }
 
+export function loadCoduriDot(force = false): Promise<void> {
+  return loadCached<RawValoare, CodDotAnvelopa>(
+    DOT_CACHE_KEY, "/api/coduri-dot-anvelope", setCoduriDot,
+    (d) => ({ id: d.id, valoare: d.valoare }), force,
+  );
+}
+
 export function invalidateLocuriCache() {
   localStorage.removeItem(LOCURI_CACHE_KEY);
 }
@@ -401,6 +421,9 @@ export function invalidateDimensiuniCache() {
 }
 export function invalidateProfilCache() {
   localStorage.removeItem(PROFIL_CACHE_KEY);
+}
+export function invalidateCoduriDotCache() {
+  localStorage.removeItem(DOT_CACHE_KEY);
 }
 
 // ─── Hotel Anvelope Images (global cache) ─────────────────────────────────────

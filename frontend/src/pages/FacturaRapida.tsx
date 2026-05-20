@@ -14,6 +14,24 @@ function fmtDate(iso: string | null | undefined): string {
   return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
 
+function CopyIcon(props: { copied: boolean }) {
+  return (
+    <Show
+      when={props.copied}
+      fallback={
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity:.6;flex-shrink:0" aria-hidden="true">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      }
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success,#16a34a)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    </Show>
+  );
+}
+
 export default function FacturaRapida() {
   const [companies, setCompanies] = createSignal<CompanyMeta[]>([]);
   const [items, setItems] = createSignal<Receipt[]>([]);
@@ -96,6 +114,22 @@ export default function FacturaRapida() {
     }
   }
 
+  const [copiedId, setCopiedId] = createSignal<string | null>(null);
+  let copiedTimer: number | undefined;
+  async function copyFactNr(r: Receipt, e: MouseEvent) {
+    e.stopPropagation();
+    if (r.facturaNr === 0) return;
+    const text = `${r.facturaSerie}${r.facturaNr}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(r.id);
+      if (copiedTimer) window.clearTimeout(copiedTimer);
+      copiedTimer = window.setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      // ignoram silent — user-ul a apasat pe text, nu pe un buton dedicat
+    }
+  }
+
   function canSend(r: Receipt): boolean {
     // `accepted`/`in_prelucrare`/`pending_upload` semnaleaza ca SPV-ul are deja bonul;
     // un retry doar duplica. `rejected`/`error` raman trimisibile (intentionat — userul
@@ -138,11 +172,26 @@ export default function FacturaRapida() {
           <div style="display:flex;flex-direction:column;gap:10px">
             <For each={items()}>
               {(r) => (
-                <div style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface1)">
+                <div
+                  onClick={() => setViewing(r)}
+                  style="padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--surface);cursor:pointer"
+                >
                   <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
                     <div>
                       <div style="font-weight:600;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                        <span>{r.facturaSerie}{r.facturaNr || "—"}</span>
+                        <span
+                          onClick={(e) => copyFactNr(r, e)}
+                          title={r.facturaNr ? "Click pentru a copia" : ""}
+                          style={`display:inline-flex;align-items:center;gap:4px;${r.facturaNr ? "cursor:pointer;" : ""}user-select:none`}
+                        >
+                          {r.facturaSerie}{r.facturaNr || "—"}
+                          <Show when={r.facturaNr !== 0}>
+                            <CopyIcon copied={copiedId() === r.id} />
+                          </Show>
+                        </span>
+                        <Show when={copiedId() === r.id}>
+                          <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(34,197,94,.15);color:var(--success,#16a34a);border:1px solid var(--success,#16a34a)">Copiat</span>
+                        </Show>
                         <Show when={r.facturaNr === 0}>
                           <span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(245,158,11,.15);color:#d97706;border:1px solid #d97706">Incomplet</span>
                         </Show>
@@ -177,7 +226,7 @@ export default function FacturaRapida() {
             </For>
           </div>
         }>
-          <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--surface1)">
+          <div style="border:1px solid var(--border);border-radius:10px;overflow:visible;background:var(--surface)">
             <table style="width:100%;border-collapse:collapse">
               <thead>
                 <tr style="background:var(--surface2);text-align:left">
@@ -193,9 +242,24 @@ export default function FacturaRapida() {
               <tbody>
                 <For each={items()}>
                   {(r) => (
-                    <tr style="border-top:1px solid var(--border)">
-                      <td style="padding:10px 12px;font-weight:600">
-                        {r.facturaSerie}{r.facturaNr || "—"}
+                    <tr
+                      onClick={() => setViewing(r)}
+                      style="border-top:1px solid var(--border);cursor:pointer"
+                    >
+                      <td style="padding:10px 12px;font-weight:600;white-space:nowrap">
+                        <span
+                          onClick={(e) => copyFactNr(r, e)}
+                          title={r.facturaNr ? "Click pentru a copia" : ""}
+                          style={`display:inline-flex;align-items:center;gap:4px;${r.facturaNr ? "cursor:pointer;" : ""}user-select:none`}
+                        >
+                          {r.facturaSerie}{r.facturaNr || "—"}
+                          <Show when={r.facturaNr !== 0}>
+                            <CopyIcon copied={copiedId() === r.id} />
+                          </Show>
+                        </span>
+                        <Show when={copiedId() === r.id}>
+                          <span style="margin-left:6px;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;background:rgba(34,197,94,.15);color:var(--success,#16a34a);border:1px solid var(--success,#16a34a)">Copiat</span>
+                        </Show>
                       </td>
                       <td style="padding:10px 12px;font-size:13px">{fmtDate(r.date)}</td>
                       <td style="padding:10px 12px;font-size:13px">
@@ -238,7 +302,18 @@ export default function FacturaRapida() {
       <FacturaRapidaView
         open={viewing() !== null}
         receipt={viewing()}
+        canEdit={!viewing()?.efacturaLocked}
         onClose={() => setViewing(null)}
+        onEdit={() => {
+          const r = viewing();
+          if (!r) return;
+          setViewing(null);
+          openEdit(r);
+        }}
+        onUpdated={(updated) => {
+          setViewing(updated);
+          setItems(items().map((it) => (it.id === updated.id ? updated : it)));
+        }}
       />
 
       <Modal

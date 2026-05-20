@@ -7,9 +7,9 @@ import { employees, loadEmployees } from "../store/employeesStore";
 import { posHotelCtx, clearPosHotelCtx, setPendingPosReturn } from "../store/posHotelStore";
 import { device } from "../store/deviceStore";
 import {
-  cazari, marci, dimensiuni, profiluri, locuriCazare, cazariHasMore, cazariLoadingMore,
-  loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadLocuriCazare,
-  invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
+  cazari, marci, dimensiuni, profiluri, coduriDot, locuriCazare, cazariHasMore, cazariLoadingMore,
+  loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadCoduriDot, loadLocuriCazare,
+  invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
   hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
@@ -251,6 +251,7 @@ function AnvelopaForm(props: {
   const [marcaId, setMarcaId] = createSignal<number | "">(props.initialData?.marcaId ?? "");
   const [dimensiuneId, setDimensiuneId] = createSignal<number | "">(props.initialData?.dimensiuneId ?? "");
   const [profilId, setProfilId] = createSignal<number | "">(props.initialData?.profilId ?? "");
+  const [dotId, setDotId] = createSignal<number | "">(props.initialData?.dotId ?? "");
   const [tip, setTip] = createSignal<TipAnvelopa>(props.initialData?.tip ?? "vara");
   const [adancime, setAdancime] = createSignal(props.initialData?.adancime != null ? String(props.initialData.adancime) : "");
   const [err, setErr] = createSignal("");
@@ -259,6 +260,7 @@ function AnvelopaForm(props: {
     loadMarci();
     loadDimensiuni();
     loadProfil();
+    loadCoduriDot();
   });
 
   async function addMarca(name: string) {
@@ -291,11 +293,22 @@ function AnvelopaForm(props: {
     }
   }
 
+  async function addDotInline(value: string) {
+    const res = await apiFetch("/api/coduri-dot-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
+    if (res.ok) {
+      const d = await res.json();
+      invalidateCoduriDotCache();
+      await loadCoduriDot(true);
+      setDotId(d.id);
+    }
+  }
+
   function confirm() {
     setErr("");
     const marcaOption = marci().find((m) => m.id === marcaId());
     const dimOption = dimensiuni().find((d) => d.id === dimensiuneId());
     const profilOption = profiluri().find((p) => p.id === profilId());
+    const dotOption = coduriDot().find((d) => d.id === dotId());
     // ID negativ temporar — va fi creat pe server la save-ul cazării
     const tempId = -Date.now();
     props.onSaved({
@@ -304,12 +317,14 @@ function AnvelopaForm(props: {
       marcaId: marcaId() !== "" ? (marcaId() as number) : null,
       dimensiuneId: dimensiuneId() !== "" ? (dimensiuneId() as number) : null,
       profilId: profilId() !== "" ? (profilId() as number) : null,
+      dotId: dotId() !== "" ? (dotId() as number) : null,
       tip: tip(),
       adancime: adancime() !== "" ? parseFloat(adancime()) : null,
       comments: null,
       marcaNume: marcaOption?.nume ?? null,
       dimensiuneValoare: dimOption?.valoare ?? null,
       profilValoare: profilOption?.valoare ?? null,
+      dotValoare: dotOption?.valoare ?? null,
     });
   }
 
@@ -323,6 +338,8 @@ function AnvelopaForm(props: {
         <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" onAddNew={addProfilInline} />
         {/* Dimensiune */}
         <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" onAddNew={addDim} />
+        {/* DOT */}
+        <SearchableSelect items={coduriDot()} value={dotId()} onSelect={setDotId} getLabel={(d) => d.valoare} placeholder="DOT" onAddNew={addDotInline} />
         {/* Adâncime */}
         <input class="input" type="number" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
         {/* Tip */}
@@ -718,6 +735,8 @@ export default function HotelAnvelope() {
           marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
           profilValoare: item.anvelopa.profil_valoare ?? null,
           profilId: item.anvelopa.profil_id ?? null,
+          dotId: item.anvelopa.dot_id ?? null,
+          dotValoare: item.anvelopa.dot_valoare ?? null,
         } : null,
       })),
       items: (d.items ?? []).map((item: any) => ({
@@ -727,9 +746,11 @@ export default function HotelAnvelope() {
           id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
           marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
           profilId: item.anvelopa.profil_id ?? null,
+          dotId: item.anvelopa.dot_id ?? null,
           tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
           marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
           profilValoare: item.anvelopa.profil_valoare ?? null,
+          dotValoare: item.anvelopa.dot_valoare ?? null,
         } : null,
       })),
     };
@@ -893,6 +914,7 @@ export default function HotelAnvelope() {
             marca_id: draft.marcaId,
             dimensiune_id: draft.dimensiuneId,
             profil_id: draft.profilId,
+            dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
           }),
@@ -1019,6 +1041,7 @@ export default function HotelAnvelope() {
             marca_id: draft.marcaId,
             dimensiune_id: draft.dimensiuneId,
             profil_id: draft.profilId,
+            dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
           }),
@@ -1160,6 +1183,7 @@ export default function HotelAnvelope() {
             marca_id: draft.marcaId,
             dimensiune_id: draft.dimensiuneId,
             profil_id: draft.profilId,
+            dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
           }),
@@ -1716,6 +1740,7 @@ export default function HotelAnvelope() {
                           <span style="flex:1;min-width:0">
                             <strong>{a.marcaNume ?? "—"}</strong>
                             <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                            <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
                             {" · "}{TIP_LABELS[a.tip]}
                             <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
                             <Show when={a.id < 0}>
@@ -1990,6 +2015,7 @@ export default function HotelAnvelope() {
                           <span style="flex:1;min-width:0">
                             <strong>{a.marcaNume ?? "—"}</strong>
                             <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                            <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
                             {" · "}{TIP_LABELS[a.tip]}
                             <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
                             <Show when={a.id < 0}>
@@ -2175,6 +2201,7 @@ export default function HotelAnvelope() {
                               <tr style="background:#1e3a8a;color:white">
                                 <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
                                 <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
+                                <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
                                 <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
                                 <th style="padding:5px 8px;text-align:left;font-weight:600">Adânc.</th>
                               </tr>
@@ -2185,6 +2212,7 @@ export default function HotelAnvelope() {
                                   <tr style={`background:${idx() % 2 === 0 ? "var(--bg)" : "transparent"}`}>
                                     <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
                                     <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                                    <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
                                     <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
                                     <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime}mm` : "—"}</td>
                                   </tr>
@@ -2290,6 +2318,7 @@ export default function HotelAnvelope() {
                                 <span style="flex:1;min-width:0">
                                   <strong>{a.marcaNume ?? "—"}</strong>
                                   <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                                  <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
                                   {" · "}{TIP_LABELS[a.tip]}
                                   <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
                                   <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
@@ -2427,6 +2456,7 @@ export default function HotelAnvelope() {
                           <tr style="background:var(--bg);color:var(--text-muted)">
                             <th style="padding:4px 8px;text-align:left">Marcă</th>
                             <th style="padding:4px 8px;text-align:left">Dimensiune</th>
+                            <th style="padding:4px 8px;text-align:left">DOT</th>
                             <th style="padding:4px 8px;text-align:left">Tip</th>
                             <th style="padding:4px 8px;text-align:left">Adâncime</th>
                           </tr>
@@ -2438,6 +2468,7 @@ export default function HotelAnvelope() {
                                 <tr>
                                   <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
                                   <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                                  <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
                                   <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
                                   <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
                                 </tr>
@@ -2587,6 +2618,7 @@ export default function HotelAnvelope() {
                             <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
                             <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
                             <th style="padding:5px 8px;text-align:left;font-weight:600">Profil</th>
+                            <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
                             <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
                             <th style="padding:5px 8px;text-align:left;font-weight:600">Adâncime</th>
                           </tr>
@@ -2600,6 +2632,7 @@ export default function HotelAnvelope() {
                                   <td style="padding:5px 8px;font-weight:600">{item.anvelopa!.marcaNume ?? "—"}</td>
                                   <td style="padding:5px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
                                   <td style="padding:5px 8px">{item.anvelopa!.profilValoare ?? "—"}</td>
+                                  <td style="padding:5px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
                                   <td style="padding:5px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
                                   <td style="padding:5px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
                                 </tr>

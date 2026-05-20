@@ -1,6 +1,7 @@
-import { Show, createSignal, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import { apiFetch, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
+import type { CompanyItem } from "../../pages/configurari/types";
 
 // Stripe.js e incarcat lazy via dynamic import — tipul Stripe/StripeElements
 // nu e specificat ca import static ca sa nu strice tsc daca @stripe/stripe-js
@@ -24,34 +25,12 @@ interface CheckoutResponse {
   publishable_key: string;
 }
 
-interface CustomerForm {
-  nume: string;
-  tip: "juridic" | "fizic";
-  cui: string;
-  email: string;
-  telefon: string;
-  street: string;
-  city: string;
-  county_code: string;
-  postal_code: string;
-  country_code: string;
-}
-
-const DEFAULT_FORM: CustomerForm = {
-  nume: "",
-  tip: "juridic",
-  cui: "",
-  email: "",
-  telefon: "",
-  street: "",
-  city: "",
-  county_code: "RO-B",
-  postal_code: "",
-  country_code: "RO",
-};
-
 export default function SubscriptionCheckoutModal(props: Props) {
-  const [form, setForm] = createSignal<CustomerForm>({ ...DEFAULT_FORM });
+  const [companies, setCompanies] = createSignal<CompanyItem[]>([]);
+  const [companiesLoading, setCompaniesLoading] = createSignal(true);
+  const [selectedId, setSelectedId] = createSignal<number | null>(null);
+  const [email, setEmail] = createSignal("");
+
   const [step, setStep] = createSignal<"form" | "pay" | "processing">("form");
   const [intent, setIntent] = createSignal<CheckoutResponse | null>(null);
   const [error, setError] = createSignal("");
@@ -61,24 +40,49 @@ export default function SubscriptionCheckoutModal(props: Props) {
   let elements: StripeAny = null;
   let paymentMount: HTMLDivElement | undefined;
 
-  function setField<K extends keyof CustomerForm>(key: K, value: CustomerForm[K]) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
+  const selectedCompany = createMemo(() =>
+    companies().find(c => c.id === selectedId()) ?? null
+  );
+
+  onMount(async () => {
+    try {
+      const res = await apiFetch("/api/companies?limit=200");
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const list = (data.items ?? []) as CompanyItem[];
+      setCompanies(list);
+      if (list.length > 0) setSelectedId(list[0].id);
+    } catch {
+      setError("Eroare la încărcarea companiilor.");
+    } finally {
+      setCompaniesLoading(false);
+    }
+  });
 
   async function submitForm(e: Event) {
     e.preventDefault();
     setError("");
-    const f = form();
-    if (!f.nume.trim()) { setError("Denumirea / numele este obligatorie."); return; }
-    if (f.tip === "juridic" && !f.cui.trim()) {
-      setError("CUI-ul este obligatoriu pentru persoane juridice.");
-      return;
-    }
+    const c = selectedCompany();
+    if (!c) { setError("Selectează o companie."); return; }
+    if (!email().trim()) { setError("Emailul este obligatoriu pentru chitanţa Stripe."); return; }
+
     setLoading(true);
     try {
+      const customer = {
+        nume: c.name,
+        tip: "juridic" as const,
+        cui: String(c.cui),
+        email: email().trim(),
+        telefon: c.phone ?? "",
+        street: c.address ?? "",
+        city: "",
+        county_code: "RO-B",
+        postal_code: c.postal_code ?? "",
+        country_code: "RO",
+      };
       const res = await apiFetch("/api/subscription/checkout", {
         method: "POST",
-        body: JSON.stringify({ customer: { ...f } }),
+        body: JSON.stringify({ customer }),
       });
       if (!res.ok) {
         const d = await readJsonSafe<{ detail?: string }>(res);
@@ -92,7 +96,6 @@ export default function SubscriptionCheckoutModal(props: Props) {
       }
       setIntent(data);
       setStep("pay");
-      // initializeaza Stripe.js asincron dupa montaj
       requestAnimationFrame(() => void mountStripe(data));
     } catch {
       setError("Eroare de conexiune.");
@@ -103,7 +106,6 @@ export default function SubscriptionCheckoutModal(props: Props) {
 
   async function mountStripe(data: CheckoutResponse) {
     try {
-      // Import dinamic ca Vite sa nu cada in dev daca pachetul nu e instalat
       const mod = await import(/* @vite-ignore */ "@stripe/stripe-js");
       stripe = await mod.loadStripe(data.publishable_key);
       if (!stripe) {
@@ -157,61 +159,75 @@ export default function SubscriptionCheckoutModal(props: Props) {
           <form onSubmit={submitForm} autocomplete="off">
             <div class="sl-modal-body" style="padding:20px 24px">
               <p style="margin:0 0 12px;color:var(--text-muted);font-size:13px">
-                Completează datele clientului — apar pe factura emisă de
-                BerlinStar SRL şi se transmit la ANAF SPV.
+                Selectează compania pentru care emiţi factura — datele sunt
+                preluate din Configurări → Companii şi se transmit la ANAF SPV.
               </p>
-              <div class="form-group">
-                <label class="form-label">Tip client</label>
-                <select
-                  class="input"
-                  value={form().tip}
-                  onChange={(e) => setField("tip", e.currentTarget.value as "juridic" | "fizic")}
-                >
-                  <option value="juridic">Persoană juridică (firmă)</option>
-                  <option value="fizic">Persoană fizică</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label">Denumire / nume complet</label>
-                <input class="input" value={form().nume} onInput={(e) => setField("nume", e.currentTarget.value)} maxLength={255} />
-              </div>
-              <div class="form-group">
-                <label class="form-label">{form().tip === "juridic" ? "CUI" : "CNP (opţional)"}</label>
-                <input class="input" value={form().cui} onInput={(e) => setField("cui", e.currentTarget.value)} maxLength={20} />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Email (pentru chitanţa Stripe)</label>
-                <input class="input" type="email" value={form().email} onInput={(e) => setField("email", e.currentTarget.value)} maxLength={255} />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Telefon</label>
-                <input class="input" value={form().telefon} onInput={(e) => setField("telefon", e.currentTarget.value)} maxLength={50} />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Adresă (strada, nr.)</label>
-                <input class="input" value={form().street} onInput={(e) => setField("street", e.currentTarget.value)} maxLength={255} />
-              </div>
-              <div style="display:grid;gap:8px;grid-template-columns:2fr 1fr 1fr">
-                <div class="form-group">
-                  <label class="form-label">Localitate</label>
-                  <input class="input" value={form().city} onInput={(e) => setField("city", e.currentTarget.value)} maxLength={100} />
+
+              <Show when={companiesLoading()}>
+                <p style="color:var(--text-muted);font-size:13px">Se încarcă companiile…</p>
+              </Show>
+
+              <Show when={!companiesLoading() && companies().length === 0}>
+                <div class="login-error" style="margin:8px 0">
+                  Nu există companii configurate. Adaugă una în
+                  Configurări → Companii înainte de a continua.
                 </div>
+              </Show>
+
+              <Show when={!companiesLoading() && companies().length > 0}>
                 <div class="form-group">
-                  <label class="form-label">Cod judeţ</label>
-                  <input class="input" value={form().county_code} onInput={(e) => setField("county_code", e.currentTarget.value)} maxLength={10} placeholder="RO-B" />
+                  <label class="form-label">Companie</label>
+                  <select
+                    class="input"
+                    value={selectedId() ?? ""}
+                    onChange={(e) => setSelectedId(Number(e.currentTarget.value))}
+                  >
+                    <For each={companies()}>
+                      {(c) => (
+                        <option value={c.id}>{c.name} — CUI {c.cui}</option>
+                      )}
+                    </For>
+                  </select>
                 </div>
+
+                <Show when={selectedCompany()}>
+                  {(c) => (
+                    <div style="background:var(--surface-2,#f1f5f9);padding:10px 12px;border-radius:6px;margin:4px 0 12px;font-size:12px;line-height:1.5">
+                      <div><strong>CUI:</strong> {c().cui}</div>
+                      <Show when={c().address}>
+                        <div><strong>Adresă:</strong> {c().address}</div>
+                      </Show>
+                      <Show when={c().phone}>
+                        <div><strong>Telefon:</strong> {c().phone}</div>
+                      </Show>
+                    </div>
+                  )}
+                </Show>
+
                 <div class="form-group">
-                  <label class="form-label">Cod poştal</label>
-                  <input class="input" value={form().postal_code} onInput={(e) => setField("postal_code", e.currentTarget.value)} maxLength={20} />
+                  <label class="form-label">Email (pentru chitanţa Stripe)</label>
+                  <input
+                    class="input"
+                    type="email"
+                    required
+                    value={email()}
+                    onInput={(e) => setEmail(e.currentTarget.value)}
+                    maxLength={255}
+                  />
                 </div>
-              </div>
+              </Show>
+
               <Show when={error()}>
                 <div class="login-error" style="margin:8px 0">{error()}</div>
               </Show>
             </div>
             <div class="sl-modal-footer">
               <button type="button" class="btn btn-ghost btn-sm" onClick={props.onClose} disabled={loading()}>Anulează</button>
-              <button type="submit" class="btn btn-primary btn-sm" disabled={loading()}>
+              <button
+                type="submit"
+                class="btn btn-primary btn-sm"
+                disabled={loading() || companiesLoading() || !selectedCompany()}
+              >
                 {loading() ? "Se iniţiază…" : "Continuă spre plată"}
               </button>
             </div>

@@ -16,6 +16,10 @@ export default defineConfig(({ mode }) => ({
     proxy: {
       '/api': 'http://localhost:4000',
     },
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
   },
   build: {
     sourcemap: false,

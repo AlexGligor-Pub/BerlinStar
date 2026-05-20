@@ -17,6 +17,7 @@ class MontajRotaCreate(BaseModel):
     marca_id: int | None = None
     dimensiune_id: int | None = None
     profil_id: int | None = None
+    dot_id: int | None = None
     tip: TipAnvelopaStr = "vara"
     adancime: float | None = None
     cuplu_strangere: float | None = None
@@ -38,6 +39,7 @@ class MontajRotaRead(BaseModel):
     marca_id: int | None
     dimensiune_id: int | None
     profil_id: int | None
+    dot_id: int | None = None
     tip: TipAnvelopaStr
     adancime: float | None
     cuplu_strangere: float | None
@@ -46,4 +48,5 @@ class MontajRotaRead(BaseModel):
     marca_nume: str | None = None
     dimensiune_valoare: str | None = None
     profil_valoare: str | None = None
+    dot_valoare: str | None = None
     created_at: datetime

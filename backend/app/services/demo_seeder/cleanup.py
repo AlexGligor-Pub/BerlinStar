@@ -59,6 +59,7 @@ _DELETE_ORDER = [
     "marci_anvelope",
     "dimensiuni_anvelope",
     "profiluri_anvelope",
+    "coduri_dot_anvelope",
     "locuri_cazare",
 ]
 

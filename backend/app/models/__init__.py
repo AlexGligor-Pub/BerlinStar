@@ -13,6 +13,7 @@ from .disclaimer import Disclaimer
 from .register import Register
 from .marca_anvelopa import MarcaAnvelopa
 from .dimensiune_anvelopa import DimensiuneAnvelopa
+from .cod_dot_anvelopa import CodDotAnvelopa
 from .anvelopa import Anvelopa, TipAnvelopa
 from .profil_anvelopa import ProfilAnvelopa
 from .loc_cazare import LocCazare
@@ -38,4 +39,4 @@ from .report_stock_movements_daily import ReportStockMovementsDaily
 from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFacturaReceivedIndex, EFacturaGlobalSettings
 from .subscription import PlatformAnafToken, AccountSubscription, SubscriptionPayment
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "CodDotAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment"]

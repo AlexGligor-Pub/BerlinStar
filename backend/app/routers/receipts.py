@@ -353,7 +353,10 @@ async def create_receipt(
 
     result = (await db.execute(
         select(Receipt)
-        .options(selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee))
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+        )
         .where(Receipt.id == receipt.id)
     )).scalar_one()
 

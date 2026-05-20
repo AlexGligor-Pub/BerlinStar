@@ -44,6 +44,9 @@ class MontajRota(Base):
     profil_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("profiluri_anvelope.id", ondelete="SET NULL"), nullable=True
     )
+    dot_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("coduri_dot_anvelope.id", ondelete="SET NULL"), nullable=True
+    )
     tip: Mapped[TipAnvelopa] = mapped_column(
         SAEnum(TipAnvelopa, name="tip_anvelopa", values_callable=lambda obj: [e.value for e in obj]),
         nullable=False,

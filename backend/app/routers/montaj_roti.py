@@ -11,6 +11,7 @@ from app.models.montaj_rota import MontajRota
 from app.models.marca_anvelopa import MarcaAnvelopa
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.models.profil_anvelopa import ProfilAnvelopa
+from app.models.cod_dot_anvelopa import CodDotAnvelopa
 from app.schemas.montaj_rota import MontajRotaRead, MontajRotiBulkUpsert
 
 router = APIRouter()
@@ -21,6 +22,7 @@ def _serialize(
     marci: dict[int, str],
     dim: dict[int, str],
     prof: dict[int, str],
+    dot: dict[int, str],
 ) -> dict:
     return {
         "id": r.id,
@@ -31,6 +33,7 @@ def _serialize(
         "marca_id": r.marca_id,
         "dimensiune_id": r.dimensiune_id,
         "profil_id": r.profil_id,
+        "dot_id": r.dot_id,
         "tip": r.tip.value if hasattr(r.tip, "value") else r.tip,
         "adancime": r.adancime,
         "cuplu_strangere": r.cuplu_strangere,
@@ -38,20 +41,23 @@ def _serialize(
         "marca_nume": marci.get(r.marca_id) if r.marca_id else None,
         "dimensiune_valoare": dim.get(r.dimensiune_id) if r.dimensiune_id else None,
         "profil_valoare": prof.get(r.profil_id) if r.profil_id else None,
+        "dot_valoare": dot.get(r.dot_id) if r.dot_id else None,
         "created_at": r.created_at,
     }
 
 
 async def _build_lookup_maps(
     db: AsyncSession, account_id: int, rows: list[MontajRota]
-) -> tuple[dict[int, str], dict[int, str], dict[int, str]]:
+) -> tuple[dict[int, str], dict[int, str], dict[int, str], dict[int, str]]:
     marca_ids = {r.marca_id for r in rows if r.marca_id is not None}
     dim_ids = {r.dimensiune_id for r in rows if r.dimensiune_id is not None}
     prof_ids = {r.profil_id for r in rows if r.profil_id is not None}
+    dot_ids = {r.dot_id for r in rows if r.dot_id is not None}
 
     marci: dict[int, str] = {}
     dim: dict[int, str] = {}
     prof: dict[int, str] = {}
+    dot: dict[int, str] = {}
 
     if marca_ids:
         res = await db.execute(
@@ -77,7 +83,15 @@ async def _build_lookup_maps(
             )
         )
         prof = {row[0]: row[1] for row in res.all()}
-    return marci, dim, prof
+    if dot_ids:
+        res = await db.execute(
+            select(CodDotAnvelopa.id, CodDotAnvelopa.valoare).where(
+                CodDotAnvelopa.account_id == account_id,
+                CodDotAnvelopa.id.in_(dot_ids),
+            )
+        )
+        dot = {row[0]: row[1] for row in res.all()}
+    return marci, dim, prof, dot
 
 
 @router.get("", response_model=list[MontajRotaRead])
@@ -96,8 +110,8 @@ async def list_montaj_roti(
         .order_by(MontajRota.ordine.asc().nulls_last(), MontajRota.id.asc())
     )
     rows = (await db.execute(stmt)).scalars().all()
-    marci, dim, prof = await _build_lookup_maps(db, account_id, list(rows))
-    return [_serialize(r, marci, dim, prof) for r in rows]
+    marci, dim, prof, dot = await _build_lookup_maps(db, account_id, list(rows))
+    return [_serialize(r, marci, dim, prof, dot) for r in rows]
 
 
 @router.post("/bulk", response_model=list[MontajRotaRead])
@@ -131,6 +145,7 @@ async def bulk_upsert(
             marca_id=item.marca_id,
             dimensiune_id=item.dimensiune_id,
             profil_id=item.profil_id,
+            dot_id=item.dot_id,
             tip=item.tip,
             adancime=item.adancime,
             cuplu_strangere=item.cuplu_strangere,
@@ -143,8 +158,8 @@ async def bulk_upsert(
     for rec in created:
         await db.refresh(rec)
 
-    marci, dim, prof = await _build_lookup_maps(db, account_id, created)
-    return [_serialize(r, marci, dim, prof) for r in created]
+    marci, dim, prof, dot = await _build_lookup_maps(db, account_id, created)
+    return [_serialize(r, marci, dim, prof, dot) for r in created]
 
 
 @router.delete("/{rota_id}", status_code=204)

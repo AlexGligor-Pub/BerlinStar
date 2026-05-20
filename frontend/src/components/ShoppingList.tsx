@@ -463,6 +463,7 @@ interface CazareAnvelopaPayload {
   marca_id: number | null;
   dimensiune_id: number | null;
   profil_id: number | null;
+  dot_id: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
 }
@@ -814,6 +815,7 @@ export default function ShoppingList() {
           marcaId: r.marcaId,
           dimensiuneId: r.dimensiuneId,
           profilId: r.profilId,
+          dotId: r.dotId,
           tip: r.tip,
           adancime: r.adancime,
           cupluStrangere: r.cupluStrangere,
@@ -855,6 +857,7 @@ export default function ShoppingList() {
                 marcaId: it.anvelopa.marca_id ?? null,
                 dimensiuneId: it.anvelopa.dimensiune_id ?? null,
                 profilId: it.anvelopa.profil_id ?? null,
+                dotId: it.anvelopa.dot_id ?? null,
                 tip: it.anvelopa.tip,
                 adancime: it.anvelopa.adancime ?? null,
                 cupluStrangere: null,
@@ -999,7 +1002,7 @@ export default function ShoppingList() {
       catch { warns.push("clientul nu a putut fi asociat"); }
     }
 
-    const veh = vehicol();
+    const veh = vehicol() ?? (titlu().trim() !== "" ? { numarMasina: titlu().trim() } : null);
     if (veh !== null) {
       try { await saveReceiptVehicol(saved.id, veh); }
       catch { warns.push("vehicolul nu a putut fi asociat"); }

@@ -26,12 +26,14 @@ def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
         "marca_id": a.marca_id,
         "dimensiune_id": a.dimensiune_id,
         "profil_id": a.profil_id,
+        "dot_id": a.dot_id,
         "tip": a.tip,
         "adancime": a.adancime,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
         "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,
         "profil_valoare": a.profil.valoare if a.profil else None,
+        "dot_valoare": a.dot.valoare if a.dot else None,
         "created_at": a.created_at,
         "updated_at": a.updated_at,
         "is_deleted": a.is_deleted,
@@ -121,6 +123,7 @@ def _load_stmt(account_id: int):
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.marca),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.dimensiune),
             selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.profil),
+            selectinload(CazareAnvelope.referinta_cazare).selectinload(CazareAnvelope.items).selectinload(CazareAnvelopaItem.anvelopa).selectinload(Anvelopa.dot),
             selectinload(CazareAnvelope.items).selectinload(
                 CazareAnvelopaItem.anvelopa
             ).selectinload(Anvelopa.marca),
@@ -130,6 +133,9 @@ def _load_stmt(account_id: int):
             selectinload(CazareAnvelope.items).selectinload(
                 CazareAnvelopaItem.anvelopa
             ).selectinload(Anvelopa.profil),
+            selectinload(CazareAnvelope.items).selectinload(
+                CazareAnvelopaItem.anvelopa
+            ).selectinload(Anvelopa.dot),
         )
         .where(CazareAnvelope.account_id == account_id, CazareAnvelope.is_deleted == False)
     )

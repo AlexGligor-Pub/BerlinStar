@@ -11,6 +11,19 @@ interface Props {
   open: boolean;
   receipt: Receipt | null;
   onClose: () => void;
+  onEdit?: () => void;
+  canEdit?: boolean;
+  onUpdated?: (r: Receipt) => void;
+}
+
+function DownloadIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
 }
 
 function fmtDate(iso: string | null | undefined): string {
@@ -21,6 +34,41 @@ function fmtDate(iso: string | null | undefined): string {
 
 export default function FacturaRapidaView(props: Props) {
   const [downloading, setDownloading] = createSignal(false);
+  const [finalizing, setFinalizing] = createSignal(false);
+
+  async function assignNumber(r: Receipt): Promise<{ ctx: DocContext; updated: Receipt } | null> {
+    const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
+      method: "POST",
+      body: JSON.stringify({ doc_type: "factura", location_id: r.locationId }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      notify(j.detail ?? "Eroare la alocarea numarului.", "error");
+      return null;
+    }
+    const ctx: DocContext = await res.json();
+    applyDocNumber(r.id, "factura", ctx.serie, ctx.nr);
+    const updated: Receipt = { ...r, facturaSerie: ctx.serie, facturaNr: ctx.nr };
+    props.onUpdated?.(updated);
+    return { ctx, updated };
+  }
+
+  async function handleFinalize() {
+    const r = props.receipt;
+    if (!r || !r.locationId) {
+      notify("Lipseste locatia pe factura.", "warn");
+      return;
+    }
+    setFinalizing(true);
+    try {
+      const out = await assignNumber(r);
+      if (out) notify(`Numar alocat: ${out.ctx.serie}${out.ctx.nr}.`, "success");
+    } catch (e: any) {
+      notify(e?.message ?? "Eroare la finalizare.", "error");
+    } finally {
+      setFinalizing(false);
+    }
+  }
 
   async function handleDownload() {
     const r = props.receipt;
@@ -30,19 +78,9 @@ export default function FacturaRapidaView(props: Props) {
     }
     setDownloading(true);
     try {
-      const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
-        method: "POST",
-        body: JSON.stringify({ doc_type: "factura", location_id: r.locationId }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        notify(j.detail ?? "Eroare la regenerarea PDF-ului.", "error");
-        return;
-      }
-      const ctx: DocContext = await res.json();
-      applyDocNumber(r.id, "factura", ctx.serie, ctx.nr);
-      const forPdf: Receipt = { ...r, facturaSerie: ctx.serie, facturaNr: ctx.nr };
-      await generateFactura(forPdf, ctx);
+      const out = await assignNumber(r);
+      if (!out) return;
+      await generateFactura(out.updated, out.ctx);
     } catch (e: any) {
       notify(e?.message ?? "Eroare la descarcarea PDF.", "error");
     } finally {
@@ -58,20 +96,39 @@ export default function FacturaRapidaView(props: Props) {
       size="md"
       footer={
         <>
-          <button
-            type="button"
-            class="btn btn-primary btn-sm"
-            onClick={handleDownload}
-            disabled={downloading() || !props.receipt}
-          >
-            {downloading()
-              ? "..."
-              : props.receipt?.facturaNr === 0
-                ? "Finalizeaza si descarca"
-                : "Descarca PDF"}
-          </button>
+          <Show when={props.onEdit && props.canEdit !== false}>
+            <button
+              type="button"
+              class="btn btn-secondary btn-sm"
+              onClick={props.onEdit}
+              disabled={!props.receipt}
+            >
+              Editeaza
+            </button>
+          </Show>
+          <Show when={props.receipt?.facturaNr === 0}>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              onClick={handleFinalize}
+              disabled={finalizing() || !props.receipt}
+            >
+              {finalizing() ? "..." : "Finalizeaza"}
+            </button>
+          </Show>
           <button type="button" class="btn btn-ghost btn-sm" onClick={props.onClose}>
             Inchide
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            onClick={handleDownload}
+            disabled={downloading() || !props.receipt || props.receipt?.facturaNr === 0}
+            title={props.receipt?.facturaNr === 0 ? "Finalizeaza intai factura" : "Descarca PDF"}
+            aria-label="Descarca PDF"
+            style="margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:6px 10px"
+          >
+            {downloading() ? "..." : <DownloadIcon />}
           </button>
         </>
       }

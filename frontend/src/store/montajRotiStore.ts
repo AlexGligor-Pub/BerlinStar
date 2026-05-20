@@ -44,6 +44,7 @@ export interface MontajRota {
   marcaId: number | null;
   dimensiuneId: number | null;
   profilId: number | null;
+  dotId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
   cupluStrangere: number | null;
@@ -51,6 +52,7 @@ export interface MontajRota {
   marcaNume: string | null;
   dimensiuneValoare: string | null;
   profilValoare: string | null;
+  dotValoare: string | null;
 }
 
 export interface MontajRotaDraft {
@@ -60,6 +62,7 @@ export interface MontajRotaDraft {
   marcaId: number | null;
   dimensiuneId: number | null;
   profilId: number | null;
+  dotId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
   cupluStrangere: number | null;
@@ -76,6 +79,7 @@ function mapMontajRota(r: any): MontajRota {
     marcaId: r.marca_id ?? null,
     dimensiuneId: r.dimensiune_id ?? null,
     profilId: r.profil_id ?? null,
+    dotId: r.dot_id ?? null,
     tip: r.tip,
     adancime: r.adancime ?? null,
     cupluStrangere: r.cuplu_strangere ?? null,
@@ -83,6 +87,7 @@ function mapMontajRota(r: any): MontajRota {
     marcaNume: r.marca_nume ?? null,
     dimensiuneValoare: r.dimensiune_valoare ?? null,
     profilValoare: r.profil_valoare ?? null,
+    dotValoare: r.dot_valoare ?? null,
   };
 }
 
@@ -110,6 +115,7 @@ export async function bulkUpsertMontajRoti(
       marca_id: it.marcaId,
       dimensiune_id: it.dimensiuneId,
       profil_id: it.profilId,
+      dot_id: it.dotId,
       tip: it.tip,
       adancime: it.adancime,
       cuplu_strangere: it.cupluStrangere,

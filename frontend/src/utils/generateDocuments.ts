@@ -179,14 +179,6 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
 
-  // Titlu bon
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.black);
-  const titluLines: string[] = doc.splitTextToSize(ro(r.titlu), CW);
-  doc.text(titluLines, ML, y);
-  y += titluLines.length * 4.5 + 3;
-
   // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
   const t = makeT(true);
   const client: ClientInfoForPdf = {
@@ -551,6 +543,7 @@ export interface CazareForPdf {
       marcaNume: string | null;
       dimensiuneValoare: string | null;
       profilValoare?: string | null;
+      dotValoare?: string | null;
       tip: string;
       adancime: number | null;
     } | null;
@@ -560,6 +553,7 @@ export interface CazareForPdf {
       marcaNume: string | null;
       dimensiuneValoare: string | null;
       profilValoare?: string | null;
+      dotValoare?: string | null;
       tip: string;
       adancime: number | null;
     } | null;
@@ -778,24 +772,33 @@ function drawCazareTopCards(
   font: string,
 ): number {
   const innerW = bw - CARD_PAD * 2;
+  const hasClient = !!(
+    client.clientNume?.trim() ||
+    client.clientCui?.trim() ||
+    client.clientReprezentant?.trim() ||
+    client.clientAdresa?.trim() ||
+    client.clientTelefon?.trim()
+  );
   const compH    = _measureCompanyContent(doc, company, innerW, font);
-  const clientH  = _measureClientContent(doc, client, innerW, t, font);
+  const clientH  = hasClient ? _measureClientContent(doc, client, innerW, t, font) : 0;
   const vehH     = vehicle ? _measureVehiculContent(doc, vehicle, innerW, t, font) : 0;
 
   const compCardH   = compH + CARD_PAD * 2;
-  const clientCardH = clientH + CARD_PAD * 2;
+  const clientCardH = hasClient ? clientH + CARD_PAD * 2 : 0;
   const vehCardH    = vehicle ? vehH + CARD_PAD * 2 : 0;
-  const rightStackH = clientCardH + (vehicle ? CARDS_GAP_Y + vehCardH : 0);
+  const rightStackH = clientCardH + (hasClient && vehicle ? CARDS_GAP_Y : 0) + vehCardH;
   const blockH = Math.max(compCardH, rightStackH);
 
   drawCard(doc, leftX, y, bw, compCardH);
   drawCompanyBlockFont(doc, "Prestator", company, leftX + CARD_PAD, y + CARD_PAD, innerW, font);
 
-  drawCard(doc, rightX, y, bw, clientCardH);
-  drawCazareClientBlock(doc, client, rightX + CARD_PAD, y + CARD_PAD, innerW, t, font);
+  if (hasClient) {
+    drawCard(doc, rightX, y, bw, clientCardH);
+    drawCazareClientBlock(doc, client, rightX + CARD_PAD, y + CARD_PAD, innerW, t, font);
+  }
 
   if (vehicle) {
-    const vY = y + clientCardH + CARDS_GAP_Y;
+    const vY = y + (hasClient ? clientCardH + CARDS_GAP_Y : 0);
     drawCard(doc, rightX, vY, bw, vehCardH);
     drawVehiculBlock(doc, vehicle, rightX + CARD_PAD, vY + CARD_PAD, innerW, t, font);
   }
@@ -903,6 +906,7 @@ export async function generateCazareCheckin(
         String(idx + 1),
         t(a.marcaNume ?? "—"),
         t(a.dimensiuneValoare ?? "—"),
+        t(a.dotValoare ?? "—"),
         t(a.profilValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
@@ -913,7 +917,7 @@ export async function generateCazareCheckin(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      head: [["#", "Marcă", "Dimensiune", "DOT", "Profil", "Tip", "Adâncime"]],
       body: tireRows,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
@@ -922,10 +926,11 @@ export async function generateCazareCheckin(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 22 },
-        4: { halign: "center", cellWidth: 14 },
-        5: { halign: "center", cellWidth: 18 },
+        2: { cellWidth: 24 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 20 },
+        5: { halign: "center", cellWidth: 12 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
@@ -971,6 +976,7 @@ export async function generateCazareCheckin(
           String(idx + 1),
           t(a.marcaNume ?? "—"),
           t(a.dimensiuneValoare ?? "—"),
+          t(a.dotValoare ?? "—"),
           t(a.profilValoare ?? "—"),
           TIP_PDF_LABELS[a.tip] ?? a.tip,
           a.adancime != null ? `${a.adancime} mm` : "—",
@@ -978,13 +984,13 @@ export async function generateCazareCheckin(
       });
       autoTable(doc, {
         startY: y,
-        head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+        head: [["#", "Marcă", "Dimensiune", "DOT", "Profil", "Tip", "Adâncime"]],
         body: oldRows,
         theme: "grid",
         styles: { font: FONT },
         headStyles: { fillColor: refColor, textColor: 255, fontSize: 7, fontStyle: "bold", cellPadding: 2 },
         bodyStyles: { fontSize: 7.5, cellPadding: 2 },
-        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 22 }, 4: { halign: "center", cellWidth: 16 }, 5: { halign: "center", cellWidth: 20 } },
+        columnStyles: { 0: { cellWidth: 8, halign: "center" }, 3: { halign: "center", cellWidth: 18 }, 4: { halign: "center", cellWidth: 22 }, 5: { halign: "center", cellWidth: 16 }, 6: { halign: "center", cellWidth: 20 } },
         margin: { left: ML, right: MR },
         tableWidth: CW,
       });
@@ -1122,6 +1128,7 @@ export async function generateCazareScoatereIntroducere(
         String(idx + 1),
         t(a.marcaNume ?? "—"),
         t(a.dimensiuneValoare ?? "—"),
+        t(a.dotValoare ?? "—"),
         t(a.profilValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
@@ -1132,7 +1139,7 @@ export async function generateCazareScoatereIntroducere(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      head: [["#", "Marcă", "Dimensiune", "DOT", "Profil", "Tip", "Adâncime"]],
       body: checkoutRows,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
@@ -1141,10 +1148,11 @@ export async function generateCazareScoatereIntroducere(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 22 },
-        4: { halign: "center", cellWidth: 14 },
-        5: { halign: "center", cellWidth: 18 },
+        2: { cellWidth: 24 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 20 },
+        5: { halign: "center", cellWidth: 12 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
@@ -1215,6 +1223,7 @@ export async function generateCazareScoatereIntroducere(
         String(idx + 1),
         t(a.marcaNume ?? "—"),
         t(a.dimensiuneValoare ?? "—"),
+        t(a.dotValoare ?? "—"),
         t(a.profilValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
@@ -1225,7 +1234,7 @@ export async function generateCazareScoatereIntroducere(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      head: [["#", "Marcă", "Dimensiune", "DOT", "Profil", "Tip", "Adâncime"]],
       body: newRows,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
@@ -1234,10 +1243,11 @@ export async function generateCazareScoatereIntroducere(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 22 },
-        4: { halign: "center", cellWidth: 14 },
-        5: { halign: "center", cellWidth: 18 },
+        2: { cellWidth: 24 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 20 },
+        5: { halign: "center", cellWidth: 12 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
@@ -1364,6 +1374,7 @@ export async function generateCazareCheckout(
         String(idx + 1),
         t(a.marcaNume ?? "—"),
         t(a.dimensiuneValoare ?? "—"),
+        t(a.dotValoare ?? "—"),
         t(a.profilValoare ?? "—"),
         TIP_PDF_LABELS[a.tip] ?? a.tip,
         a.adancime != null ? `${a.adancime} mm` : "—",
@@ -1374,7 +1385,7 @@ export async function generateCazareCheckout(
     const tableStartY = y;
     autoTable(doc, {
       startY: y,
-      head: [["#", "Marcă", "Dimensiune", "Profil", "Tip", "Adâncime"]],
+      head: [["#", "Marcă", "Dimensiune", "DOT", "Profil", "Tip", "Adâncime"]],
       body: checkoutRows,
       theme: "grid",
       styles: { font: FONT, fontSize: 7.5, cellPadding: 2 },
@@ -1383,10 +1394,11 @@ export async function generateCazareCheckout(
       columnStyles: {
         0: { halign: "center", cellWidth: 8 },
         1: { cellWidth: "auto" },
-        2: { cellWidth: 26 },
-        3: { halign: "center", cellWidth: 22 },
-        4: { halign: "center", cellWidth: 14 },
-        5: { halign: "center", cellWidth: 18 },
+        2: { cellWidth: 24 },
+        3: { halign: "center", cellWidth: 16 },
+        4: { halign: "center", cellWidth: 20 },
+        5: { halign: "center", cellWidth: 12 },
+        6: { halign: "center", cellWidth: 16 },
       },
       margin: { left: ML, right: MR + SIDE_IMG_W + SIDE_GAP },
       tableWidth: tableW,
@@ -1419,6 +1431,7 @@ export interface MontajRotaRow {
   marcaNume: string | null;
   dimensiuneValoare: string | null;
   profilValoare: string | null;
+  dotValoare: string | null;
   tip: string;
   adancime: number | null;
   cupluStrangere: number | null;
@@ -1443,6 +1456,7 @@ function _montajRotaHasData(r: MontajRotaRow): boolean {
     (r.marcaNume != null && r.marcaNume !== "") ||
     (r.dimensiuneValoare != null && r.dimensiuneValoare !== "") ||
     (r.profilValoare != null && r.profilValoare !== "") ||
+    (r.dotValoare != null && r.dotValoare !== "") ||
     r.presiune != null ||
     r.adancime != null ||
     r.cupluStrangere != null
@@ -1538,6 +1552,13 @@ async function drawMontajRotaCard(
   doc.text(dimLines, anchorX, ty, { align });
   ty += Math.max(1, dimLines.length) * 3.6;
 
+  // DOT
+  if (r.dotValoare) {
+    const dotLines = doc.splitTextToSize(`DOT: ${t(r.dotValoare)}`, textW) as string[];
+    doc.text(dotLines, anchorX, ty, { align });
+    ty += Math.max(1, dotLines.length) * 3.6;
+  }
+
   // Tip
   const tipLines = doc.splitTextToSize(`Tip: ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`, textW) as string[];
   doc.text(tipLines, anchorX, ty, { align });
@@ -1592,6 +1613,7 @@ function drawMontajRotaRowTextOnly(
   if (r.marcaNume) parts.push(t(r.marcaNume));
   if (r.dimensiuneValoare) parts.push(`dimensiune ${t(r.dimensiuneValoare)}`);
   if (r.profilValoare) parts.push(`profil ${t(r.profilValoare)}`);
+  if (r.dotValoare) parts.push(`DOT ${t(r.dotValoare)}`);
   parts.push(`tip ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`);
   if (r.adancime != null) parts.push(`${t("adâncime")} ${r.adancime} mm`);
   if (r.presiune != null) parts.push(`presiune ${r.presiune.toFixed(1)} bar`);

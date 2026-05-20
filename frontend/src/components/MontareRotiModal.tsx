@@ -2,9 +2,9 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import { apiFetch, API_BASE } from "../utils/api";
 import SearchableSelect from "./SearchableSelect";
 import {
-  marci, dimensiuni, profiluri,
-  loadMarci, loadDimensiuni, loadProfil,
-  invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache,
+  marci, dimensiuni, profiluri, coduriDot,
+  loadMarci, loadDimensiuni, loadProfil, loadCoduriDot,
+  invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
   type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
 import {
@@ -45,6 +45,7 @@ function emptyRow(idx: number): RowDraft {
     marcaId: null,
     dimensiuneId: null,
     profilId: null,
+    dotId: null,
     tip: "vara",
     adancime: ADANCIME_DEFAULT,
     cupluStrangere: pozitieFaraCuplu(pozitie) ? 0 : null,
@@ -78,6 +79,7 @@ export default function MontareRotiModal(props: {
     loadMarci();
     loadDimensiuni();
     loadProfil();
+    loadCoduriDot();
     loadMontareRotiImages();
   });
 
@@ -128,6 +130,13 @@ export default function MontareRotiModal(props: {
       await loadDimensiuni(true);
     }
   }
+  async function addDot(value: string) {
+    const res = await apiFetch("/api/coduri-dot-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
+    if (res.ok) {
+      invalidateCoduriDotCache();
+      await loadCoduriDot(true);
+    }
+  }
 
   async function doSave() {
     setSaving(true);
@@ -140,6 +149,7 @@ export default function MontareRotiModal(props: {
         marcaId: r.marcaId,
         dimensiuneId: r.dimensiuneId,
         profilId: r.profilId,
+        dotId: r.dotId,
         tip: r.tip,
         adancime: r.adancime,
         cupluStrangere: r.cupluStrangere,
@@ -163,9 +173,9 @@ export default function MontareRotiModal(props: {
   function renderWheelImage(placement: "left" | "right" | "bottom", pozitie: PozitieRoata) {
     const placementStyle =
       placement === "left"
-        ? "grid-column:1;grid-row:1 / span 4;align-self:stretch"
+        ? "grid-column:1;grid-row:1 / span 2;align-self:stretch"
         : placement === "right"
-        ? "grid-column:3;grid-row:1 / span 4;align-self:stretch"
+        ? "grid-column:3;grid-row:1 / span 2;align-self:stretch"
         : "grid-column:1 / -1";
     const url = imageUrlForPozitie(pozitie);
     return (
@@ -310,6 +320,19 @@ export default function MontareRotiModal(props: {
                         />
                       </div>
 
+                      {/* DOT */}
+                      <div>
+                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
+                        <SearchableSelect
+                          items={coduriDot()}
+                          value={row.dotId ?? ""}
+                          onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
+                          getLabel={(d) => d.valoare}
+                          placeholder="DOT"
+                          onAddNew={addDot}
+                        />
+                      </div>
+
                       {/* Tip — mutat inaintea Adancime */}
                       <div>
                         <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
@@ -361,7 +384,7 @@ export default function MontareRotiModal(props: {
                           </div>
                         }
                       >
-                        <div style="grid-column:span 2;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
+                        <div style="grid-column:1 / -1;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
                           <div>
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
                             <input

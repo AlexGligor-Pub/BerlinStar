@@ -486,22 +486,6 @@ function LocatiiPanel() {
           </Show>
         </div>
         <div class="locatii-chart-card" style="flex:1;min-width:260px">
-          <div class="locatii-chart-title">Mix metode de plată</div>
-          <div class="locatii-chart-subtitle">Procent din venit per metodă</div>
-          <Show when={!hideExplanations()}>
-            <p class="chart-explanation">
-              Fiecare felie reprezintă o metodă de plată. Pentru bonurile parțiale e luată doar
-              suma efectiv încasată. Treci cu mouse-ul peste felie pentru detalii. Util pentru a
-              vedea ce procent din vânzări vine prin fiecare metodă.
-            </p>
-          </Show>
-          <div ref={donutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
-        </div>
-      </div>
-
-      {/* Produse vs Servicii donut */}
-      <div class="locatii-charts" style="margin-top:14px">
-        <div class="locatii-chart-card" style="flex:1;min-width:260px;max-width:480px">
           <div class="locatii-chart-title">Produse vs Servicii</div>
           <div class="locatii-chart-subtitle">Contribuția produselor vs serviciilor la venit</div>
           <Show when={!hideExplanations()}>
@@ -513,6 +497,71 @@ function LocatiiPanel() {
             </p>
           </Show>
           <div ref={itypeDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+        </div>
+      </div>
+
+      {/* Mix metode de plată donut + tabel */}
+      <div class="locatii-charts" style="margin-top:14px">
+        <div class="locatii-chart-card" style="flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start">
+          <div style="flex:1;min-width:260px">
+            <div class="locatii-chart-title">Mix metode de plată</div>
+            <div class="locatii-chart-subtitle">Procent din venit per metodă</div>
+            <Show when={!hideExplanations()}>
+              <p class="chart-explanation">
+                Fiecare felie reprezintă o metodă de plată. Pentru bonurile parțiale e luată doar
+                suma efectiv încasată. Treci cu mouse-ul peste felie pentru detalii. Util pentru a
+                vedea ce procent din vânzări vine prin fiecare metodă.
+              </p>
+            </Show>
+            <div ref={donutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
+          </div>
+          <Show when={data()}>
+            {(d) => {
+              const items = () => [
+                { label: "Card", value: toNumber(d().pay_methods.sum_card), color: PAY_COLORS[0] },
+                { label: "Cash", value: toNumber(d().pay_methods.sum_cash), color: PAY_COLORS[1] },
+                { label: "OP", value: toNumber(d().pay_methods.sum_op), color: PAY_COLORS[2] },
+                { label: "Parțial", value: toNumber(d().pay_methods.sum_partial), color: PAY_COLORS[3] },
+                { label: "Neplătit", value: toNumber(d().pay_methods.sum_neplatit), color: PAY_COLORS[4] },
+              ];
+              const totalPay = () => items().reduce((s, i) => s + i.value, 0);
+              return (
+                <div style="flex:1;min-width:260px;align-self:center">
+                  <table class="locatii-table" style="width:100%;border-collapse:collapse;font-size:0.85rem">
+                    <thead>
+                      <tr>
+                        <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#2a3045);color:var(--text-muted,#8b90a0);font-weight:600">Metodă</th>
+                        <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border,#2a3045);color:var(--text-muted,#8b90a0);font-weight:600">Valoare (lei)</th>
+                        <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border,#2a3045);color:var(--text-muted,#8b90a0);font-weight:600">Procent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={items()}>
+                        {(it) => {
+                          const pct = totalPay() > 0 ? (it.value / totalPay()) * 100 : 0;
+                          return (
+                            <tr>
+                              <td style="padding:6px 8px;border-bottom:1px solid var(--border-soft,#222838)">
+                                <span style={`display:inline-block;width:10px;height:10px;border-radius:2px;background:${it.color};margin-right:8px;vertical-align:middle`} />
+                                {it.label}
+                              </td>
+                              <td style="padding:6px 8px;border-bottom:1px solid var(--border-soft,#222838);text-align:right;font-variant-numeric:tabular-nums">{fmtMoney(it.value)}</td>
+                              <td style="padding:6px 8px;border-bottom:1px solid var(--border-soft,#222838);text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted,#8b90a0)">{pct.toFixed(1)}%</td>
+                            </tr>
+                          );
+                        }}
+                      </For>
+                      <tr>
+                        <td style="padding:8px;font-weight:700">Total</td>
+                        <td style="padding:8px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">{fmtMoney(totalPay())}</td>
+                        <td style="padding:8px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">100%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            }}
+          </Show>
         </div>
       </div>
 

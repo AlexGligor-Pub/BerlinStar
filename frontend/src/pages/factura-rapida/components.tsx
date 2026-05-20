@@ -1,4 +1,4 @@
-import { Show, For, createSignal, onMount, onCleanup, type JSX } from "solid-js";
+import { Show, For, Index, createSignal, onMount, onCleanup, type JSX } from "solid-js";
 import { apiFetch } from "../../utils/api";
 import Input from "../../components/ui/Input";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
@@ -129,7 +129,7 @@ export function ClientSearch(props: {
           />
           <Show when={showDrop() && (loading() || results().length)}>
             <div
-              style="position:absolute;left:0;right:0;top:100%;z-index:10;background:var(--surface1);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.08)"
+              style="position:absolute;left:0;right:0;top:100%;z-index:10;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;max-height:220px;overflow:auto;box-shadow:0 4px 12px rgba(0,0,0,.08)"
             >
               <Show when={loading()}>
                 <div style="padding:8px 12px;color:var(--text-muted);font-size:13px">Cautare...</div>
@@ -313,52 +313,54 @@ export function ItemsEditor(props: {
     props.onChange([...props.lines, newLine()]);
   }
 
+  // Folosim <Index> in loc de <For> ca DOM-ul sa ramana stabil per index:
+  // <For> ar recrea randul cand obiectul liniei e inlocuit (focus loss dupa fiecare tasta).
   return (
     <div>
       <div style="font-weight:600;margin-bottom:8px">Articole</div>
-      <For each={props.lines}>
+      <Index each={props.lines}>
         {(line, idx) => (
           <div
             class="fr-item-row"
             style="display:grid;grid-template-columns:1fr 70px 80px 110px 90px 36px;gap:8px;align-items:end;margin-bottom:8px"
           >
             <Input
-              label={idx() === 0 ? "Descriere" : undefined}
-              value={line.name}
+              label={idx === 0 ? "Descriere" : undefined}
+              value={line().name}
               placeholder="Servicii / produs"
-              onInput={(v) => update(idx(), { name: v })}
-              error={props.errors[`name_${idx()}`]}
+              onInput={(v) => update(idx, { name: v })}
+              error={props.errors[`name_${idx}`]}
             />
             <Input
-              label={idx() === 0 ? "Cant" : undefined}
+              label={idx === 0 ? "Cant" : undefined}
               type="number"
               min="1"
               step="1"
-              value={String(line.qty)}
-              onInput={(v) => update(idx(), { qty: Math.max(1, parseInt(v, 10) || 1) })}
+              value={String(line().qty)}
+              onInput={(v) => update(idx, { qty: Math.max(1, parseInt(v, 10) || 1) })}
             />
             <Input
-              label={idx() === 0 ? "UM" : undefined}
-              value={line.unit}
-              onInput={(v) => update(idx(), { unit: v })}
+              label={idx === 0 ? "UM" : undefined}
+              value={line().unit}
+              onInput={(v) => update(idx, { unit: v })}
             />
             <Input
-              label={idx() === 0 ? "Pret (net)" : undefined}
+              label={idx === 0 ? "Pret (net)" : undefined}
               type="number"
               min="0"
               step="0.01"
-              value={String(line.price)}
-              onInput={(v) => update(idx(), { price: parseFloat(v) || 0 })}
-              error={props.errors[`price_${idx()}`]}
+              value={String(line().price)}
+              onInput={(v) => update(idx, { price: parseFloat(v) || 0 })}
+              error={props.errors[`price_${idx}`]}
             />
             <div class="field">
-              <Show when={idx() === 0}>
+              <Show when={idx === 0}>
                 <label class="field-label">TVA</label>
               </Show>
               <select
                 class="input"
-                value={line.vatPercent}
-                onChange={(e) => update(idx(), { vatPercent: parseInt(e.currentTarget.value, 10) })}
+                value={line().vatPercent}
+                onChange={(e) => update(idx, { vatPercent: parseInt(e.currentTarget.value, 10) })}
               >
                 <For each={VAT_OPTIONS}>
                   {(v) => <option value={v}>{v}%</option>}
@@ -369,7 +371,7 @@ export function ItemsEditor(props: {
               type="button"
               class="btn btn-ghost btn-sm"
               aria-label="Sterge linie"
-              onClick={() => remove(idx())}
+              onClick={() => remove(idx)}
               disabled={props.lines.length <= 1}
               style="height:38px"
             >
@@ -377,7 +379,7 @@ export function ItemsEditor(props: {
             </button>
           </div>
         )}
-      </For>
+      </Index>
       <button type="button" class="btn btn-ghost btn-sm" onClick={add}>
         + Adauga linie
       </button>
@@ -425,19 +427,23 @@ export function RowKebab(props: {
   }
 
   return (
-    <div ref={wrap} style="position:relative;display:inline-block">
+    <div
+      ref={wrap}
+      onClick={(e) => e.stopPropagation()}
+      style="position:relative;display:inline-block"
+    >
       <button
         type="button"
         class="btn btn-ghost btn-sm"
         aria-label="Actiuni"
-        onClick={() => setOpen((v) => !v)}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         style="padding:4px 8px"
       >
         ⋮
       </button>
       <Show when={open()}>
         <div
-          style="position:absolute;right:0;top:100%;z-index:20;background:var(--surface1);border:1px solid var(--border);border-radius:8px;margin-top:4px;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,.1)"
+          style="position:absolute;right:0;top:100%;z-index:100;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-top:4px;min-width:160px;box-shadow:0 4px 12px rgba(0,0,0,.1)"
         >
           {item("Vizualizeaza", props.onView)}
           {item("Editeaza", props.onEdit, !props.canEdit)}

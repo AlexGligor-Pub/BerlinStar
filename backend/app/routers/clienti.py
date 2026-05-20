@@ -36,7 +36,11 @@ async def list_clienti(
     if last_id is not None:
         stmt = stmt.where(Client.id > last_id)
     if q:
-        stmt = stmt.where(Client.nume.ilike(f"%{q}%"))
+        from sqlalchemy import or_
+        stmt = stmt.where(or_(
+            Client.nume.ilike(f"%{q}%"),
+            Client.cui.ilike(f"%{q}%"),
+        ))
     if q_masina:
         subq = (
             select(ClientVehicol.client_id)
