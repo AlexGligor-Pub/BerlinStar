@@ -173,9 +173,9 @@ export default function MontareRotiModal(props: {
   function renderWheelImage(placement: "left" | "right" | "bottom", pozitie: PozitieRoata) {
     const placementStyle =
       placement === "left"
-        ? "grid-column:1;grid-row:1 / span 2;align-self:stretch"
+        ? "grid-column:1;grid-row:1 / span 3;align-self:stretch"
         : placement === "right"
-        ? "grid-column:3;grid-row:1 / span 2;align-self:stretch"
+        ? "grid-column:3;grid-row:1 / span 3;align-self:stretch"
         : "grid-column:1 / -1";
     const url = imageUrlForPozitie(pozitie);
     return (
@@ -307,46 +307,50 @@ export default function MontareRotiModal(props: {
                         />
                       </div>
 
-                      {/* Dimensiune */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
-                        <SearchableSelect
-                          items={dimensiuni()}
-                          value={row.dimensiuneId ?? ""}
-                          onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
-                          getLabel={(d) => d.valoare}
-                          placeholder="Dimensiune"
-                          onAddNew={addDim}
-                        />
-                      </div>
+                      {/* Dim / DOT / Tip — împachetate în 3 sub-coloane pentru a încăpea pe acelasi rând,
+                          în paralel cu imaginea (care acum spanează 3 rânduri). */}
+                      <div style="grid-column:span 2;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;align-items:start">
+                        {/* Dimensiune */}
+                        <div>
+                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
+                          <SearchableSelect
+                            items={dimensiuni()}
+                            value={row.dimensiuneId ?? ""}
+                            onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
+                            getLabel={(d) => d.valoare}
+                            placeholder="Dimensiune"
+                            onAddNew={addDim}
+                          />
+                        </div>
 
-                      {/* DOT */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
-                        <SearchableSelect
-                          items={coduriDot()}
-                          value={row.dotId ?? ""}
-                          onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
-                          getLabel={(d) => d.valoare}
-                          placeholder="DOT"
-                          onAddNew={addDot}
-                        />
-                      </div>
+                        {/* DOT */}
+                        <div>
+                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
+                          <SearchableSelect
+                            items={coduriDot()}
+                            value={row.dotId ?? ""}
+                            onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
+                            getLabel={(d) => d.valoare}
+                            placeholder="DOT"
+                            onAddNew={addDot}
+                          />
+                        </div>
 
-                      {/* Tip — mutat inaintea Adancime */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
-                        <select
-                          class="input"
-                          style="width:100%"
-                          value={row.tip}
-                          onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
-                        >
-                          <option value="iarna">{TIP_LABELS.iarna}</option>
-                          <option value="vara">{TIP_LABELS.vara}</option>
-                          <option value="ms">{TIP_LABELS.ms}</option>
-                          <option value="altele">{TIP_LABELS.altele}</option>
-                        </select>
+                        {/* Tip */}
+                        <div>
+                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
+                          <select
+                            class="input"
+                            style="width:100%"
+                            value={row.tip}
+                            onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
+                          >
+                            <option value="iarna">{TIP_LABELS.iarna}</option>
+                            <option value="vara">{TIP_LABELS.vara}</option>
+                            <option value="ms">{TIP_LABELS.ms}</option>
+                            <option value="altele">{TIP_LABELS.altele}</option>
+                          </select>
+                        </div>
                       </div>
 
                       {/* Adancime + Cuplu — perechi cu lățimi 0.7fr / 1.3fr cand ambele sunt vizibile;
