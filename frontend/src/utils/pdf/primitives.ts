@@ -156,28 +156,37 @@ export async function qrDataUrl(text: string): Promise<string | null> {
 /**
  * Footer pe toate paginile: linie subtire, data generare, numar pagina,
  * (optional) website la centru si QR code pe prima pagina.
+ *
+ * Daca `opts.itemCount` > 10, QR-ul nu se afiseaza ca sa lase mai mult loc pe pagina.
  */
 export async function drawFooterWithBranding(
   doc: jsPDF,
   website: string | null | undefined,
+  opts?: { itemCount?: number },
 ): Promise<void> {
   const n = pageCount(doc);
-  const qr = website ? await qrDataUrl(website) : null;
+  const showQr = opts?.itemCount == null || opts.itemCount <= 10;
+  const qr = website && showQr ? await qrDataUrl(website) : null;
 
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
     const h = doc.internal.pageSize.getHeight();
 
+    // Footer lipit de marginea de jos: text aproape de baza paginii, QR direct deasupra textului.
+    const websiteBaselineY = h - 2;
+
     if (website) {
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.5);
       doc.setTextColor(...COLORS.black);
-      doc.text(website, PAGE.width / 2, h - 5.5, { align: "center" });
+      doc.text(website, PAGE.width / 2, websiteBaselineY, { align: "center" });
     }
 
     if (qr && i === 1) {
       const qrSize = 12;
-      doc.addImage(qr, "PNG", PAGE.width / 2 - qrSize / 2, h - 10 - qrSize - 1, qrSize, qrSize, undefined, "FAST");
+      // QR-ul se aseaza imediat deasupra textului (top-ul textului ~2.3mm peste baseline + 0.5mm gap).
+      const qrY = websiteBaselineY - 3 - qrSize;
+      doc.addImage(qr, "PNG", PAGE.width / 2 - qrSize / 2, qrY, qrSize, qrSize, undefined, "FAST");
     }
   }
 }

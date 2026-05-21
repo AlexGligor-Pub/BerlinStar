@@ -483,19 +483,21 @@ export function drawSignatures(
   doc.setLineWidth(0.3);
 
   // Linie intrerupta la mijloc, cu textul centrat in interval (vertical-centrat pe linie).
+  // Linia ocupa jumate din latimea coloanei, centrata sub label.
   const gap = 1.5; // mm spatiu liber pe fiecare parte a textului
   const textBaselineY = y + 1; // offset baseline pentru centrare vizuala pe linie
+  const lineW = colW / 2;
 
   const leftMid = ML + colW / 2;
   const leftTextW = doc.getTextWidth(leftLabel);
-  doc.line(ML, y, leftMid - leftTextW / 2 - gap, y);
-  doc.line(leftMid + leftTextW / 2 + gap, y, ML + colW, y);
+  doc.line(leftMid - lineW / 2, y, leftMid - leftTextW / 2 - gap, y);
+  doc.line(leftMid + leftTextW / 2 + gap, y, leftMid + lineW / 2, y);
   doc.text(leftLabel, leftMid, textBaselineY, { align: "center" });
 
   const rightMid = col2X + colW / 2;
   const rightTextW = doc.getTextWidth(rightLabel);
-  doc.line(col2X, y, rightMid - rightTextW / 2 - gap, y);
-  doc.line(rightMid + rightTextW / 2 + gap, y, col2X + colW, y);
+  doc.line(rightMid - lineW / 2, y, rightMid - rightTextW / 2 - gap, y);
+  doc.line(rightMid + rightTextW / 2 + gap, y, rightMid + lineW / 2, y);
   doc.text(rightLabel, rightMid, textBaselineY, { align: "center" });
 
   return y;
