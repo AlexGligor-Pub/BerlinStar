@@ -303,7 +303,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   // - altfel pe pagina noua.
   if (montajRoti && montajRoti.length > 0) {
     const montajTitleH = 7;
-    const montajHlineH = 3;
+    const montajHlineH = 6;
     const estH = estimateMontajRotiBodyHeight(montajRoti) + montajTitleH + montajHlineH;
     const signLineY = PAGE.height - 22;
     const buffer = 4;
