@@ -384,14 +384,6 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 
   let y = Math.max(midY, cardsBottomY) + 4;
 
-  // Titlu bon (sub topul cu cardurile, peste tabel)
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.black);
-  const titluLines: string[] = doc.splitTextToSize(ro(r.titlu), CW);
-  doc.text(titluLines, ML, y);
-  y += titluLines.length * 4.5 + 3;
-
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
   y = drawTotals(doc, r, y, tvaPct, r.items, { skipTopLine: true });
 
