@@ -11,7 +11,7 @@ import {
   fmtDate, lei, docFilename, asciifyDiacritics,
   hline, drawBackground, drawLogo, drawSideImage,
   drawFooterWithBranding,
-  fetchImageAsDataUrl,
+  fetchImageAsDataUrl, loadImageAsDataUrl,
   drawHeader, drawCompanyBlock, drawClientBlock,
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
 } from "./pdf";
@@ -173,14 +173,52 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   const tvaPct = ctx.company?.tva_percentage ?? 0;
   const date = fmtDate(r.date);
 
-  // Background si logo
+  // Background
   await drawBackground(doc, ctx.company?.background_path);
-  // Logo aliniat cu topul textului "DEVIZ" (16pt → cap height ~4mm peste baseline=MT).
-  await drawLogo(doc, ctx.company?.logo_path, MT - 4);
 
-  let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
+  // Layout 3 coloane: Prestator (stanga) | Logo + DEVIZ + Serie/Nr + Data (mijloc) | Client + Vehicul (dreapta)
+  const middleW = 34;
+  const sideGap = 5;
+  const sideW = (CW - middleW - 2 * sideGap) / 2;
+  const leftX = ML;
+  const middleX = ML + sideW + sideGap;
+  const rightX = middleX + middleW + sideGap;
 
-  // Prestator (left) + Client + Vehicul (right, stacked) — fiecare in propriul card
+  // Coloana mijloc: logo (centrat) + titlu DEVIZ + Serie/Nr + Data
+  const logoSize = 20;
+  const logoX = middleX + (middleW - logoSize) / 2;
+  const logoY = MT;
+  if (ctx.company?.logo_path) {
+    try {
+      const dataUrl = await loadImageAsDataUrl(ctx.company.logo_path);
+      if (dataUrl) {
+        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
+      }
+    } catch { /* ignore */ }
+  }
+
+  let midY = logoY + logoSize + 4;
+  const midCenterX = middleX + middleW / 2;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...C.black);
+  doc.text("DEVIZ", midCenterX, midY, { align: "center" });
+  midY += 6;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.black);
+  const nrTxt = String(ctx.nr).padStart(2, "0");
+  doc.text(
+    ctx.serie ? `Serie: ${ctx.serie}   Nr.: ${nrTxt}` : `Nr.: ${nrTxt}`,
+    midCenterX, midY, { align: "center" },
+  );
+  midY += 4;
+  doc.text(`Data: ${date}`, midCenterX, midY, { align: "center" });
+  midY += 5;
+
+  // Carduri Prestator (stanga) + Client + Vehicul (dreapta, stivuit) — pornesc de la MT (acelasi top ca logoul)
   const t = makeT(true);
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
@@ -201,10 +239,11 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
       }
     : null;
 
-  const bw = (CW - CARDS_GAP_X) / 2;
-  const leftX = ML;
-  const rightX = ML + bw + CARDS_GAP_X;
-  y = drawCazareTopCards(doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, y, bw, t, "helvetica") + 4;
+  const cardsBottomY = drawCazareTopCards(
+    doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, MT, sideW, t, "helvetica",
+  );
+
+  let y = Math.max(midY, cardsBottomY) + 4;
 
   hline(doc, y, C.lightGray, 0.2);
   y += 4;
