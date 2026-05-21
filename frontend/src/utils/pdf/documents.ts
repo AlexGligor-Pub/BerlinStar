@@ -385,7 +385,7 @@ export function drawDisclaimer(
   if (y > PAGE_H - 30) { doc.addPage(); y = PAGE.marginTop; }
 
   const padHline = opts?.compact ? 1.5 : 3;
-  const padTitle = opts?.compact ? 1.5 : 3;
+  const padTitle = opts?.compact ? 3 : 3;
   const padAfter = opts?.compact ? 1 : 3;
 
   hline(doc, y, COLORS.veryLight, 0.2);
