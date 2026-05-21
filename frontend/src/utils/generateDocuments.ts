@@ -699,7 +699,6 @@ export interface VehiculForPdf {
 
 const CARD_PAD = 3.5;
 const CARD_BORDER: [number, number, number] = [180, 180, 180];
-const CARDS_GAP_X = 8;
 const CARDS_GAP_Y = 3;
 
 function drawCard(doc: any, x: number, y: number, w: number, h: number): void {
@@ -971,7 +970,7 @@ async function drawDocHeader3Col(
   company: any,
   client: ClientInfoForPdf,
   vehicle: VehiculForPdf | null,
-  opts: { title: string; serie?: string; nr: number; dateStr: string; middleW?: number },
+  opts: { title: string; serie?: string; nr: number | string; dateStr: string; middleW?: number },
   t: (s: string | null | undefined) => string,
   FONT: string,
 ): Promise<number> {
