@@ -216,7 +216,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   );
   midY += 4;
   doc.text(`Data: ${date}`, midCenterX, midY, { align: "center" });
-  midY += 5;
+  midY += 1;
 
   // Carduri Prestator (stanga) + Client + Vehicul (dreapta, stivuit) — pornesc de la MT (acelasi top ca logoul)
   const t = makeT(true);
@@ -244,7 +244,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     { clientVehiculInline: true },
   );
 
-  let y = Math.max(midY, cardsBottomY) + 4;
+  let y = Math.max(midY, cardsBottomY) + 1;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
   y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true });
