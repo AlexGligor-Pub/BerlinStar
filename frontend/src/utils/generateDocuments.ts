@@ -1527,7 +1527,7 @@ async function drawMontajRotaCard(
 
   // Titlu pozitie
   doc.setFont(FONT, "bold");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(...navyBlue);
   doc.text(t(_POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie), anchorX, ty, { align });
   ty += 5;
@@ -1682,12 +1682,22 @@ export async function generateMontajRoti(
     if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
   }
 
-  // Cardurile sunt lipite — fara spatii intre ele (orizontal si vertical) — pentru ca
-  // imaginile cardurilor adiacente sa fie aliniate edge-to-edge.
+  // Layout 2 coloane (75/25): stanga = grid 2x2 cu roti, dreapta = text Conditii Tehnice + Atentie.
+  const colGapMain = 6;
+  const leftW = (CW - colGapMain) * 0.75;
+  const rightW = (CW - colGapMain) * 0.25;
+  const leftHalfX = ML;
+  const rightHalfX = ML + leftW + colGapMain;
+
+  // Grid stanga: cardurile sunt lipite intre ele (fara spatii) pentru ca imaginile
+  // cardurilor adiacente sa fie aliniate edge-to-edge.
   const colGap = 0;
   const rowGap = 0;
-  const cardW = (CW - colGap) / 2;
+  const cardW = (leftW - colGap) / 2;
   const cardH = 42;
+
+  const gridStartY = y;
+  let leftY = gridStartY;
 
   // Daca nici una din cele 4 pozitii principale nu are date, sarim peste grid-ul de carduri
   // (nu afisam nici macar imaginile).
@@ -1705,33 +1715,25 @@ export async function generateMontajRoti(
       // Stanga (coloana 1) → imaginea spre interior (dreapta cardului).
       // Dreapta (coloana 2) → imaginea spre interior (stanga cardului).
       // gridRow controleaza partea verticala a cardului catre care e aliniata imaginea.
-      if (left)  await drawMontajRotaCard(doc, left,  ML,                  y, cardW, cardH, "right", gridRow, t, FONT);
-      if (right) await drawMontajRotaCard(doc, right, ML + cardW + colGap, y, cardW, cardH, "left",  gridRow, t, FONT);
-      y += cardH + rowGap;
+      if (left)  await drawMontajRotaCard(doc, left,  leftHalfX,                 leftY, cardW, cardH, "right", gridRow, t, FONT);
+      if (right) await drawMontajRotaCard(doc, right, leftHalfX + cardW + colGap, leftY, cardW, cardH, "left",  gridRow, t, FONT);
+      leftY += cardH + rowGap;
     };
 
     // Randul 1 (Fata) e in partea de sus a gridului → imaginea aliniata spre vecinul de jos
     await drawPair("stanga_fata", "dreapta_fata", "top");
     // Randul 2 (Spate) e in partea de jos a gridului → imaginea aliniata spre vecinul de sus
     await drawPair("stanga_spate", "dreapta_spate", "bottom");
-    // Separator vizual intre gridul cardurilor (lipite) si randurile Rezerva/Nespecificat.
-    if (byPoz.rezerva || byPoz.nespecificat) y += 4;
   }
 
-  if (byPoz.rezerva) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + 2;
-  }
-  if (byPoz.nespecificat) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + 2;
-  }
-  y += 2;
+  // Coloana dreapta: Conditii Tehnice + Atentie, incepe la acelasi y ca grid-ul.
+  let rightY = gridStartY;
 
-  // ── Condiții tehnice de lucru ──────────────────────────────────────────────
   doc.setFont(FONT, "bold");
   doc.setFontSize(7);
   doc.setTextColor(...C.black);
-  doc.text(t("CONDIȚII TEHNICE DE LUCRU"), ML, y);
-  y += 3;
+  doc.text(t("CONDIȚII TEHNICE DE LUCRU"), rightHalfX, rightY);
+  rightY += 3;
 
   doc.setFont(FONT, "normal");
   doc.setFontSize(6.5);
@@ -1741,19 +1743,31 @@ export async function generateMontajRoti(
     "Presiunea pneurilor a fost reglată conform valorilor recomandate de producătorul autovehiculului, indicate pe eticheta de pe stâlpul caroseriei, în manualul de utilizare sau pe capacul rezervorului de combustibil.",
   ];
   for (const p of paragrafe) {
-    const lines: string[] = doc.splitTextToSize(t(p), CW);
-    doc.text(lines, ML, y);
-    y += lines.length * 2.6 + 1.5;
+    const lines: string[] = doc.splitTextToSize(t(p), rightW);
+    doc.text(lines, rightHalfX, rightY);
+    rightY += lines.length * 2.6 + 1.5;
   }
 
   doc.setFont(FONT, "bold");
   doc.setFontSize(6.5);
   doc.setTextColor(...C.black);
   const atentie = "Atenție: Clientul este sfătuit să verifice strângerea prezoanelor după primii 50 pana la 100 km parcurși de la montaj, la un service autorizat sau cu o cheie dinamometrică calibrată.";
-  const atLines: string[] = doc.splitTextToSize(t(atentie), CW);
-  doc.text(atLines, ML, y);
-  y += atLines.length * 2.6 + 4;
+  const atLines: string[] = doc.splitTextToSize(t(atentie), rightW);
+  doc.text(atLines, rightHalfX, rightY);
+  rightY += atLines.length * 2.6 + 4;
   doc.setTextColor(...C.black);
+
+  // Continuam de la baza celei mai inalte coloane.
+  y = Math.max(leftY, rightY);
+
+  if (byPoz.rezerva || byPoz.nespecificat) y += 4;
+
+  if (byPoz.rezerva) {
+    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + 2;
+  }
+  if (byPoz.nespecificat) {
+    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + 2;
+  }
 
   await drawFooterWithBranding(doc, company?.website);
 
