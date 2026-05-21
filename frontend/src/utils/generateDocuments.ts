@@ -297,17 +297,27 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   }
 
   y = drawDisclaimer(doc, ctx.disclaimer, y, ro, { compact: true });
+
+  // Daca receiptul are montaj roti, anexam corpul (grid + Conditii Tehnice + Atentie):
+  // - pe aceeasi pagina cu deviz-ul daca incape deasupra zonei de semnatura,
+  // - altfel pe pagina noua.
+  if (montajRoti && montajRoti.length > 0) {
+    const estH = estimateMontajRotiBodyHeight(montajRoti);
+    const signLineY = PAGE.height - 22;
+    const buffer = 4;
+    if (y + estH + buffer > signLineY) {
+      doc.addPage();
+      await drawBackground(doc, ctx.company?.background_path);
+      y = MT;
+    } else {
+      y += 4;
+    }
+    y = await drawMontajRotiBody(doc, montajRoti, y, t, "helvetica");
+  }
+
+  // Semnaturile la baza paginii curente (dupa montaj daca exista).
   drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y, { pinToBottom: true });
   await drawFooterWithBranding(doc, ctx.company?.website);
-
-  // Daca receiptul are montaj roti, anexam corpul (grid + Conditii Tehnice + Atentie)
-  // pe o pagina noua — fara header, top cards sau alte cliseuri din PDF-ul standalone.
-  if (montajRoti && montajRoti.length > 0) {
-    doc.addPage();
-    await drawBackground(doc, ctx.company?.background_path);
-    await drawMontajRotiBody(doc, montajRoti, MT, t, "helvetica");
-    await drawFooterWithBranding(doc, ctx.company?.website);
-  }
 
   if (!append) doc.save(docFilename("deviz", r.titlu));
 }
@@ -1758,6 +1768,34 @@ function drawMontajRotaRowTextOnly(
   const lines = doc.splitTextToSize(sentence, maxW) as string[];
   doc.text(lines, dx, lineY);
   return lineY + (lines.length - 1) * 3.6 + 5;
+}
+
+/** Estimeaza inaltimea pe care o va ocupa corpul Montare Roti, ca sa decidem
+ *  daca incape pe pagina curenta sau trebuie pe pagina noua. */
+function estimateMontajRotiBodyHeight(rows: MontajRotaRow[]): number {
+  const byPoz: Partial<Record<string, MontajRotaRow>> = {};
+  for (const row of rows) {
+    if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
+  }
+  const cardH = 42;
+  const hasFront = (["stanga_fata", "dreapta_fata"] as const).some((p) => {
+    const r = byPoz[p];
+    return r != null && _montajRotaHasData(r);
+  });
+  const hasBack = (["stanga_spate", "dreapta_spate"] as const).some((p) => {
+    const r = byPoz[p];
+    return r != null && _montajRotaHasData(r);
+  });
+  let gridH = 0;
+  if (hasFront) gridH += cardH;
+  if (hasBack) gridH += cardH;
+  // Coloana dreapta (Conditii + 2 paragrafe + Atentie la 6.5pt pe ~43mm) — estimat conservativ.
+  const rightH = 55;
+  let totalH = Math.max(gridH, rightH);
+  if (byPoz.rezerva || byPoz.nespecificat) totalH += 4;
+  if (byPoz.rezerva) totalH += 7;
+  if (byPoz.nespecificat) totalH += 7;
+  return totalH;
 }
 
 /** Corpul PDF-ului Montare Roți: grid 2x2 cu carduri (stanga 75%) +
