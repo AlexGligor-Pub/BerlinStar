@@ -372,25 +372,31 @@ export function drawTotals(
   return y + 2;
 }
 
-/** Disclaimer — 6pt, gri deschis, salt de pagina daca nu mai e loc. */
+/** Disclaimer — 6pt, gri deschis, salt de pagina daca nu mai e loc.
+ *  `compact: true` reduce padding-urile interne pentru un layout mai stramt. */
 export function drawDisclaimer(
   doc: jsPDF,
   disclaimer: DisclaimerInfo | null,
   y: number,
   t: TextTransform,
+  opts?: { compact?: boolean },
 ): number {
   if (!disclaimer?.text) return y;
   if (y > PAGE_H - 30) { doc.addPage(); y = PAGE.marginTop; }
 
+  const padHline = opts?.compact ? 1.5 : 3;
+  const padTitle = opts?.compact ? 1.5 : 3;
+  const padAfter = opts?.compact ? 1 : 3;
+
   hline(doc, y, COLORS.veryLight, 0.2);
-  y += 3;
+  y += padHline;
 
   if (disclaimer.title) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
     doc.setTextColor(...COLORS.black);
     doc.text(t(disclaimer.title).toUpperCase(), ML, y);
-    y += 3;
+    y += padTitle;
   }
 
   doc.setFont("helvetica", "normal");
@@ -398,19 +404,28 @@ export function drawDisclaimer(
   doc.setTextColor(...COLORS.black);
   const lines: string[] = doc.splitTextToSize(t(disclaimer.text), CW);
   doc.text(lines, ML, y);
-  y += lines.length * 2.8 + 3;
+  y += lines.length * 2.8 + padAfter;
   return y;
 }
 
-/** Doua rubrici de semnatura (linie + label). */
+/** Doua rubrici de semnatura (linie + label).
+ *  `pinToBottom: true` plaseaza semnaturile la baza paginii (deasupra footer-ului),
+ *  indiferent de y-ul primit. */
 export function drawSignatures(
   doc: jsPDF,
   leftLabel: string,
   rightLabel: string,
   y: number,
+  opts?: { pinToBottom?: boolean },
 ): number {
-  if (y > PAGE_H - 22) { doc.addPage(); y = PAGE.marginTop; }
-  y += 8;
+  if (opts?.pinToBottom) {
+    // Footer-ul incepe la PAGE_H - 10. Plasam linia semnaturii la ~22mm de baza,
+    // ca labelurile (linie + 4mm) sa stea confortabil deasupra footer-ului.
+    y = PAGE_H - 22;
+  } else {
+    if (y > PAGE_H - 22) { doc.addPage(); y = PAGE.marginTop; }
+    y += 8;
+  }
 
   const colW = CW / 2 - 8;
   const col2X = ML + colW + 16;

@@ -251,7 +251,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
-    y += 3;
+    y += 2;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
@@ -262,12 +262,12 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     doc.setTextColor(...C.black);
     const dl: string[] = doc.splitTextToSize(ro(r.descriere.trim()), CW);
     doc.text(dl, ML, y);
-    y += dl.length * 4 + 3;
+    y += dl.length * 4 + 1;
   }
 
   if (r.dateTehn?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
-    y += 3;
+    y += 2;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
@@ -278,12 +278,12 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     doc.setTextColor(...C.black);
     const dtl: string[] = doc.splitTextToSize(ro(r.dateTehn.trim()), CW);
     doc.text(dtl, ML, y);
-    y += dtl.length * 4 + 3;
+    y += dtl.length * 4 + 1;
   }
 
   if (r.metodaPlata === "Platit Partial" && r.partialPay != null) {
     hline(doc, y, C.veryLight, 0.1);
-    y += 4;
+    y += 3;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...C.black);
@@ -293,11 +293,11 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     doc.setFontSize(8.5);
     doc.setTextColor(...C.black);
     doc.text(`Rest de plata: ${lei(totalFinal2 - r.partialPay)}`, ML, y + 5);
-    y += 12;
+    y += 10;
   }
 
-  y = drawDisclaimer(doc, ctx.disclaimer, y, ro);
-  y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
+  y = drawDisclaimer(doc, ctx.disclaimer, y, ro, { compact: true });
+  drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y, { pinToBottom: true });
   await drawFooterWithBranding(doc, ctx.company?.website);
 
   // Daca receiptul are montaj roti, anexam corpul (grid + Conditii Tehnice + Atentie)
