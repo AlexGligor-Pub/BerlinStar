@@ -661,7 +661,28 @@ function ReceiptCard(props: { receipt: Receipt }) {
       }
       const ctx: DocContext = await res.json();
       applyDocNumber(r.id, apiDocType as "deviz" | "factura" | "chitanta", ctx.serie, ctx.nr);
-      if (docType === "deviz") await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true);
+      if (docType === "deviz") {
+        // Anexam corpul Montare Roti la sfarsitul deviz-ului daca receiptul are date.
+        const montajList = await loadMontajRotiByReceipt(Number(r.id)).catch(() => [] as MontajRota[]);
+        let montajRows: MontajRotaRow[] | undefined;
+        if (montajList.length > 0) {
+          await loadMontareRotiImages();
+          const montareImgs = buildMontareRotiProxyUrls();
+          montajRows = montajList.map((m) => ({
+            pozitie: m.pozitie,
+            presiune: m.presiune,
+            marcaNume: m.marcaNume,
+            dimensiuneValoare: m.dimensiuneValoare,
+            profilValoare: m.profilValoare,
+            dotValoare: m.dotValoare,
+            tip: m.tip,
+            adancime: m.adancime,
+            cupluStrangere: m.cupluStrangere,
+            imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
+          }));
+        }
+        await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows);
+      }
       else if (docType === "factura") await generateFactura(r, ctx);
       else if (docType === "chitanta") await generateChitanta(r, ctx);
       else await handleDevizPlusOperatii(ctx);

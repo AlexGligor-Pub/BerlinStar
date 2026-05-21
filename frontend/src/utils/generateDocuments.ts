@@ -165,7 +165,7 @@ async function loadPdf() {
 
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
-export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician = false, append?: AppendOptions): Promise<void> {
+export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician = false, append?: AppendOptions, montajRoti?: MontajRotaRow[]): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = append ? append.doc : new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   if (append && !append.isFirst) doc.addPage();
@@ -299,6 +299,15 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   y = drawDisclaimer(doc, ctx.disclaimer, y, ro);
   y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y);
   await drawFooterWithBranding(doc, ctx.company?.website);
+
+  // Daca receiptul are montaj roti, anexam corpul (grid + Conditii Tehnice + Atentie)
+  // pe o pagina noua — fara header, top cards sau alte cliseuri din PDF-ul standalone.
+  if (montajRoti && montajRoti.length > 0) {
+    doc.addPage();
+    await drawBackground(doc, ctx.company?.background_path);
+    await drawMontajRotiBody(doc, montajRoti, MT, t, "helvetica");
+    await drawFooterWithBranding(doc, ctx.company?.website);
+  }
 
   if (!append) doc.save(docFilename("deviz", r.titlu));
 }
@@ -1751,53 +1760,17 @@ function drawMontajRotaRowTextOnly(
   return lineY + (lines.length - 1) * 3.6 + 5;
 }
 
-/** PDF — Montare Roți */
-export async function generateMontajRoti(
-  receipt: Receipt,
-  company: CompanyData | null,
+/** Corpul PDF-ului Montare Roți: grid 2x2 cu carduri (stanga 75%) +
+ *  text Conditii Tehnice + Atentie (dreapta 25%) + Rezerva/Nespecificat full-width.
+ *  Nu deseneaza header, top cards, hline-uri sau footer — folosit atat in
+ *  PDF-ul standalone cat si ca anexa la sfarsitul Devizului. */
+async function drawMontajRotiBody(
+  doc: any,
   rows: MontajRotaRow[],
-  vehicle: VehiculForPdf | null = null,
-  append?: AppendOptions,
-): Promise<void> {
-  const { jsPDF } = await loadPdf();
-  const doc = append ? append.doc : new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  if (append && !append.isFirst) doc.addPage();
-
-  const fontB64 = await loadRoFontBase64();
-  if (fontB64) registerRoFont(doc, fontB64);
-  const FONT = fontB64 ? "NotoSans" : "helvetica";
-  const t = makeT(!!fontB64);
-  doc.setFont(FONT, "normal");
-
-  await drawBackground(doc, company?.background_path);
-  await drawLogo(doc, company?.logo_path, MT);
-
-  const fmtReceiptDate = (() => {
-    try { return fmtDate(receipt.date); } catch { return ""; }
-  })();
-  let y = drawHeader(doc, "Montare Roți", "", receipt.id as unknown as number, fmtReceiptDate, FONT);
-  y += 2;
-  hline(doc, y);
-  y += 6;
-
-  const client: ClientInfoForPdf = {
-    clientNume: receipt.clientNume ?? null,
-    clientCui: (receipt as any).clientCui ?? null,
-    clientReprezentant: (receipt as any).clientReprezentant ?? null,
-    clientAdresa: (receipt as any).clientAdresa ?? null,
-    clientTelefon: (receipt as any).clientTelefon ?? null,
-  };
-
-  const bw = (CW - CARDS_GAP_X) / 2;
-  const leftX = ML;
-  const rightX = ML + bw + CARDS_GAP_X;
-  y = drawCazareTopCards(doc, company ?? null, client, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
-
-  hline(doc, y);
-  y += 6;
-
-  // Card grid (2 coloane x 2 randuri principale + Rezerva / Nespecificat full-width)
-  // — fara borduri vizibile, doar layout-ul de spacing.
+  y: number,
+  t: (s: string | null | undefined) => string,
+  FONT: string,
+): Promise<number> {
   const byPoz: Partial<Record<string, MontajRotaRow>> = {};
   for (const row of rows) {
     if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
@@ -1820,8 +1793,7 @@ export async function generateMontajRoti(
   const gridStartY = y;
   let leftY = gridStartY;
 
-  // Daca nici una din cele 4 pozitii principale nu are date, sarim peste grid-ul de carduri
-  // (nu afisam nici macar imaginile).
+  // Daca nici una din cele 4 pozitii principale nu are date, sarim peste grid-ul de carduri.
   const _MAIN_POZITII = ["stanga_fata", "dreapta_fata", "stanga_spate", "dreapta_spate"];
   const anyMainHasData = _MAIN_POZITII.some((p) => {
     const row = byPoz[p];
@@ -1833,17 +1805,12 @@ export async function generateMontajRoti(
       const left = byPoz[leftKey];
       const right = byPoz[rightKey];
       if (!left && !right) return;
-      // Stanga (coloana 1) → imaginea spre interior (dreapta cardului).
-      // Dreapta (coloana 2) → imaginea spre interior (stanga cardului).
-      // gridRow controleaza partea verticala a cardului catre care e aliniata imaginea.
       if (left)  await drawMontajRotaCard(doc, left,  leftHalfX,                 leftY, cardW, cardH, "right", gridRow, t, FONT);
       if (right) await drawMontajRotaCard(doc, right, leftHalfX + cardW + colGap, leftY, cardW, cardH, "left",  gridRow, t, FONT);
       leftY += cardH + rowGap;
     };
 
-    // Randul 1 (Fata) e in partea de sus a gridului → imaginea aliniata spre vecinul de jos
     await drawPair("stanga_fata", "dreapta_fata", "top");
-    // Randul 2 (Spate) e in partea de jos a gridului → imaginea aliniata spre vecinul de sus
     await drawPair("stanga_spate", "dreapta_spate", "bottom");
   }
 
@@ -1889,6 +1856,56 @@ export async function generateMontajRoti(
   if (byPoz.nespecificat) {
     y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + 2;
   }
+
+  return y;
+}
+
+/** PDF — Montare Roți */
+export async function generateMontajRoti(
+  receipt: Receipt,
+  company: CompanyData | null,
+  rows: MontajRotaRow[],
+  vehicle: VehiculForPdf | null = null,
+  append?: AppendOptions,
+): Promise<void> {
+  const { jsPDF } = await loadPdf();
+  const doc = append ? append.doc : new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  if (append && !append.isFirst) doc.addPage();
+
+  const fontB64 = await loadRoFontBase64();
+  if (fontB64) registerRoFont(doc, fontB64);
+  const FONT = fontB64 ? "NotoSans" : "helvetica";
+  const t = makeT(!!fontB64);
+  doc.setFont(FONT, "normal");
+
+  await drawBackground(doc, company?.background_path);
+  await drawLogo(doc, company?.logo_path, MT);
+
+  const fmtReceiptDate = (() => {
+    try { return fmtDate(receipt.date); } catch { return ""; }
+  })();
+  let y = drawHeader(doc, "Montare Roți", "", receipt.id as unknown as number, fmtReceiptDate, FONT);
+  y += 2;
+  hline(doc, y);
+  y += 6;
+
+  const client: ClientInfoForPdf = {
+    clientNume: receipt.clientNume ?? null,
+    clientCui: (receipt as any).clientCui ?? null,
+    clientReprezentant: (receipt as any).clientReprezentant ?? null,
+    clientAdresa: (receipt as any).clientAdresa ?? null,
+    clientTelefon: (receipt as any).clientTelefon ?? null,
+  };
+
+  const bw = (CW - CARDS_GAP_X) / 2;
+  const leftX = ML;
+  const rightX = ML + bw + CARDS_GAP_X;
+  y = drawCazareTopCards(doc, company ?? null, client, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
+
+  hline(doc, y);
+  y += 6;
+
+  y = await drawMontajRotiBody(doc, rows, y, t, FONT);
 
   await drawFooterWithBranding(doc, company?.website);
 
