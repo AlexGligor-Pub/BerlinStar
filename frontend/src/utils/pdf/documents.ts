@@ -368,12 +368,20 @@ export function drawTotals(
   const vatLabel = distinctVats.length === 1 ? `TVA ${distinctVats[0]}%:` : "TVA (cote multiple):";
 
   if (opts?.inlineSubtotals) {
-    // Subtotal Net + TVA pe acelasi rand, aliniate la dreapta paginii.
-    const tvaText = `${vatLabel} ${lei(tvaAmt)}`;
-    doc.text(tvaText, rightX, y, { align: "right" });
-    const tvaW = doc.getTextWidth(tvaText);
-    doc.text(`Subtotal (fara TVA): ${lei(net)}`, rightX - tvaW - 8, y, { align: "right" });
-    y += 4.5;
+    // Doua coloane pe acelasi rand: TVA primul (stanga), Subtotal Net al doilea (dreapta).
+    // Pozitii fixe ca sa garantam ca toate cele 4 elemente (2 labels + 2 valori) sunt vizibile.
+    const tvaValueX = rightX - 70;
+    const tvaLabelX = tvaValueX - 35;
+    // TVA bold via overprint (faux-bold, NotoSans nu are bold real).
+    doc.setFont("helvetica", "bold");
+    doc.text(vatLabel, tvaLabelX, y);
+    doc.text(vatLabel, tvaLabelX + 0.2, y);
+    doc.text(lei(tvaAmt), tvaValueX, y, { align: "right" });
+    doc.text(lei(tvaAmt), tvaValueX + 0.2, y, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.text("Subtotal (fara TVA):", tvaValueX + 6, y);
+    doc.text(lei(net), rightX, y, { align: "right" });
+    y += 2.25;
   } else {
     doc.text("Subtotal (fara TVA):", labelX, y);
     doc.text(lei(net), rightX, y, { align: "right" });
@@ -390,8 +398,11 @@ export function drawTotals(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...COLORS.black);
+  // Faux-bold via overprint (NotoSans nu are bold real).
   doc.text("TOTAL DE PLATA:", labelX, y);
+  doc.text("TOTAL DE PLATA:", labelX + 0.2, y);
   doc.text(lei(totalFinal), rightX, y, { align: "right" });
+  doc.text(lei(totalFinal), rightX + 0.2, y, { align: "right" });
   y += 5;
 
   if (totals.metodaPlata === "Platit Partial" && totals.partialPay != null) {
@@ -404,7 +415,7 @@ export function drawTotals(
     y += 4.5;
   }
 
-  return y + 2;
+  return y + 1;
 }
 
 /** Disclaimer — 6pt, gri deschis, salt de pagina daca nu mai e loc.
@@ -419,7 +430,7 @@ export function drawDisclaimer(
   if (!disclaimer?.text) return y;
   if (y > PAGE_H - 30) { doc.addPage(); y = PAGE.marginTop; }
 
-  const padHline = opts?.compact ? 1.5 : 3;
+  const padHline = opts?.compact ? 0.75 : 1.5;
   const padTitle = opts?.compact ? 3 : 3;
   const padAfter = opts?.compact ? 1 : 3;
 
@@ -465,15 +476,27 @@ export function drawSignatures(
   const colW = CW / 2 - 8;
   const col2X = ML + colW + 16;
 
-  doc.setDrawColor(...COLORS.black);
-  doc.setLineWidth(0.3);
-  doc.line(ML, y, ML + colW, y);
-  doc.line(col2X, y, col2X + colW, y);
-
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...COLORS.black);
-  doc.text(leftLabel, ML, y + 4);
-  doc.text(rightLabel, col2X, y + 4);
+  doc.setDrawColor(...COLORS.black);
+  doc.setLineWidth(0.3);
 
-  return y + 12;
+  // Linie intrerupta la mijloc, cu textul centrat in interval (vertical-centrat pe linie).
+  const gap = 1.5; // mm spatiu liber pe fiecare parte a textului
+  const textBaselineY = y + 1; // offset baseline pentru centrare vizuala pe linie
+
+  const leftMid = ML + colW / 2;
+  const leftTextW = doc.getTextWidth(leftLabel);
+  doc.line(ML, y, leftMid - leftTextW / 2 - gap, y);
+  doc.line(leftMid + leftTextW / 2 + gap, y, ML + colW, y);
+  doc.text(leftLabel, leftMid, textBaselineY, { align: "center" });
+
+  const rightMid = col2X + colW / 2;
+  const rightTextW = doc.getTextWidth(rightLabel);
+  doc.line(col2X, y, rightMid - rightTextW / 2 - gap, y);
+  doc.line(rightMid + rightTextW / 2 + gap, y, col2X + colW, y);
+  doc.text(rightLabel, rightMid, textBaselineY, { align: "center" });
+
+  return y;
 }

@@ -118,7 +118,7 @@ export function logout(redirectTo: string | null = "/login") {
   }
 }
 
-export const TRIAL_DAYS = 7;
+export const TRIAL_DAYS = 30;
 
 export function trialRemainingMs(): number {
   if (!auth.isLocked || !auth.lockedAt) return Infinity;

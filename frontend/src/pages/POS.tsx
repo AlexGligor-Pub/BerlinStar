@@ -28,8 +28,8 @@ export default function POS() {
   const [selectedDepartmentId, setSelectedDepartmentId] = createSignal<number | null>(null);
   const [search, setSearch] = createSignal("");
   const [category, setCategory] = createSignal("Toate");
-  const TYPE_CYCLE = ["Produse/Servicii", "Servicii", "Produse"] as const;
-  const [typeFilter, setTypeFilter] = createSignal<typeof TYPE_CYCLE[number]>("Produse/Servicii");
+  const [showProduse, setShowProduse] = createSignal(true);
+  const [showServicii, setShowServicii] = createSignal(true);
 
   const [showDevizModal, setShowDevizModal] = createSignal(false);
   const [devizSearch, setDevizSearch] = createSignal("");
@@ -63,11 +63,6 @@ export default function POS() {
       vehicol: r.vehicol ?? null,
     });
     setShowDevizModal(false);
-  }
-
-  function cycleType() {
-    const idx = TYPE_CYCLE.indexOf(typeFilter());
-    setTypeFilter(TYPE_CYCLE[(idx + 1) % TYPE_CYCLE.length]);
   }
 
   function selectCatalogDepartment(id: number | null) {
@@ -108,13 +103,14 @@ export default function POS() {
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    const tf = typeFilter();
+    const sp = showProduse();
+    const ss = showServicii();
     const tid = selectedDepartmentId();
     const deptIds = locationDeptIds();
     return products().filter((p) => {
       const matchCat = category() === "Toate" || p.category === category();
       const matchSearch = !q || p.name.toLowerCase().includes(q);
-      const matchType = tf === "Produse/Servicii" || p.type === (tf === "Servicii" ? "Service" : "Produs");
+      const matchType = (p.type === "Produs" && sp) || (p.type === "Service" && ss);
       const matchTheme = tid !== null ? p.departmentId === tid : deptIds.has(p.departmentId!);
       return matchCat && matchSearch && matchType && matchTheme;
     });
@@ -183,8 +179,33 @@ export default function POS() {
                     value={search()}
                     onInput={(e) => setSearch(e.currentTarget.value)}
                   />
-                  <button class="btn btn-sm btn-ghost type-cycle-btn" onClick={cycleType}>
-                    {typeFilter()}
+                  <button
+                    class="btn btn-sm type-toggle-btn"
+                    classList={{ "type-toggle-btn--on": showProduse(), "type-toggle-btn--off": !showProduse() }}
+                    onClick={() => {
+                      const next = !showProduse();
+                      setShowProduse(next);
+                      if (!next && !showServicii()) {
+                        setShowProduse(true);
+                        setShowServicii(true);
+                      }
+                    }}
+                  >
+                    Produse
+                  </button>
+                  <button
+                    class="btn btn-sm type-toggle-btn"
+                    classList={{ "type-toggle-btn--on": showServicii(), "type-toggle-btn--off": !showServicii() }}
+                    onClick={() => {
+                      const next = !showServicii();
+                      setShowServicii(next);
+                      if (!next && !showProduse()) {
+                        setShowProduse(true);
+                        setShowServicii(true);
+                      }
+                    }}
+                  >
+                    Servicii
                   </button>
                   <div class="filter-divider" />
                   <div class="pos-toolbar-cats">
@@ -210,6 +231,9 @@ export default function POS() {
 
               <div class="pos-right-col">
                 <div class="pos-right-actions">
+                  <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
+                    Deschide Deviz
+                  </button>
                   <button
                     class="btn btn-sm pos-panel-slide-btn"
                     classList={{
@@ -220,11 +244,8 @@ export default function POS() {
                   >
                     {activeDepartmentName() ?? "Departament"} ▶
                   </button>
-                  <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
-                    Deviz existent
-                  </button>
                 </div>
-                <ShoppingList />
+                <ShoppingList onEmployeeBadgeClick={() => setPanel(1)} />
               </div>
             </div>
           </div>
@@ -309,7 +330,17 @@ export default function POS() {
                           onClick={() => { selectEmployee(e.id); setPanel(0); }}
                         >
                           {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                          <span class="pos-employee-card-name">{e.name}</span>
+                          {(() => {
+                            const idx = e.name.indexOf(" ");
+                            return idx === -1 ? (
+                              <span class="pos-employee-card-name">{e.name}</span>
+                            ) : (
+                              <span class="pos-employee-card-name">
+                                <span>{e.name.slice(0, idx)}</span>
+                                <span>{e.name.slice(idx + 1)}</span>
+                              </span>
+                            );
+                          })()}
                         </button>
                       )}
                     </For>
@@ -327,7 +358,17 @@ export default function POS() {
                           onClick={() => { selectEmployee(e.id); setPanel(0); }}
                         >
                           {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                          <span class="pos-employee-card-name">{e.name}</span>
+                          {(() => {
+                            const idx = e.name.indexOf(" ");
+                            return idx === -1 ? (
+                              <span class="pos-employee-card-name">{e.name}</span>
+                            ) : (
+                              <span class="pos-employee-card-name">
+                                <span>{e.name.slice(0, idx)}</span>
+                                <span>{e.name.slice(idx + 1)}</span>
+                              </span>
+                            );
+                          })()}
                         </button>
                       )}
                     </For>

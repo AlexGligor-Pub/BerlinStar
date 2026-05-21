@@ -484,7 +484,7 @@ interface CazariResponse {
   items: CazareDetail[];
 }
 
-export default function ShoppingList() {
+export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void } = {}) {
   const navigate = useNavigate();
   const [titlu, setTitlu] = createSignal("");
   const [descriere, setDescriere] = createSignal("");
@@ -1037,28 +1037,53 @@ export default function ShoppingList() {
             {(() => {
               const e = selectedEmployee()!;
               return (
-                <span class="sl-employee-badge">
+                <span
+                  class="sl-employee-badge"
+                  role={props.onEmployeeBadgeClick ? "button" : undefined}
+                  tabIndex={props.onEmployeeBadgeClick ? 0 : undefined}
+                  style={props.onEmployeeBadgeClick ? "cursor:pointer" : undefined}
+                  onClick={props.onEmployeeBadgeClick}
+                  onKeyDown={(ev) => {
+                    if (props.onEmployeeBadgeClick && (ev.key === "Enter" || ev.key === " ")) {
+                      ev.preventDefault();
+                      props.onEmployeeBadgeClick();
+                    }
+                  }}
+                >
                   <Show when={e.imagePath}>
                     <img src={e.imagePath!} class="sl-employee-badge-avatar" alt={e.name} />
                   </Show>
                   <span class="sl-employee-badge-info">
-                    <span class="sl-employee-badge-name">{e.name}</span>
+                    {(() => {
+                      const idx = e.name.indexOf(" ");
+                      return idx === -1 ? (
+                        <span class="sl-employee-badge-name">{e.name}</span>
+                      ) : (
+                        <span class="sl-employee-badge-name">
+                          <span>{e.name.slice(0, idx)}</span>
+                          <span>{e.name.slice(idx + 1)}</span>
+                        </span>
+                      );
+                    })()}
                     <Show when={e.target > 0}>
                       <span class="sl-employee-badge-pct">
                         {Math.round(e.currentTargetAccumulation / e.target * 100)}%
                       </span>
                     </Show>
                   </span>
+                  <Show when={e.target > 0 && Math.round(e.currentTargetAccumulation / e.target * 100) > 100}>
+                    <span class="sl-employee-badge-crown" title="Target depasit">👑</span>
+                  </Show>
                 </span>
               );
             })()}
           </Show>
         </div>
         <div class="sl-header-right">
-          <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={openManual} title="Adaugă produs/serviciu manual">+ Produs/Serviciu</button>
-          <Show when={cart.items.length > 0}>
-            <button class="btn btn-ghost btn-sm sl-extra-btn" onClick={() => setShowClearConfirm(true)}>Sterge tot</button>
-          </Show>
+          <button class="btn btn-ghost btn-sm sl-extra-btn sl-extra-btn--stacked" onClick={openManual} title="Adaugă produs/serviciu manual">
+            <span class="sl-extra-btn-sub">Introducere manuala</span>
+            <span class="sl-extra-btn-main">Produs/Serviciu</span>
+          </button>
         </div>
       </div>
 

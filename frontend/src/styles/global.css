@@ -273,11 +273,18 @@ body {
   border-color: #fca5a5;
 }
 
+.rcard-spv-badge--muted {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
 @media (prefers-color-scheme: dark) {
   .rcard-spv-badge--pending { background: rgba(254, 243, 199, 0.12); color: #fcd34d; border-color: rgba(252, 211, 77, 0.4); }
   .rcard-spv-badge--info    { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border-color: rgba(147, 197, 253, 0.4); }
   .rcard-spv-badge--success { background: rgba(34, 197, 94, 0.15);  color: #86efac; border-color: rgba(134, 239, 172, 0.4); }
   .rcard-spv-badge--danger  { background: rgba(239, 68, 68, 0.15);  color: #fca5a5; border-color: rgba(252, 165, 165, 0.4); }
+  .rcard-spv-badge--muted   { background: rgba(156, 163, 175, 0.15); color: #9ca3af; border-color: rgba(156, 163, 175, 0.35); }
 }
 
 .btn-danger {
@@ -612,6 +619,10 @@ body {
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
 
+img.pos-theme-preview {
+  border: none;
+}
+
 .pos-theme-preview--all { background: color-mix(in srgb, var(--accent) 20%, var(--surface2)); }
 .pos-theme-preview--c1  { background: #3b82f6; }
 .pos-theme-preview--c2  { background: #10b981; }
@@ -667,27 +678,38 @@ body {
   margin-top: 16px;
 }
 
+@media (min-width: 769px) {
+  .pos-employee-grid {
+    max-width: 90%;
+  }
+}
+
 .pos-employee-card {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 5px 12px 5px 5px;
-  border-radius: 20px;
+  gap: 9px;
+  padding: 5px 14px 5px 5px;
+  border-radius: 28px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   white-space: nowrap;
 }
 
 .pos-employee-avatar {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
+}
+
+.pos-employee-card .pos-employee-avatar {
+  width: 72px;
+  height: 72px;
 }
 
 .pos-employee-card:hover {
@@ -711,6 +733,12 @@ body {
 .pos-employee-card-name {
   font-weight: 500;
   font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  line-height: 1.15;
+  white-space: normal;
 }
 
 .pos-employee-pct {
@@ -870,6 +898,29 @@ body {
   min-width: 76px;
 }
 
+.type-toggle-btn {
+  min-width: 76px;
+  border: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.type-toggle-btn--on {
+  background: #16a34a;
+  color: #fff;
+  border-color: #16a34a;
+}
+
+.type-toggle-btn--off {
+  background: var(--surface2, #e5e7eb);
+  color: var(--text-muted, #6b7280);
+  border-color: var(--border);
+  opacity: 0.55;
+}
+
+.type-toggle-btn--off:hover {
+  opacity: 0.8;
+}
+
 .filter-divider {
   width: 1px;
   align-self: stretch;
@@ -979,7 +1030,6 @@ body {
   gap: 8px;
   min-width: 0;
   flex: 1;
-  overflow: hidden;
 }
 
 .sl-header-right {
@@ -991,22 +1041,23 @@ body {
 }
 
 .sl-employee-badge {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--accent-text);
-  background: var(--accent);
-  border-radius: 16px;
+  color: #2563eb;
+  background: transparent;
+  border: 2px solid #2563eb;
+  border-radius: 6px;
   padding: 4px 12px 4px 4px;
-  overflow: hidden;
   min-width: 0;
   max-width: 100%;
 }
 
 .sl-employee-badge-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 4px;
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -1024,23 +1075,41 @@ body {
 .sl-employee-badge-name {
   font-size: 0.8rem;
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
   max-width: 100%;
 }
 
 .sl-employee-badge-pct {
   opacity: 0.85;
-  font-weight: 400;
+  font-weight: 700;
   font-size: 0.72rem;
+}
+
+.sl-employee-badge-crown {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 5;
+  font-size: 1.05rem;
+  line-height: 1;
+  background: #fff8d9;
+  border: 1.5px solid #d4a017;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(180, 130, 0, 0.45));
 }
 
 .shopping-list-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
 }
 
@@ -1087,6 +1156,32 @@ body {
   border-color: #16a34a;
   color: #16a34a;
   background: #16a34a18;
+}
+
+.sl-extra-btn--stacked {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.15;
+  gap: 1px;
+  padding: 4px 10px;
+  align-self: stretch;
+  background: #16a34a;
+  border-color: #16a34a;
+  border-width: 2px;
+  color: #fff;
+}
+
+.sl-extra-btn-sub {
+  font-size: 0.62rem;
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+.sl-extra-btn-main {
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 /* Modal */
@@ -2180,10 +2275,30 @@ body {
 
 .receipt-actions {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.receipt-actions-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.receipt-actions-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.receipt-actions-row {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
-  margin-top: 4px;
 }
 
 .receipt-confirm-delete {
@@ -3124,6 +3239,27 @@ body {
 
 .btn-danger:hover { opacity: 0.85; }
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-danger-outline {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  padding: 6px 14px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-danger-outline:hover {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.btn-danger-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 /* ─── cfg assoc header row (label + bulk buttons) ─── */
 .cfg-assoc-header {
@@ -5552,7 +5688,7 @@ body {
   }
 
   /* Actiuni document: distributie pe latime, cu tap target generos */
-  .receipt-actions {
+  .receipt-actions-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
     gap: 6px;
@@ -5638,7 +5774,7 @@ body {
   }
 
   /* Butoanele de actiuni: 2 pe rand */
-  .receipt-actions {
+  .receipt-actions-row {
     grid-template-columns: repeat(2, 1fr);
   }
 

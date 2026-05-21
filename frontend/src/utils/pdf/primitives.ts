@@ -167,7 +167,6 @@ export async function drawFooterWithBranding(
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
     const h = doc.internal.pageSize.getHeight();
-    hline(doc, h - 10, COLORS.veryLight, 0.2);
 
     if (website) {
       doc.setFont("helvetica", "normal");

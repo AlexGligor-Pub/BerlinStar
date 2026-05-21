@@ -251,7 +251,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
-    y += 2;
+    y += 1;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
@@ -267,7 +267,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   if (r.dateTehn?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
-    y += 2;
+    y += 1;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...C.black);
@@ -456,122 +456,177 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   const date = fmtDate(r.date);
 
   await drawBackground(doc, ctx.company?.background_path);
-  await drawLogo(doc, ctx.company?.logo_path, MT);
 
-  let y = drawHeader(doc, "CHITANTA", ctx.serie, ctx.nr, date);
+  // Chitanta ocupa numai jumatatea de sus a paginii A4 (~138mm inaltime).
+  // Chenar exterior care incadreaza intregul continut, inclusiv logo-ul.
+  const frameX = ML;
+  const frameY = MT;
+  const frameW = CW;
+  const frameH = 138; // se opreste inainte de mijlocul paginii (148.5mm)
+  doc.setDrawColor(...C.black);
+  doc.setLineWidth(0.5);
+  doc.rect(frameX, frameY, frameW, frameH);
+
+  // padding intern in chenar
+  const innerPad = 6;
+  const innerX = frameX + innerPad;
+  const innerW = frameW - 2 * innerPad;
+  const centerX = frameX + frameW / 2;
+
+  // Logo centrat sus, in interiorul chenarului
+  const logoSize = 16;
+  let y = frameY + innerPad;
+  if (ctx.company?.logo_path) {
+    try {
+      const dataUrl = await loadImageAsDataUrl(ctx.company.logo_path);
+      if (dataUrl) {
+        doc.addImage(dataUrl, "PNG", centerX - logoSize / 2, y, logoSize, logoSize, undefined, "FAST");
+      }
+    } catch { /* ignore */ }
+  }
+  y += logoSize + 3;
+
+  // Titlu CHITANȚĂ centrat (faux-bold via overprint, NotoSans nu are bold real)
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...C.black);
+  doc.text(ro("CHITANȚĂ"), centerX, y, { align: "center" });
+  doc.text(ro("CHITANȚĂ"), centerX + 0.2, y, { align: "center" });
+  y += 5;
+
+  // Serie + Nr + Data, centrate pe acelasi rand
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...C.black);
+  const nrStr = String(ctx.nr).padStart(5, "0");
+  const meta = ctx.serie
+    ? `Seria ${ctx.serie}   Nr. ${nrStr}   Data: ${date}`
+    : `Nr. ${nrStr}   Data: ${date}`;
+  doc.text(meta, centerX, y, { align: "center" });
+  y += 5;
+
+  // Linie despartitoare
+  doc.setDrawColor(...C.lightGray);
+  doc.setLineWidth(0.2);
+  doc.line(innerX, y, innerX + innerW, y);
   y += 4;
 
-  // Am primit de la
+  // Casier + companie + "am primit de la" — propozitie compacta
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(9);
   doc.setTextColor(...C.black);
-  doc.text("Am primit de la", ML, y);
+  const companyName = ctx.company?.name ?? "-";
+  const companyCui = ctx.company?.cui ? `, CUI ${ctx.company.cui}` : "";
+  const introLine = ro(`Subsemnatul, casier al societății ${companyName}${companyCui}, am primit astăzi de la:`);
+  const introLines: string[] = doc.splitTextToSize(introLine, innerW);
+  doc.text(introLines, innerX, y);
+  y += introLines.length * 4 + 1;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.setTextColor(...C.black);
-  doc.text(ro(r.clientNume ?? "-"), ML + 40, y);
+  doc.text(ro(r.clientNume ?? "-"), innerX + 4, y);
+  y += 4.5;
   if (r.clientTip === "juridic" && r.clientCui) {
-    y += 5.5;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...C.black);
-    doc.text(`CUI: ${r.clientCui}`, ML + 40, y);
-    y += 5.5;
-  } else {
-    y += 9;
+    doc.setFontSize(8.5);
+    doc.text(`CUI: ${r.clientCui}`, innerX + 4, y);
+    y += 4.5;
   }
 
-  hline(doc, y, C.veryLight, 0.2);
-  y += 4;
+  y += 1;
+  doc.setDrawColor(...C.lightGray);
+  doc.setLineWidth(0.2);
+  doc.line(innerX, y, innerX + innerW, y);
+  y += 4.5;
 
-  // Suma
+  // Suma de
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.black);
-  doc.text("Suma de", ML, y);
+  doc.setFontSize(9.5);
+  doc.text(ro("suma de:"), innerX, y);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.setTextColor(...C.black);
-  doc.text(lei(totalFinal), ML + 26, y);
-  y += 6;
-
-  // TVA breakdown
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
-  doc.text(`(din care: net ${lei(totalNet)}, TVA ${tvaPct}% = ${lei(tvaAmt)})`, ML + 26, y);
-  y += 4;
+  const sumaX = innerX + 20;
+  doc.text(lei(totalFinal), sumaX, y);
+  doc.text(lei(totalFinal), sumaX + 0.2, y); // overprint faux-bold
+  y += 5.5;
 
   // In litere
   const inLitere = sumInLitere(totalFinal);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-  doc.text(`(${ro(inLitere)})`, ML, y);
-  y += 9;
+  const litereLines: string[] = doc.splitTextToSize(ro(`(adică ${inLitere})`), innerW);
+  doc.text(litereLines, innerX, y);
+  y += litereLines.length * 3.8 + 1;
 
-  hline(doc, y, C.veryLight, 0.2);
-  y += 4;
+  // TVA breakdown verbos
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  const tvaLine = ro(`din care: valoare netă ${lei(totalNet)} + TVA ${tvaPct}% în valoare de ${lei(tvaAmt)}.`);
+  const tvaLines: string[] = doc.splitTextToSize(tvaLine, innerW);
+  doc.text(tvaLines, innerX, y);
+  y += tvaLines.length * 4 + 2;
+
+  doc.setDrawColor(...C.lightGray);
+  doc.setLineWidth(0.2);
+  doc.line(innerX, y, innerX + innerW, y);
+  y += 4.5;
 
   // Reprezentand
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...C.black);
-  doc.text("Reprezentand", ML, y);
+  doc.setFontSize(9);
+  doc.text(ro("reprezentând contravaloarea:"), innerX, y);
+  y += 4.5;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(...C.black);
-  const repLines: string[] = doc.splitTextToSize(ro(r.titlu), CW - 38);
-  doc.text(repLines, ML + 36, y);
-  y += repLines.length * 5 + 4;
+  const repLines: string[] = doc.splitTextToSize(ro(r.titlu), innerW - 4);
+  doc.text(repLines, innerX + 4, y);
+  y += repLines.length * 4.5 + 2;
 
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...C.black);
-    doc.text(`Modalitate: ${ro(r.metodaPlata)}`, ML, y);
-    y += 6;
+    doc.text(ro(`Modalitate de plată: ${r.metodaPlata}`), innerX, y);
+    y += 4.5;
   }
 
   if (r.facturaNr > 0) {
     const facturaRef = r.facturaSerie
-      ? `Factura nr. ${r.facturaSerie}${r.facturaNr}`
-      : `Factura nr. ${r.facturaNr}`;
+      ? `${r.facturaSerie}${r.facturaNr}`
+      : `${r.facturaNr}`;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.setTextColor(...C.black);
-    doc.text("Achita conform", ML, y);
+    const prefix = ro("Achitată conform facturii nr. ");
+    doc.text(prefix, innerX, y);
+    const prefixW = doc.getTextWidth(prefix);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(...C.black);
-    doc.text(facturaRef, ML + 34, y);
-    y += 6;
+    doc.text(facturaRef, innerX + prefixW, y);
+    y += 4.5;
   }
 
-  y += 8;
-
-  // Casier + date companie
-  const colW = CW / 2 - 6;
-  const col2X = ML + colW + 12;
+  // Footer in chenar: semnatura casier (stanga) + date companie (dreapta)
+  const colW = (innerW - 10) / 2;
+  const col2X = innerX + colW + 10;
+  // Plasam blocul jos in chenar, lasand 10mm pana la marginea de jos
+  const footerY = frameY + frameH - innerPad - 10;
 
   doc.setDrawColor(...C.black);
   doc.setLineWidth(0.3);
-  doc.line(ML, y, ML + colW, y);
-
+  doc.line(innerX, footerY, innerX + colW, footerY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(...C.black);
-  doc.text("Casier / Operator", ML, y + 4);
+  doc.setTextColor(...C.gray);
+  doc.text(ro("Semnătura și ștampila casierului"), innerX, footerY + 3.5);
 
   if (ctx.company) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(9);
     doc.setTextColor(...C.black);
-    doc.text(ro(ctx.company.name), col2X, y - 6);
+    doc.text(ro(ctx.company.name), col2X, footerY - 8);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(...C.black);
-    let cy = y - 2;
-    if (ctx.company.cui) { doc.text(`CUI: ${ctx.company.cui}`, col2X, cy); cy += 3.5; }
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gray);
+    let cy = footerY - 3.5;
+    if (ctx.company.cui) { doc.text(`CUI: ${ctx.company.cui}`, col2X, cy); cy += 4; }
     if (ctx.company.address) {
       const al: string[] = doc.splitTextToSize(ro(ctx.company.address), colW);
       doc.text(al, col2X, cy);
@@ -1674,8 +1729,22 @@ async function drawMontajRotaCard(
     }
   }
 
-  // Daca rotata nu are date, randam doar imaginea (fara text)
-  if (!_montajRotaHasData(r)) return;
+  // Daca rotata nu are date, randam pozitia + textul "Nu s-a executat montajul roții"
+  if (!_montajRotaHasData(r)) {
+    let ty = y + 4.5;
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...navyBlue);
+    doc.text(t(_POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie), anchorX, ty, { align });
+    ty += 6;
+    doc.setFont(FONT, "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.gray);
+    const msg = t("Nu s-a executat montajul roții");
+    const lines = doc.splitTextToSize(msg, textW) as string[];
+    doc.text(lines, anchorX, ty, { align });
+    return;
+  }
 
   let ty = y + 4.5;
 
@@ -1754,19 +1823,17 @@ function drawMontajRotaRowTextOnly(
 ): number {
   const navyBlue: [number, number, number] = [30, 58, 138];
   const pad = 2;
-  const lineY = y + 5;
-  // Titlu pozitie (bold, navy)
+  const lineY = y + 3.5;
+
+  // Masuram titlul (bold, navy)
   doc.setFont(FONT, "bold");
   doc.setFontSize(9);
-  doc.setTextColor(...navyBlue);
   const title = `${t(_POZITIE_LABELS_PDF[r.pozitie] ?? r.pozitie)}:`;
-  doc.text(title, x + pad, lineY);
   const titleW = doc.getTextWidth(title);
 
   // Detalii ca propozitie cu virgula
   doc.setFont(FONT, "normal");
   doc.setFontSize(8);
-  doc.setTextColor(...C.black);
   const parts: string[] = [];
   if (r.marcaNume) parts.push(t(r.marcaNume));
   if (r.dimensiuneValoare) parts.push(`dimensiune ${t(r.dimensiuneValoare)}`);
@@ -1777,11 +1844,37 @@ function drawMontajRotaRowTextOnly(
   if (r.presiune != null) parts.push(`presiune ${r.presiune.toFixed(1)} bar`);
   const sentence = parts.length > 0 ? parts.join(", ") + "." : "—";
 
+  // Daca incape totul pe un singur rand, centram orizontal title + sentence.
+  const sentenceW = doc.getTextWidth(sentence);
+  const inlineW = titleW + 2 + sentenceW;
+  const usableW = w - 2 * pad;
+
+  if (inlineW <= usableW) {
+    const startX = x + (w - inlineW) / 2;
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...navyBlue);
+    doc.text(title, startX, lineY);
+    doc.setFont(FONT, "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...C.black);
+    doc.text(sentence, startX + titleW + 2, lineY);
+    return lineY + 2;
+  }
+
+  // Fallback: titlu stanga, sentence wrap pe restul latimii (left-aligned).
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...navyBlue);
+  doc.text(title, x + pad, lineY);
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(...C.black);
   const dx = x + pad + titleW + 2;
   const maxW = w - (dx - x) - pad;
   const lines = doc.splitTextToSize(sentence, maxW) as string[];
   doc.text(lines, dx, lineY);
-  return lineY + (lines.length - 1) * 3.6 + 5;
+  return lineY + (lines.length - 1) * 3.6 + 2;
 }
 
 /** Estimeaza inaltimea pe care o va ocupa corpul Montare Roti, ca sa decidem
@@ -1791,24 +1884,17 @@ function estimateMontajRotiBodyHeight(rows: MontajRotaRow[]): number {
   for (const row of rows) {
     if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
   }
-  const cardH = 42;
-  const hasFront = (["stanga_fata", "dreapta_fata"] as const).some((p) => {
-    const r = byPoz[p];
-    return r != null && _montajRotaHasData(r);
-  });
-  const hasBack = (["stanga_spate", "dreapta_spate"] as const).some((p) => {
-    const r = byPoz[p];
-    return r != null && _montajRotaHasData(r);
-  });
-  let gridH = 0;
-  if (hasFront) gridH += cardH;
-  if (hasBack) gridH += cardH;
-  // Coloana dreapta (Conditii + 2 paragrafe + Atentie la 6.5pt pe ~43mm) — estimat conservativ.
-  const rightH = 55;
-  let totalH = Math.max(gridH, rightH);
-  if (byPoz.rezerva || byPoz.nespecificat) totalH += 4;
-  if (byPoz.rezerva) totalH += 7;
-  if (byPoz.nespecificat) totalH += 7;
+  const hasMainWheels = !!(byPoz.stanga_fata || byPoz.dreapta_fata || byPoz.stanga_spate || byPoz.dreapta_spate);
+  let totalH = 0;
+  if (hasMainWheels) {
+    const cardH = 42;
+    const gridH = cardH * 2;
+    // Coloana dreapta (Conditii + 2 paragrafe + Atentie la 6.5pt pe ~43mm) — estimat conservativ.
+    const rightH = 55;
+    totalH = Math.max(gridH, rightH);
+  }
+  if (byPoz.rezerva) totalH += 6;
+  if (byPoz.nespecificat) totalH += 6;
   return totalH;
 }
 
@@ -1828,85 +1914,105 @@ async function drawMontajRotiBody(
     if (!(row.pozitie in byPoz)) byPoz[row.pozitie] = row;
   }
 
-  // Layout 2 coloane (75/25): stanga = grid 2x2 cu roti, dreapta = text Conditii Tehnice + Atentie.
-  const colGapMain = 6;
-  const leftW = (CW - colGapMain) * 0.75;
-  const rightW = (CW - colGapMain) * 0.25;
-  const leftHalfX = ML;
-  const rightHalfX = ML + leftW + colGapMain;
+  const hasMainWheels = !!(byPoz.stanga_fata || byPoz.dreapta_fata || byPoz.stanga_spate || byPoz.dreapta_spate);
 
-  // Grid stanga: cardurile sunt lipite intre ele (fara spatii) pentru ca imaginile
-  // cardurilor adiacente sa fie aliniate edge-to-edge.
-  const colGap = 0;
-  const rowGap = 0;
-  const cardW = (leftW - colGap) / 2;
-  const cardH = 42;
+  if (hasMainWheels) {
+    // Layout 2 coloane (75/25): stanga = grid 2x2 cu roti, dreapta = text Conditii Tehnice + Atentie.
+    const colGapMain = 6;
+    const leftW = (CW - colGapMain) * 0.75;
+    const rightW = (CW - colGapMain) * 0.25;
+    const leftHalfX = ML;
+    const rightHalfX = ML + leftW + colGapMain;
 
-  const gridStartY = y;
-  let leftY = gridStartY;
+    // Grid stanga: cardurile sunt lipite intre ele (fara spatii) pentru ca imaginile
+    // cardurilor adiacente sa fie aliniate edge-to-edge.
+    const colGap = 0;
+    const rowGap = 0;
+    const cardW = (leftW - colGap) / 2;
+    const cardH = 42;
 
-  // Daca nici una din cele 4 pozitii principale nu are date, sarim peste grid-ul de carduri.
-  const _MAIN_POZITII = ["stanga_fata", "dreapta_fata", "stanga_spate", "dreapta_spate"];
-  const anyMainHasData = _MAIN_POZITII.some((p) => {
-    const row = byPoz[p];
-    return row != null && _montajRotaHasData(row);
-  });
+    const gridStartY = y;
+    let leftY = gridStartY;
 
-  if (anyMainHasData) {
+    // URL-urile imaginilor per-pozitie au pattern fix (`.../image/<pozitie>`);
+    // extragem baza dintr-un rand existent ca sa putem popula imaginea si la
+    // pozitiile lipsa (cele cu placeholder "Nu s-a executat").
+    let urlBase: string | null = null;
+    for (const r of rows) {
+      if (r.imageUrl) {
+        const idx = r.imageUrl.lastIndexOf("/");
+        if (idx > 0) { urlBase = r.imageUrl.slice(0, idx + 1); break; }
+      }
+    }
+
+    // Toate cele 4 pozitii principale sunt mereu randate; pentru cele lipsa/empty
+    // afisam un card-placeholder cu "Nu s-a executat montajul roții".
+    const rowFor = (pozitie: string): MontajRotaRow => byPoz[pozitie] ?? {
+      pozitie,
+      presiune: null,
+      marcaNume: null,
+      dimensiuneValoare: null,
+      profilValoare: null,
+      dotValoare: null,
+      tip: "",
+      adancime: null,
+      cupluStrangere: null,
+      imageUrl: urlBase ? urlBase + pozitie : null,
+    };
+
     const drawPair = async (leftKey: string, rightKey: string, gridRow: "top" | "bottom") => {
-      const left = byPoz[leftKey];
-      const right = byPoz[rightKey];
-      if (!left && !right) return;
-      if (left)  await drawMontajRotaCard(doc, left,  leftHalfX,                 leftY, cardW, cardH, "right", gridRow, t, FONT);
-      if (right) await drawMontajRotaCard(doc, right, leftHalfX + cardW + colGap, leftY, cardW, cardH, "left",  gridRow, t, FONT);
+      const left = rowFor(leftKey);
+      const right = rowFor(rightKey);
+      await drawMontajRotaCard(doc, left,  leftHalfX,                 leftY, cardW, cardH, "right", gridRow, t, FONT);
+      await drawMontajRotaCard(doc, right, leftHalfX + cardW + colGap, leftY, cardW, cardH, "left",  gridRow, t, FONT);
       leftY += cardH + rowGap;
     };
 
     await drawPair("stanga_fata", "dreapta_fata", "top");
     await drawPair("stanga_spate", "dreapta_spate", "bottom");
+
+    // Coloana dreapta: Conditii Tehnice + Atentie, incepe la acelasi y ca grid-ul.
+    let rightY = gridStartY;
+
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text(t("CONDIȚII TEHNICE DE LUCRU"), rightHalfX, rightY);
+    rightY += 3;
+
+    doc.setFont(FONT, "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.gray);
+    const paragrafe = [
+      "Strângerea prezoanelor de roată s-a efectuat cu cheie dinamometrică, la momentul de strângere specificat în manualul tehnic al vehiculului, conform indicațiilor producătorului autovehiculului sau conform valorilor înscrise pe eticheta situată pe stâlpul ușii șoferului.",
+      "Presiunea pneurilor a fost reglată conform valorilor recomandate de producătorul autovehiculului, indicate pe eticheta de pe stâlpul caroseriei, în manualul de utilizare sau pe capacul rezervorului de combustibil.",
+    ];
+    for (const p of paragrafe) {
+      const lines: string[] = doc.splitTextToSize(t(p), rightW);
+      doc.text(lines, rightHalfX, rightY);
+      rightY += lines.length * 2.6 + 1.5;
+    }
+
+    doc.setFont(FONT, "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(...C.black);
+    const atentie = "Atenție: Clientul este sfătuit să verifice strângerea prezoanelor după primii 50 pana la 100 km parcurși de la montaj, la un service autorizat sau cu o cheie dinamometrică calibrată.";
+    const atLines: string[] = doc.splitTextToSize(t(atentie), rightW);
+    doc.text(atLines, rightHalfX, rightY);
+    rightY += atLines.length * 2.6 + 4;
+    doc.setTextColor(...C.black);
+
+    // Continuam de la baza celei mai inalte coloane.
+    y = Math.max(leftY, rightY);
   }
 
-  // Coloana dreapta: Conditii Tehnice + Atentie, incepe la acelasi y ca grid-ul.
-  let rightY = gridStartY;
-
-  doc.setFont(FONT, "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...C.black);
-  doc.text(t("CONDIȚII TEHNICE DE LUCRU"), rightHalfX, rightY);
-  rightY += 3;
-
-  doc.setFont(FONT, "normal");
-  doc.setFontSize(6.5);
-  doc.setTextColor(...C.gray);
-  const paragrafe = [
-    "Strângerea prezoanelor de roată s-a efectuat cu cheie dinamometrică, la momentul de strângere specificat în manualul tehnic al vehiculului, conform indicațiilor producătorului autovehiculului sau conform valorilor înscrise pe eticheta situată pe stâlpul ușii șoferului.",
-    "Presiunea pneurilor a fost reglată conform valorilor recomandate de producătorul autovehiculului, indicate pe eticheta de pe stâlpul caroseriei, în manualul de utilizare sau pe capacul rezervorului de combustibil.",
-  ];
-  for (const p of paragrafe) {
-    const lines: string[] = doc.splitTextToSize(t(p), rightW);
-    doc.text(lines, rightHalfX, rightY);
-    rightY += lines.length * 2.6 + 1.5;
-  }
-
-  doc.setFont(FONT, "bold");
-  doc.setFontSize(6.5);
-  doc.setTextColor(...C.black);
-  const atentie = "Atenție: Clientul este sfătuit să verifice strângerea prezoanelor după primii 50 pana la 100 km parcurși de la montaj, la un service autorizat sau cu o cheie dinamometrică calibrată.";
-  const atLines: string[] = doc.splitTextToSize(t(atentie), rightW);
-  doc.text(atLines, rightHalfX, rightY);
-  rightY += atLines.length * 2.6 + 4;
-  doc.setTextColor(...C.black);
-
-  // Continuam de la baza celei mai inalte coloane.
-  y = Math.max(leftY, rightY);
-
-  if (byPoz.rezerva || byPoz.nespecificat) y += 4;
-
+  // Rezerva / Nespecificat sunt lipite de grid-ul de mai sus (fara padding extra)
+  // si compacte pe verticala.
   if (byPoz.rezerva) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT) + 2;
+    y = drawMontajRotaRowTextOnly(doc, byPoz.rezerva, ML, y, CW, t, FONT);
   }
   if (byPoz.nespecificat) {
-    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT) + 2;
+    y = drawMontajRotaRowTextOnly(doc, byPoz.nespecificat, ML, y, CW, t, FONT);
   }
 
   return y;
@@ -1931,15 +2037,47 @@ export async function generateMontajRoti(
   doc.setFont(FONT, "normal");
 
   await drawBackground(doc, company?.background_path);
-  await drawLogo(doc, company?.logo_path, MT);
+
+  // Layout 3 coloane (acelasi cu Deviz): Prestator (stanga) | Logo + titlu + Nr + Data (mijloc) | Client + Vehicul (dreapta inline)
+  const middleW = 34;
+  const sideGap = 5;
+  const sideW = (CW - middleW - 2 * sideGap) / 2;
+  const leftX = ML;
+  const middleX = ML + sideW + sideGap;
+  const rightX = middleX + middleW + sideGap;
+
+  const logoSize = 20;
+  const logoX = middleX + (middleW - logoSize) / 2;
+  const logoY = MT;
+  if (company?.logo_path) {
+    try {
+      const dataUrl = await loadImageAsDataUrl(company.logo_path);
+      if (dataUrl) {
+        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
+      }
+    } catch { /* ignore */ }
+  }
+
+  let midY = logoY + logoSize + 4;
+  const midCenterX = middleX + middleW / 2;
 
   const fmtReceiptDate = (() => {
     try { return fmtDate(receipt.date); } catch { return ""; }
   })();
-  let y = drawHeader(doc, "Montare Roți", "", receipt.id as unknown as number, fmtReceiptDate, FONT);
-  y += 2;
-  hline(doc, y);
-  y += 6;
+
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...C.black);
+  doc.text(t("Montare Roți"), midCenterX, midY, { align: "center" });
+  midY += 6;
+
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.black);
+  doc.text(`Nr.: ${String(receipt.id).padStart(2, "0")}`, midCenterX, midY, { align: "center" });
+  midY += 4;
+  doc.text(`Data: ${fmtReceiptDate}`, midCenterX, midY, { align: "center" });
+  midY += 2;
 
   const client: ClientInfoForPdf = {
     clientNume: receipt.clientNume ?? null,
@@ -1949,13 +2087,15 @@ export async function generateMontajRoti(
     clientTelefon: (receipt as any).clientTelefon ?? null,
   };
 
-  const bw = (CW - CARDS_GAP_X) / 2;
-  const leftX = ML;
-  const rightX = ML + bw + CARDS_GAP_X;
-  y = drawCazareTopCards(doc, company ?? null, client, vehicle, leftX, rightX, y, bw, t, FONT) + 4;
+  const cardsBottomY = drawCazareTopCards(
+    doc, company ?? null, client, vehicle, leftX, rightX, MT, sideW, t, FONT,
+    { clientVehiculInline: true },
+  );
 
-  hline(doc, y);
-  y += 6;
+  let y = Math.max(midY, cardsBottomY);
+
+  hline(doc, y, C.veryLight, 0.2);
+  y += 2;
 
   y = await drawMontajRotiBody(doc, rows, y, t, FONT);
 
@@ -1965,57 +2105,3 @@ export async function generateMontajRoti(
   if (!append) doc.save(docFilename("montaj_roti", clientSlug));
 }
 
-// ─── Orchestrator: Deviz + Operații ───────────────────────────────────────────
-
-export type CazareSection =
-  | { type: "checkin"; cazare: CazareForPdf }
-  | { type: "checkout"; cazare: CazareForPdf; checkoutDate: string }
-  | { type: "combined"; checkout: CazareForPdf; newCazare: CazareForPdf; checkoutDate: string; montatePeMasina: boolean };
-
-/** Merge: PDF combinat = Deviz complet + Montaj Roti complet + fiecare Cazare completa,
- *  fiecare cu propriul header/logo/top-cards/footer (ca si cum ar fi descarcate individual). */
-export async function generateDevizPlusOperatii(
-  r: Receipt,
-  ctx: DocContext,
-  vehicle: VehiculForPdf | null,
-  montajRoti: MontajRotaRow[],
-  cazariSections: CazareSection[],
-  images: { cazare: string | null; scoatere: string | null; montare: string | null } | null,
-  showTehnician = false,
-): Promise<void> {
-  const { jsPDF } = await loadPdf();
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
-  // Inregistreaza fontul o data — generatoarele apelate vor reincarca cache-ul si vor reapela
-  // registerRoFont pe acelasi doc (idempotent).
-  const fontB64 = await loadRoFontBase64();
-  if (fontB64) registerRoFont(doc, fontB64);
-
-  let isFirst = true;
-  const append = () => {
-    const opts: AppendOptions = { doc, isFirst };
-    isFirst = false;
-    return opts;
-  };
-
-  await generateDeviz(r, ctx, showTehnician, append());
-
-  if (montajRoti.length > 0) {
-    await generateMontajRoti(r, ctx.company ?? null, montajRoti, vehicle, append());
-  }
-
-  for (const section of cazariSections) {
-    if (section.type === "checkin") {
-      await generateCazareCheckin(section.cazare, ctx.company ?? null, images, vehicle, append());
-    } else if (section.type === "checkout") {
-      await generateCazareCheckout(section.cazare, ctx.company ?? null, images, vehicle, append());
-    } else {
-      await generateCazareScoatereIntroducere(
-        section.checkout, section.newCazare, ctx.company ?? null,
-        section.checkoutDate, section.montatePeMasina, images, vehicle, append(),
-      );
-    }
-  }
-
-  const clientSlug = (r.clientNume ?? "client").replace(/\s+/g, "_").slice(0, 30);
-  doc.save(docFilename("deviz_operatii", clientSlug));
-}

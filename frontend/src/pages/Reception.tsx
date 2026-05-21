@@ -3,8 +3,8 @@ import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti, generateDevizPlusOperatii } from "../utils/generateDocuments";
-import type { DocContext, CompanyData, MontajRotaRow, CazareSection } from "../utils/generateDocuments";
+import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
+import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
 import {
   loadMontajRotiByReceipt, loadMontareRotiImages, buildMontareRotiProxyUrls,
@@ -124,6 +124,18 @@ function emptyClientForm() {
 type ClientForm = ReturnType<typeof emptyClientForm>;
 
 const METODE = ["Platit cash", "Platit cu cardul", "Platit prin OP", "Platit Partial"];
+
+/** Mapeaza valoarea stocata in DB (fara diacritice) la textul afisat (cu diacritice). */
+function displayMetoda(m: string | null | undefined): string {
+  switch (m) {
+    case "Platit cash":        return "Plătit cash";
+    case "Platit cu cardul":   return "Plătit cu cardul";
+    case "Platit prin OP":     return "Plătit prin OP";
+    case "Platit Partial":     return "Plătit parțial";
+    case null: case undefined: case "": return "Neplătit";
+    default: return m;
+  }
+}
 
 function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void }) {
   const f = () => props.f;
@@ -643,16 +655,15 @@ function ReceiptCard(props: { receipt: Receipt }) {
     }
   }
 
-  async function handleDocDownload(docType: "deviz" | "factura" | "chitanta" | "deviz_operatii") {
+  async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
     setDocError(null);
     const locationId = device()?.locationId;
     if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);
     try {
-      const apiDocType = docType === "deviz_operatii" ? "deviz" : docType;
       const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
         method: "POST",
-        body: JSON.stringify({ doc_type: apiDocType, location_id: locationId }),
+        body: JSON.stringify({ doc_type: docType, location_id: locationId }),
       });
       if (!res.ok) {
         const msg = await readApiError(res, "Eroare la generarea documentului.");
@@ -660,7 +671,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
-      applyDocNumber(r.id, apiDocType as "deviz" | "factura" | "chitanta", ctx.serie, ctx.nr);
+      applyDocNumber(r.id, docType, ctx.serie, ctx.nr);
       if (docType === "deviz") {
         // Anexam corpul Montare Roti la sfarsitul deviz-ului daca receiptul are date.
         const montajList = await loadMontajRotiByReceipt(Number(r.id)).catch(() => [] as MontajRota[]);
@@ -685,74 +696,11 @@ function ReceiptCard(props: { receipt: Receipt }) {
       }
       else if (docType === "factura") await generateFactura(r, ctx);
       else if (docType === "chitanta") await generateChitanta(r, ctx);
-      else await handleDevizPlusOperatii(ctx);
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare necunoscută.");
     } finally {
       setDocLoading(null);
     }
-  }
-
-  async function handleDevizPlusOperatii(ctx: DocContext) {
-    await Promise.all([loadHotelImages(), loadMontareRotiImages()]);
-    const imgs = buildHotelImageProxyUrls();
-    const montareImgs = buildMontareRotiProxyUrls();
-    const vehicle = r.vehicol ?? null;
-
-    // Fetch montaj roti + cazări în paralel
-    const [montajList, cazariRes] = await Promise.all([
-      loadMontajRotiByReceipt(Number(r.id)),
-      apiFetch(`/api/cazare-anvelope?receipt_id=${r.id}&limit=20`).then((res) => res.ok ? res.json() : null).catch(() => null),
-    ]);
-
-    const montajRows: MontajRotaRow[] = montajList.map((m) => ({
-      pozitie: m.pozitie,
-      presiune: m.presiune,
-      marcaNume: m.marcaNume,
-      dimensiuneValoare: m.dimensiuneValoare,
-      profilValoare: m.profilValoare,
-      dotValoare: m.dotValoare,
-      tip: m.tip,
-      adancime: m.adancime,
-      cupluStrangere: m.cupluStrangere,
-      imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
-    }));
-
-    const cazariBasice: Array<{ id: number }> = cazariRes?.items ?? [];
-    const sections: CazareSection[] = [];
-    const renderedIds = new Set<number>();
-
-    for (const cb of cazariBasice) {
-      if (renderedIds.has(cb.id)) continue;
-      const full = await getCazareById(cb.id);
-      if (!full) continue;
-      if (full.dataCheckout && full.successorCazareId != null) {
-        const successor = await getCazareById(full.successorCazareId);
-        if (successor) {
-          sections.push({
-            type: "combined",
-            checkout: full,
-            newCazare: successor,
-            checkoutDate: full.dataCheckout,
-            montatePeMasina: full.successorMontatePeMasina ?? successor.montatePeMasina ?? false,
-          });
-          renderedIds.add(full.id);
-          renderedIds.add(successor.id);
-          continue;
-        }
-      }
-      if (full.dataCheckout) {
-        sections.push({ type: "checkout", cazare: full, checkoutDate: full.dataCheckout });
-      } else {
-        sections.push({ type: "checkin", cazare: full });
-      }
-      renderedIds.add(full.id);
-    }
-
-    await generateDevizPlusOperatii(
-      r, ctx, vehicle, montajRows, sections, imgs,
-      generalSettings()?.afiseazaTehnicianDeviz === true,
-    );
   }
 
   const isPartial = () => metodaDraft() === "Platit Partial";
@@ -812,7 +760,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
           <div class="rcard-right-col">
             <span class="rcard-total">{r.total.toFixed(2)} lei</span>
             <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !r.metodaPlata }}>
-              {r.metodaPlata ?? "Neplatit"}
+              {displayMetoda(r.metodaPlata)}
             </span>
           </div>
           <Show when={!live().metodaPlata && !live().efacturaLocked}>
@@ -851,9 +799,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
             <div class="receipt-items">
               <For each={r.items}>
-                {(item) => (
+                {(item, index) => (
                   <div class="receipt-item">
-                    <span class="receipt-item-name">{item.name}</span>
+                    <span class="receipt-item-name">{index() + 1}. {item.name}</span>
                     <span class="receipt-item-qty">{item.qty} x {item.price.toFixed(2)}</span>
                     <span class="receipt-item-total">{(item.price * item.qty).toFixed(2)}</span>
                   </div>
@@ -870,83 +818,106 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
             {r.metodaPlata && (
               <div class="receipt-plata">
-                <span>Metoda de plata</span>
-                <span>{r.metodaPlata}</span>
+                <span>Metodă de plată</span>
+                <span>{displayMetoda(r.metodaPlata)}</span>
               </div>
             )}
 
             <div class="receipt-divider receipt-divider--dashed" />
 
             <div class="receipt-actions">
-              <Show when={adminVisible() && !live().efacturaLocked}>
-                <button class="btn btn-danger btn-sm" onClick={handleDeleteClick}>
-                  Sterge
-                </button>
-              </Show>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
-                {docLoading() === "deviz" ? "..." : "Deviz"}
-              </button>
-              <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz_operatii")}>
-                {docLoading() === "deviz_operatii" ? "..." : "Deviz + Op."}
-              </button>
-              <Show when={generalSettings()?.useFactura !== false}>
-                <Show when={live().devizNr > 0 && live().facturaNr === 0}>
-                  <button
-                    class="btn btn-primary btn-sm"
-                    disabled={docLoading() !== null}
-                    onClick={openFactureazaModal}
-                    title="Alocă număr de factură pe baza devizului existent"
-                  >
-                    Facturează
+              {/* Documente: butoanele de descarcare PDF */}
+              <div class="receipt-actions-group">
+                <div class="receipt-actions-label">Documente:</div>
+                <div class="receipt-actions-row">
+                  <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
+                    {docLoading() === "deviz" ? "..." : "Deviz"}
                   </button>
-                </Show>
-                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
-                  {docLoading() === "factura" ? "..." : "Factura"}
-                </button>
-                <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
-                  {docLoading() === "chitanta" ? "..." : "Chitanta"}
-                </button>
+                  <Show when={generalSettings()?.useFactura !== false && live().facturaNr > 0}>
+                    <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
+                      {docLoading() === "factura" ? "..." : "Factură"}
+                    </button>
+                  </Show>
+                  <Show when={generalSettings()?.useFactura !== false && (live().metodaPlata === "Platit cash" || live().metodaPlata === "Platit Partial")}>
+                    <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
+                      {docLoading() === "chitanta" ? "..." : "Chitanță"}
+                    </button>
+                  </Show>
+                </div>
+              </div>
 
-                {/* Buton Trimite in SPV — apare doar daca factura e alocata */}
-                <Show when={live().facturaNr > 0}>
-                  {/* Starea 1: nu s-a trimis niciodata sau a esuat pre-ANAF -> Trimite */}
-                  <Show when={live().efacturaStatus === null || (live().efacturaStatus === "error" && live().efacturaIndexIncarcare === null)}>
-                    <button
-                      class="btn btn-spv btn-sm"
-                      onClick={openSpvModal}
-                      title="Trimite factura electronica catre ANAF SPV"
-                    >
-                      Trimite in SPV
+              {/* Procese: actiuni care schimba starea (facturare, trimitere ANAF) */}
+              <Show when={generalSettings()?.useFactura !== false}>
+                <div class="receipt-actions-group">
+                  <div class="receipt-actions-label">Procese:</div>
+                  <div class="receipt-actions-row">
+                    <Show when={live().devizNr > 0 && live().facturaNr === 0}>
+                      <button
+                        class="btn btn-primary btn-sm"
+                        disabled={docLoading() !== null}
+                        onClick={openFactureazaModal}
+                        title="Alocă număr de factură pe baza devizului existent"
+                      >
+                        Facturează
+                      </button>
+                    </Show>
+
+                    {/* Info: facturarea s-a facut deja */}
+                    <Show when={live().facturaNr > 0}>
+                      <span class="rcard-spv-badge rcard-spv-badge--muted" title={`Factura nr. ${live().facturaNr} alocată`}>
+                        Facturat
+                      </span>
+                    </Show>
+
+                    {/* Trimite in SPV — apare doar daca factura e alocata */}
+                    <Show when={live().facturaNr > 0}>
+                      <Show when={live().efacturaStatus === null || (live().efacturaStatus === "error" && live().efacturaIndexIncarcare === null)}>
+                        <button
+                          class="btn btn-spv btn-sm"
+                          onClick={openSpvModal}
+                          title="Trimite factura electronică către ANAF SPV"
+                        >
+                          Trimite în SPV
+                        </button>
+                      </Show>
+                      <Show when={live().efacturaStatus === "pending_upload"}>
+                        <span class="rcard-spv-badge rcard-spv-badge--pending" title="Upload în curs către ANAF">
+                          Se trimite...
+                        </span>
+                      </Show>
+                      <Show when={live().efacturaStatus === "in_prelucrare"}>
+                        <span class="rcard-spv-badge rcard-spv-badge--info" title="ANAF a primit factura și o validează">
+                          În procesare ANAF
+                        </span>
+                      </Show>
+                      <Show when={live().efacturaStatus === "accepted"}>
+                        <span class="rcard-spv-badge rcard-spv-badge--success" title="Factură acceptată de ANAF">
+                          Acceptat ANAF
+                        </span>
+                      </Show>
+                      <Show when={live().efacturaStatus === "rejected"}>
+                        <span class="rcard-spv-badge rcard-spv-badge--danger" title={live().efacturaError ?? "Factură respinsă de ANAF"}>
+                          Respins ANAF
+                        </span>
+                        <button class="btn btn-danger btn-sm" onClick={handleSpvRetry}>
+                          Reîncearcă
+                        </button>
+                      </Show>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Administrare: actiuni de gestiune (stergere etc) */}
+              <Show when={adminVisible() && !live().efacturaLocked}>
+                <div class="receipt-actions-group">
+                  <div class="receipt-actions-label">Administrare:</div>
+                  <div class="receipt-actions-row">
+                    <button class="btn btn-danger-outline btn-sm" onClick={handleDeleteClick}>
+                      Șterge
                     </button>
-                  </Show>
-                  {/* Starea 2: pending — se trimite */}
-                  <Show when={live().efacturaStatus === "pending_upload"}>
-                    <span class="rcard-spv-badge rcard-spv-badge--pending" title="Upload in curs catre ANAF">
-                      Se trimite...
-                    </span>
-                  </Show>
-                  {/* Starea 3: in_prelucrare — ANAF proceseaza */}
-                  <Show when={live().efacturaStatus === "in_prelucrare"}>
-                    <span class="rcard-spv-badge rcard-spv-badge--info" title="ANAF a primit factura si o valideaza">
-                      In procesare ANAF
-                    </span>
-                  </Show>
-                  {/* Starea 4: accepted */}
-                  <Show when={live().efacturaStatus === "accepted"}>
-                    <span class="rcard-spv-badge rcard-spv-badge--success" title="Factura acceptata de ANAF">
-                      Acceptat ANAF
-                    </span>
-                  </Show>
-                  {/* Starea 5: rejected — buton de retry */}
-                  <Show when={live().efacturaStatus === "rejected"}>
-                    <span class="rcard-spv-badge rcard-spv-badge--danger" title={live().efacturaError ?? "Factura respinsa de ANAF"}>
-                      Respins ANAF
-                    </span>
-                    <button class="btn btn-danger btn-sm" onClick={handleSpvRetry}>
-                      Reincearca
-                    </button>
-                  </Show>
-                </Show>
+                  </div>
+                </div>
               </Show>
             </div>
             <Show when={live().efacturaStatus === "error" && live().efacturaError}>
@@ -962,18 +933,18 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
           {/* Coloana dreapta */}
           <div class="rcard-extra-col">
-            <ClientSection receipt={r} readOnly={live().efacturaLocked} />
+            <ClientSection receipt={r} readOnly={live().efacturaLocked || !!live().metodaPlata} />
             {/* Status plata */}
             <div class="rcard-extra-card">
-              <div class="rcard-extra-title">Status plata</div>
+              <div class="rcard-extra-title">Status plată</div>
               <select
                 class="rcard-plata-select"
                 value={metodaDraft()}
                 onChange={(e) => setMetodaDraft(e.currentTarget.value)}
               >
-                <option value="">Neplatit</option>
+                <option value="">Neplătit</option>
                 <For each={METODE}>
-                  {(m) => <option value={m}>{m}</option>}
+                  {(m) => <option value={m}>{displayMetoda(m)}</option>}
                 </For>
               </select>
               <Show when={isPartial()}>
@@ -1499,7 +1470,7 @@ export default function Reception() {
                       classList={{ "filter-menu-item--active": selected().has(opt) }}
                       onClick={() => toggleOption(opt)}
                     >
-                      {opt}
+                      {displayMetoda(opt)}
                     </button>
                   )}
                 </For>
@@ -1508,7 +1479,7 @@ export default function Reception() {
                     class="btn btn-ghost btn-sm filter-clear-btn"
                     onClick={() => setSelected(new Set())}
                   >
-                    Sterge filtre
+                    Șterge filtre
                   </button>
                 </Show>
               </div>
