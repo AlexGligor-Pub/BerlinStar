@@ -10,13 +10,13 @@ export { COLORS, PAGE, CONTENT_WIDTH } from "./constants";
 export { ext, lastTableY, pageCount, type JsPdfExt } from "./types";
 export { fmtDate, fmtNow, lei, docFilename, asciifyDiacritics } from "./format";
 export {
-  hline, drawBackground, drawLogo, drawSideImage,
+  hline, drawBackground, drawSideImage,
   qrDataUrl, drawFooterWithBranding,
   loadImageAsDataUrl, fetchImageAsDataUrl,
 } from "./primitives";
 export {
-  drawHeader, drawCompanyBlock, drawClientBlock,
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
-  type TextTransform, type CompanyInfo, type ClientInfo,
+  SIGNATURES_PIN_Y,
+  type TextTransform,
   type ReceiptItemForTable, type ReceiptTotals, type DisclaimerInfo,
 } from "./documents";

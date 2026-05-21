@@ -25,30 +25,6 @@ export type TextTransform = (s: string | null | undefined) => string;
 
 // ─── Tipuri minimale pentru blocurile de document ─────────────────────────────
 
-export interface CompanyInfo {
-  id?: number;
-  name: string;
-  cui: string | number;
-  address?: string | null;
-  nr_reg_com?: string | null;
-  phone?: string | null;
-  tva_percentage?: number | null;
-  logo_path?: string | null;
-  background_path?: string | null;
-  website?: string | null;
-  bank_name?: string | null;
-  iban?: string | null;
-  capital_social?: number | null;
-}
-
-export interface ClientInfo {
-  clientNume: string | null;
-  clientCui: string | null;
-  clientReprezentant: string | null;
-  clientAdresa: string | null;
-  clientTelefon: string | null;
-}
-
 export interface ReceiptItemForTable {
   name: string;
   qty: number;
@@ -71,122 +47,6 @@ export interface DisclaimerInfo {
 }
 
 // ─── Drawing ──────────────────────────────────────────────────────────────────
-
-/** Header document: titlu + serie/nr + data (stanga). */
-export function drawHeader(
-  doc: jsPDF,
-  title: string,
-  serie: string,
-  nr: number,
-  date: string,
-  font = "helvetica",
-): number {
-  let y = PAGE.marginTop;
-
-  doc.setFont(font, "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...COLORS.black);
-  doc.text(title, ML, y);
-
-  doc.setFont(font, "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...COLORS.black);
-  y += 6;
-  doc.text(
-    serie ? `Serie: ${serie}   Nr.: ${String(nr).padStart(2, "0")}` : `Nr.: ${String(nr).padStart(2, "0")}`,
-    ML,
-    y,
-  );
-  y += 4;
-  doc.text(`Data: ${date}`, ML, y);
-
-  y += 5;
-  return y + 5;
-}
-
-/** Bloc companie: eticheta + camp info. */
-export function drawCompanyBlock(
-  doc: jsPDF,
-  label: string,
-  company: CompanyInfo | null,
-  x: number, y: number, bw: number,
-  t: TextTransform,
-): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.black);
-  doc.text(t(label).toUpperCase(), x, y);
-  y += 3.5;
-
-  if (!company) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(...COLORS.black);
-    doc.text("-", x, y);
-    return y + 4;
-  }
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.black);
-  const nameLines: string[] = doc.splitTextToSize(t(company.name), bw);
-  doc.text(nameLines, x, y);
-  y += nameLines.length * 4.2;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.black);
-  if (company.cui) { doc.text(`CUI: ${company.cui}`, x, y); y += 3.5; }
-  if (company.nr_reg_com) { doc.text(`Reg.Com.: ${t(company.nr_reg_com)}`, x, y); y += 3.5; }
-  if (company.address) {
-    const al: string[] = doc.splitTextToSize(t(company.address), bw);
-    doc.text(al, x, y);
-    y += al.length * 3.5;
-  }
-  if (company.phone) { doc.text(`Tel: ${t(company.phone)}`, x, y); y += 3.5; }
-  if (company.bank_name) { doc.text(`Banca: ${t(company.bank_name)}`, x, y); y += 3.5; }
-  if (company.iban) { doc.text(`IBAN: ${company.iban}`, x, y); y += 3.5; }
-  if (company.capital_social != null) {
-    const cap = company.capital_social.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    doc.text(`Capital social: ${cap} lei`, x, y); y += 3.5;
-  }
-  return y;
-}
-
-/** Bloc client. */
-export function drawClientBlock(
-  doc: jsPDF,
-  label: string,
-  client: ClientInfo,
-  x: number, y: number, bw: number,
-  t: TextTransform,
-): number {
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.black);
-  doc.text(t(label).toUpperCase(), x, y);
-  y += 3.5;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.black);
-  const lines: string[] = doc.splitTextToSize(t(client.clientNume ?? "-"), bw);
-  doc.text(lines, x, y);
-  y += lines.length * 4.2;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...COLORS.black);
-  if (client.clientCui)          { doc.text(`CUI: ${client.clientCui}`, x, y); y += 3.5; }
-  if (client.clientReprezentant) { doc.text(`Repr.: ${t(client.clientReprezentant)}`, x, y); y += 3.5; }
-  if (client.clientAdresa) {
-    const al: string[] = doc.splitTextToSize(t(client.clientAdresa), bw);
-    doc.text(al, x, y);
-    y += al.length * 3.5;
-  }
-  if (client.clientTelefon) { doc.text(`Tel: ${client.clientTelefon}`, x, y); y += 3.5; }
-  return y;
-}
 
 /** Tabel articole cu TVA per linie. autoTable = referinta la jspdf-autotable. */
 export function drawItemsTable(
@@ -454,6 +314,10 @@ export function drawDisclaimer(
   return y;
 }
 
+/** Y-ul liniei de semnatura cand `pinToBottom: true` — exportat ca apelantii sa-l
+ *  poata folosi pentru a verifica daca alt continut incape deasupra. */
+export const SIGNATURES_PIN_Y = PAGE_H - 22;
+
 /** Doua rubrici de semnatura (linie + label).
  *  `pinToBottom: true` plaseaza semnaturile la baza paginii (deasupra footer-ului),
  *  indiferent de y-ul primit. */
@@ -467,7 +331,7 @@ export function drawSignatures(
   if (opts?.pinToBottom) {
     // Footer-ul incepe la PAGE_H - 10. Plasam linia semnaturii la ~22mm de baza,
     // ca labelurile (linie + 4mm) sa stea confortabil deasupra footer-ului.
-    y = PAGE_H - 22;
+    y = SIGNATURES_PIN_Y;
   } else {
     if (y > PAGE_H - 22) { doc.addPage(); y = PAGE.marginTop; }
     y += 8;

@@ -12,7 +12,7 @@ import {
   hline, drawBackground, drawSideImage,
   drawFooterWithBranding,
   fetchImageAsDataUrl, loadImageAsDataUrl,
-  drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
+  drawItemsTable, drawTotals, drawDisclaimer, drawSignatures, SIGNATURES_PIN_Y,
 } from "./pdf";
 // Importat ca asset Vite → primeste hash in nume la build, deci nu mai sufera de
 // cache stale la nivel de nginx/CDN cand schimbam continutul fontului.
@@ -144,13 +144,6 @@ function makeT(hasFont: boolean) {
 // fmtDate, fmtNow, lei, docFilename sunt importate din ./pdf — partajate cu
 // generateReceiptPdf si orice generator viitor.
 
-// ─── Componente desenare ──────────────────────────────────────────────────────
-
-// hline, drawCompanyBlock, drawClientBlock, drawItemsTable,
-// drawTotals, drawDisclaimer, drawSignatures mutate in ./pdf/primitives si
-// ./pdf/documents. Call sites paseaza `ro` ca text-transform (parametrul t).
-
-
 async function loadPdf() {
   const [{ jsPDF }, { default: autoTable }] = await Promise.all([
     import("jspdf"),
@@ -158,9 +151,6 @@ async function loadPdf() {
   ]);
   return { jsPDF, autoTable };
 }
-
-// loadImageAsDataUrl, drawBackground, fetchImageAsDataUrl,
-// drawSideImage, qrDataUrl, drawFooterWithBranding mutate in ./pdf/primitives.
 
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
@@ -175,49 +165,6 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   // Background
   await drawBackground(doc, ctx.company?.background_path);
 
-  // Layout 3 coloane: Prestator (stanga) | Logo + DEVIZ + Serie/Nr + Data (mijloc) | Client + Vehicul (dreapta)
-  const middleW = 34;
-  const sideGap = 5;
-  const sideW = (CW - middleW - 2 * sideGap) / 2;
-  const leftX = ML;
-  const middleX = ML + sideW + sideGap;
-  const rightX = middleX + middleW + sideGap;
-
-  // Coloana mijloc: logo (centrat) + titlu DEVIZ + Serie/Nr + Data
-  const logoSize = 20;
-  const logoX = middleX + (middleW - logoSize) / 2;
-  const logoY = MT;
-  if (ctx.company?.logo_path) {
-    try {
-      const dataUrl = await loadImageAsDataUrl(ctx.company.logo_path);
-      if (dataUrl) {
-        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
-      }
-    } catch { /* ignore */ }
-  }
-
-  let midY = logoY + logoSize + 4;
-  const midCenterX = middleX + middleW / 2;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...C.black);
-  doc.text("DEVIZ", midCenterX, midY, { align: "center" });
-  midY += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-  const nrTxt = String(ctx.nr).padStart(2, "0");
-  doc.text(
-    ctx.serie ? `Serie: ${ctx.serie}   Nr.: ${nrTxt}` : `Nr.: ${nrTxt}`,
-    midCenterX, midY, { align: "center" },
-  );
-  midY += 4;
-  doc.text(`Data: ${date}`, midCenterX, midY, { align: "center" });
-  midY += 2;
-
-  // Carduri Prestator (stanga) + Client + Vehicul (dreapta, stivuit) — pornesc de la MT (acelasi top ca logoul)
   const t = makeT(true);
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
@@ -238,12 +185,11 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
       }
     : null;
 
-  const cardsBottomY = drawCazareTopCards(
-    doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, MT, sideW, t, "helvetica",
-    { clientVehiculInline: true },
-  );
-
-  let y = Math.max(midY, cardsBottomY) + 3;
+  let y = await drawDocHeader3Col(
+    doc, ctx.company ?? null, client, vehicleForPdf,
+    { title: "DEVIZ", serie: ctx.serie, nr: ctx.nr, dateStr: date },
+    t, "helvetica",
+  ) + 3;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
   y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true, inlineSubtotals: true });
@@ -304,9 +250,8 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     const montajTitleH = 7;
     const montajHlineH = 6;
     const estH = estimateMontajRotiBodyHeight(montajRoti) + montajTitleH + montajHlineH;
-    const signLineY = PAGE.height - 22;
     const buffer = 4;
-    if (y + estH + buffer > signLineY) {
+    if (y + estH + buffer > SIGNATURES_PIN_Y) {
       doc.addPage();
       await drawBackground(doc, ctx.company?.background_path);
       y = MT;
@@ -321,7 +266,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     doc.setFontSize(11);
     doc.setTextColor(...C.black);
     doc.text(
-      `Montare Roți   Nr.: ${r.id}   Data: ${fmtDate(r.date)}`,
+      t(`Montare Roți   Nr.: ${r.id}   Data: ${fmtDate(r.date)}`),
       PAGE.width / 2, y, { align: "center" },
     );
     y += montajTitleH;
@@ -329,7 +274,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   }
 
   // Semnaturile la baza paginii curente (dupa montaj daca exista).
-  drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y, { pinToBottom: true });
+  y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y, { pinToBottom: true });
   await drawFooterWithBranding(doc, ctx.company?.website, { itemCount: r.items.length });
 
   if (!append) doc.save(docFilename("deviz", r.titlu));
@@ -346,49 +291,6 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 
   await drawBackground(doc, ctx.company?.background_path);
 
-  // Layout 3 coloane: Furnizor (stanga) | Logo + FACTURA FISCALA + Serie/Nr + Data (mijloc) | Cumparator + Vehicul (dreapta, inline)
-  const middleW = 34;
-  const sideGap = 5;
-  const sideW = (CW - middleW - 2 * sideGap) / 2;
-  const leftX = ML;
-  const middleX = ML + sideW + sideGap;
-  const rightX = middleX + middleW + sideGap;
-
-  const logoSize = 20;
-  const logoX = middleX + (middleW - logoSize) / 2;
-  const logoY = MT;
-  if (ctx.company?.logo_path) {
-    try {
-      const dataUrl = await loadImageAsDataUrl(ctx.company.logo_path);
-      if (dataUrl) {
-        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
-      }
-    } catch { /* ignore */ }
-  }
-
-  let midY = logoY + logoSize + 4;
-  const midCenterX = middleX + middleW / 2;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...C.black);
-  const titleLines: string[] = doc.splitTextToSize("FACTURA FISCALA", middleW);
-  doc.text(titleLines, midCenterX, midY, { align: "center" });
-  midY += titleLines.length * 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-  const nrTxt = String(ctx.nr).padStart(2, "0");
-  doc.text(
-    ctx.serie ? `Serie: ${ctx.serie}   Nr.: ${nrTxt}` : `Nr.: ${nrTxt}`,
-    midCenterX, midY, { align: "center" },
-  );
-  midY += 4;
-  doc.text(`Data: ${date}`, midCenterX, midY, { align: "center" });
-  midY += 5;
-
-  // Carduri Furnizor (stanga) + Cumparator + Vehicul (dreapta, inline)
   const t = makeT(true);
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
@@ -409,12 +311,11 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
       }
     : null;
 
-  const cardsBottomY = drawCazareTopCards(
-    doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, MT, sideW, t, "helvetica",
-    { clientVehiculInline: true },
-  );
-
-  let y = Math.max(midY, cardsBottomY) + 4;
+  let y = await drawDocHeader3Col(
+    doc, ctx.company ?? null, client, vehicleForPdf,
+    { title: "FACTURA FISCALA", serie: ctx.serie, nr: ctx.nr, dateStr: date },
+    t, "helvetica",
+  ) + 4;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
   y = drawTotals(doc, r, y, tvaPct, r.items, { skipTopLine: true });
@@ -1058,6 +959,68 @@ function drawCazareTopCards(
   }
 
   return y + blockH;
+}
+
+/** Header 3 coloane pentru Deviz / Factura / Montare Roți:
+ *  Prestator (stanga) | Logo + titlu (16pt) + Serie/Nr + Data (mijloc) |
+ *  Client + Vehicul inline (dreapta). Serie/Nr trec prin splitTextToSize ca sa
+ *  nu deborde middleW cand seria + numarul sunt lungi.
+ *  Returneaza y-ul de la baza headerului. */
+async function drawDocHeader3Col(
+  doc: any,
+  company: any,
+  client: ClientInfoForPdf,
+  vehicle: VehiculForPdf | null,
+  opts: { title: string; serie?: string; nr: number; dateStr: string; middleW?: number },
+  t: (s: string | null | undefined) => string,
+  FONT: string,
+): Promise<number> {
+  const middleW = opts.middleW ?? 34;
+  const sideGap = 5;
+  const sideW = (CW - middleW - 2 * sideGap) / 2;
+  const leftX = ML;
+  const middleX = ML + sideW + sideGap;
+  const rightX = middleX + middleW + sideGap;
+
+  const logoSize = 20;
+  const logoX = middleX + (middleW - logoSize) / 2;
+  const logoY = MT;
+  if (company?.logo_path) {
+    try {
+      const dataUrl = await loadImageAsDataUrl(company.logo_path);
+      if (dataUrl) {
+        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
+      }
+    } catch { /* ignore */ }
+  }
+
+  let midY = logoY + logoSize + 4;
+  const midCenterX = middleX + middleW / 2;
+
+  doc.setFont(FONT, "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(...C.black);
+  const titleLines: string[] = doc.splitTextToSize(t(opts.title), middleW);
+  doc.text(titleLines, midCenterX, midY, { align: "center" });
+  midY += titleLines.length * 6;
+
+  doc.setFont(FONT, "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(...C.black);
+  const nrTxt = String(opts.nr).padStart(2, "0");
+  const serieNr = opts.serie ? `Serie: ${opts.serie}   Nr.: ${nrTxt}` : `Nr.: ${nrTxt}`;
+  const serieLines: string[] = doc.splitTextToSize(serieNr, middleW);
+  doc.text(serieLines, midCenterX, midY, { align: "center" });
+  midY += serieLines.length * 4;
+  doc.text(`Data: ${opts.dateStr}`, midCenterX, midY, { align: "center" });
+  midY += 2;
+
+  const cardsBottomY = drawCazareTopCards(
+    doc, company ?? null, client, vehicle, leftX, rightX, MT, sideW, t, FONT,
+    { clientVehiculInline: true },
+  );
+
+  return Math.max(midY, cardsBottomY);
 }
 
 /** Header 3 coloane pentru documentele de Hotel Anvelope, in stilul Deviz:
@@ -2038,46 +2001,9 @@ export async function generateMontajRoti(
 
   await drawBackground(doc, company?.background_path);
 
-  // Layout 3 coloane (acelasi cu Deviz): Prestator (stanga) | Logo + titlu + Nr + Data (mijloc) | Client + Vehicul (dreapta inline)
-  const middleW = 34;
-  const sideGap = 5;
-  const sideW = (CW - middleW - 2 * sideGap) / 2;
-  const leftX = ML;
-  const middleX = ML + sideW + sideGap;
-  const rightX = middleX + middleW + sideGap;
-
-  const logoSize = 20;
-  const logoX = middleX + (middleW - logoSize) / 2;
-  const logoY = MT;
-  if (company?.logo_path) {
-    try {
-      const dataUrl = await loadImageAsDataUrl(company.logo_path);
-      if (dataUrl) {
-        doc.addImage(dataUrl, "PNG", logoX, logoY, logoSize, logoSize, undefined, "FAST");
-      }
-    } catch { /* ignore */ }
-  }
-
-  let midY = logoY + logoSize + 4;
-  const midCenterX = middleX + middleW / 2;
-
   const fmtReceiptDate = (() => {
     try { return fmtDate(receipt.date); } catch { return ""; }
   })();
-
-  doc.setFont(FONT, "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(...C.black);
-  doc.text(t("Montare Roți"), midCenterX, midY, { align: "center" });
-  midY += 6;
-
-  doc.setFont(FONT, "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(...C.black);
-  doc.text(`Nr.: ${String(receipt.id).padStart(2, "0")}`, midCenterX, midY, { align: "center" });
-  midY += 4;
-  doc.text(`Data: ${fmtReceiptDate}`, midCenterX, midY, { align: "center" });
-  midY += 2;
 
   const client: ClientInfoForPdf = {
     clientNume: receipt.clientNume ?? null,
@@ -2087,12 +2013,11 @@ export async function generateMontajRoti(
     clientTelefon: (receipt as any).clientTelefon ?? null,
   };
 
-  const cardsBottomY = drawCazareTopCards(
-    doc, company ?? null, client, vehicle, leftX, rightX, MT, sideW, t, FONT,
-    { clientVehiculInline: true },
+  let y = await drawDocHeader3Col(
+    doc, company ?? null, client, vehicle,
+    { title: "Montare Roți", nr: receipt.id, dateStr: fmtReceiptDate },
+    t, FONT,
   );
-
-  let y = Math.max(midY, cardsBottomY);
 
   hline(doc, y, C.veryLight, 0.2);
   y += 2;

@@ -102,23 +102,6 @@ export async function drawBackground(
   } catch { /* ignore */ }
 }
 
-/** Deseneaza logo-ul in coltul din dreapta-sus, 20x20 mm. */
-export async function drawLogo(
-  doc: jsPDF,
-  url: string | null | undefined,
-  y: number,
-): Promise<void> {
-  if (!url) return;
-  try {
-    const dataUrl = await loadImageAsDataUrl(url);
-    if (!dataUrl) return;
-    const logoH = 20;
-    const logoW = 20;
-    const x = PAGE.width - PAGE.marginRight - logoW;
-    doc.addImage(dataUrl, "PNG", x, y, logoW, logoH, undefined, "FAST");
-  } catch { /* ignore */ }
-}
-
 /** Deseneaza o imagine intr-o caseta (boxW x boxH), pastrand aspect-ratio si centrand. */
 export async function drawSideImage(
   doc: jsPDF,
