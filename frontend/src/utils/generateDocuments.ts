@@ -247,7 +247,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   let y = Math.max(midY, cardsBottomY) + 3;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
-  y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true });
+  y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true, inlineSubtotals: true });
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);

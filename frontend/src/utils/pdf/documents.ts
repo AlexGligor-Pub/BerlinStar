@@ -258,6 +258,8 @@ export function drawItemsTable(
         7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
       };
 
+  // Faux bold pe header: NotoSans nu are variant bold real, deci re-desenam textul
+  // cu offset orizontal mic (overprint) in didDrawCell — efectul vizual e text "ingrosat".
   autoTable(doc, {
     startY: y,
     head,
@@ -288,6 +290,29 @@ export function drawItemsTable(
     columnStyles,
     margin: { left: ML, right: MR },
     tableWidth: CW,
+    didDrawCell: (data: any) => {
+      if (data.section !== "head") return;
+      const cell = data.cell;
+      const text = Array.isArray(cell.text) ? cell.text.join(" ") : String(cell.text ?? cell.raw ?? "");
+      if (!text) return;
+
+      const halign: "left" | "center" | "right" = cell.styles.halign || "left";
+      const pad = cell.styles.cellPadding;
+      const padLeft  = typeof pad === "object" ? (pad.left  ?? 1.5) : (pad ?? 1.5);
+      const padRight = typeof pad === "object" ? (pad.right ?? 1.5) : (pad ?? 1.5);
+      let x: number;
+      if (halign === "center") x = cell.x + cell.width / 2;
+      else if (halign === "right") x = cell.x + cell.width - padRight;
+      else x = cell.x + padLeft;
+
+      const fontSize = cell.styles.fontSize ?? 7;
+      const y2 = cell.y + cell.height / 2 + (fontSize * 0.3528) * 0.35;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(fontSize);
+      doc.setTextColor(...COLORS.black);
+      doc.text(text, x + 0.15, y2, { align: halign });
+    },
   });
 
   return lastTableY(doc) + 3;
@@ -304,7 +329,7 @@ export function drawTotals(
   y: number,
   tvaPct: number | null | undefined,
   items?: ReceiptItemForTable[],
-  opts?: { skipTopLine?: boolean },
+  opts?: { skipTopLine?: boolean; inlineSubtotals?: boolean },
 ): number {
   const rightX = PAGE_W - MR;
   const labelX = rightX - 60;
@@ -336,18 +361,28 @@ export function drawTotals(
   doc.setFontSize(8.5);
   doc.setTextColor(...COLORS.black);
 
-  doc.text("Subtotal (fara TVA):", labelX, y);
-  doc.text(lei(net), rightX, y, { align: "right" });
-  y += 4.5;
-
   // Pentru linii cu cote diferite afisam un total agregat; defalcatul pe rate ramane in tabel.
   const distinctVats = allLinesHaveVat
     ? Array.from(new Set(items!.map((it) => it.vatPercent ?? 0)))
     : [pct];
   const vatLabel = distinctVats.length === 1 ? `TVA ${distinctVats[0]}%:` : "TVA (cote multiple):";
-  doc.text(vatLabel, labelX, y);
-  doc.text(lei(tvaAmt), rightX, y, { align: "right" });
-  y += 4.5;
+
+  if (opts?.inlineSubtotals) {
+    // Subtotal Net + TVA pe acelasi rand, aliniate la dreapta paginii.
+    const tvaText = `${vatLabel} ${lei(tvaAmt)}`;
+    doc.text(tvaText, rightX, y, { align: "right" });
+    const tvaW = doc.getTextWidth(tvaText);
+    doc.text(`Subtotal (fara TVA): ${lei(net)}`, rightX - tvaW - 8, y, { align: "right" });
+    y += 4.5;
+  } else {
+    doc.text("Subtotal (fara TVA):", labelX, y);
+    doc.text(lei(net), rightX, y, { align: "right" });
+    y += 4.5;
+
+    doc.text(vatLabel, labelX, y);
+    doc.text(lei(tvaAmt), rightX, y, { align: "right" });
+    y += 4.5;
+  }
 
   hline(doc, y, COLORS.lightGray, 0.2);
   y += 4;
