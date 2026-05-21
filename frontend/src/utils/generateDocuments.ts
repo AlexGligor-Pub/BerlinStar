@@ -302,7 +302,8 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   // - pe aceeasi pagina cu deviz-ul daca incape deasupra zonei de semnatura,
   // - altfel pe pagina noua.
   if (montajRoti && montajRoti.length > 0) {
-    const estH = estimateMontajRotiBodyHeight(montajRoti);
+    const montajTitleH = 7;
+    const estH = estimateMontajRotiBodyHeight(montajRoti) + montajTitleH;
     const signLineY = PAGE.height - 22;
     const buffer = 4;
     if (y + estH + buffer > signLineY) {
@@ -312,6 +313,15 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     } else {
       y += 4;
     }
+    // Titlu sectiune (bold, centrat, pe o singura linie)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...C.black);
+    doc.text(
+      `Montare Roți   Nr.: ${r.id}   Data: ${fmtDate(r.date)}`,
+      PAGE.width / 2, y, { align: "center" },
+    );
+    y += montajTitleH;
     y = await drawMontajRotiBody(doc, montajRoti, y, t, "helvetica");
   }
 
