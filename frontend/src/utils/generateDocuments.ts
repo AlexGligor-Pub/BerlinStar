@@ -816,9 +816,13 @@ function drawCazareTopCards(
     client.clientAdresa?.trim() ||
     client.clientTelefon?.trim()
   );
-  const compH    = _measureCompanyContent(doc, company, innerW, font);
-  const clientH  = hasClient ? _measureClientContent(doc, client, innerW, t, font) : 0;
-  const vehH     = vehicle ? _measureVehiculContent(doc, vehicle, innerW, t, font) : 0;
+  // Functiile de masurare insumeaza incrementele de linie inclusiv pe cel de DUPA ultima
+  // linie (pregatit pentru "urmatoarea linie", care nu exista). Scadem acel increment
+  // (3.5mm pentru 7.5pt) ca sa nu apara un rand gol vizibil in josul cardului.
+  const trailingLineGap = 3.5;
+  const compH    = Math.max(0, _measureCompanyContent(doc, company, innerW, font) - trailingLineGap);
+  const clientH  = hasClient ? Math.max(0, _measureClientContent(doc, client, innerW, t, font) - trailingLineGap) : 0;
+  const vehH     = vehicle ? Math.max(0, _measureVehiculContent(doc, vehicle, innerW, t, font) - trailingLineGap) : 0;
 
   const compCardH   = compH + CARD_PAD * 2;
   const clientCardH = hasClient ? clientH + CARD_PAD * 2 : 0;
