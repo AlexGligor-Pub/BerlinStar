@@ -19,9 +19,9 @@ export const COLORS = {
 export const PAGE = {
   width:  210,
   height: 297,
-  marginLeft:   3.75,
-  marginRight:  3.75,
-  marginTop:    3.5,
+  marginLeft:   7.5,
+  marginRight:  7.5,
+  marginTop:    7,
 } as const;
 
 /** Latimea utila intre marginile stanga si dreapta. */
