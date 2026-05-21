@@ -6,7 +6,6 @@
 
 import type { jsPDF } from "jspdf";
 import { COLORS, PAGE } from "./constants";
-import { fmtNow } from "./format";
 import { pageCount } from "./types";
 
 type RGB = readonly [number, number, number];
@@ -163,7 +162,6 @@ export async function drawFooterWithBranding(
   website: string | null | undefined,
 ): Promise<void> {
   const n = pageCount(doc);
-  const now = fmtNow();
   const qr = website ? await qrDataUrl(website) : null;
 
   for (let i = 1; i <= n; i++) {
@@ -171,13 +169,8 @@ export async function drawFooterWithBranding(
     const h = doc.internal.pageSize.getHeight();
     hline(doc, h - 10, COLORS.veryLight, 0.2);
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
-    doc.setTextColor(...COLORS.black);
-    doc.text(`Generat: ${now}`, PAGE.marginLeft, h - 5.5);
-    doc.text(`Pagina ${i} / ${n}`, PAGE.width - PAGE.marginRight, h - 5.5, { align: "right" });
-
     if (website) {
+      doc.setFont("helvetica", "normal");
       doc.setFontSize(6.5);
       doc.setTextColor(...COLORS.black);
       doc.text(website, PAGE.width / 2, h - 5.5, { align: "center" });
