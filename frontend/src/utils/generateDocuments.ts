@@ -245,11 +245,8 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   let y = Math.max(midY, cardsBottomY) + 4;
 
-  hline(doc, y, C.lightGray, 0.2);
-  y += 4;
-
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
-  y = drawTotals(doc, r, y, tvaPct);
+  y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true });
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);

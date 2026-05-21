@@ -304,6 +304,7 @@ export function drawTotals(
   y: number,
   tvaPct: number | null | undefined,
   items?: ReceiptItemForTable[],
+  opts?: { skipTopLine?: boolean },
 ): number {
   const rightX = PAGE_W - MR;
   const labelX = rightX - 60;
@@ -326,8 +327,10 @@ export function drawTotals(
     tvaAmt = totalFinal - net;
   }
 
-  hline(doc, y, COLORS.lightGray, 0.2);
-  y += 4;
+  if (!opts?.skipTopLine) {
+    hline(doc, y, COLORS.lightGray, 0.2);
+    y += 4;
+  }
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
