@@ -10,6 +10,7 @@ import { savePosHotelCtx, consumePendingPosReturn } from "../store/posHotelStore
 import { notify } from "../store/notificationsStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
+import SplitName from "./SplitName";
 import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import type { TipAnvelopa } from "../store/hotelAnvelopeStore";
 
@@ -1054,17 +1055,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                     <img src={e.imagePath!} class="sl-employee-badge-avatar" alt={e.name} />
                   </Show>
                   <span class="sl-employee-badge-info">
-                    {(() => {
-                      const idx = e.name.indexOf(" ");
-                      return idx === -1 ? (
-                        <span class="sl-employee-badge-name">{e.name}</span>
-                      ) : (
-                        <span class="sl-employee-badge-name">
-                          <span>{e.name.slice(0, idx)}</span>
-                          <span>{e.name.slice(idx + 1)}</span>
-                        </span>
-                      );
-                    })()}
+                    <SplitName name={e.name} class="sl-employee-badge-name" />
                     <Show when={e.target > 0}>
                       <span class="sl-employee-badge-pct">
                         {Math.round(e.currentTargetAccumulation / e.target * 100)}%

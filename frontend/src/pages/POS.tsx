@@ -7,8 +7,38 @@ import { triggerLoad } from "../store/resumeStore";
 import { device } from "../store/deviceStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
+import SplitName from "../components/SplitName";
 
 const PAGE_SIZE = 20;
+
+interface TypeToggleProps {
+  label: string;
+  show: () => boolean;
+  setShow: (v: boolean) => void;
+  other: () => boolean;
+  setOther: (v: boolean) => void;
+}
+
+/** Buton toggle ON/OFF cu invariant: cel putin unul dintre (this, other) ramane
+ *  pe ON. Daca click-ul ar lasa ambele OFF, le restaureaza pe amandoua. */
+function TypeToggle(props: TypeToggleProps) {
+  return (
+    <button
+      class="btn btn-sm type-toggle-btn"
+      classList={{ "type-toggle-btn--on": props.show(), "type-toggle-btn--off": !props.show() }}
+      onClick={() => {
+        const next = !props.show();
+        props.setShow(next);
+        if (!next && !props.other()) {
+          props.setShow(true);
+          props.setOther(true);
+        }
+      }}
+    >
+      {props.label}
+    </button>
+  );
+}
 
 function formatDevizTime(dateStr: string): string {
   const now = Date.now();
@@ -179,34 +209,20 @@ export default function POS() {
                     value={search()}
                     onInput={(e) => setSearch(e.currentTarget.value)}
                   />
-                  <button
-                    class="btn btn-sm type-toggle-btn"
-                    classList={{ "type-toggle-btn--on": showProduse(), "type-toggle-btn--off": !showProduse() }}
-                    onClick={() => {
-                      const next = !showProduse();
-                      setShowProduse(next);
-                      if (!next && !showServicii()) {
-                        setShowProduse(true);
-                        setShowServicii(true);
-                      }
-                    }}
-                  >
-                    Produse
-                  </button>
-                  <button
-                    class="btn btn-sm type-toggle-btn"
-                    classList={{ "type-toggle-btn--on": showServicii(), "type-toggle-btn--off": !showServicii() }}
-                    onClick={() => {
-                      const next = !showServicii();
-                      setShowServicii(next);
-                      if (!next && !showProduse()) {
-                        setShowProduse(true);
-                        setShowServicii(true);
-                      }
-                    }}
-                  >
-                    Servicii
-                  </button>
+                  <TypeToggle
+                    label="Produse"
+                    show={showProduse}
+                    setShow={setShowProduse}
+                    other={showServicii}
+                    setOther={setShowServicii}
+                  />
+                  <TypeToggle
+                    label="Servicii"
+                    show={showServicii}
+                    setShow={setShowServicii}
+                    other={showProduse}
+                    setOther={setShowProduse}
+                  />
                   <div class="filter-divider" />
                   <div class="pos-toolbar-cats">
                     <For each={categories()}>
@@ -330,17 +346,7 @@ export default function POS() {
                           onClick={() => { selectEmployee(e.id); setPanel(0); }}
                         >
                           {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                          {(() => {
-                            const idx = e.name.indexOf(" ");
-                            return idx === -1 ? (
-                              <span class="pos-employee-card-name">{e.name}</span>
-                            ) : (
-                              <span class="pos-employee-card-name">
-                                <span>{e.name.slice(0, idx)}</span>
-                                <span>{e.name.slice(idx + 1)}</span>
-                              </span>
-                            );
-                          })()}
+                          <SplitName name={e.name} class="pos-employee-card-name" />
                         </button>
                       )}
                     </For>
@@ -358,17 +364,7 @@ export default function POS() {
                           onClick={() => { selectEmployee(e.id); setPanel(0); }}
                         >
                           {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                          {(() => {
-                            const idx = e.name.indexOf(" ");
-                            return idx === -1 ? (
-                              <span class="pos-employee-card-name">{e.name}</span>
-                            ) : (
-                              <span class="pos-employee-card-name">
-                                <span>{e.name.slice(0, idx)}</span>
-                                <span>{e.name.slice(idx + 1)}</span>
-                              </span>
-                            );
-                          })()}
+                          <SplitName name={e.name} class="pos-employee-card-name" />
                         </button>
                       )}
                     </For>
