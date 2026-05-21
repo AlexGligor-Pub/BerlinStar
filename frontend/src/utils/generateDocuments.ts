@@ -175,7 +175,8 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   // Background si logo
   await drawBackground(doc, ctx.company?.background_path);
-  await drawLogo(doc, ctx.company?.logo_path, MT);
+  // Logo aliniat cu topul textului "DEVIZ" (16pt → cap height ~4mm peste baseline=MT).
+  await drawLogo(doc, ctx.company?.logo_path, MT - 4);
 
   let y = drawHeader(doc, "DEVIZ", ctx.serie, ctx.nr, date);
 
