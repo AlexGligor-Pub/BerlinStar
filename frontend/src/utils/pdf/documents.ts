@@ -91,9 +91,14 @@ export function drawItemsTable(
     return row;
   });
 
+  // Header coloanei TVA: daca toate articolele au aceeasi cota, scrie "TVA X%".
+  // Altfel (cote mixte in Factura Rapida) ramane generic "TVA".
+  const rates = Array.from(new Set(items.map((it) => it.vatPercent ?? tvaPct)));
+  const tvaHeader = rates.length === 1 ? `TVA ${rates[0]}%` : "TVA";
+
   const head = showTehnician
-    ? [["#", "Denumire", "Tehnician", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]]
-    : [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", "Val. TVA", "Total"]];
+    ? [["#", "Denumire", "Tehnician", "Cant.", "U.M.", "Pret unit.", "Val. net", tvaHeader, "Total"]]
+    : [["#", "Denumire", "Cant.", "U.M.", "Pret unit.", "Val. net", tvaHeader, "Total"]];
 
   const columnStyles: Record<number, Record<string, unknown>> = showTehnician
     ? {
@@ -118,8 +123,6 @@ export function drawItemsTable(
         7: { halign: "right", cellWidth: 24, fontStyle: "bold" },
       };
 
-  // Faux bold pe header: NotoSans nu are variant bold real, deci re-desenam textul
-  // cu offset orizontal mic (overprint) in didDrawCell — efectul vizual e text "ingrosat".
   autoTable(doc, {
     startY: y,
     head,
@@ -150,29 +153,6 @@ export function drawItemsTable(
     columnStyles,
     margin: { left: ML, right: MR },
     tableWidth: CW,
-    didDrawCell: (data: any) => {
-      if (data.section !== "head") return;
-      const cell = data.cell;
-      const text = Array.isArray(cell.text) ? cell.text.join(" ") : String(cell.text ?? cell.raw ?? "");
-      if (!text) return;
-
-      const halign: "left" | "center" | "right" = cell.styles.halign || "left";
-      const pad = cell.styles.cellPadding;
-      const padLeft  = typeof pad === "object" ? (pad.left  ?? 1.5) : (pad ?? 1.5);
-      const padRight = typeof pad === "object" ? (pad.right ?? 1.5) : (pad ?? 1.5);
-      let x: number;
-      if (halign === "center") x = cell.x + cell.width / 2;
-      else if (halign === "right") x = cell.x + cell.width - padRight;
-      else x = cell.x + padLeft;
-
-      const fontSize = cell.styles.fontSize ?? 7;
-      const y2 = cell.y + cell.height / 2 + (fontSize * 0.3528) * 0.35;
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(fontSize);
-      doc.setTextColor(...COLORS.black);
-      doc.text(text, x + 0.15, y2, { align: halign });
-    },
   });
 
   return lastTableY(doc) + 3;
