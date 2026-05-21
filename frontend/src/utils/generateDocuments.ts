@@ -241,6 +241,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
 
   const cardsBottomY = drawCazareTopCards(
     doc, ctx.company ?? null, client, vehicleForPdf, leftX, rightX, MT, sideW, t, "helvetica",
+    { clientVehiculInline: true },
   );
 
   let y = Math.max(midY, cardsBottomY) + 4;
@@ -795,7 +796,11 @@ function drawCazareClientBlock(doc: any, ci: ClientInfoForPdf, x: number, y: num
   return y;
 }
 
-/** Top section: Prestator card (left col) + Client + optional Vehicle cards (right col). */
+/** Top section: Prestator card (left col) + Client + optional Vehicle cards (right col).
+ *
+ *  Cu `opts.clientVehiculInline` = true, Client si Vehicul sunt asezate alaturat
+ *  (split pe coloana dreapta), nu stivuit vertical.
+ */
 function drawCazareTopCards(
   doc: any,
   company: any,
@@ -807,6 +812,7 @@ function drawCazareTopCards(
   bw: number,
   t: (s: string | null | undefined) => string,
   font: string,
+  opts?: { clientVehiculInline?: boolean },
 ): number {
   const innerW = bw - CARD_PAD * 2;
   const hasClient = !!(
@@ -820,11 +826,36 @@ function drawCazareTopCards(
   // linie (pregatit pentru "urmatoarea linie", care nu exista). Scadem acel increment
   // (3.5mm pentru 7.5pt) ca sa nu apara un rand gol vizibil in josul cardului.
   const trailingLineGap = 3.5;
-  const compH    = Math.max(0, _measureCompanyContent(doc, company, innerW, font) - trailingLineGap);
+  const compH = Math.max(0, _measureCompanyContent(doc, company, innerW, font) - trailingLineGap);
+  const compCardH = compH + CARD_PAD * 2;
+
+  // Layout inline: Client si Vehicul lipite pe coloana dreapta (jumatate-jumatate).
+  if (opts?.clientVehiculInline && hasClient && vehicle) {
+    const subGap = 2;
+    const subW = (bw - subGap) / 2;
+    const subInnerW = subW - CARD_PAD * 2;
+    const clientH = Math.max(0, _measureClientContent(doc, client, subInnerW, t, font) - trailingLineGap);
+    const vehH    = Math.max(0, _measureVehiculContent(doc, vehicle, subInnerW, t, font) - trailingLineGap);
+    const subCardH = Math.max(clientH, vehH) + CARD_PAD * 2;
+    const blockH = Math.max(compCardH, subCardH);
+
+    drawCard(doc, leftX, y, bw, compCardH);
+    drawCompanyBlockFont(doc, "Prestator", company, leftX + CARD_PAD, y + CARD_PAD, innerW, font);
+
+    drawCard(doc, rightX, y, subW, subCardH);
+    drawCazareClientBlock(doc, client, rightX + CARD_PAD, y + CARD_PAD, subInnerW, t, font);
+
+    const vehX = rightX + subW + subGap;
+    drawCard(doc, vehX, y, subW, subCardH);
+    drawVehiculBlock(doc, vehicle, vehX + CARD_PAD, y + CARD_PAD, subInnerW, t, font);
+
+    return y + blockH;
+  }
+
+  // Layout default (stivuit): Client deasupra, Vehicul dedesubt.
   const clientH  = hasClient ? Math.max(0, _measureClientContent(doc, client, innerW, t, font) - trailingLineGap) : 0;
   const vehH     = vehicle ? Math.max(0, _measureVehiculContent(doc, vehicle, innerW, t, font) - trailingLineGap) : 0;
 
-  const compCardH   = compH + CARD_PAD * 2;
   const clientCardH = hasClient ? clientH + CARD_PAD * 2 : 0;
   const vehCardH    = vehicle ? vehH + CARD_PAD * 2 : 0;
   const rightStackH = clientCardH + (hasClient && vehicle ? CARDS_GAP_Y : 0) + vehCardH;
