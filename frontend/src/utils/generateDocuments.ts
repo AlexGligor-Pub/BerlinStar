@@ -1540,17 +1540,21 @@ async function drawMontajRotaCard(
   doc.text(marcaLines, anchorX, ty, { align });
   ty += Math.max(1, marcaLines.length) * 4.2;
 
-  // Dimensiune · Profil — folosim splitTextToSize ca să forțăm încadrarea în
-  // lățimea de text (`textW`) și să nu „iasă" în stânga celorlalte rânduri
-  // când dimensiunea + profilul ar fi mai late decât slotul disponibil.
+  // Dimensiune — splitTextToSize forțează încadrarea în lățimea de text (`textW`).
   doc.setFont(FONT, "normal");
   doc.setFontSize(7.5);
   doc.setTextColor(...C.gray);
   const dim = t(r.dimensiuneValoare ?? "—");
-  const profil = t(r.profilValoare ?? "—");
-  const dimLines = doc.splitTextToSize(`${dim}  ·  ${profil}`, textW) as string[];
+  const dimLines = doc.splitTextToSize(dim, textW) as string[];
   doc.text(dimLines, anchorX, ty, { align });
   ty += Math.max(1, dimLines.length) * 3.6;
+
+  // Profil
+  if (r.profilValoare) {
+    const profilLines = doc.splitTextToSize(`Profil: ${t(r.profilValoare)}`, textW) as string[];
+    doc.text(profilLines, anchorX, ty, { align });
+    ty += Math.max(1, profilLines.length) * 3.6;
+  }
 
   // DOT
   if (r.dotValoare) {

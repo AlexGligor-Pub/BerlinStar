@@ -22,6 +22,13 @@ interface ClientVehicol {
 }
 import { generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere } from "../utils/generateDocuments";
 import type { CompanyData } from "../utils/generateDocuments";
+import { generalSettings, type GeneralSettingsData } from "../store/generalSettingsStore";
+
+const hotelShowField = (key: keyof GeneralSettingsData): boolean => {
+  const s = generalSettings();
+  if (!s) return true;
+  return s[key] !== false;
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -335,20 +342,28 @@ function AnvelopaForm(props: {
         {/* Marcă */}
         <SearchableSelect items={marci()} value={marcaId()} onSelect={setMarcaId} getLabel={(m) => m.nume} placeholder="Marcă" onAddNew={addMarca} />
         {/* Profil */}
-        <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" onAddNew={addProfilInline} />
+        <Show when={hotelShowField("hotelAnvelopeShowProfil")}>
+          <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" onAddNew={addProfilInline} />
+        </Show>
         {/* Dimensiune */}
         <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" onAddNew={addDim} />
         {/* DOT */}
-        <SearchableSelect items={coduriDot()} value={dotId()} onSelect={setDotId} getLabel={(d) => d.valoare} placeholder="DOT" onAddNew={addDotInline} />
+        <Show when={hotelShowField("hotelAnvelopeShowDot")}>
+          <SearchableSelect items={coduriDot()} value={dotId()} onSelect={setDotId} getLabel={(d) => d.valoare} placeholder="DOT" onAddNew={addDotInline} />
+        </Show>
         {/* Adâncime */}
-        <input class="input" type="number" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
+        <Show when={hotelShowField("hotelAnvelopeShowAdancime")}>
+          <input class="input" type="number" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
+        </Show>
         {/* Tip */}
-        <select class="input" value={tip()} onChange={(e) => setTip(e.currentTarget.value as TipAnvelopa)}>
-          <option value="iarna">Iarnă</option>
-          <option value="vara">Vară</option>
-          <option value="ms">M+S</option>
-          <option value="altele">Altele</option>
-        </select>
+        <Show when={hotelShowField("hotelAnvelopeShowTip")}>
+          <select class="input" value={tip()} onChange={(e) => setTip(e.currentTarget.value as TipAnvelopa)}>
+            <option value="iarna">Iarnă</option>
+            <option value="vara">Vară</option>
+            <option value="ms">M+S</option>
+            <option value="altele">Altele</option>
+          </select>
+        </Show>
       </div>
       <Show when={err()}><p style="color:var(--danger);font-size:12px;margin:6px 0 0">{err()}</p></Show>
       <div style="display:flex;gap:6px;margin-top:8px">

@@ -13,3 +13,17 @@ class GeneralSettings(Base):
     use_aviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     afiseaza_tehnician_deviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dezactiveaza_hotel_anvelope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    montare_roti_show_presiune: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_marca: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_profil: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_dimensiune: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_dot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_tip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_adancime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_cuplu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    hotel_anvelope_show_profil: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    hotel_anvelope_show_dot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    hotel_anvelope_show_adancime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    hotel_anvelope_show_tip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
