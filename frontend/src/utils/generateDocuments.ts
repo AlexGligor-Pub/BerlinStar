@@ -303,7 +303,8 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   // - altfel pe pagina noua.
   if (montajRoti && montajRoti.length > 0) {
     const montajTitleH = 7;
-    const estH = estimateMontajRotiBodyHeight(montajRoti) + montajTitleH;
+    const montajHlineH = 3;
+    const estH = estimateMontajRotiBodyHeight(montajRoti) + montajTitleH + montajHlineH;
     const signLineY = PAGE.height - 22;
     const buffer = 4;
     if (y + estH + buffer > signLineY) {
@@ -313,6 +314,9 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
     } else {
       y += 4;
     }
+    // Linie orizontala separator inainte de Montare Roti
+    hline(doc, y, C.veryLight, 0.2);
+    y += montajHlineH;
     // Titlu sectiune (bold, centrat, pe o singura linie)
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
