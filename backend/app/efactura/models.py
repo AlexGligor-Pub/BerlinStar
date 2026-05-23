@@ -129,7 +129,7 @@ class EFacturaGlobalSettings(Base):
     )
     frontend_callback_redirect: Mapped[str] = mapped_column(
         String(500), nullable=False,
-        default="http://localhost:2000/adminv2?section=efactura",
+        default="http://localhost:2000/efactura",
     )
     # OAuth ANAF credentials — globale pentru toata platforma BerlinStar.
     # BerlinStar se inregistreaza O DATA la https://www.anaf.ro/InregOauth si
@@ -141,6 +141,50 @@ class EFacturaGlobalSettings(Base):
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TaskRun(Base):
+    """Istoricul rularii joburilor APScheduler eFactura.
+
+    Folosit de AdminV2 -> Logs pentru a vedea ce a rulat, cand, cu ce status.
+    """
+    __tablename__ = "task_runs"
+    __table_args__ = (
+        Index("ix_task_runs_job_id", "job_id"),
+        Index("ix_task_runs_started_at", "started_at"),
+        Index("ix_task_runs_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="running")
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    items_processed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    items_failed: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    triggered_by: Mapped[str] = mapped_column(String(32), nullable=False, default="schedule")
+
+
+class ScheduledJobOverride(Base):
+    """Overrides salvate in DB pentru schedule-ul joburilor APScheduler.
+
+    Daca exista un rand pentru un job_id, la pornirea scheduler-ului folosim
+    cron_expression-ul din DB in loc de default-ul hardcoded in cod.
+    """
+    __tablename__ = "scheduled_job_overrides"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    cron_expression: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    trigger_type: Mapped[str] = mapped_column(String(16), nullable=False, default="cron")
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
 
 
 class EFacturaReceivedIndex(Base):

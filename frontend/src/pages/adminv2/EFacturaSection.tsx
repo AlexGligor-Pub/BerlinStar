@@ -50,6 +50,64 @@ type Tab = "config" | "companies" | "status" | "deadlines" | "received" | "audit
 
 // ---------- Helpers ----------
 
+function appOrigin(): string {
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  return window.location.origin + base;
+}
+
+function computedRedirectUri(): string {
+  return appOrigin() + "/api/efactura/callback";
+}
+
+function computedFrontendCallback(): string {
+  return appOrigin() + "/efactura";
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
+    notify("Copiat în clipboard.", "success");
+  } catch {
+    notify("Nu am putut copia în clipboard.", "error");
+  }
+}
+
+function CopyInput(props: { value: string; ariaLabel?: string }) {
+  return (
+    <div style="display:flex;gap:6px;align-items:stretch">
+      <input
+        class="input"
+        type="text"
+        value={props.value}
+        readOnly
+        style="flex:1"
+        onFocus={(e) => e.currentTarget.select()}
+      />
+      <button
+        type="button"
+        class="btn btn-sm btn-ghost"
+        title="Copiază în clipboard"
+        aria-label={props.ariaLabel ?? "Copiază în clipboard"}
+        onClick={() => void copyToClipboard(props.value)}
+        style="padding:0 10px;font-size:14px;line-height:1"
+      >
+        📋
+      </button>
+    </div>
+  );
+}
+
 function tokenStateBadge(s: TokenState): { color: string; icon: string; label: string } {
   switch (s) {
     case "connected":
@@ -211,8 +269,6 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
   const [tokenUrl, setTokenUrl] = createSignal("");
   const [apiBaseProd, setApiBaseProd] = createSignal("");
   const [apiBaseTest, setApiBaseTest] = createSignal("");
-  const [redirectUri, setRedirectUri] = createSignal("");
-  const [frontendCallback, setFrontendCallback] = createSignal("");
   const [schedulerEnabled, setSchedulerEnabled] = createSignal(false);
   const [oauthClientId, setOauthClientId] = createSignal("");
   const [oauthClientSecret, setOauthClientSecret] = createSignal("");
@@ -231,8 +287,6 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
       setTokenUrl(data.anaf_token_url);
       setApiBaseProd(data.anaf_api_base_prod);
       setApiBaseTest(data.anaf_api_base_test);
-      setRedirectUri(data.default_redirect_uri);
-      setFrontendCallback(data.frontend_callback_redirect);
       setSchedulerEnabled(data.scheduler_enabled);
       setOauthClientId(data.oauth_client_id ?? "");
       setOauthClientSecret("");
@@ -254,8 +308,8 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
         anaf_token_url: tokenUrl(),
         anaf_api_base_prod: apiBaseProd(),
         anaf_api_base_test: apiBaseTest(),
-        default_redirect_uri: redirectUri(),
-        frontend_callback_redirect: frontendCallback(),
+        default_redirect_uri: computedRedirectUri(),
+        frontend_callback_redirect: computedFrontendCallback(),
         scheduler_enabled: schedulerEnabled(),
         oauth_client_id: oauthClientId() || null,
       };
@@ -438,26 +492,17 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
               <h3 style="margin:0 0 10px;font-size:14px">🌐 URL-uri redirect</h3>
               <div class="form-group">
                 <label class="form-label">redirect_uri OAuth ANAF (global)</label>
-                <input
-                  class="input"
-                  type="text"
-                  value={redirectUri()}
-                  onInput={(e) => setRedirectUri(e.currentTarget.value)}
-                  placeholder="https://app.berlinstar.ro/api/efactura/callback"
-                />
+                <CopyInput value={computedRedirectUri()} ariaLabel="Copiază redirect_uri OAuth ANAF" />
                 <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-                  Trebuie să fie identic cu cel înregistrat la ANAF pe contul OAuth al BerlinStar.
+                  Generat automat din hostul curent. Trebuie să fie identic cu cel înregistrat la ANAF pe contul OAuth al BerlinStar.
                 </div>
               </div>
               <div class="form-group" style="margin-top:8px">
                 <label class="form-label">Frontend post-callback redirect</label>
-                <input
-                  class="input"
-                  type="text"
-                  value={frontendCallback()}
-                  onInput={(e) => setFrontendCallback(e.currentTarget.value)}
-                  placeholder="http://localhost:2000/adminv2?section=efactura"
-                />
+                <CopyInput value={computedFrontendCallback()} ariaLabel="Copiază frontend post-callback redirect" />
+                <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+                  Generat automat din hostul curent.
+                </div>
               </div>
             </div>
 

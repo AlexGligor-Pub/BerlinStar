@@ -84,17 +84,30 @@ export default function EFacturaLayout(props: { children?: JSX.Element }) {
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <Show when={!loading() && companies().length > 0}>
               <label class="form-label" style="margin:0;font-size:12px">Companie:</label>
-              <select
-                class="input"
-                style="max-width:280px"
-                value={companyId() ?? ""}
-                onChange={(e) => changeCompany(Number(e.currentTarget.value) || null)}
+              <Show
+                when={companies().length > 1}
+                fallback={
+                  <Show when={companies()[0]}>
+                    {(c) => (
+                      <span style="font-weight:600;font-size:13px;color:var(--text);white-space:nowrap">
+                        {c().name} <span style="color:var(--text-muted);font-weight:500">(CUI {c().cui})</span>
+                      </span>
+                    )}
+                  </Show>
+                }
               >
-                <option value="">— alege —</option>
-                <For each={companies()}>
-                  {(c) => <option value={c.company_id}>{c.name} (CUI {c.cui})</option>}
-                </For>
-              </select>
+                <select
+                  class="input"
+                  style="max-width:280px"
+                  value={companyId() ?? ""}
+                  onChange={(e) => changeCompany(Number(e.currentTarget.value) || null)}
+                >
+                  <option value="">— alege —</option>
+                  <For each={companies()}>
+                    {(c) => <option value={c.company_id}>{c.name} (CUI {c.cui})</option>}
+                  </For>
+                </select>
+              </Show>
               <Show when={selectedCompany()}>
                 {(c) => (
                   <span

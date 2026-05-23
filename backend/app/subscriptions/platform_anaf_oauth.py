@@ -103,7 +103,7 @@ async def build_authorize_url(db: AsyncSession) -> str:
     gs = await get_or_create_global_settings(db)
     if not (gs.issuer_cui or "").strip():
         raise AnafConfigError(
-            "CUI-ul firmei BerlinStar nu este configurat. AdminV2 -> Abonament -> Setari."
+            "CUI-ul firmei emitente nu este configurat. AdminV2 -> Abonament -> Setări."
         )
 
     client_id, _ = await _get_oauth_credentials(db)
@@ -125,7 +125,7 @@ async def handle_callback(db: AsyncSession, code: str, state: str) -> PlatformAn
     _decode_state(state)
     gs = await get_or_create_global_settings(db)
     if not (gs.issuer_cui or "").strip():
-        raise AnafConfigError("CUI-ul firmei BerlinStar nu este configurat.")
+        raise AnafConfigError("CUI-ul firmei emitente nu este configurat.")
 
     client_id, client_secret = await _get_oauth_credentials(db)
     redirect_uri = await _get_redirect_uri(db)
@@ -209,7 +209,7 @@ async def _refresh_token(db: AsyncSession, token: PlatformAnafToken) -> Platform
         )
     if resp.status_code in (400, 401):
         raise AnafTokenExpired(
-            "Refresh token platforma expirat — reconectare cu USB BerlinStar SRL."
+            "Refresh token platforma expirat — reconectare cu USB-ul firmei emitente."
         )
     if resp.status_code != 200:
         raise AnafAuthError(f"ANAF a respins refresh-ul platforma (HTTP {resp.status_code}).")

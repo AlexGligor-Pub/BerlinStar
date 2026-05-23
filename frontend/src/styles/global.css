@@ -331,6 +331,19 @@ body {
   border-color: var(--accent);
 }
 
+.input[readonly],
+.input:read-only {
+  background: var(--surface2, var(--surface));
+  color: var(--text-muted);
+  cursor: default;
+  border-style: dashed;
+}
+
+.input[readonly]:focus,
+.input:read-only:focus {
+  border-color: var(--border);
+}
+
 .form-group {
   display: flex;
   flex-direction: column;
@@ -4898,6 +4911,28 @@ img.pos-theme-preview {
   display: flex;
   flex-direction: column;
   padding: 8px 0;
+}
+
+.adminv2-nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.adminv2-nav-group + .adminv2-nav-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+
+.adminv2-nav-category {
+  padding: 8px 16px 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.75;
+  user-select: none;
 }
 
 .adminv2-nav-item {

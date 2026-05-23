@@ -585,6 +585,149 @@ export function drawGroupedBars(container: HTMLDivElement, items: GroupedBarItem
   });
 }
 
+export interface DailyCountItem {
+  date: string;   // "YYYY-MM-DD"
+  count: number;
+}
+
+/**
+ * Bar chart pentru count-uri zilnice (ex: bonuri/zi pe ultimele N zile).
+ * Folosit in modalele admin care arata activitate recenta per cont.
+ */
+export function drawDailyCountBars(
+  container: HTMLDivElement,
+  items: DailyCountItem[],
+  opts?: { label?: string },
+) {
+  d3.select(container).selectAll("*").remove();
+  if (items.length === 0) {
+    d3.select(container)
+      .append("div")
+      .style("padding", "32px 0")
+      .style("text-align", "center")
+      .style("color", "var(--text-muted, #8b90a0)")
+      .style("font-size", "0.85rem")
+      .text("Nicio valoare de afișat.");
+    return;
+  }
+
+  const unitLabel = opts?.label ?? "bonuri";
+
+  const w = container.clientWidth || 600;
+  const isNarrow = w < 480;
+  const h = isNarrow ? 220 : 260;
+  const margin = {
+    top: 16,
+    right: isNarrow ? 10 : 20,
+    bottom: 36,
+    left: 44,
+  };
+  const iw = w - margin.left - margin.right;
+  const ih = h - margin.top - margin.bottom;
+
+  d3.select(container).style("position", "relative");
+
+  const svg = d3.select(container)
+    .append("svg")
+    .attr("viewBox", `0 0 ${w} ${h}`)
+    .attr("preserveAspectRatio", "xMidYMid meet")
+    .attr("width", "100%")
+    .style("display", "block")
+    .style("height", "auto")
+    .style("max-width", "100%");
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x = d3.scaleBand<string>()
+    .domain(items.map((d) => d.date))
+    .range([0, iw])
+    .padding(0.18);
+
+  const yMax = d3.max(items, (d) => d.count) || 1;
+  const y = d3.scaleLinear().domain([0, yMax * 1.15]).range([ih, 0]).nice();
+
+  // Gridlines
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickSize(-iw).tickFormat(() => ""))
+    .selectAll("line")
+    .attr("stroke", "var(--border, #2a3045)")
+    .attr("stroke-opacity", 0.4);
+  g.selectAll(".domain").remove();
+
+  // X axis — afisam cca 6 etichete pentru a evita aglomerarea
+  const tickEvery = Math.max(1, Math.ceil(items.length / 6));
+  const parseDate = d3.timeParse("%Y-%m-%d");
+  const tickFormat = d3.timeFormat("%d.%m");
+  g.append("g")
+    .attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x).tickFormat((d, i) => {
+      if (i % tickEvery !== 0 && i !== items.length - 1) return "";
+      const dt = parseDate(d as string);
+      return dt ? tickFormat(dt) : (d as string);
+    }))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+
+  // Y axis
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(5).tickFormat(d3.format("d")))
+    .selectAll("text")
+    .attr("fill", "var(--text-muted, #8b90a0)")
+    .style("font-size", "11px");
+
+  // Tooltip
+  const tooltip = d3.select(container)
+    .append("div")
+    .style("position", "absolute")
+    .style("pointer-events", "none")
+    .style("background", "var(--surface, #1e2330)")
+    .style("border", "1px solid var(--border, #2a3045)")
+    .style("border-radius", "6px")
+    .style("padding", "6px 10px")
+    .style("font-size", "12px")
+    .style("color", "var(--text, #e8eaf0)")
+    .style("opacity", 0)
+    .style("transition", "opacity 0.12s");
+
+  const fmtDateRo = d3.timeFormat("%d %b %Y");
+
+  g.selectAll("rect.bar")
+    .data(items)
+    .join("rect")
+    .attr("class", "bar")
+    .attr("x", (d) => x(d.date) || 0)
+    .attr("width", x.bandwidth())
+    .attr("y", ih)
+    .attr("height", 0)
+    .attr("fill", "var(--accent, #5b7cfa)")
+    .attr("rx", 3)
+    .style("cursor", "pointer")
+    .on("mouseover", function (event, d) {
+      d3.select(this).attr("fill-opacity", 0.85);
+      const rect = container.getBoundingClientRect();
+      const dt = parseDate(d.date);
+      const dateLabel = dt ? fmtDateRo(dt) : d.date;
+      tooltip.style("opacity", 1)
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px")
+        .html(`<strong style="display:block;color:var(--accent, #5b7cfa)">${dateLabel}</strong>${d.count} ${unitLabel}`);
+    })
+    .on("mousemove", function (event) {
+      const rect = container.getBoundingClientRect();
+      tooltip
+        .style("left", (event.clientX - rect.left + 14) + "px")
+        .style("top", (event.clientY - rect.top - 10) + "px");
+    })
+    .on("mouseout", function () {
+      d3.select(this).attr("fill-opacity", 1);
+      tooltip.style("opacity", 0);
+    })
+    .transition().duration(700)
+    .attr("y", (d) => y(d.count))
+    .attr("height", (d) => ih - y(d.count));
+}
+
 export function drawMonthlyBars(container: HTMLDivElement, items: MonthlyItem[]) {
   d3.select(container).selectAll("*").remove();
   if (items.length === 0) {

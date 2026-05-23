@@ -221,19 +221,12 @@ async def anaf_callback(
     state: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ):
-    """Callback OAuth ANAF — redirecteaza inapoi in AdminV2."""
+    """Callback OAuth ANAF — redirecteaza inapoi in AdminV2 (tab Abonament)."""
+    target = runtime_config.derived_admin_subscription_callback()
     try:
         await platform_anaf_oauth.handle_callback(db, code, state)
-        cfg = await runtime_config.load(db)
-        target = cfg.frontend_callback_redirect.replace(
-            "section=efactura", "section=abonament"
-        )
         return RedirectResponse(url=target + "&anaf=connected")
     except (AnafAuthError, AnafConfigError) as exc:
-        cfg = await runtime_config.load(db)
-        target = cfg.frontend_callback_redirect.replace(
-            "section=efactura", "section=abonament"
-        )
         return RedirectResponse(url=f"{target}&anaf_error={exc}")
 
 

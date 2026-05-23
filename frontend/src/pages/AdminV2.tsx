@@ -13,21 +13,54 @@ import LegacyImportSection from "./adminv2/LegacyImportSection";
 import DemoSeedSection from "./adminv2/DemoSeedSection";
 import SubscriptionSettingsSection from "./adminv2/SubscriptionSettingsSection";
 import SubscriptionAccountsSection from "./adminv2/SubscriptionAccountsSection";
+import TasksSection from "./adminv2/TasksSection";
+import LogsSection from "./adminv2/LogsSection";
 
-type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
+type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
 
-const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-  { id: "conturi", label: "Conturi", icon: "👥" },
-  { id: "hotel", label: "Hotel Anvelope", icon: "🔧" },
-  { id: "montare", label: "Montare Roți", icon: "🛞" },
-  { id: "email", label: "Email", icon: "✉️" },
-  { id: "rapoarte", label: "Rapoarte", icon: "📊" },
-  { id: "efactura", label: "eFactura ANAF", icon: "📄" },
-  { id: "abonament-setari", label: "Abonament — Setări", icon: "💳" },
-  { id: "abonament-conturi", label: "Abonament — Conturi", icon: "📅" },
-  { id: "import-legacy", label: "Import Legacy", icon: "🗃️" },
-  { id: "demo-seed", label: "Demo Seeder", icon: "🌱" },
+interface NavItem { id: Section; label: string; icon: string }
+interface NavCategory { label: string; items: NavItem[] }
+
+const NAV_CATEGORIES: NavCategory[] = [
+  {
+    label: "Useri",
+    items: [
+      { id: "conturi", label: "Conturi", icon: "👥" },
+    ],
+  },
+  {
+    label: "Aplicații",
+    items: [
+      { id: "hotel", label: "Hotel Anvelope", icon: "🔧" },
+      { id: "montare", label: "Montare Roți", icon: "🛞" },
+    ],
+  },
+  {
+    label: "Operațional",
+    items: [
+      { id: "email", label: "Email", icon: "✉️" },
+      { id: "rapoarte", label: "Rapoarte", icon: "📊" },
+      { id: "efactura", label: "eFactura ANAF", icon: "📄" },
+    ],
+  },
+  {
+    label: "Abonament",
+    items: [
+      { id: "abonament-setari", label: "Setări", icon: "💳" },
+      { id: "abonament-conturi", label: "Conturi", icon: "📅" },
+    ],
+  },
+  {
+    label: "Sistem",
+    items: [
+      { id: "tasks", label: "Tasks", icon: "⏱️" },
+      { id: "logs", label: "Logs", icon: "📜" },
+      { id: "import-legacy", label: "Import Legacy", icon: "🗃️" },
+      { id: "demo-seed", label: "Demo Seeder", icon: "🌱" },
+    ],
+  },
 ];
+
 
 // La mount, daca avem un token persistat valid (<24h) sarim peste ecranul de logare.
 function initialVerified(): boolean {
@@ -142,7 +175,12 @@ export default function AdminV2() {
             </svg>
           </button>
           <span class="adminv2-mobile-title">
-            {NAV_ITEMS.find((n) => n.id === section())?.label ?? "Admin"}
+            {(() => {
+              const cat = NAV_CATEGORIES.find((c) => c.items.some((i) => i.id === section()));
+              const item = cat?.items.find((i) => i.id === section());
+              if (!cat || !item) return "Admin";
+              return cat.items.length > 1 ? `${cat.label} — ${item.label}` : item.label;
+            })()}
           </span>
         </div>
 
@@ -156,16 +194,23 @@ export default function AdminV2() {
               <span class="adminv2-sidebar-title">BerlinStar Admin</span>
             </div>
             <nav class="adminv2-nav">
-              <For each={NAV_ITEMS}>
-                {(item) => (
-                  <button
-                    class="adminv2-nav-item"
-                    classList={{ "adminv2-nav-item--active": section() === item.id }}
-                    onClick={() => selectSection(item.id)}
-                  >
-                    <span class="adminv2-nav-item__icon">{item.icon}</span>
-                    <span>{item.label}</span>
-                  </button>
+              <For each={NAV_CATEGORIES}>
+                {(cat) => (
+                  <div class="adminv2-nav-group">
+                    <div class="adminv2-nav-category">{cat.label}</div>
+                    <For each={cat.items}>
+                      {(item) => (
+                        <button
+                          class="adminv2-nav-item"
+                          classList={{ "adminv2-nav-item--active": section() === item.id }}
+                          onClick={() => selectSection(item.id)}
+                        >
+                          <span class="adminv2-nav-item__icon">{item.icon}</span>
+                          <span>{item.label}</span>
+                        </button>
+                      )}
+                    </For>
+                  </div>
                 )}
               </For>
             </nav>
@@ -195,6 +240,12 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "efactura"}>
               <EFacturaSection />
+            </Show>
+            <Show when={section() === "tasks"}>
+              <TasksSection />
+            </Show>
+            <Show when={section() === "logs"}>
+              <LogsSection />
             </Show>
             <Show when={section() === "abonament-setari"}>
               <SubscriptionSettingsSection />

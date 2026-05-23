@@ -216,41 +216,165 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
    ============================ */
 .hero {
   position: relative;
-  background: radial-gradient(ellipse at top right, #1E293B 0%, var(--navy) 45%, #050810 100%);
+  background:
+    linear-gradient(105deg,
+      rgba(5,8,16,0.94) 0%,
+      rgba(11,17,32,0.88) 30%,
+      rgba(11,17,32,0.65) 55%,
+      rgba(11,17,32,0.35) 80%,
+      rgba(11,17,32,0.20) 100%),
+    url('images/produs.png') no-repeat;
+  background-size: cover;
+  background-position: center right;
+  background-attachment: scroll;
   color: #fff;
-  padding: 140px 0 80px;
+  padding: 140px 0 90px;
   overflow: hidden;
 }
 .hero::before {
   content: '';
   position: absolute; inset: 0;
   background-image:
-    radial-gradient(circle at 20% 30%, rgba(251,191,36,.12), transparent 35%),
-    radial-gradient(circle at 80% 70%, rgba(99,102,241,.08), transparent 40%);
+    radial-gradient(circle at 15% 25%, rgba(251,191,36,.16), transparent 40%),
+    radial-gradient(circle at 85% 75%, rgba(99,102,241,.10), transparent 45%);
   pointer-events: none;
 }
 .hero::after {
   content: '';
   position: absolute; inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    linear-gradient(rgba(255,255,255,.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.022) 1px, transparent 1px);
   background-size: 60px 60px;
-  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+  mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 20% 50%, #000 0%, transparent 70%);
   pointer-events: none;
 }
-.hero-inner { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr; gap: 48px; align-items: center; }
-.hero h1 { color: #fff; }
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  display: block;
+  max-width: 720px;
+}
+.hero .eyebrow {
+  background: rgba(251,191,36,.18);
+  color: var(--gold);
+  border: 1px solid rgba(251,191,36,.28);
+  padding: 7px 16px;
+  font-size: 12.5px;
+  letter-spacing: 1.4px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.hero h1 {
+  color: #fff;
+  font-size: clamp(2.1rem, 5.5vw, 3.8rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+  margin-bottom: 4px;
+  text-shadow: 0 2px 24px rgba(0,0,0,0.45);
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
+}
 .hero h1 .accent {
-  background: linear-gradient(135deg, var(--gold) 0%, #FCD34D 100%);
+  background: linear-gradient(135deg, var(--gold) 0%, #FCD34D 60%, #FDE68A 100%);
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent;
 }
-.hero p.lead { color: rgba(255,255,255,.78); margin-top: 18px; }
-.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
-.hero-trust { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 32px; font-size: 13px; color: rgba(255,255,255,.7); }
-.hero-trust span { display: flex; align-items: center; gap: 6px; }
+.hero p.lead {
+  color: rgba(255,255,255,.85);
+  margin-top: 22px;
+  font-size: clamp(1.05rem, 2.2vw, 1.22rem);
+  line-height: 1.65;
+  max-width: 620px;
+  text-shadow: 0 1px 12px rgba(0,0,0,0.35);
+}
+.hero-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-top: 34px; }
+
+/* Mega CTA — big invite-to-signup button */
+.btn-xl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 34px;
+  border-radius: 16px;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: var(--navy);
+  box-shadow:
+    0 14px 32px -8px rgba(245,158,11,.65),
+    0 4px 12px -2px rgba(245,158,11,.45),
+    inset 0 1px 0 rgba(255,255,255,.4);
+  position: relative;
+  overflow: hidden;
+  transition: transform .2s ease, box-shadow .2s ease;
+  white-space: nowrap;
+  min-height: 60px;
+}
+.btn-xl::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255,255,255,.35), transparent 60%);
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+}
+.btn-xl:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow:
+    0 22px 44px -8px rgba(245,158,11,.75),
+    0 8px 18px -2px rgba(245,158,11,.55),
+    inset 0 1px 0 rgba(255,255,255,.5);
+}
+.btn-xl:hover::before { opacity: 1; }
+.btn-xl .arrow {
+  display: inline-flex;
+  transition: transform .25s ease;
+}
+.btn-xl:hover .arrow { transform: translateX(4px); }
+.btn-xl-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 22px;
+  background: radial-gradient(ellipse at center, rgba(251,191,36,.55), transparent 65%);
+  filter: blur(20px);
+  z-index: -1;
+  opacity: .8;
+  animation: cta-pulse 2.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes cta-pulse {
+  0%, 100% { opacity: .55; transform: scale(1); }
+  50% { opacity: .9; transform: scale(1.06); }
+}
+.cta-wrap {
+  position: relative;
+  display: inline-block;
+}
+.cta-microcopy {
+  margin-top: 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,.78);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cta-microcopy svg { color: var(--gold); flex-shrink: 0; }
+.hero-trust {
+  display: flex; flex-wrap: wrap; gap: 14px 22px;
+  margin-top: 36px;
+  font-size: 13.5px;
+  color: rgba(255,255,255,.82);
+  font-weight: 500;
+}
+.hero-trust span { display: flex; align-items: center; gap: 8px; }
 .hero-trust svg { flex-shrink: 0; }
 
 .hero-visual {
@@ -339,13 +463,17 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
   margin-top: 32px;
 }
 .stat-card {
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.1);
+  background: rgba(11,17,32,0.55);
+  border: 1px solid rgba(255,255,255,.12);
   border-radius: 14px;
   padding: 18px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform .2s ease, border-color .2s ease;
 }
-.stat-card .v { font-size: 1.6rem; font-weight: 800; color: var(--gold); font-family: 'Plus Jakarta Sans', sans-serif; }
-.stat-card .l { font-size: 12px; color: rgba(255,255,255,.7); margin-top: 4px; }
+.stat-card:hover { transform: translateY(-2px); border-color: rgba(251,191,36,0.35); }
+.stat-card .v { font-size: 1.6rem; font-weight: 800; color: var(--gold); font-family: 'Plus Jakarta Sans', sans-serif; letter-spacing: -0.01em; }
+.stat-card .l { font-size: 12px; color: rgba(255,255,255,.78); margin-top: 4px; line-height: 1.4; }
 
 /* ============================
    PROBLEMS
@@ -469,6 +597,102 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 }
 
 /* ============================
+   FEATURE SHOWCASE (Devize)
+   ============================ */
+.feature-showcase {
+  grid-column: 1 / -1;
+  background:
+    radial-gradient(ellipse at top right, rgba(251,191,36,.18), transparent 55%),
+    linear-gradient(135deg, #0B1120 0%, #1E293B 100%);
+  color: #fff;
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(251,191,36,.18);
+}
+.feature-showcase::after {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 320px; height: 320px;
+  background: radial-gradient(circle, rgba(251,191,36,.25), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+}
+.showcase-content { position: relative; z-index: 1; }
+.showcase-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--gold);
+  background: rgba(251,191,36,.15);
+  border: 1px solid rgba(251,191,36,.3);
+  padding: 7px 14px;
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+.feature-showcase h3 {
+  color: #fff;
+  font-size: clamp(1.4rem, 3vw, 1.85rem);
+  margin-bottom: 12px;
+  line-height: 1.2;
+}
+.feature-showcase h3 .accent {
+  background: linear-gradient(135deg, var(--gold) 0%, #FCD34D 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.feature-showcase p.lead-text {
+  color: rgba(255,255,255,.85);
+  font-size: 1.02rem;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+.feature-showcase .feature-list { margin-top: 8px; }
+.feature-showcase .feature-list li {
+  color: rgba(255,255,255,.88);
+  font-size: 14px;
+}
+.feature-showcase .feature-list li::before {
+  background-color: rgba(251,191,36,.2);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23FBBF24' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+}
+.showcase-image {
+  position: relative;
+  z-index: 1;
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow:
+    0 30px 60px -15px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(255,255,255,0.08);
+  transition: transform .3s ease;
+}
+.showcase-image:hover { transform: translateY(-4px); }
+.showcase-image img {
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  display: block;
+}
+@media (min-width: 960px) {
+  .feature-showcase {
+    grid-template-columns: 1.05fr 1fr;
+    padding: 44px;
+    gap: 44px;
+    align-items: center;
+  }
+}
+
+/* ============================
    DOCUMENTS SECTION
    ============================ */
 .documents-section { background: linear-gradient(180deg, #fff 0%, var(--slate-50) 100%); }
@@ -569,7 +793,7 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
   background-size: 50px 50px;
   pointer-events: none;
 }
-.anaf-grid { display: grid; grid-template-columns: 1fr; gap: 32px; position: relative; z-index: 1; }
+.anaf-grid { display: grid; grid-template-columns: 1fr; gap: 32px; position: relative; z-index: 1; max-width: 820px; margin: 0 auto; }
 .anaf-section h2 { color: #fff; }
 .anaf-section p.lead { color: rgba(255,255,255,.78); }
 .anaf-points { margin-top: 28px; display: grid; gap: 14px; }
@@ -901,9 +1125,9 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 /* Desktop: 960px+ */
 @media (min-width: 960px) {
   .section { padding: 96px 0; }
-  .hero { padding: 160px 0 100px; }
-  .hero-inner { grid-template-columns: 1.05fr 1fr; gap: 60px; }
-  .anaf-grid { grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+  .hero { padding: 170px 0 120px; min-height: 640px; }
+  .anaf-grid { grid-template-columns: 1fr; gap: 32px; }
+  .anaf-points { grid-template-columns: 1fr 1fr; display: grid; gap: 16px; }
   .features-grid { grid-template-columns: repeat(3, 1fr); }
   .industry-grid { grid-template-columns: repeat(3, 1fr); }
   .steps-grid { grid-template-columns: repeat(4, 1fr); }
@@ -942,20 +1166,35 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
   .nav-cta { margin: 12px 0 0; }
 
   /* Hero mobile fixes */
-  .hero { padding: 110px 0 60px; }
+  .hero {
+    padding: 110px 0 70px;
+    background:
+      linear-gradient(180deg,
+        rgba(5,8,16,0.92) 0%,
+        rgba(11,17,32,0.85) 45%,
+        rgba(11,17,32,0.6) 75%,
+        rgba(11,17,32,0.35) 100%),
+      url('images/produs.png') no-repeat;
+    background-size: cover;
+    background-position: center bottom;
+  }
   .eyebrow {
     border-radius: 12px;
     line-height: 1.4;
     white-space: normal;
   }
-  .hero h1 { font-size: clamp(1.7rem, 8vw, 2.4rem); }
+  .hero h1 { font-size: clamp(1.55rem, 6.4vw, 2.3rem); line-height: 1.15; }
+  .hero p.lead { font-size: 0.98rem; line-height: 1.6; }
+  .hero-inner { max-width: 100%; }
+  .hero-actions { flex-direction: column; align-items: stretch; gap: 12px; }
+  .cta-wrap { width: 100%; display: block; }
+  .btn-xl { width: 100%; font-size: 16px; padding: 18px 22px; min-height: 56px; }
+  .btn-secondary { width: 100%; }
   .hero-trust { gap: 10px 16px; }
   .stats-grid { gap: 10px; margin-top: 24px; }
   .stat-card { padding: 14px; }
   .stat-card .v { font-size: 1.3rem; }
   .stat-card .l { font-size: 11px; }
-  .hero-visual { padding: 12px; }
-  .hero-badge { right: 14px; font-size: 10px; padding: 4px 10px; }
 }
 @media (min-width: 860px) {
   .nav-links { display: flex; }
@@ -1007,23 +1246,38 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 
 <!-- =================== HERO =================== -->
 <header class="hero" id="top">
-  <div class="container hero-inner">
-    <div>
-      <span class="eyebrow dark">★ Vulcanizări & Service Auto · România</span>
-      <h1>Software dedicat pentru vulcanizarea și service-ul tău auto, <span class="accent">într-o singură aplicație.</span></h1>
+  <div class="container">
+    <div class="hero-inner">
+      <span class="eyebrow dark">🚀 Level UP pentru vulcanizări &amp; service auto</span>
+
+      <h1>
+        Du-ți vulcanizarea sau service-ul auto la
+        <span class="accent">nivelul următor.</span>
+      </h1>
+
       <p class="lead">
-        Berlin Star este aplicația gândită exclusiv pentru vulcanizări și service-uri auto:
-        eFactura ANAF automată, Hotel Anvelope, montaj roți, programări și gestiune stocuri.
-        Funcționează în browser, optimizat pentru desktop, tabletă și telefon.
+        Lasă în urmă caietele, Excel-urile și panica de la termenul ANAF.
+        Cu Berlin Star ai
+        <strong style="color:#fff;font-weight:600;">eFactura automată</strong>,
+        <strong style="color:#fff;font-weight:600;">Hotel Anvelope</strong>,
+        programări, montaj roți și stocuri — toate într-un singur loc, accesibile de pe orice dispozitiv.
       </p>
 
       <div class="hero-actions">
-        <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary">
-          Creează cont gratuit
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-        </a>
+        <div class="cta-wrap">
+          <span class="btn-xl-glow" aria-hidden="true"></span>
+          <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn-xl">
+            Creează cont gratuit
+            <span class="arrow"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg></span>
+          </a>
+        </div>
         <a href="#features" class="btn btn-secondary">Vezi funcționalitățile</a>
       </div>
+
+      <p class="cta-microcopy">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        2 minute · fără card · acces imediat la toate funcționalitățile
+      </p>
 
       <div class="hero-trust">
         <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Cont în 2 minute</span>
@@ -1032,38 +1286,10 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card"><div class="v">700 €</div><div class="l">Un singur preț, pe an</div></div>
+        <div class="stat-card"><div class="v"><span style="font-size:0.7em;font-weight:600;opacity:.75;">de la</span> 350 €</div><div class="l">pe an · planuri pentru orice firmă</div></div>
         <div class="stat-card"><div class="v">100%</div><div class="l">Conform OUG 120/2021</div></div>
         <div class="stat-card"><div class="v">2 min</div><div class="l">Timp creare cont</div></div>
         <div class="stat-card"><div class="v">24/7</div><div class="l">Acces din orice locație</div></div>
-      </div>
-    </div>
-
-    <!-- Right side: dashboard mockup (graceful if image is added later) -->
-    <div class="hero-visual">
-      <div class="hero-badge">● LIVE — Dashboard</div>
-      <div class="browser-bar">
-        <span class="dot"></span><span class="dot"></span><span class="dot"></span>
-      </div>
-      <!-- Suggestion: replace with images/dashboard.png when ready -->
-      <div class="mock-screen" id="mockScreen">
-        <div class="mock-sidebar">
-          <div class="mock-icon active">▦</div>
-          <div class="mock-icon">€</div>
-          <div class="mock-icon">⊞</div>
-          <div class="mock-icon">◷</div>
-          <div class="mock-icon">⚙</div>
-        </div>
-        <div class="mock-content">
-          <h4>Vânzări astăzi</h4>
-          <div class="mock-tile-grid">
-            <div class="mock-tile gold"><div class="v">12.450 RON</div><div class="l">Total încasări</div></div>
-            <div class="mock-tile"><div class="v">47</div><div class="l">Bonuri emise</div></div>
-            <div class="mock-tile"><div class="v">23</div><div class="l">eFactura trimise ANAF</div></div>
-            <div class="mock-tile"><div class="v">8</div><div class="l">Programări mâine</div></div>
-          </div>
-          <div class="mock-chart"></div>
-        </div>
       </div>
     </div>
   </div>
@@ -1151,11 +1377,35 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
   <div class="container">
     <div style="max-width: 720px;">
       <span class="eyebrow">Tot ce-ți trebuie</span>
-      <h2>O singură aplicație. 9 module care lucrează împreună.</h2>
-      <p class="lead">Nu mai plătești 4 abonamente. Nu mai exportezi și importezi date între sisteme. Toate modulele comunică automat — de la programare la factură.</p>
+      <h2>O singură aplicație. Toate modulele lucrează împreună.</h2>
+      <p class="lead">Nu mai plătești 4 abonamente. Nu mai exportezi și importezi date între sisteme. Toate modulele comunică automat — de la programare la deviz și factură.</p>
     </div>
 
     <div class="features-grid">
+
+      <!-- DEVIZE SHOWCASE -->
+      <div class="feature-showcase reveal">
+        <div class="showcase-content">
+          <span class="showcase-badge">★ Modulul care îți diferențiază service-ul</span>
+          <h3>Devize <span class="accent">personalizate</span>, cu logo-ul firmei tale</h3>
+          <p class="lead-text">
+            Generează în câteva secunde devize și comenzi de lucru profesionale —
+            cu antetul firmei tale, schema vizuală a vehiculului, toate detaliile anvelopelor și
+            condițiile tehnice pre-completate. Gata de printat sau trimis pe email.
+          </p>
+          <ul class="feature-list">
+            <li>Antet personalizat cu logo, CUI și datele firmei tale</li>
+            <li>Schemă vizuală a vehiculului — cele 4 poziții cu anvelope</li>
+            <li>Detalii per anvelopă: brand, dimensiune, profil, adâncime, presiune, cuplu</li>
+            <li>Linii articol cu manoperă, piese, cantitate, preț, TVA &amp; total</li>
+            <li>Termen, condiții și spațiu de semnătură pre-completate</li>
+            <li>Export PDF instant — print, salvare sau trimitere pe email</li>
+          </ul>
+        </div>
+        <div class="showcase-image">
+          <img src="images/deviz.png" alt="Exemplu de deviz Berlin Star — comandă de lucru pentru montaj anvelope cu schema vehiculului" loading="lazy" />
+        </div>
+      </div>
 
       <div class="feature-card flag reveal">
         <div class="icon-wrap">📋</div>
@@ -1390,44 +1640,6 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
       </div>
     </div>
 
-    <div class="anaf-mockup">
-      <div class="anaf-mockup-header">
-        <div>
-          <div style="font-size: 13px; color: rgba(255,255,255,.5); font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">Factura #2026/0431</div>
-          <div style="font-size: 18px; font-weight: 700; color: #fff; margin-top: 4px;">Anvelope Goodyear · 4 buc</div>
-        </div>
-        <div class="anaf-status"><span class="pulse"></span> SPV Activ</div>
-      </div>
-
-      <div class="anaf-line">
-        <span class="label">Status ANAF</span>
-        <span class="value ok">✓ Acceptată</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">Cod transmisie</span>
-        <span class="value">RO-XML-3829471</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">Trimisă la</span>
-        <span class="value">14:23:08 · acum 12 secunde</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">Standard</span>
-        <span class="value">UBL 2.1 / CIUS-RO 1.0.9</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">TVA</span>
-        <span class="value">19% · 760,00 RON</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">Total factură</span>
-        <span class="value gold">4.760,00 RON</span>
-      </div>
-      <div class="anaf-line">
-        <span class="label">Arhivare</span>
-        <span class="value ok">✓ 10 ani · S3 EU</span>
-      </div>
-    </div>
   </div>
 </section>
 
@@ -1518,42 +1730,96 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
 <!-- =================== PRICING =================== -->
 <section class="section" id="pricing">
   <div class="container">
-    <div style="max-width: 720px;">
-      <span class="eyebrow">Transparent. Un singur preț.</span>
-      <h2>Un preț. Toate funcționalitățile. Fără surprize.</h2>
-      <p class="lead">Nu te punem să alegi între 3 pachete confuze. Un singur abonament, toate modulele incluse, fără limite la facturi sau utilizatori.</p>
+    <div style="max-width: 760px;">
+      <span class="eyebrow">Planuri transparente</span>
+      <h2>Alege planul după mărimea echipei tale.</h2>
+      <p class="lead">Toate planurile au <strong>exact aceleași funcționalități</strong>. Singura diferență este numărul maxim de angajați care pot folosi sistemul. Fără limite la facturi, clienți sau vehicule.</p>
     </div>
 
-    <div style="max-width: 540px; margin: 40px auto 0;">
-      <div class="pricing-card featured reveal" style="transform: none;">
-        <span class="popular-badge">★ Toate modulele incluse</span>
-        <div class="plan-name">Abonament Berlin Star</div>
-        <h3>Pentru vulcanizări și service-uri auto</h3>
-        <div class="price"><span class="currency">€</span> 700 <span class="period">/ an</span></div>
-        <p class="desc">≈ 58 € / lună · preț final · facturare anuală</p>
+    <p class="text-center" style="margin: 18px auto 0; max-width: 720px; color: var(--slate-500); font-size: 14px;">
+      <strong style="color: var(--navy);">Aceleași funcționalități în toate planurile</strong> — diferă doar numărul de angajați. Planul <strong style="color: var(--gold-dark);">Pro</strong> include în plus un <strong style="color: var(--gold-dark);">video training dedicat</strong> pentru echipa ta.
+    </p>
+
+    <div class="pricing-grid">
+
+      <!-- STARTER -->
+      <div class="pricing-card reveal">
+        <div class="plan-name">Starter</div>
+        <h3>Pentru ateliere mici</h3>
+        <div class="price"><span class="currency">€</span> 350 <span class="period">/ an + TVA 21%</span></div>
+        <p class="desc">≈ 424 € / an cu TVA · până la <strong>5 angajați</strong></p>
         <ul class="features-list">
-          <li><strong>eFactura ANAF automată</strong>, nelimitat</li>
-          <li><strong>Hotel Anvelope</strong> cu locație fizică și istoric</li>
+          <li><strong>eFactura ANAF</strong> automată, nelimitat</li>
+          <li><strong>Hotel Anvelope</strong> + istoric per vehicul</li>
           <li><strong>Montaj roți</strong> & comenzi de lucru digitale</li>
           <li>Programări cu calendar partajat</li>
-          <li>Gestiune clienți & vehicule (istoric VIN)</li>
-          <li>Gestiune stocuri cu alerte de stoc minim</li>
-          <li>Rapoarte & dashboard în timp real</li>
-          <li>Interfață optimizată pentru mobil și tabletă</li>
-          <li>Acces din orice browser, oriunde ai net</li>
-          <li>Conformitate eFactura cu arhivare 10 ani</li>
-          <li>Suport WhatsApp + telefon, în limba română</li>
+          <li>Gestiune clienți &amp; vehicule (istoric VIN)</li>
+          <li>Gestiune stocuri + alerte stoc minim</li>
+          <li>Rapoarte &amp; dashboard în timp real</li>
+          <li>Acces de pe desktop, tabletă și telefon</li>
+          <li>Suport WhatsApp + telefon, în română</li>
           <li>Update-uri și module noi incluse</li>
         </ul>
-        <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary btn-block">
-          Creează cont și începe
+        <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-light btn-block">
+          Începe cu Starter
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </a>
       </div>
+
+      <!-- STANDARD (featured) -->
+      <div class="pricing-card featured reveal">
+        <span class="popular-badge">★ Cel mai ales</span>
+        <div class="plan-name">Standard</div>
+        <h3>Pentru service-uri active</h3>
+        <div class="price"><span class="currency">€</span> 700 <span class="period">/ an + TVA 21%</span></div>
+        <p class="desc">≈ 847 € / an cu TVA · până la <strong>20 angajați</strong></p>
+        <ul class="features-list">
+          <li><strong>eFactura ANAF</strong> automată, nelimitat</li>
+          <li><strong>Hotel Anvelope</strong> + istoric per vehicul</li>
+          <li><strong>Montaj roți</strong> &amp; comenzi de lucru digitale</li>
+          <li>Programări cu calendar partajat</li>
+          <li>Gestiune clienți &amp; vehicule (istoric VIN)</li>
+          <li>Gestiune stocuri + alerte stoc minim</li>
+          <li>Rapoarte &amp; dashboard în timp real</li>
+          <li>Acces de pe desktop, tabletă și telefon</li>
+          <li>Suport WhatsApp + telefon, în română</li>
+          <li>Update-uri și module noi incluse</li>
+        </ul>
+        <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary btn-block">
+          Creează cont — Standard
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+
+      <!-- PRO -->
+      <div class="pricing-card reveal">
+        <div class="plan-name">Pro</div>
+        <h3>Pentru lanțuri &amp; rețele</h3>
+        <div class="price"><span class="currency">€</span> 1000 <span class="period">/ an + TVA 21%</span></div>
+        <p class="desc">≈ 1.210 € / an cu TVA · până la <strong>40 angajați</strong></p>
+        <ul class="features-list">
+          <li><strong>eFactura ANAF</strong> automată, nelimitat</li>
+          <li><strong>Hotel Anvelope</strong> + istoric per vehicul</li>
+          <li><strong>Montaj roți</strong> &amp; comenzi de lucru digitale</li>
+          <li>Programări cu calendar partajat</li>
+          <li>Gestiune clienți &amp; vehicule (istoric VIN)</li>
+          <li>Gestiune stocuri + alerte stoc minim</li>
+          <li>Rapoarte &amp; dashboard în timp real</li>
+          <li>Acces de pe desktop, tabletă și telefon</li>
+          <li>Suport WhatsApp + telefon, în română</li>
+          <li>Update-uri și module noi incluse</li>
+          <li><strong style="color: var(--gold-dark);">★ BONUS: Video training dedicat pentru echipă</strong></li>
+        </ul>
+        <a href="http://professorprime.ro/berlinstar/" target="_blank" rel="noopener" class="btn btn-light btn-block">
+          Începe cu Pro
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </a>
+      </div>
+
     </div>
 
-    <p class="text-center" style="margin-top: 24px; color: var(--slate-500); font-size: 14px; max-width: 600px; margin-left: auto; margin-right: auto;">
-      <strong>Professor Prime S.R.L. este companie neplătitoare de TVA</strong> — prețul de 700 € este final, nu se adaugă TVA pe factură. Facturarea se face anual. Fără contract pe termen lung — la următoarea reînnoire decizi singur dacă continui. Demo gratuit la cerere.
+    <p class="text-center" style="margin-top: 32px; color: var(--slate-500); font-size: 14px; max-width: 680px; margin-left: auto; margin-right: auto;">
+      <strong>Prețurile afișate sunt fără TVA.</strong> La factură se adaugă TVA 21%. Facturarea se face anual. Fără contract pe termen lung — la următoarea reînnoire decizi singur dacă continui. Migrare din programul vechi și demo gratuit la cerere.
     </p>
   </div>
 </section>
@@ -1623,7 +1889,7 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
           <span class="chev">▼</span>
         </button>
         <div class="faq-a"><div class="a-inner faq-a-inner">
-          Nu. Abonamentul este lunar, îl poți anula cu o lună înainte fără penalizări. Pentru abonament anual oferim 2 luni gratuite — dar nici aici nu există clauze ascunse. Dacă vrei să pleci, îți exportăm datele și gata.
+          Nu. Abonamentul este anual și se facturează o singură dată pe an. La sfârșitul perioadei decizi singur dacă reînnoiești sau nu — nu există reînnoire automată ascunsă și nicio clauză de penalizare. Dacă vrei să pleci, îți exportăm datele în Excel / PDF și gata.
         </div></div>
       </div>
 
@@ -1633,7 +1899,7 @@ p.lead { font-size: clamp(1.05rem, 2.5vw, 1.2rem); color: var(--slate-700); max-
           <span class="chev">▼</span>
         </button>
         <div class="faq-a"><div class="a-inner faq-a-inner">
-          Noi. Online sau la sediu (în zona București / Ilfov). Training-ul inițial este inclus în prețul abonamentului. Pentru actualizări mari, organizăm webinare gratuite. Iar interfața e atât de simplă încât majoritatea operatorilor înțeleg fluxul în 30 de minute.
+          Noi. Online (cu partajare ecran &amp; sesiuni înregistrate) sau la sediu, în județul Timiș. Training-ul inițial este inclus în prețul abonamentului. Pentru actualizări mari organizăm webinare gratuite, iar interfața e atât de simplă încât majoritatea operatorilor înțeleg fluxul în 30 de minute.
         </div></div>
       </div>
 

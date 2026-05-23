@@ -2,17 +2,18 @@ from __future__ import annotations
 import hmac
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import jwt
-from fastapi import APIRouter, Depends, HTTPException, Path, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.account import Account
+from app.models.report_receipts_daily import ReportReceiptsDaily
 from app.rate_limit import limiter
 from app.services.demo_seeder import (
     DEMO_PASSWORD,
@@ -209,3 +210,52 @@ async def impersonate_account(
         is_locked=target.is_locked,
         locked_at=target.locked_at,
     )
+
+
+class ReceiptsDailyPoint(BaseModel):
+    date: date
+    count: int
+
+
+class ReceiptsDailyResponse(BaseModel):
+    account_id: int
+    days: int
+    total: int
+    points: list[ReceiptsDailyPoint]
+
+
+@router.get("/accounts/{account_id}/receipts-daily", response_model=ReceiptsDailyResponse)
+async def receipts_daily_for_account(
+    account_id: int = Path(..., gt=0),
+    days: int = Query(30, ge=1, le=365),
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Count-uri zilnice de bonuri pentru un cont, in ultimele `days` zile.
+
+    Foloseste agregatul pre-calculat `report_receipts_daily`. Daca o zi nu are
+    rand in tabel, intoarce count=0 pentru ea (interval continuu).
+    """
+    end_d = datetime.now(timezone.utc).date()
+    start_d = end_d - timedelta(days=days - 1)
+
+    rows = (await db.execute(
+        select(
+            ReportReceiptsDaily.report_date,
+            func.coalesce(func.sum(ReportReceiptsDaily.count_total), 0).label("cnt"),
+        )
+        .where(
+            ReportReceiptsDaily.account_id == account_id,
+            ReportReceiptsDaily.report_date >= start_d,
+            ReportReceiptsDaily.report_date <= end_d,
+        )
+        .group_by(ReportReceiptsDaily.report_date)
+    )).all()
+
+    by_date: dict[date, int] = {r.report_date: int(r.cnt) for r in rows}
+    points: list[ReceiptsDailyPoint] = []
+    for i in range(days):
+        d = start_d + timedelta(days=i)
+        points.append(ReceiptsDailyPoint(date=d, count=by_date.get(d, 0)))
+    total = sum(p.count for p in points)
+    return ReceiptsDailyResponse(account_id=account_id, days=days, total=total, points=points)

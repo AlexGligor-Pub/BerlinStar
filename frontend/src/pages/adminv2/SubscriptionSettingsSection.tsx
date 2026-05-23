@@ -149,9 +149,9 @@ export default function SubscriptionSettingsSection() {
             </div>
 
             <div class="account-card" style="padding:16px">
-              <h3 style="margin-top:0">Date firmă emitentă (BerlinStar SRL)</h3>
+              <h3 style="margin-top:0">Date firmă emitentă</h3>
               <p style="font-size:13px;color:var(--text-muted);margin-top:0">
-                Aceste date apar pe factura emisă către clienţii BerlinStar şi se transmit la ANAF SPV.
+                Aceste date apar pe factura emisă către clienţii platformei şi se transmit la ANAF SPV.
               </p>
               <div style="display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
                 <div class="form-group"><label class="form-label">Denumire</label>
@@ -220,7 +220,14 @@ export default function SubscriptionSettingsSection() {
             </div>
 
             <div class="account-card" style="padding:16px">
-              <h3 style="margin-top:0">ANAF SPV (BerlinStar SRL)</h3>
+              <h3 style="margin-top:0">
+                ANAF SPV{d().issuer_name ? ` (${d().issuer_name})` : ""}
+              </h3>
+              <p style="font-size:13px;color:var(--text-muted);margin-top:0">
+                Conectarea foloseşte CUI-ul firmei emitente configurate mai sus
+                {d().issuer_cui ? ` (${d().issuer_cui})` : ""}.
+                Trebuie să te autentifici la ANAF cu certificatul digital al acelei firme.
+              </p>
               <div class="form-group">
                 <label class="form-label">Mediu ANAF</label>
                 <select class="input" value={d().platform_anaf_use_test_env ? "1" : "0"} onChange={(e) => update("platform_anaf_use_test_env", e.currentTarget.value === "1")}>

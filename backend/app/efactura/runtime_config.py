@@ -29,7 +29,8 @@ DEFAULT_ANAF_TOKEN_URL = "https://logincert.anaf.ro/anaf-oauth2/v1/token"
 DEFAULT_ANAF_API_BASE_PROD = "https://api.anaf.ro/prod/FCTEL/rest"
 DEFAULT_ANAF_API_BASE_TEST = "https://api.anaf.ro/test/FCTEL/rest"
 _FALLBACK_BACKEND_CALLBACK = "http://localhost:8000/api/efactura/callback"
-_FALLBACK_FRONTEND_CALLBACK = "http://localhost:2000/adminv2?section=efactura"
+_FALLBACK_FRONTEND_CALLBACK = "http://localhost:2000/efactura"
+_FALLBACK_ADMIN_SUBSCRIPTION_CALLBACK = "http://localhost:2000/adminv2?section=abonament"
 
 
 def _public_base_url() -> str | None:
@@ -49,9 +50,26 @@ def derived_redirect_uri() -> str:
 
 
 def derived_frontend_callback() -> str:
-    """Frontend redirect dupa callback derivat din PUBLIC_BASE_URL, sau fallback dev."""
+    """Frontend redirect dupa callback derivat din PUBLIC_BASE_URL, sau fallback dev.
+
+    Tinta este pagina `/efactura` (accesibila oricarui user logat), nu `/adminv2`.
+    """
     base = _public_base_url()
-    return f"{base}/adminv2?section=efactura" if base else _FALLBACK_FRONTEND_CALLBACK
+    return f"{base}/efactura" if base else _FALLBACK_FRONTEND_CALLBACK
+
+
+def derived_admin_subscription_callback() -> str:
+    """Frontend redirect pentru callback-ul OAuth al abonamentului platformei.
+
+    Spre deosebire de `derived_frontend_callback`, asta merge in AdminV2 ->
+    tabul Abonament (doar pentru admini).
+    """
+    base = _public_base_url()
+    return (
+        f"{base}/adminv2?section=abonament"
+        if base
+        else _FALLBACK_ADMIN_SUBSCRIPTION_CALLBACK
+    )
 
 
 # Pastram aliasurile vechi (folosite in alte module) pentru compatibilitate.
@@ -159,6 +177,15 @@ async def ensure_initialized(db: AsyncSession) -> EFacturaGlobalSettings:
             row.default_redirect_uri = derived_redirect_uri()
             changed = True
         if not row.frontend_callback_redirect:
+            row.frontend_callback_redirect = derived_frontend_callback()
+            changed = True
+        # Migram valorile vechi care indica spre AdminV2 (acum mergem in /efactura
+        # pentru ca pagina trebuie sa fie accesibila si userilor non-admin).
+        elif "adminv2" in row.frontend_callback_redirect and "section=efactura" in row.frontend_callback_redirect:
+            log.info(
+                "Migrare: frontend_callback_redirect %r -> %r",
+                row.frontend_callback_redirect, derived_frontend_callback(),
+            )
             row.frontend_callback_redirect = derived_frontend_callback()
             changed = True
 

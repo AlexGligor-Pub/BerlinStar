@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import delete as sa_delete, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -21,7 +23,14 @@ from app.efactura.exceptions import (
     AnafTokenExpired,
     AnafTokenMissing,
 )
-from app.efactura.models import AnafSettings, AnafToken, EFacturaGlobalSettings, EFacturaRecord
+from app.efactura.models import (
+    AnafSettings,
+    AnafToken,
+    EFacturaGlobalSettings,
+    EFacturaRecord,
+    ScheduledJobOverride,
+    TaskRun,
+)
 from app.efactura.schemas import (
     AnafSettingsOut,
     AnafSettingsUpdate,
@@ -202,6 +211,37 @@ async def test_company_connection(
     return {"ok": True, "detail": "Token ANAF valid (refresh-ul automat functioneaza)."}
 
 
+@router.post("/companies/{company_id}/refresh-token")
+async def refresh_company_token(
+    company_id: int = Path(..., gt=0),
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Force-refresh manual al token-ului ANAF (ignora pragul de 5 min)."""
+    company = (await db.execute(select(Company).where(Company.id == company_id))).scalar_one_or_none()
+    if company is None:
+        raise HTTPException(404, "Compania nu exista.")
+    token = (
+        await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
+    ).scalar_one_or_none()
+    if token is None:
+        raise HTTPException(404, "Nu exista token ANAF pentru aceasta companie.")
+    try:
+        token = await oauth_service._refresh_token(db, token)
+    except AnafTokenExpired as exc:
+        raise HTTPException(401, f"Refresh token expirat: {exc}")
+    except AnafAuthError as exc:
+        raise HTTPException(502, f"Eroare ANAF la refresh: {exc}")
+    expires_at = token.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    return {
+        "ok": True,
+        "expires_at": expires_at.isoformat(),
+        "detail": "Token refreshat cu succes.",
+    }
+
+
 @router.get("/dashboard")
 async def admin_dashboard(
     admin: Account = Depends(_require_super_admin),
@@ -250,15 +290,270 @@ async def trigger_scheduler_job(
     job_name: str,
     admin: Account = Depends(_require_super_admin),
 ):
-    """Trigger manual al unui job APScheduler eFactura (debug)."""
+    """Trigger manual al unui job APScheduler eFactura.
+
+    Persistă un TaskRun cu triggered_by=manual pentru a apare in Logs.
+    """
     try:
-        await efactura_scheduler.trigger_job(job_name)
+        await efactura_scheduler.trigger_job(job_name, triggered_by="manual")
     except ValueError as exc:
         raise HTTPException(404, str(exc))
     except Exception as exc:  # noqa: BLE001
         log.exception("Manual trigger failed for %s", job_name)
         raise HTTPException(500, f"Job a esuat: {exc}")
     return {"ok": True, "job": job_name}
+
+
+# ---------- Tasks: list + edit schedule ----------
+
+class JobInfo(BaseModel):
+    job_id: str
+    label: str
+    enabled: bool
+    trigger_type: str  # "cron" | "interval"
+    cron_expression: str | None
+    cron_expression_default: str
+    is_override: bool
+    next_run_at: datetime | None
+    last_run: dict | None  # {status, finished_at}
+    scheduler_running: bool
+
+
+class JobUpdateBody(BaseModel):
+    cron_expression: str | None = Field(default=None, description="Cron 5-camp sau numar minute (interval).")
+    trigger_type: Literal["cron", "interval"] | None = None
+    enabled: bool | None = None
+    reset_to_default: bool = False
+
+
+def _default_trigger_str(job_id: str) -> tuple[str, str]:
+    """Returneaza (trigger_type, expression) ca string pentru afisaj UI."""
+    defaults = {
+        "efactura_upload_pending": ("interval", "5"),
+        "efactura_poll_status": ("interval", "10"),
+        "efactura_download_responses": ("interval", "30"),
+        "efactura_deadline_alert": ("cron", "0 8 * * *"),
+        "efactura_token_expiry_alert": ("cron", "0 9 * * *"),
+        "efactura_token_refresh_all": ("cron", "0 2 1 * *"),
+        "efactura_sync_received": ("interval", "60"),
+        "task_runs_cleanup": ("cron", "0 4 * * *"),
+        "subscription_lock_expired": ("cron", "5 0 * * *"),
+        "subscription_renewal_email": ("cron", "15 8 * * *"),
+        "subscription_anaf_poll": ("interval", "15"),
+    }
+    return defaults.get(job_id, ("cron", ""))
+
+
+@router.get("/jobs", response_model=list[JobInfo])
+async def list_jobs(
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista tuturor joburilor cunoscute, cu next_run + ultima rulare."""
+    sched = efactura_scheduler.get_scheduler()
+    running = sched is not None
+
+    overrides = {
+        o.job_id: o
+        for o in (await db.execute(select(ScheduledJobOverride))).scalars().all()
+    }
+
+    result: list[JobInfo] = []
+    known = efactura_scheduler.list_known_jobs()
+
+    # Ultima rulare per job
+    last_run_map: dict[str, TaskRun] = {}
+    for job_id in known:
+        last = (
+            await db.execute(
+                select(TaskRun)
+                .where(TaskRun.job_id == job_id)
+                .order_by(desc(TaskRun.started_at))
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if last is not None:
+            last_run_map[job_id] = last
+
+    for job_id in known:
+        ov = overrides.get(job_id)
+        default_type, default_expr = _default_trigger_str(job_id)
+        if ov is not None and ov.cron_expression:
+            trigger_type = ov.trigger_type
+            cron_expression = ov.cron_expression
+            is_override = True
+        else:
+            trigger_type = default_type
+            cron_expression = default_expr
+            is_override = False
+
+        enabled = True if ov is None else ov.enabled
+
+        # Next run din APScheduler runtime
+        next_run_at = None
+        if running and sched is not None:
+            j = sched.get_job(job_id)
+            if j is not None and j.next_run_time is not None:
+                next_run_at = j.next_run_time
+
+        lr = last_run_map.get(job_id)
+        last_run = None
+        if lr is not None:
+            last_run = {
+                "status": lr.status,
+                "finished_at": lr.finished_at.isoformat() if lr.finished_at else None,
+                "started_at": lr.started_at.isoformat(),
+                "duration_ms": lr.duration_ms,
+                "triggered_by": lr.triggered_by,
+            }
+
+        result.append(JobInfo(
+            job_id=job_id,
+            label=efactura_scheduler.JOB_LABELS.get(job_id, job_id),
+            enabled=enabled,
+            trigger_type=trigger_type,
+            cron_expression=cron_expression,
+            cron_expression_default=default_expr,
+            is_override=is_override,
+            next_run_at=next_run_at,
+            last_run=last_run,
+            scheduler_running=running,
+        ))
+
+    return result
+
+
+@router.patch("/jobs/{job_name}")
+async def update_job_schedule(
+    body: JobUpdateBody,
+    job_name: str,
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Editeaza schedule-ul unui job (salveaza override in DB + reschedule live).
+
+    Pentru `trigger_type=cron`, `cron_expression` trebuie sa fie 5-camp clasic (minute hour day month dow).
+    Pentru `trigger_type=interval`, `cron_expression` trebuie sa fie un numar (minute).
+    `reset_to_default=true` sterge overrideul si revine la defaults.
+    """
+    if job_name not in efactura_scheduler.list_known_jobs():
+        raise HTTPException(404, f"Job necunoscut: {job_name}")
+
+    existing = (
+        await db.execute(
+            select(ScheduledJobOverride).where(ScheduledJobOverride.job_id == job_name)
+        )
+    ).scalar_one_or_none()
+
+    if body.reset_to_default:
+        if existing is not None:
+            await db.delete(existing)
+            await db.commit()
+    else:
+        if existing is None:
+            existing = ScheduledJobOverride(
+                job_id=job_name,
+                trigger_type=body.trigger_type or "cron",
+                cron_expression=body.cron_expression,
+                enabled=True if body.enabled is None else body.enabled,
+            )
+            db.add(existing)
+        else:
+            if body.trigger_type is not None:
+                existing.trigger_type = body.trigger_type
+            if body.cron_expression is not None:
+                existing.cron_expression = body.cron_expression
+            if body.enabled is not None:
+                existing.enabled = body.enabled
+            existing.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    # Aplica live in scheduler (daca ruleaza)
+    try:
+        await efactura_scheduler.reschedule_job(job_name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Reschedule failed pentru %s", job_name)
+        raise HTTPException(400, f"Schedule invalid: {exc}")
+
+    log.info("Job %s reschedule de admin_id=%s (reset=%s)", job_name, admin.id, body.reset_to_default)
+    return {"ok": True, "job": job_name}
+
+
+# ---------- Task logs ----------
+
+class TaskLogOut(BaseModel):
+    id: int
+    job_id: str
+    started_at: datetime
+    finished_at: datetime | None
+    status: str
+    duration_ms: int | None
+    items_processed: int | None
+    items_failed: int | None
+    error_message: str | None
+    triggered_by: str
+
+
+class TaskLogListOut(BaseModel):
+    items: list[TaskLogOut]
+    total: int
+    limit: int
+    offset: int
+
+
+@router.get("/task-logs", response_model=TaskLogListOut)
+async def list_task_logs(
+    job_id: str | None = Query(None),
+    status: str | None = Query(None, description="running | success | error"),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lista paginata de rulari, filtrabila dupa job/status."""
+    stmt = select(TaskRun)
+    count_stmt = select(func.count(TaskRun.id))
+    if job_id:
+        stmt = stmt.where(TaskRun.job_id == job_id)
+        count_stmt = count_stmt.where(TaskRun.job_id == job_id)
+    if status:
+        stmt = stmt.where(TaskRun.status == status)
+        count_stmt = count_stmt.where(TaskRun.status == status)
+    stmt = stmt.order_by(desc(TaskRun.started_at)).limit(limit).offset(offset)
+
+    rows = (await db.execute(stmt)).scalars().all()
+    total = (await db.execute(count_stmt)).scalar_one()
+
+    items = [
+        TaskLogOut(
+            id=r.id,
+            job_id=r.job_id,
+            started_at=r.started_at,
+            finished_at=r.finished_at,
+            status=r.status,
+            duration_ms=r.duration_ms,
+            items_processed=r.items_processed,
+            items_failed=r.items_failed,
+            error_message=r.error_message,
+            triggered_by=r.triggered_by,
+        )
+        for r in rows
+    ]
+    return TaskLogListOut(items=items, total=int(total), limit=limit, offset=offset)
+
+
+@router.delete("/task-logs")
+async def clear_task_logs(
+    admin: Account = Depends(_require_super_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Sterge toate intrarile din task_runs (buton Clear in UI)."""
+    result = await db.execute(sa_delete(TaskRun))
+    await db.commit()
+    log.warning("task_runs sterse de admin_id=%s (%d randuri)", admin.id, result.rowcount or 0)
+    return {"ok": True, "deleted": int(result.rowcount or 0)}
 
 
 # ---------- Global settings (mutate din .env in UI) ----------
