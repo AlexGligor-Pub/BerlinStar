@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import re
 import traceback
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -505,6 +506,12 @@ async def job_token_refresh_all() -> None:
                     token.company_id, exc,
                 )
                 report_items(failed=1)
+            except Exception as exc:  # noqa: BLE001 — safety net: nu lasa o exceptie unica (timeout, etc.) sa opreasca bucla
+                log.exception(
+                    "token_refresh_all: eroare neasteptata pentru company_id=%s: %s",
+                    token.company_id, exc,
+                )
+                report_items(failed=1)
 
 
 # ---------- Job: task_runs cleanup (retention 90 zile) ----------
@@ -517,88 +524,62 @@ async def job_task_runs_cleanup() -> None:
     cutoff = datetime.now(timezone.utc) - timedelta(days=_TASK_RUN_RETENTION_DAYS)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
-            delete(TaskRun).where(TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff)
+            delete(TaskRun)
+            .where(TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff)
+            .execution_options(synchronize_session=False)
         )
         await db.commit()
-        log.info("task_runs_cleanup: %d randuri sterse (cutoff=%s)", result.rowcount or 0, cutoff.isoformat())
-        report_items(processed=result.rowcount or 0)
+        deleted = int(result.rowcount or 0)
+        log.info("task_runs_cleanup: %d randuri sterse (cutoff=%s)", deleted, cutoff.isoformat())
+        report_items(processed=deleted)
 
 
-# ---------- Helper: wrapper care logheaza in DB fiecare rulare ----------
+# ---------- Helper: scrub secrete din traceback ----------
 
-def _with_task_log(job_id: str, fn):
-    """Returneaza o functie async care insereaza un TaskRun la inceput,
-    apeleaza job-ul si update-eaza row-ul la final (success/error)."""
-
-    async def wrapper():
-        ctx = _RunContext(triggered_by="schedule")
-        token = _current_run.set(ctx)
-        run_id: int | None = None
-        started = datetime.now(timezone.utc)
-        try:
-            async with AsyncSessionLocal() as db:
-                run = TaskRun(
-                    job_id=job_id, started_at=started, status="running",
-                    triggered_by=ctx.triggered_by,
-                )
-                db.add(run)
-                await db.commit()
-                run_id = run.id
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Nu am putut crea TaskRun pentru %s: %s", job_id, exc)
-
-        try:
-            await fn()
-            status = "success"
-            error_msg = None
-        except Exception as exc:  # noqa: BLE001
-            status = "error"
-            error_msg = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()[-2000:]}"
-            log.exception("Job %s a esuat", job_id)
-        finally:
-            _current_run.reset(token)
-
-        finished = datetime.now(timezone.utc)
-        duration_ms = int((finished - started).total_seconds() * 1000)
-        if run_id is not None:
-            try:
-                async with AsyncSessionLocal() as db:
-                    row = (
-                        await db.execute(select(TaskRun).where(TaskRun.id == run_id))
-                    ).scalar_one_or_none()
-                    if row is not None:
-                        row.finished_at = finished
-                        row.duration_ms = duration_ms
-                        row.status = status
-                        row.error_message = error_msg
-                        row.items_processed = ctx.items_processed or None
-                        row.items_failed = ctx.items_failed or None
-                        await db.commit()
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Nu am putut update-a TaskRun %s: %s", run_id, exc)
-
-    wrapper.__name__ = f"_logged_{job_id}"
-    return wrapper
+# Match-uri pentru tokeni Bearer si headere Authorization in tracebackuri.
+_BEARER_RE = re.compile(r"(?i)(Bearer\s+)[A-Za-z0-9._\-+/=]+")
+_AUTH_HEADER_RE = re.compile(
+    r"(?i)('?Authorization'?\s*[:=]\s*['\"]?)(Bearer\s+)?[A-Za-z0-9._\-+/=]+"
+)
 
 
-# ---------- Helper: trigger logged (din UI) ----------
+def _scrub_secrets(text: str) -> str:
+    text = _BEARER_RE.sub(r"\1***REDACTED***", text)
+    text = _AUTH_HEADER_RE.sub(r"\1***REDACTED***", text)
+    return text
 
-async def _run_job_logged(job_id: str, fn, triggered_by: str = "manual") -> None:
-    """Apeleaza un job direct, dar persistand intrarea in task_runs cu triggered_by dat."""
+
+# ---------- Helper: insert + update TaskRun cu o singura sesiune ----------
+
+async def _execute_logged(job_id: str, fn, triggered_by: str) -> str | None:
+    """Logica unica pentru ambele wrappers (scheduled + manual).
+
+    Foloseste o singura sesiune cu flush pentru a obtine run.id fara
+    commit prematur — astfel evitam expirarea atributelor + roundtrip-uri
+    duble la commit. Returneaza error_msg sau None.
+    """
     ctx = _RunContext(triggered_by=triggered_by)
-    token = _current_run.set(ctx)
-    run_id: int | None = None
+    ctx_token = _current_run.set(ctx)
     started = datetime.now(timezone.utc)
+    run_id: int | None = None
+
     try:
         async with AsyncSessionLocal() as db:
             run = TaskRun(
-                job_id=job_id, started_at=started, status="running", triggered_by=triggered_by,
+                job_id=job_id, started_at=started, status="running",
+                triggered_by=triggered_by,
             )
             db.add(run)
-            await db.commit()
-            run_id = run.id
+            try:
+                await db.flush()
+                run_id = int(run.id)
+                await db.commit()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Nu am putut crea TaskRun pentru %s: %s", job_id, exc)
+                await db.rollback()
+                run_id = None
     except Exception as exc:  # noqa: BLE001
-        log.warning("Nu am putut crea TaskRun pentru %s (manual): %s", job_id, exc)
+        log.warning("Sesiune indisponibila pentru TaskRun %s: %s", job_id, exc)
 
     error_msg: str | None = None
     try:
@@ -606,10 +587,11 @@ async def _run_job_logged(job_id: str, fn, triggered_by: str = "manual") -> None
         status = "success"
     except Exception as exc:  # noqa: BLE001
         status = "error"
-        error_msg = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()[-2000:]}"
-        log.exception("Manual trigger %s a esuat", job_id)
+        raw = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()[-2000:]}"
+        error_msg = _scrub_secrets(raw)
+        log.exception("Job %s a esuat (triggered_by=%s)", job_id, triggered_by)
     finally:
-        _current_run.reset(token)
+        _current_run.reset(ctx_token)
 
     finished = datetime.now(timezone.utc)
     duration_ms = int((finished - started).total_seconds() * 1000)
@@ -628,35 +610,71 @@ async def _run_job_logged(job_id: str, fn, triggered_by: str = "manual") -> None
                     row.items_failed = ctx.items_failed or None
                     await db.commit()
         except Exception as exc:  # noqa: BLE001
-            log.warning("Nu am putut update-a TaskRun %s (manual): %s", run_id, exc)
+            log.warning("Nu am putut update-a TaskRun %s: %s", run_id, exc)
 
+    return error_msg
+
+
+def _with_task_log(job_id: str, fn):
+    """Wrapper pentru jobs inregistrate in APScheduler (triggered_by=schedule)."""
+
+    async def wrapper():
+        await _execute_logged(job_id, fn, triggered_by="schedule")
+
+    wrapper.__name__ = f"_logged_{job_id}"
+    return wrapper
+
+
+# ---------- Helper: trigger logged (din UI) ----------
+
+async def _run_job_logged(job_id: str, fn, triggered_by: str = "manual") -> None:
+    """Apeleaza un job direct, dar persistand intrarea in task_runs cu triggered_by dat."""
+    error_msg = await _execute_logged(job_id, fn, triggered_by=triggered_by)
     if error_msg:
         raise RuntimeError(error_msg)
 
 
 # ---------- Helper: build trigger from override ----------
 
+def parse_cron_expression(expr: str, trigger_type: str):
+    """Valideaza si returneaza un trigger din (expr, type). Raise ValueError la invalid.
+
+    Public — folosit din router_admin pentru pre-validare inainte de commit DB.
+    """
+    expr = (expr or "").strip()
+    if not expr:
+        raise ValueError("Expresia nu poate fi goala.")
+    if trigger_type == "interval":
+        try:
+            minutes = int(expr)
+        except ValueError as exc:
+            raise ValueError(f"Pentru 'interval' expresia trebuie sa fie un numar de minute: {expr!r}") from exc
+        if minutes <= 0:
+            raise ValueError("Intervalul (minute) trebuie sa fie > 0.")
+        return IntervalTrigger(minutes=minutes, timezone=_BUCHAREST_TZ)
+    if trigger_type != "cron":
+        raise ValueError(f"trigger_type necunoscut: {trigger_type!r}")
+    parts = expr.split()
+    if len(parts) != 5:
+        raise ValueError(f"Cron expression invalid (asteptat 5 campuri): {expr!r}")
+    minute, hour, day, month, dow = parts
+    try:
+        return CronTrigger(
+            minute=minute, hour=hour, day=day, month=month, day_of_week=dow,
+            timezone=_BUCHAREST_TZ,
+        )
+    except Exception as exc:  # noqa: BLE001 — APScheduler ridica ValueError generic
+        raise ValueError(f"Cron expression invalid: {exc}") from exc
+
+
 def _build_trigger(default_trigger, override: ScheduledJobOverride | None):
     """Daca avem un override valid in DB, parseaza-l si returneaza-l;
     altfel returneaza trigger-ul default."""
     if override is None or not override.cron_expression:
         return default_trigger
-    expr = override.cron_expression.strip()
     try:
-        if override.trigger_type == "interval":
-            # Acceptam doar numar de minute pentru interval, ca sa fie usor din UI.
-            minutes = int(expr)
-            return IntervalTrigger(minutes=minutes, timezone=_BUCHAREST_TZ)
-        # cron standard cu 5 campuri: minute hour day month day_of_week
-        parts = expr.split()
-        if len(parts) != 5:
-            raise ValueError(f"Cron expression invalid (asteptat 5 campuri): {expr!r}")
-        minute, hour, day, month, dow = parts
-        return CronTrigger(
-            minute=minute, hour=hour, day=day, month=month, day_of_week=dow,
-            timezone=_BUCHAREST_TZ,
-        )
-    except Exception as exc:  # noqa: BLE001
+        return parse_cron_expression(override.cron_expression, override.trigger_type)
+    except ValueError as exc:
         log.warning(
             "Override invalid pentru job (%s): %s. Folosim default.",
             override.cron_expression, exc,
@@ -668,6 +686,40 @@ async def _load_overrides() -> dict[str, ScheduledJobOverride]:
     async with AsyncSessionLocal() as db:
         rows = (await db.execute(select(ScheduledJobOverride))).scalars().all()
     return {r.job_id: r for r in rows}
+
+
+# ---------- Defaults pentru toate joburile (sursa unica) ----------
+
+# Mapare job_id -> (trigger_type, expression) folosita atat pentru:
+#  - construirea trigger-ului default in cod (start_scheduler, reschedule_job)
+#  - afisarea defaults-ului in UI (router_admin.list_jobs)
+# Daca adaugi un job nou, defineste-l aici si in _JOB_FN_MAP de mai jos.
+JOB_DEFAULTS: dict[str, tuple[str, str]] = {
+    "efactura_upload_pending": ("interval", "5"),
+    "efactura_poll_status": ("interval", "10"),
+    "efactura_download_responses": ("interval", "30"),
+    "efactura_deadline_alert": ("cron", "0 8 * * *"),
+    "efactura_token_expiry_alert": ("cron", "0 9 * * *"),
+    "efactura_token_refresh_all": ("cron", "0 2 1 * *"),
+    "efactura_sync_received": ("interval", "60"),
+    "task_runs_cleanup": ("cron", "0 4 * * *"),
+    "subscription_lock_expired": ("cron", "5 0 * * *"),
+    "subscription_renewal_email": ("cron", "15 8 * * *"),
+    "subscription_anaf_poll": ("interval", "15"),
+}
+
+
+def default_trigger_for(job_id: str):
+    """Construieste trigger-ul APScheduler default pentru un job, din JOB_DEFAULTS."""
+    spec = JOB_DEFAULTS.get(job_id)
+    if spec is None:
+        return None
+    return parse_cron_expression(spec[1], spec[0])
+
+
+def default_trigger_str(job_id: str) -> tuple[str, str]:
+    """Returneaza (trigger_type, expression) pentru afisaj UI."""
+    return JOB_DEFAULTS.get(job_id, ("cron", ""))
 
 
 # ---------- Bootstrap ----------
@@ -690,26 +742,16 @@ async def start_scheduler() -> None:
 
     overrides = await _load_overrides()
 
-    job_specs: list[tuple[str, object, object]] = [
-        ("efactura_upload_pending", IntervalTrigger(minutes=5, timezone=_BUCHAREST_TZ), job_upload_pending),
-        ("efactura_poll_status", IntervalTrigger(minutes=10, timezone=_BUCHAREST_TZ), job_poll_status),
-        ("efactura_download_responses", IntervalTrigger(minutes=30, timezone=_BUCHAREST_TZ), job_download_responses),
-        ("efactura_deadline_alert", CronTrigger(hour=8, minute=0, timezone=_BUCHAREST_TZ), job_deadline_alert),
-        ("efactura_token_expiry_alert", CronTrigger(hour=9, minute=0, timezone=_BUCHAREST_TZ), job_token_expiry_alert),
-        ("efactura_token_refresh_all", CronTrigger(day=1, hour=2, minute=0, timezone=_BUCHAREST_TZ), job_token_refresh_all),
-        ("efactura_sync_received", IntervalTrigger(minutes=60, timezone=_BUCHAREST_TZ), job_sync_received),
-        ("task_runs_cleanup", CronTrigger(hour=4, minute=0, timezone=_BUCHAREST_TZ), job_task_runs_cleanup),
-        ("subscription_lock_expired", CronTrigger(hour=0, minute=5, timezone=_BUCHAREST_TZ), job_subscription_lock_expired),
-        ("subscription_renewal_email", CronTrigger(hour=8, minute=15, timezone=_BUCHAREST_TZ), job_subscription_renewal_email),
-        ("subscription_anaf_poll", IntervalTrigger(minutes=15, timezone=_BUCHAREST_TZ), job_subscription_anaf_poll),
-    ]
-
-    for job_id, default_trigger, fn in job_specs:
+    for job_id in JOB_DEFAULTS:
+        fn = _JOB_FN_MAP.get(job_id)
+        if fn is None:
+            log.warning("Job %s in JOB_DEFAULTS dar lipseste din _JOB_FN_MAP; sar.", job_id)
+            continue
         override = overrides.get(job_id)
         if override is not None and not override.enabled:
             log.info("Job %s este dezactivat din DB override.", job_id)
             continue
-        trigger = _build_trigger(default_trigger, override)
+        trigger = _build_trigger(default_trigger_for(job_id), override)
         _scheduler.add_job(
             _with_task_log(job_id, fn),
             trigger,
@@ -786,21 +828,7 @@ async def reschedule_job(job_name: str) -> None:
     if job_name not in _JOB_FN_MAP:
         raise ValueError(f"Job necunoscut: {job_name}")
 
-    # Cautam default-ul din job_specs (recompunem aici, ca sa nu duplicam).
-    default_triggers = {
-        "efactura_upload_pending": IntervalTrigger(minutes=5, timezone=_BUCHAREST_TZ),
-        "efactura_poll_status": IntervalTrigger(minutes=10, timezone=_BUCHAREST_TZ),
-        "efactura_download_responses": IntervalTrigger(minutes=30, timezone=_BUCHAREST_TZ),
-        "efactura_deadline_alert": CronTrigger(hour=8, minute=0, timezone=_BUCHAREST_TZ),
-        "efactura_token_expiry_alert": CronTrigger(hour=9, minute=0, timezone=_BUCHAREST_TZ),
-        "efactura_token_refresh_all": CronTrigger(day=1, hour=2, minute=0, timezone=_BUCHAREST_TZ),
-        "efactura_sync_received": IntervalTrigger(minutes=60, timezone=_BUCHAREST_TZ),
-        "task_runs_cleanup": CronTrigger(hour=4, minute=0, timezone=_BUCHAREST_TZ),
-        "subscription_lock_expired": CronTrigger(hour=0, minute=5, timezone=_BUCHAREST_TZ),
-        "subscription_renewal_email": CronTrigger(hour=8, minute=15, timezone=_BUCHAREST_TZ),
-        "subscription_anaf_poll": IntervalTrigger(minutes=15, timezone=_BUCHAREST_TZ),
-    }
-    default = default_triggers.get(job_name)
+    default = default_trigger_for(job_name)
     if default is None:
         raise ValueError(f"Default trigger lipsa pentru {job_name}")
 

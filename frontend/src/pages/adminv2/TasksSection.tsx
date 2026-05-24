@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import {
   createSolidTable, flexRender, getCoreRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
@@ -65,7 +65,16 @@ export default function TasksSection() {
     }
   }
 
-  onMount(loadJobs);
+  onMount(() => {
+    loadJobs();
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape" && editJob() && !editSaving()) {
+        closeEdit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
+  });
 
   async function doTrigger(j: JobInfo) {
     setTriggeringId(j.job_id);
@@ -323,9 +332,9 @@ export default function TasksSection() {
       <Show when={editJob()}>
         {(j) => (
           <div class="sl-modal-overlay">
-            <div class="sl-modal">
+            <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="tasks-edit-title">
               <div class="sl-modal-header">
-                <span class="sl-modal-title">Editeaza schedule: {j().label}</span>
+                <span class="sl-modal-title" id="tasks-edit-title">Editeaza schedule: {j().label}</span>
                 <button class="btn btn-ghost btn-sm" onClick={closeEdit}>✕</button>
               </div>
               <div class="admin-modal-body">

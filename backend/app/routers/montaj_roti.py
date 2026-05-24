@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,9 @@ from app.models.marca_anvelopa import MarcaAnvelopa
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.models.profil_anvelopa import ProfilAnvelopa
 from app.models.cod_dot_anvelopa import CodDotAnvelopa
+from app.models.vehicol import Vehicol
+from app.models.receipt import Receipt
+from app.models.client import Client
 from app.schemas.montaj_rota import MontajRotaRead, MontajRotiBulkUpsert
 
 router = APIRouter()
@@ -37,6 +40,8 @@ def _serialize(
         "tip": r.tip.value if hasattr(r.tip, "value") else r.tip,
         "adancime": r.adancime,
         "cuplu_strangere": r.cuplu_strangere,
+        "indice_viteza": r.indice_viteza,
+        "indice_sarcina": r.indice_sarcina,
         "comments": r.comments,
         "marca_nume": marci.get(r.marca_id) if r.marca_id else None,
         "dimensiune_valoare": dim.get(r.dimensiune_id) if r.dimensiune_id else None,
@@ -94,6 +99,66 @@ async def _build_lookup_maps(
     return marci, dim, prof, dot
 
 
+@router.get("/by-license-plate")
+async def latest_montaj_by_plate(
+    numar_masina: str,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    plate = (numar_masina or "").strip().upper().replace(" ", "")
+    if not plate:
+        raise HTTPException(400, "numar_masina lipsă.")
+
+    normalized_db = func.upper(func.replace(Vehicol.numar_masina, " ", ""))
+
+    stmt = (
+        select(MontajRota, Receipt.client_id, Receipt.created_at, Vehicol.numar_masina, Client.nume)
+        .join(Receipt, Receipt.id == MontajRota.receipt_id)
+        .join(Vehicol, Vehicol.receipt_id == Receipt.id)
+        .outerjoin(Client, Client.id == Receipt.client_id)
+        .where(
+            MontajRota.account_id == account_id,
+            MontajRota.is_deleted == False,
+            Receipt.account_id == account_id,
+            Receipt.is_deleted == False,
+            Vehicol.account_id == account_id,
+            Vehicol.is_deleted == False,
+            normalized_db == plate,
+        )
+        .order_by(MontajRota.created_at.desc(), MontajRota.id.desc())
+        .limit(1)
+    )
+    row = (await db.execute(stmt)).first()
+    if row is None:
+        return {"found": False}
+
+    latest, client_id, receipt_created_at, plate_raw, client_nume = row
+    receipt_id = latest.receipt_id
+
+    wheels_stmt = (
+        select(MontajRota)
+        .where(
+            MontajRota.account_id == account_id,
+            MontajRota.is_deleted == False,
+            MontajRota.receipt_id == receipt_id,
+        )
+        .order_by(MontajRota.ordine.asc().nulls_last(), MontajRota.id.asc())
+    )
+    wheels = (await db.execute(wheels_stmt)).scalars().all()
+    marci, dim, prof, dot = await _build_lookup_maps(db, account_id, list(wheels))
+
+    return {
+        "found": True,
+        "receipt_id": receipt_id,
+        "receipt_created_at": receipt_created_at,
+        "montaj_created_at": latest.created_at,
+        "numar_masina": plate_raw,
+        "client_id": client_id,
+        "client_nume": client_nume,
+        "wheels": [_serialize(r, marci, dim, prof, dot) for r in wheels],
+    }
+
+
 @router.get("", response_model=list[MontajRotaRead])
 async def list_montaj_roti(
     receipt_id: int,
@@ -149,6 +214,8 @@ async def bulk_upsert(
             tip=item.tip,
             adancime=item.adancime,
             cuplu_strangere=item.cuplu_strangere,
+            indice_viteza=item.indice_viteza,
+            indice_sarcina=item.indice_sarcina,
             comments=item.comments,
         )
         db.add(rec)

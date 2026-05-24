@@ -6,7 +6,7 @@ Auth:  super admin (username == "admin") via _require_super_admin from app.route
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -320,28 +320,14 @@ class JobInfo(BaseModel):
 
 
 class JobUpdateBody(BaseModel):
-    cron_expression: str | None = Field(default=None, description="Cron 5-camp sau numar minute (interval).")
+    cron_expression: str | None = Field(
+        default=None,
+        max_length=128,
+        description="Cron 5-camp sau numar minute (interval).",
+    )
     trigger_type: Literal["cron", "interval"] | None = None
     enabled: bool | None = None
     reset_to_default: bool = False
-
-
-def _default_trigger_str(job_id: str) -> tuple[str, str]:
-    """Returneaza (trigger_type, expression) ca string pentru afisaj UI."""
-    defaults = {
-        "efactura_upload_pending": ("interval", "5"),
-        "efactura_poll_status": ("interval", "10"),
-        "efactura_download_responses": ("interval", "30"),
-        "efactura_deadline_alert": ("cron", "0 8 * * *"),
-        "efactura_token_expiry_alert": ("cron", "0 9 * * *"),
-        "efactura_token_refresh_all": ("cron", "0 2 1 * *"),
-        "efactura_sync_received": ("interval", "60"),
-        "task_runs_cleanup": ("cron", "0 4 * * *"),
-        "subscription_lock_expired": ("cron", "5 0 * * *"),
-        "subscription_renewal_email": ("cron", "15 8 * * *"),
-        "subscription_anaf_poll": ("interval", "15"),
-    }
-    return defaults.get(job_id, ("cron", ""))
 
 
 @router.get("/jobs", response_model=list[JobInfo])
@@ -361,23 +347,21 @@ async def list_jobs(
     result: list[JobInfo] = []
     known = efactura_scheduler.list_known_jobs()
 
-    # Ultima rulare per job
-    last_run_map: dict[str, TaskRun] = {}
-    for job_id in known:
-        last = (
-            await db.execute(
-                select(TaskRun)
-                .where(TaskRun.job_id == job_id)
-                .order_by(desc(TaskRun.started_at))
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-        if last is not None:
-            last_run_map[job_id] = last
+    # Ultima rulare per job — un singur query cu DISTINCT ON in PostgreSQL.
+    # In ordinea (job_id, started_at DESC) primul rand per job_id e cel mai recent.
+    last_run_rows = (
+        await db.execute(
+            select(TaskRun)
+            .where(TaskRun.job_id.in_(known))
+            .distinct(TaskRun.job_id)
+            .order_by(TaskRun.job_id, desc(TaskRun.started_at))
+        )
+    ).scalars().all()
+    last_run_map: dict[str, TaskRun] = {r.job_id: r for r in last_run_rows}
 
     for job_id in known:
         ov = overrides.get(job_id)
-        default_type, default_expr = _default_trigger_str(job_id)
+        default_type, default_expr = efactura_scheduler.default_trigger_str(job_id)
         if ov is not None and ov.cron_expression:
             trigger_type = ov.trigger_type
             cron_expression = ov.cron_expression
@@ -444,6 +428,26 @@ async def update_job_schedule(
             select(ScheduledJobOverride).where(ScheduledJobOverride.job_id == job_name)
         )
     ).scalar_one_or_none()
+
+    # Calculam expresia + trigger_type-ul efectiv DUPA modificarea propusa
+    # si pre-validam parsarea inainte de a face commit in DB. In felul asta
+    # nu salvam in DB un override care la urmatorul start_scheduler ar esua.
+    if not body.reset_to_default:
+        effective_type = (
+            body.trigger_type
+            or (existing.trigger_type if existing else None)
+            or "cron"
+        )
+        effective_expr = (
+            body.cron_expression
+            if body.cron_expression is not None
+            else (existing.cron_expression if existing else None)
+        )
+        if effective_expr:
+            try:
+                efactura_scheduler.parse_cron_expression(effective_expr, effective_type)
+            except ValueError as exc:
+                raise HTTPException(400, f"Schedule invalid: {exc}")
 
     if body.reset_to_default:
         if existing is not None:
@@ -546,14 +550,35 @@ async def list_task_logs(
 
 @router.delete("/task-logs")
 async def clear_task_logs(
+    keep_last_days: int = Query(
+        0, ge=0, le=365,
+        description=(
+            "Daca > 0, sterge doar rulari mai vechi de N zile. "
+            "Default 0 = sterge tot (pastrand astfel comportamentul vechi)."
+        ),
+    ),
     admin: Account = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Sterge toate intrarile din task_runs (buton Clear in UI)."""
-    result = await db.execute(sa_delete(TaskRun))
+    """Sterge intrari din task_runs.
+
+    - `keep_last_days=0` (default): sterge tot — accesibil doar super-admin.
+    - `keep_last_days>0`: sterge doar rulari finalizate mai vechi decat cutoff.
+    """
+    stmt = sa_delete(TaskRun).execution_options(synchronize_session=False)
+    if keep_last_days > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=keep_last_days)
+        stmt = stmt.where(
+            TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff,
+        )
+    result = await db.execute(stmt)
     await db.commit()
-    log.warning("task_runs sterse de admin_id=%s (%d randuri)", admin.id, result.rowcount or 0)
-    return {"ok": True, "deleted": int(result.rowcount or 0)}
+    deleted = int(result.rowcount or 0)
+    log.warning(
+        "task_runs sterse de admin_id=%s (%d randuri, keep_last_days=%s)",
+        admin.id, deleted, keep_last_days,
+    )
+    return {"ok": True, "deleted": deleted, "keep_last_days": keep_last_days}
 
 
 # ---------- Global settings (mutate din .env in UI) ----------

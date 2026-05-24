@@ -40,12 +40,17 @@ export interface Anvelopa {
   dotId: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
+  indiceViteza: string | null;
+  indiceSarcina: number | null;
   comments: string | null;
   marcaNume: string | null;
   dimensiuneValoare: string | null;
   profilValoare: string | null;
   dotValoare: string | null;
 }
+
+export const INDICE_VITEZA_SHORTCUTS: string[] = ["H", "V", "T", "W", "Y", "S", "R", "Q", "P", "N"];
+export const INDICE_SARCINA_SHORTCUTS: number[] = [91, 94, 95, 88, 98, 87, 92, 96, 100, 102];
 
 export interface CazareItem {
   id: number;
@@ -97,6 +102,8 @@ interface RawAnvelopa {
   dot_id?: number | null;
   tip: string;
   adancime?: number | null;
+  indice_viteza?: string | null;
+  indice_sarcina?: number | null;
   comments?: string | null;
   marca_nume?: string | null;
   dimensiune_valoare?: string | null;
@@ -153,6 +160,8 @@ function mapAnvelopa(a: RawAnvelopa): Anvelopa {
     dotId: a.dot_id ?? null,
     tip: a.tip as TipAnvelopa, // server enum oglindit local
     adancime: a.adancime ?? null,
+    indiceViteza: a.indice_viteza ?? null,
+    indiceSarcina: a.indice_sarcina ?? null,
     comments: a.comments ?? null,
     marcaNume: a.marca_nume ?? null,
     dimensiuneValoare: a.dimensiune_valoare ?? null,
@@ -161,7 +170,7 @@ function mapAnvelopa(a: RawAnvelopa): Anvelopa {
   };
 }
 
-function mapCazare(c: RawCazare): Cazare {
+export function mapCazare(c: RawCazare): Cazare {
   return {
     id: c.id,
     clientId: c.client_id ?? null,

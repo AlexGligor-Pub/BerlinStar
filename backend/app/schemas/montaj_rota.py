@@ -21,6 +21,8 @@ class MontajRotaCreate(BaseModel):
     tip: TipAnvelopaStr = "vara"
     adancime: float | None = None
     cuplu_strangere: float | None = None
+    indice_viteza: str | None = None
+    indice_sarcina: int | None = None
     comments: str | None = None
 
 
@@ -43,6 +45,8 @@ class MontajRotaRead(BaseModel):
     tip: TipAnvelopaStr
     adancime: float | None
     cuplu_strangere: float | None
+    indice_viteza: str | None = None
+    indice_sarcina: int | None = None
     comments: str | None
     # denormalizat
     marca_nume: str | None = None

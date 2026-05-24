@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -153,6 +154,14 @@ class TaskRun(Base):
         Index("ix_task_runs_job_id", "job_id"),
         Index("ix_task_runs_started_at", "started_at"),
         Index("ix_task_runs_status", "status"),
+        CheckConstraint(
+            "status IN ('running', 'success', 'error')",
+            name="ck_task_runs_status",
+        ),
+        CheckConstraint(
+            "triggered_by IN ('schedule', 'manual')",
+            name="ck_task_runs_triggered_by",
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -176,6 +185,12 @@ class ScheduledJobOverride(Base):
     cron_expression-ul din DB in loc de default-ul hardcoded in cod.
     """
     __tablename__ = "scheduled_job_overrides"
+    __table_args__ = (
+        CheckConstraint(
+            "trigger_type IN ('cron', 'interval')",
+            name="ck_scheduled_job_overrides_trigger_type",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     job_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)

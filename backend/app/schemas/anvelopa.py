@@ -12,6 +12,8 @@ class AnvelopaCreate(BaseModel):
     dot_id: int | None = None
     tip: TipAnvelopa = TipAnvelopa.VARA
     adancime: float | None = Field(default=None, ge=0)
+    indice_viteza: str | None = Field(default=None, max_length=4)
+    indice_sarcina: int | None = Field(default=None, ge=0)
     comments: str | None = None
 
 
@@ -22,6 +24,8 @@ class AnvelopaUpdate(BaseModel):
     dot_id: int | None = None
     tip: TipAnvelopa | None = None
     adancime: float | None = Field(default=None, ge=0)
+    indice_viteza: str | None = Field(default=None, max_length=4)
+    indice_sarcina: int | None = Field(default=None, ge=0)
     comments: str | None = None
 
 
@@ -36,6 +40,8 @@ class AnvelopaRead(BaseModel):
     dot_id: int | None = None
     tip: TipAnvelopa
     adancime: float | None
+    indice_viteza: str | None = None
+    indice_sarcina: int | None = None
     comments: str | None
     # denormalizat pentru afișare
     marca_nume: str | None = None

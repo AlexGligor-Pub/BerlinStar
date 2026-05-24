@@ -1,17 +1,17 @@
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
 import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
-import { consumeResume, pendingLoad, clearPendingLoad } from "../store/resumeStore";
+import { consumeResume, pendingLoad, clearPendingLoad, newDevizTick } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
-import { savePosHotelCtx, consumePendingPosReturn } from "../store/posHotelStore";
+import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
 import { notify } from "../store/notificationsStore";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
-import { loadMontajRotiByReceipt, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
+import { loadMontajRotiByReceipt, bulkUpsertMontajRoti, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import type { TipAnvelopa } from "../store/hotelAnvelopeStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
@@ -467,6 +467,8 @@ interface CazareAnvelopaPayload {
   dot_id: number | null;
   tip: TipAnvelopa;
   adancime: number | null;
+  indice_viteza: string | null;
+  indice_sarcina: number | null;
 }
 
 interface CazareItemPayload {
@@ -622,6 +624,57 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     }
   }
 
+  async function autoSaveMountedTiresFromHotel(receiptId: number) {
+    try {
+      const existing = await loadMontajRotiByReceipt(receiptId);
+      if (existing.length > 0) return; // nu suprascriem montaj-ul deja salvat de utilizator
+      const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${receiptId}&limit=10`);
+      if (!res.ok) return;
+      const data = await res.json() as CazariResponse;
+      const cazari = data?.items ?? [];
+      let mountedItems: CazareItemPayload[] | null = null;
+      // 1) Scoatere simplă: cazarea are data_checkout + montate_pe_masina=true
+      // 2) Combinată: cazarea veche are data_checkout + successor_montate_pe_masina=true
+      for (const c of cazari) {
+        if (c.data_checkout && (c.montate_pe_masina || c.successor_montate_pe_masina)) {
+          mountedItems = c.items ?? [];
+          break;
+        }
+      }
+      // 3) Fallback: cazarea nouă cu referinta_cazare_id și montate_pe_masina=true
+      if (!mountedItems) {
+        for (const c of cazari) {
+          if (c.referinta_cazare_id != null && c.montate_pe_masina && (c.referinta_cazare_items?.length ?? 0) > 0) {
+            mountedItems = c.referinta_cazare_items ?? [];
+            break;
+          }
+        }
+      }
+      if (!mountedItems || mountedItems.length === 0) return;
+      const drafts: MontajRotaDraft[] = mountedItems
+        .filter((it): it is CazareItemPayload & { anvelopa: CazareAnvelopaPayload } => !!it.anvelopa)
+        .map((it, i) => ({
+          pozitie: defaultPozitieForIndex(i),
+          presiune: 2.3,
+          ordine: i,
+          marcaId: it.anvelopa.marca_id ?? null,
+          dimensiuneId: it.anvelopa.dimensiune_id ?? null,
+          profilId: it.anvelopa.profil_id ?? null,
+          dotId: it.anvelopa.dot_id ?? null,
+          tip: it.anvelopa.tip,
+          adancime: it.anvelopa.adancime ?? null,
+          cupluStrangere: null,
+          indiceViteza: it.anvelopa.indice_viteza ?? null,
+          indiceSarcina: it.anvelopa.indice_sarcina ?? null,
+          comments: null,
+        }));
+      if (drafts.length === 0) return;
+      await bulkUpsertMontajRoti(receiptId, drafts);
+      await refreshLinkedMontaje();
+      notify("Rotile montate pe mașină au fost adăugate la deviz.", "success");
+    } catch { /* silent — userul poate deschide manual Montare Roți */ }
+  }
+
   onMount(() => {
     const pending = consumePendingPosReturn();
     if (pending) {
@@ -642,6 +695,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
         ? "Scoaterea a fost adăugată la deviz."
         : "Cazarea a fost adăugată la deviz.";
       notify(msg, "success");
+      // Dacă scoaterea a marcat „Montate pe mașină", salvăm automat rotile ca montaj la deviz.
+      if ((pending.action === "scoatere" || pending.action === "scoatere_si_cazare") && meta?.receiptId) {
+        void autoSaveMountedTiresFromHotel(Number(meta.receiptId));
+      }
       return;
     }
     const r = consumeResume();
@@ -679,6 +736,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
   function handleListaNoua() {
     clearCart();
     clearCartMeta();
+    clearPosHotelCtx();
     setTitlu("");
     setDescriere("");
     setDateTehn("");
@@ -687,6 +745,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setLoadedReceiptId(null);
     setShowResumeModal(false);
   }
+
+  // Trigger extern din POS (buton "Deviz Nou") — defer pentru a evita run-ul inițial
+  createEffect(on(newDevizTick, () => { handleListaNoua(); }, { defer: true }));
 
   createEffect(() => {
     const d = pendingLoad();
@@ -820,6 +881,8 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
           tip: r.tip,
           adancime: r.adancime,
           cupluStrangere: r.cupluStrangere,
+          indiceViteza: r.indiceViteza,
+          indiceSarcina: r.indiceSarcina,
           comments: r.comments,
         }));
       } else {
@@ -862,6 +925,8 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                 tip: it.anvelopa.tip,
                 adancime: it.anvelopa.adancime ?? null,
                 cupluStrangere: null,
+                indiceViteza: it.anvelopa.indice_viteza ?? null,
+                indiceSarcina: it.anvelopa.indice_sarcina ?? null,
                 comments: null,
               }));
           }
@@ -934,6 +999,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       titlu: titlu().trim(),
       clientId: client.id,
       clientNume: client.nume,
+      employeeId: selectedEmployee()?.id ?? null,
     });
     setGoingToHotel(false);
     navigate("/hotel-anvelope");

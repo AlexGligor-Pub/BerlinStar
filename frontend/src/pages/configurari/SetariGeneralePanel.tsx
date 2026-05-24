@@ -21,6 +21,8 @@ const MONTARE_ROTI_FIELDS: MontareRotiField[] = [
   { key: "montareRotiShowTip", label: "Tip", hint: "Iarnă / Vară / M+S / Altele." },
   { key: "montareRotiShowAdancime", label: "Adâncime (mm)", hint: "Adâncimea profilului, cu scurtături." },
   { key: "montareRotiShowCuplu", label: "Cuplu strângere (Nm)", hint: "Cuplul recomandat de strângere a piulițelor." },
+  { key: "montareRotiShowIndiceViteza", label: "Indice Viteză", hint: "Indicele de viteză (ex.: H, V, T, W, Y)." },
+  { key: "montareRotiShowIndiceSarcina", label: "Indice Sarcină", hint: "Indicele de sarcină (ex.: 91, 94, 95)." },
 ];
 
 const HOTEL_ANVELOPE_FIELDS: MontareRotiField[] = [
@@ -28,6 +30,8 @@ const HOTEL_ANVELOPE_FIELDS: MontareRotiField[] = [
   { key: "hotelAnvelopeShowDot", label: "DOT", hint: "Codul DOT (săptămâna/anul fabricației)." },
   { key: "hotelAnvelopeShowAdancime", label: "Adâncime (mm)", hint: "Adâncimea profilului anvelopei." },
   { key: "hotelAnvelopeShowTip", label: "Tip", hint: "Iarnă / Vară / M+S / Altele." },
+  { key: "hotelAnvelopeShowIndiceViteza", label: "Indice Viteză", hint: "Indicele de viteză (ex.: H, V, T, W, Y)." },
+  { key: "hotelAnvelopeShowIndiceSarcina", label: "Indice Sarcină", hint: "Indicele de sarcină (ex.: 91, 94, 95)." },
 ];
 
 export default function SetariGeneralePanel() {

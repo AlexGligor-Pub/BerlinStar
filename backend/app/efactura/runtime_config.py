@@ -179,15 +179,9 @@ async def ensure_initialized(db: AsyncSession) -> EFacturaGlobalSettings:
         if not row.frontend_callback_redirect:
             row.frontend_callback_redirect = derived_frontend_callback()
             changed = True
-        # Migram valorile vechi care indica spre AdminV2 (acum mergem in /efactura
-        # pentru ca pagina trebuie sa fie accesibila si userilor non-admin).
-        elif "adminv2" in row.frontend_callback_redirect and "section=efactura" in row.frontend_callback_redirect:
-            log.info(
-                "Migrare: frontend_callback_redirect %r -> %r",
-                row.frontend_callback_redirect, derived_frontend_callback(),
-            )
-            row.frontend_callback_redirect = derived_frontend_callback()
-            changed = True
+        # Migrarea vechiului `/adminv2?section=efactura` -> `/efactura` e facuta
+        # ca data migration in Alembic (zza0jj1kk2ll3). Nu o repetam aici ca sa
+        # nu suprascriem o valoare aleasa manual de admin.
 
     # Auto-generare Fernet key la primul startup (deci tokeni se pot stoca imediat)
     if not row.fernet_key:

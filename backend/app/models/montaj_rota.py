@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import enum
-from sqlalchemy import Integer, Text, Boolean, DateTime, Float, ForeignKey, Index, Enum as SAEnum
+from sqlalchemy import Integer, String, Text, Boolean, DateTime, Float, ForeignKey, Index, Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 from .anvelopa import TipAnvelopa
@@ -54,6 +54,8 @@ class MontajRota(Base):
     )
     adancime: Mapped[float | None] = mapped_column(Float, nullable=True)
     cuplu_strangere: Mapped[float | None] = mapped_column(Float, nullable=True)
+    indice_viteza: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    indice_sarcina: Mapped[int | None] = mapped_column(Integer, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

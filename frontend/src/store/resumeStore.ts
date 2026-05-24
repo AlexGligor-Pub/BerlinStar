@@ -42,3 +42,12 @@ export function clearPendingLoad() {
 }
 
 export { pendingLoad };
+
+// Reactive trigger pentru "Deviz Nou" — incrementat de POS, urmărit de ShoppingList
+const [newDevizTick, setNewDevizTick] = createSignal(0);
+
+export function triggerNewDeviz() {
+  setNewDevizTick((n) => n + 1);
+}
+
+export { newDevizTick };

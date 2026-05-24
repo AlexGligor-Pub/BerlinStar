@@ -1276,8 +1276,15 @@ export async function generateCazareScoatereIntroducere(
 
   await drawBackground(doc, company?.background_path);
 
+  // Header — folosim clientul cazării noi (destinatarul documentului); dacă scoaterea
+  // se face de la alt client, acel client e menționat explicit în secțiunea SCOATERE.
+  const differentClient =
+    (checkoutCazare.clientNume ?? "").trim() !== "" &&
+    (newCazare.clientNume ?? "").trim() !== "" &&
+    (checkoutCazare.clientNume ?? "").trim() !== (newCazare.clientNume ?? "").trim();
+
   let y = await drawCazareHeader3Col(
-    doc, company ?? null, checkoutCazare, vehicle,
+    doc, company ?? null, newCazare, vehicle,
     "Scoatere și cazare nouă", checkoutCazare.id, fmtDate(checkoutDate), t, FONT,
   ) + 3;
 
@@ -1291,6 +1298,19 @@ export async function generateCazareScoatereIntroducere(
   doc.setTextColor(...navyBlue);
   doc.text("SCOATERE DIN CAZARE", ML, y);
   y += 5;
+
+  // Notă: anvelopele scoase aparțin altui client decât destinatarul documentului
+  if (differentClient) {
+    setF("bold", 9);
+    doc.setTextColor(...navyBlue);
+    const ownerLines: string[] = doc.splitTextToSize(
+      `Anvelopele au fost scoase de la clientul: ${t(checkoutCazare.clientNume ?? "")}`,
+      CW,
+    );
+    doc.text(ownerLines, ML, y);
+    y += ownerLines.length * 4 + 2;
+    doc.setTextColor(...C.black);
+  }
 
   // Detalii cazare — checkout (2 coloane: locație/angajat | date)
   const colW = (CW - 8) / 2;
@@ -1770,9 +1790,9 @@ async function drawMontajRotaCard(
     doc.text(value, startX + lblW, ty);
     ty += 3.8;
   };
-  drawKV(t("Adâncime"), r.adancime != null ? `${r.adancime} mm` : "—");
-  drawKV("Presiune", r.presiune != null ? `${r.presiune.toFixed(1)} bar` : "—");
-  drawKV("Cuplu", r.cupluStrangere != null ? `${r.cupluStrangere} Nm` : "—");
+  if (r.adancime != null) drawKV(t("Adâncime"), `${r.adancime} mm`);
+  if (r.presiune != null) drawKV("Presiune", `${r.presiune.toFixed(1)} bar`);
+  if (r.cupluStrangere != null) drawKV("Cuplu", `${r.cupluStrangere} Nm`);
 }
 
 /** Rand text-only pentru Rezerva / Nespecificat: titlu bold + detalii in propozitie

@@ -15,11 +15,15 @@ export interface GeneralSettingsData {
   montareRotiShowTip: boolean;
   montareRotiShowAdancime: boolean;
   montareRotiShowCuplu: boolean;
+  montareRotiShowIndiceViteza: boolean;
+  montareRotiShowIndiceSarcina: boolean;
 
   hotelAnvelopeShowProfil: boolean;
   hotelAnvelopeShowDot: boolean;
   hotelAnvelopeShowAdancime: boolean;
   hotelAnvelopeShowTip: boolean;
+  hotelAnvelopeShowIndiceViteza: boolean;
+  hotelAnvelopeShowIndiceSarcina: boolean;
 }
 
 export type GeneralSettingsPatch = Partial<GeneralSettingsData>;
@@ -37,10 +41,14 @@ const API_KEY_MAP: Record<keyof GeneralSettingsData, string> = {
   montareRotiShowTip: "montare_roti_show_tip",
   montareRotiShowAdancime: "montare_roti_show_adancime",
   montareRotiShowCuplu: "montare_roti_show_cuplu",
+  montareRotiShowIndiceViteza: "montare_roti_show_indice_viteza",
+  montareRotiShowIndiceSarcina: "montare_roti_show_indice_sarcina",
   hotelAnvelopeShowProfil: "hotel_anvelope_show_profil",
   hotelAnvelopeShowDot: "hotel_anvelope_show_dot",
   hotelAnvelopeShowAdancime: "hotel_anvelope_show_adancime",
   hotelAnvelopeShowTip: "hotel_anvelope_show_tip",
+  hotelAnvelopeShowIndiceViteza: "hotel_anvelope_show_indice_viteza",
+  hotelAnvelopeShowIndiceSarcina: "hotel_anvelope_show_indice_sarcina",
 };
 
 function mapFromApi(data: any): GeneralSettingsData {
@@ -57,10 +65,14 @@ function mapFromApi(data: any): GeneralSettingsData {
     montareRotiShowTip: data.montare_roti_show_tip ?? true,
     montareRotiShowAdancime: data.montare_roti_show_adancime ?? true,
     montareRotiShowCuplu: data.montare_roti_show_cuplu ?? true,
+    montareRotiShowIndiceViteza: data.montare_roti_show_indice_viteza ?? false,
+    montareRotiShowIndiceSarcina: data.montare_roti_show_indice_sarcina ?? false,
     hotelAnvelopeShowProfil: data.hotel_anvelope_show_profil ?? true,
     hotelAnvelopeShowDot: data.hotel_anvelope_show_dot ?? true,
     hotelAnvelopeShowAdancime: data.hotel_anvelope_show_adancime ?? true,
     hotelAnvelopeShowTip: data.hotel_anvelope_show_tip ?? true,
+    hotelAnvelopeShowIndiceViteza: data.hotel_anvelope_show_indice_viteza ?? false,
+    hotelAnvelopeShowIndiceSarcina: data.hotel_anvelope_show_indice_sarcina ?? false,
   };
 }
 

@@ -3,7 +3,7 @@ import { products, loadProducts } from "../store/productsStore";
 import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
 import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
 import { receipts, loadReceipts, connectPosSSE, disconnectPosSSE, type Receipt } from "../store/receiptsStore";
-import { triggerLoad } from "../store/resumeStore";
+import { triggerLoad, triggerNewDeviz } from "../store/resumeStore";
 import { device } from "../store/deviceStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
@@ -15,25 +15,15 @@ interface TypeToggleProps {
   label: string;
   show: () => boolean;
   setShow: (v: boolean) => void;
-  other: () => boolean;
-  setOther: (v: boolean) => void;
 }
 
-/** Buton toggle ON/OFF cu invariant: cel putin unul dintre (this, other) ramane
- *  pe ON. Daca click-ul ar lasa ambele OFF, le restaureaza pe amandoua. */
+/** Buton toggle ON/OFF independent. Ambele off = niciun filtru aplicat. */
 function TypeToggle(props: TypeToggleProps) {
   return (
     <button
       class="btn btn-sm type-toggle-btn"
       classList={{ "type-toggle-btn--on": props.show(), "type-toggle-btn--off": !props.show() }}
-      onClick={() => {
-        const next = !props.show();
-        props.setShow(next);
-        if (!next && !props.other()) {
-          props.setShow(true);
-          props.setOther(true);
-        }
-      }}
+      onClick={() => props.setShow(!props.show())}
     >
       {props.label}
     </button>
@@ -58,12 +48,23 @@ export default function POS() {
   const [selectedDepartmentId, setSelectedDepartmentId] = createSignal<number | null>(null);
   const [search, setSearch] = createSignal("");
   const [category, setCategory] = createSignal("Toate");
-  const [showProduse, setShowProduse] = createSignal(true);
-  const [showServicii, setShowServicii] = createSignal(true);
+  const [showProduse, setShowProduse] = createSignal(false);
+  const [showServicii, setShowServicii] = createSignal(false);
 
   const [showDevizModal, setShowDevizModal] = createSignal(false);
   const [devizSearch, setDevizSearch] = createSignal("");
   const [visibleCount, setVisibleCount] = createSignal(PAGE_SIZE);
+  const [showNewDevizConfirm, setShowNewDevizConfirm] = createSignal(false);
+
+  function confirmNewDeviz() {
+    triggerNewDeviz();
+    selectEmployee(null);
+    setSelectedDepartmentId(null);
+    setCategory("Toate");
+    setShowProduse(false);
+    setShowServicii(false);
+    setShowNewDevizConfirm(false);
+  }
 
   const unpaidFiltered = createMemo(() => {
     const q = devizSearch().toLowerCase().trim();
@@ -135,12 +136,13 @@ export default function POS() {
     const q = search().toLowerCase();
     const sp = showProduse();
     const ss = showServicii();
+    const noTypeFilter = !sp && !ss; // ambele off → fără filtru de tip
     const tid = selectedDepartmentId();
     const deptIds = locationDeptIds();
     return products().filter((p) => {
       const matchCat = category() === "Toate" || p.category === category();
       const matchSearch = !q || p.name.toLowerCase().includes(q);
-      const matchType = (p.type === "Produs" && sp) || (p.type === "Service" && ss);
+      const matchType = noTypeFilter || (p.type === "Produs" && sp) || (p.type === "Service" && ss);
       const matchTheme = tid !== null ? p.departmentId === tid : deptIds.has(p.departmentId!);
       return matchCat && matchSearch && matchType && matchTheme;
     });
@@ -202,6 +204,14 @@ export default function POS() {
             <div class="pos-layout">
               <div class="pos-left-col">
                 <div class="pos-toolbar">
+                  <button
+                    class="btn btn-sm btn-primary"
+                    style="white-space:nowrap;flex-shrink:0"
+                    onClick={() => setShowNewDevizConfirm(true)}
+                    title="Începe un deviz nou (șterge lista curentă)"
+                  >
+                    Deviz Nou
+                  </button>
                   <input
                     class="input pos-search"
                     type="search"
@@ -213,15 +223,11 @@ export default function POS() {
                     label="Produse"
                     show={showProduse}
                     setShow={setShowProduse}
-                    other={showServicii}
-                    setOther={setShowServicii}
                   />
                   <TypeToggle
                     label="Servicii"
                     show={showServicii}
                     setShow={setShowServicii}
-                    other={showProduse}
-                    setOther={setShowProduse}
                   />
                   <div class="filter-divider" />
                   <div class="pos-toolbar-cats">
@@ -404,6 +410,43 @@ export default function POS() {
         </div>
 
       </div>
+
+      <Show when={showNewDevizConfirm()}>
+        <div class="sl-modal-overlay" style="z-index:500">
+          <div class="sl-modal" style="max-width:520px;width:100%;text-align:center">
+            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
+              <span class="sl-modal-title">Deviz Nou</span>
+            </div>
+            <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
+                Lista curentă (produse, client, mașină, observații, angajat, departament și context POS-Hotel) va fi <strong>ștearsă complet</strong>.
+                <br />Continui?
+              </p>
+            </div>
+            <div class="sl-modal-footer" style="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none">
+              <button
+                class="btn btn-ghost"
+                style="min-width:160px;min-height:96px;font-size:16px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
+                onClick={() => setShowNewDevizConfirm(false)}
+              >
+                Anulează
+              </button>
+              <button
+                class="btn btn-primary"
+                style="min-width:160px;min-height:96px;font-size:16px;font-weight:700;border-radius:10px"
+                onClick={confirmNewDeviz}
+              >
+                Începe Deviz Nou
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
 
       <Show when={showDevizModal()}>
         <div class="sl-modal-overlay">

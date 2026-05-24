@@ -11,6 +11,7 @@ import {
   bulkUpsertMontajRoti, defaultPozitieForIndex,
   POZITII_ORDONATE, POZITIE_LABELS,
   PRESIUNE_SHORTCUTS, CUPLU_SHORTCUTS, ADANCIME_SHORTCUTS, ADANCIME_DEFAULT,
+  INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
   montareRotiImages, loadMontareRotiImages,
   type MontajRotaDraft, type PozitieRoata,
 } from "../store/montajRotiStore";
@@ -50,6 +51,8 @@ function emptyRow(idx: number): RowDraft {
     tip: "vara",
     adancime: ADANCIME_DEFAULT,
     cupluStrangere: pozitieFaraCuplu(pozitie) ? 0 : null,
+    indiceViteza: null,
+    indiceSarcina: null,
     comments: null,
   };
 }
@@ -154,6 +157,8 @@ export default function MontareRotiModal(props: {
         tip: r.tip,
         adancime: r.adancime,
         cupluStrangere: r.cupluStrangere,
+        indiceViteza: r.indiceViteza,
+        indiceSarcina: r.indiceSarcina,
         comments: r.comments,
       }));
       await bulkUpsertMontajRoti(props.receiptId, items);
@@ -177,17 +182,11 @@ export default function MontareRotiModal(props: {
     return s[key] !== false;
   };
 
-  function renderWheelImage(placement: "left" | "right" | "bottom", pozitie: PozitieRoata) {
-    const placementStyle =
-      placement === "left"
-        ? "grid-column:1;grid-row:1 / span 4;align-self:stretch"
-        : placement === "right"
-        ? "grid-column:3;grid-row:1 / span 4;align-self:stretch"
-        : "grid-column:1 / -1";
+  function renderWheelImage(pozitie: PozitieRoata, extraStyle: string = "") {
     const url = imageUrlForPozitie(pozitie);
     return (
       <div
-        style={`${placementStyle};min-height:120px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:#fff`}
+        style={`min-height:120px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:#fff;${extraStyle}`}
       >
         <Show
           when={url}
@@ -233,284 +232,357 @@ export default function MontareRotiModal(props: {
                       </div>
                     </div>
 
-                    <div style="display:grid;gap:5px;grid-template-columns:1fr 1fr 1fr;align-items:start">
-                      <Show when={placement() === "left"}>
-                        {renderWheelImage("left", row.pozitie)}
-                      </Show>
-
-                      {/* Pozitie */}
-                      <div>
-                        <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Poziție</label>
-                        <select
-                          class="input"
-                          style="width:100%"
-                          value={row.pozitie}
-                          onChange={(e) => {
-                            const newPoz = e.currentTarget.value as PozitieRoata;
-                            const patch: Partial<RowDraft> = { pozitie: newPoz };
-                            if (pozitieFaraCuplu(newPoz)) patch.cupluStrangere = 0;
-                            patchRow(row.uid, patch);
-                          }}
-                        >
-                          <For each={POZITII_ORDONATE}>
-                            {(p) => <option value={p}>{POZITIE_LABELS[p]}</option>}
-                          </For>
-                        </select>
-                      </div>
-
-                      {/* Presiune */}
-                      <Show when={showField("montareRotiShowPresiune")}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Presiune (bar)</label>
-                          <input
-                            class="input"
-                            style="width:100%"
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            value={row.presiune ?? ""}
-                            onInput={(e) => {
-                              const v = e.currentTarget.value;
-                              patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
-                            }}
-                          />
-                          <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-                            <For each={PRESIUNE_SHORTCUTS}>
-                              {(val) => (
-                                <button
-                                  type="button"
-                                  style={SHORTCUT_BTN_STYLE}
-                                  onClick={() => patchRow(row.uid, { presiune: val })}
-                                >
-                                  {val.toFixed(1)}
-                                </button>
-                              )}
-                            </For>
+                    {(() => {
+                      const renderControls = () => (
+                        <>
+                          {/* Pozitie */}
+                          <div>
+                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Poziție</label>
+                            <select
+                              class="input"
+                              style="width:100%"
+                              value={row.pozitie}
+                              onChange={(e) => {
+                                const newPoz = e.currentTarget.value as PozitieRoata;
+                                const patch: Partial<RowDraft> = { pozitie: newPoz };
+                                if (pozitieFaraCuplu(newPoz)) patch.cupluStrangere = 0;
+                                patchRow(row.uid, patch);
+                              }}
+                            >
+                              <For each={POZITII_ORDONATE}>
+                                {(p) => <option value={p}>{POZITIE_LABELS[p]}</option>}
+                              </For>
+                            </select>
                           </div>
-                        </div>
-                      </Show>
 
-                      {/* Marca */}
-                      <Show when={showField("montareRotiShowMarca")}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
-                          <SearchableSelect
-                            items={marci()}
-                            value={row.marcaId ?? ""}
-                            onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
-                            getLabel={(m) => m.nume}
-                            placeholder="Marcă"
-                            onAddNew={addMarca}
-                          />
-                        </div>
-                      </Show>
-
-                      {/* Profil */}
-                      <Show when={showField("montareRotiShowProfil")}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
-                          <SearchableSelect
-                            items={profiluri()}
-                            value={row.profilId ?? ""}
-                            onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
-                            getLabel={(p) => p.valoare}
-                            placeholder="Profil"
-                            onAddNew={addProfil}
-                          />
-                        </div>
-                      </Show>
-
-                      {/* Dim / DOT / Tip — împachetate în 3 sub-coloane pentru a încăpea pe acelasi rând,
-                          în paralel cu imaginea (care acum spanează 3 rânduri). */}
-                      <Show when={showField("montareRotiShowDimensiune") || showField("montareRotiShowDot") || showField("montareRotiShowTip")}>
-                        <div style="grid-column:span 2;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;align-items:start">
-                          {/* Dimensiune */}
-                          <Show when={showField("montareRotiShowDimensiune")}>
+                          {/* Presiune */}
+                          <Show when={showField("montareRotiShowPresiune")}>
                             <div>
-                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
-                              <SearchableSelect
-                                items={dimensiuni()}
-                                value={row.dimensiuneId ?? ""}
-                                onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
-                                getLabel={(d) => d.valoare}
-                                placeholder="Dimensiune"
-                                onAddNew={addDim}
-                              />
-                            </div>
-                          </Show>
-
-                          {/* DOT */}
-                          <Show when={showField("montareRotiShowDot")}>
-                            <div>
-                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
-                              <SearchableSelect
-                                items={coduriDot()}
-                                value={row.dotId ?? ""}
-                                onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
-                                getLabel={(d) => d.valoare}
-                                placeholder="DOT"
-                                onAddNew={addDot}
-                              />
-                            </div>
-                          </Show>
-
-                          {/* Tip */}
-                          <Show when={showField("montareRotiShowTip")}>
-                            <div>
-                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
-                              <select
+                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Presiune (bar)</label>
+                              <input
                                 class="input"
                                 style="width:100%"
-                                value={row.tip}
-                                onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
-                              >
-                                <option value="iarna">{TIP_LABELS.iarna}</option>
-                                <option value="vara">{TIP_LABELS.vara}</option>
-                                <option value="ms">{TIP_LABELS.ms}</option>
-                                <option value="altele">{TIP_LABELS.altele}</option>
-                              </select>
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                value={row.presiune ?? ""}
+                                onInput={(e) => {
+                                  const v = e.currentTarget.value;
+                                  patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
+                                }}
+                              />
+                              <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                <For each={PRESIUNE_SHORTCUTS}>
+                                  {(val) => (
+                                    <button
+                                      type="button"
+                                      style={SHORTCUT_BTN_STYLE}
+                                      onClick={() => patchRow(row.uid, { presiune: val })}
+                                    >
+                                      {val.toFixed(1)}
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
                             </div>
                           </Show>
-                        </div>
-                      </Show>
 
-                      {/* Adancime + Cuplu — vizibilitate combinata din setarile userului + regula
-                          Rezerva/Nespecificat (Cuplu ascuns automat). Layout 0.7fr/1.3fr cand ambele
-                          sunt vizibile, altfel coloana simpla. */}
-                      <Show when={(() => {
-                        const adVisible = showField("montareRotiShowAdancime");
-                        const cupluVisible = showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie);
-                        return adVisible && cupluVisible;
-                      })()}>
-                        <div style="grid-column:span 2;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
-                          <div>
-                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                            <input
-                              class="input"
-                              style="width:100%"
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              value={row.adancime ?? ""}
-                              onInput={(e) => {
-                                const v = e.currentTarget.value;
-                                patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                              }}
-                            />
-                            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-                              <For each={ADANCIME_SHORTCUTS}>
-                                {(val) => (
-                                  <button
-                                    type="button"
-                                    style={SHORTCUT_BTN_STYLE}
-                                    onClick={() => patchRow(row.uid, { adancime: val })}
-                                  >
-                                    {val}
-                                  </button>
-                                )}
-                              </For>
+                          {/* Marca */}
+                          <Show when={showField("montareRotiShowMarca")}>
+                            <div>
+                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
+                              <SearchableSelect
+                                items={marci()}
+                                value={row.marcaId ?? ""}
+                                onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
+                                getLabel={(m) => m.nume}
+                                placeholder="Marcă"
+                                onAddNew={addMarca}
+                              />
                             </div>
-                          </div>
-                          <div>
-                            <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                            <input
-                              class="input"
-                              style="width:100%"
-                              type="number"
-                              step="1"
-                              min="0"
-                              value={row.cupluStrangere ?? ""}
-                              onInput={(e) => {
-                                const v = e.currentTarget.value;
-                                patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                              }}
-                            />
-                            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-                              <For each={CUPLU_SHORTCUTS}>
-                                {(val) => (
-                                  <button
-                                    type="button"
-                                    style={SHORTCUT_BTN_STYLE}
-                                    onClick={() => patchRow(row.uid, { cupluStrangere: val })}
-                                  >
-                                    {val}
-                                  </button>
-                                )}
-                              </For>
+                          </Show>
+
+                          {/* Profil */}
+                          <Show when={showField("montareRotiShowProfil")}>
+                            <div>
+                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
+                              <SearchableSelect
+                                items={profiluri()}
+                                value={row.profilId ?? ""}
+                                onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
+                                getLabel={(p) => p.valoare}
+                                placeholder="Profil"
+                                onAddNew={addProfil}
+                              />
                             </div>
-                          </div>
-                        </div>
-                      </Show>
+                          </Show>
 
-                      <Show when={showField("montareRotiShowAdancime") && (!showField("montareRotiShowCuplu") || pozitieFaraCuplu(row.pozitie))}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                          <input
-                            class="input"
-                            style="width:100%"
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            value={row.adancime ?? ""}
-                            onInput={(e) => {
-                              const v = e.currentTarget.value;
-                              patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                            }}
-                          />
-                          <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-                            <For each={ADANCIME_SHORTCUTS}>
-                              {(val) => (
-                                <button
-                                  type="button"
-                                  style={SHORTCUT_BTN_STYLE}
-                                  onClick={() => patchRow(row.uid, { adancime: val })}
-                                >
-                                  {val}
-                                </button>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
+                          {/* Dim / DOT / Tip — span pe toata latimea controalelor, in 3 sub-coloane. */}
+                          <Show when={showField("montareRotiShowDimensiune") || showField("montareRotiShowDot") || showField("montareRotiShowTip")}>
+                            <div style="grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;align-items:start">
+                              <Show when={showField("montareRotiShowDimensiune")}>
+                                <div>
+                                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
+                                  <SearchableSelect
+                                    items={dimensiuni()}
+                                    value={row.dimensiuneId ?? ""}
+                                    onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
+                                    getLabel={(d) => d.valoare}
+                                    placeholder="Dimensiune"
+                                    onAddNew={addDim}
+                                  />
+                                </div>
+                              </Show>
+                              <Show when={showField("montareRotiShowDot")}>
+                                <div>
+                                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
+                                  <SearchableSelect
+                                    items={coduriDot()}
+                                    value={row.dotId ?? ""}
+                                    onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
+                                    getLabel={(d) => d.valoare}
+                                    placeholder="DOT"
+                                    onAddNew={addDot}
+                                  />
+                                </div>
+                              </Show>
+                              <Show when={showField("montareRotiShowTip")}>
+                                <div>
+                                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Tip</label>
+                                  <select
+                                    class="input"
+                                    style="width:100%"
+                                    value={row.tip}
+                                    onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
+                                  >
+                                    <option value="iarna">{TIP_LABELS.iarna}</option>
+                                    <option value="vara">{TIP_LABELS.vara}</option>
+                                    <option value="ms">{TIP_LABELS.ms}</option>
+                                    <option value="altele">{TIP_LABELS.altele}</option>
+                                  </select>
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
 
-                      <Show when={!showField("montareRotiShowAdancime") && showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie)}>
-                        <div>
-                          <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                          <input
-                            class="input"
-                            style="width:100%"
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={row.cupluStrangere ?? ""}
-                            onInput={(e) => {
-                              const v = e.currentTarget.value;
-                              patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                            }}
-                          />
-                          <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
-                            <For each={CUPLU_SHORTCUTS}>
-                              {(val) => (
-                                <button
-                                  type="button"
-                                  style={SHORTCUT_BTN_STYLE}
-                                  onClick={() => patchRow(row.uid, { cupluStrangere: val })}
-                                >
-                                  {val}
-                                </button>
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      </Show>
+                          {/* Adancime + Cuplu — span pe toata latimea controalelor. */}
+                          <Show when={(() => {
+                            const adVisible = showField("montareRotiShowAdancime");
+                            const cupluVisible = showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie);
+                            return adVisible && cupluVisible;
+                          })()}>
+                            <div style="grid-column:1 / -1;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
+                              <div>
+                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                                <input
+                                  class="input"
+                                  style="width:100%"
+                                  type="number"
+                                  step="0.5"
+                                  min="0"
+                                  value={row.adancime ?? ""}
+                                  onInput={(e) => {
+                                    const v = e.currentTarget.value;
+                                    patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                                  }}
+                                />
+                                <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                  <For each={ADANCIME_SHORTCUTS}>
+                                    {(val) => (
+                                      <button
+                                        type="button"
+                                        style={SHORTCUT_BTN_STYLE}
+                                        onClick={() => patchRow(row.uid, { adancime: val })}
+                                      >
+                                        {val}
+                                      </button>
+                                    )}
+                                  </For>
+                                </div>
+                              </div>
+                              <div>
+                                <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                                <input
+                                  class="input"
+                                  style="width:100%"
+                                  type="number"
+                                  step="1"
+                                  min="0"
+                                  value={row.cupluStrangere ?? ""}
+                                  onInput={(e) => {
+                                    const v = e.currentTarget.value;
+                                    patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                                  }}
+                                />
+                                <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                  <For each={CUPLU_SHORTCUTS}>
+                                    {(val) => (
+                                      <button
+                                        type="button"
+                                        style={SHORTCUT_BTN_STYLE}
+                                        onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                      >
+                                        {val}
+                                      </button>
+                                    )}
+                                  </For>
+                                </div>
+                              </div>
+                            </div>
+                          </Show>
 
-                      <Show when={placement() === "right"}>
-                        {renderWheelImage("right", row.pozitie)}
-                      </Show>
-                      <Show when={placement() === "bottom"}>
-                        {renderWheelImage("bottom", row.pozitie)}
-                      </Show>
-                    </div>
+                          <Show when={showField("montareRotiShowAdancime") && (!showField("montareRotiShowCuplu") || pozitieFaraCuplu(row.pozitie))}>
+                            <div>
+                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
+                              <input
+                                class="input"
+                                style="width:100%"
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                value={row.adancime ?? ""}
+                                onInput={(e) => {
+                                  const v = e.currentTarget.value;
+                                  patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
+                                }}
+                              />
+                              <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                <For each={ADANCIME_SHORTCUTS}>
+                                  {(val) => (
+                                    <button
+                                      type="button"
+                                      style={SHORTCUT_BTN_STYLE}
+                                      onClick={() => patchRow(row.uid, { adancime: val })}
+                                    >
+                                      {val}
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+
+                          <Show when={!showField("montareRotiShowAdancime") && showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie)}>
+                            <div>
+                              <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
+                              <input
+                                class="input"
+                                style="width:100%"
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={row.cupluStrangere ?? ""}
+                                onInput={(e) => {
+                                  const v = e.currentTarget.value;
+                                  patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
+                                }}
+                              />
+                              <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                <For each={CUPLU_SHORTCUTS}>
+                                  {(val) => (
+                                    <button
+                                      type="button"
+                                      style={SHORTCUT_BTN_STYLE}
+                                      onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                    >
+                                      {val}
+                                    </button>
+                                  )}
+                                </For>
+                              </div>
+                            </div>
+                          </Show>
+
+                          {/* Indice Viteza + Indice Sarcina — span pe toata latimea controalelor. */}
+                          <Show when={showField("montareRotiShowIndiceViteza") || showField("montareRotiShowIndiceSarcina")}>
+                            <div style="grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:start">
+                              <Show when={showField("montareRotiShowIndiceViteza")}>
+                                <div>
+                                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Indice Viteză</label>
+                                  <input
+                                    class="input"
+                                    style="width:100%"
+                                    type="text"
+                                    maxLength={4}
+                                    value={row.indiceViteza ?? ""}
+                                    onInput={(e) => {
+                                      const v = e.currentTarget.value.toUpperCase();
+                                      patchRow(row.uid, { indiceViteza: v === "" ? null : v });
+                                    }}
+                                  />
+                                  <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                    <For each={INDICE_VITEZA_SHORTCUTS}>
+                                      {(val) => (
+                                        <button
+                                          type="button"
+                                          style={SHORTCUT_BTN_STYLE}
+                                          onClick={() => patchRow(row.uid, { indiceViteza: val })}
+                                        >
+                                          {val}
+                                        </button>
+                                      )}
+                                    </For>
+                                  </div>
+                                </div>
+                              </Show>
+                              <Show when={showField("montareRotiShowIndiceSarcina")}>
+                                <div>
+                                  <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Indice Sarcină</label>
+                                  <input
+                                    class="input"
+                                    style="width:100%"
+                                    type="number"
+                                    step="1"
+                                    min="0"
+                                    value={row.indiceSarcina ?? ""}
+                                    onInput={(e) => {
+                                      const v = e.currentTarget.value;
+                                      patchRow(row.uid, { indiceSarcina: v === "" ? null : parseInt(v, 10) });
+                                    }}
+                                  />
+                                  <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+                                    <For each={INDICE_SARCINA_SHORTCUTS}>
+                                      {(val) => (
+                                        <button
+                                          type="button"
+                                          style={SHORTCUT_BTN_STYLE}
+                                          onClick={() => patchRow(row.uid, { indiceSarcina: val })}
+                                        >
+                                          {val}
+                                        </button>
+                                      )}
+                                    </For>
+                                  </div>
+                                </div>
+                              </Show>
+                            </div>
+                          </Show>
+                        </>
+                      );
+
+                      return (
+                        <Show when={placement() === "bottom"} fallback={
+                          <div style="display:flex;gap:6px;align-items:stretch">
+                            <Show when={placement() === "left"}>
+                              {renderWheelImage(row.pozitie, "flex:0 0 32%;min-width:140px")}
+                            </Show>
+                            <div style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:start">
+                              {renderControls()}
+                            </div>
+                            <Show when={placement() === "right"}>
+                              {renderWheelImage(row.pozitie, "flex:0 0 32%;min-width:140px")}
+                            </Show>
+                          </div>
+                        }>
+                          <div style="display:flex;flex-direction:column;gap:6px">
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:start">
+                              {renderControls()}
+                            </div>
+                            {renderWheelImage(row.pozitie)}
+                          </div>
+                        </Show>
+                      );
+                    })()}
                   </div>
                 );
               }}

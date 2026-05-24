@@ -26,6 +26,8 @@ def _serialize(a: Anvelopa) -> dict:
         "dot_id": a.dot_id,
         "tip": a.tip,
         "adancime": a.adancime,
+        "indice_viteza": a.indice_viteza,
+        "indice_sarcina": a.indice_sarcina,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
         "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,

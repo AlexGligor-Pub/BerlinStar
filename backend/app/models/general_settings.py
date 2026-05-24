@@ -22,8 +22,12 @@ class GeneralSettings(Base):
     montare_roti_show_tip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     montare_roti_show_adancime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     montare_roti_show_cuplu: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    montare_roti_show_indice_viteza: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    montare_roti_show_indice_sarcina: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     hotel_anvelope_show_profil: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     hotel_anvelope_show_dot: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     hotel_anvelope_show_adancime: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     hotel_anvelope_show_tip: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    hotel_anvelope_show_indice_viteza: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    hotel_anvelope_show_indice_sarcina: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

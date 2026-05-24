@@ -35,6 +35,9 @@ export const CUPLU_SHORTCUTS = [90, 100, 110, 120, 130, 140, 150, 160, 170, 180,
 export const ADANCIME_SHORTCUTS = [2, 3, 4, 5, 6];
 export const ADANCIME_DEFAULT = 5;
 
+export const INDICE_VITEZA_SHORTCUTS: string[] = ["H", "V", "T", "W", "Y", "S", "R", "Q", "P", "N"];
+export const INDICE_SARCINA_SHORTCUTS: number[] = [91, 94, 95, 88, 98, 87, 92, 96, 100, 102];
+
 export interface MontajRota {
   id: number;
   receiptId: number | null;
@@ -48,6 +51,8 @@ export interface MontajRota {
   tip: TipAnvelopa;
   adancime: number | null;
   cupluStrangere: number | null;
+  indiceViteza: string | null;
+  indiceSarcina: number | null;
   comments: string | null;
   marcaNume: string | null;
   dimensiuneValoare: string | null;
@@ -66,6 +71,8 @@ export interface MontajRotaDraft {
   tip: TipAnvelopa;
   adancime: number | null;
   cupluStrangere: number | null;
+  indiceViteza: string | null;
+  indiceSarcina: number | null;
   comments: string | null;
 }
 
@@ -83,6 +90,8 @@ function mapMontajRota(r: any): MontajRota {
     tip: r.tip,
     adancime: r.adancime ?? null,
     cupluStrangere: r.cuplu_strangere ?? null,
+    indiceViteza: r.indice_viteza ?? null,
+    indiceSarcina: r.indice_sarcina ?? null,
     comments: r.comments ?? null,
     marcaNume: r.marca_nume ?? null,
     dimensiuneValoare: r.dimensiune_valoare ?? null,
@@ -99,6 +108,40 @@ export async function loadMontajRotiByReceipt(receiptId: number): Promise<Montaj
     return (data as any[]).map(mapMontajRota);
   } catch {
     return [];
+  }
+}
+
+export interface MontajSuggestion {
+  receiptId: number;
+  receiptCreatedAt: string;
+  montajCreatedAt: string;
+  numarMasina: string;
+  clientId: number | null;
+  clientNume: string | null;
+  wheels: MontajRota[];
+}
+
+export async function loadLatestMontajByPlate(plate: string): Promise<MontajSuggestion | null> {
+  const q = (plate ?? "").trim();
+  if (!q) return null;
+  try {
+    const res = await apiFetch(`/api/montaj-roti/by-license-plate?numar_masina=${encodeURIComponent(q)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data || data.found !== true) return null;
+    const wheels = Array.isArray(data.wheels) ? (data.wheels as any[]).map(mapMontajRota) : [];
+    if (wheels.length === 0) return null;
+    return {
+      receiptId: data.receipt_id,
+      receiptCreatedAt: data.receipt_created_at,
+      montajCreatedAt: data.montaj_created_at,
+      numarMasina: data.numar_masina,
+      clientId: data.client_id ?? null,
+      clientNume: data.client_nume ?? null,
+      wheels,
+    };
+  } catch {
+    return null;
   }
 }
 
@@ -119,6 +162,8 @@ export async function bulkUpsertMontajRoti(
       tip: it.tip,
       adancime: it.adancime,
       cuplu_strangere: it.cupluStrangere,
+      indice_viteza: it.indiceViteza,
+      indice_sarcina: it.indiceSarcina,
       comments: it.comments,
     })),
   };

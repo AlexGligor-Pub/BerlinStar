@@ -13,22 +13,42 @@ import EFacturaPanel from "./configurari/EFacturaPanel";
 import ContulMeuPanel from "./configurari/ContulMeuPanel";
 import AbonamentPanel from "./configurari/AbonamentPanel";
 
-const TOPICS = [
-  { id: "locatii",         label: "Locații"            },
-  { id: "departamente",    label: "Departamente"       },
-  { id: "angajati",        label: "Angajați"           },
-  { id: "produse",         label: "Produse și Servicii" },
-  { id: "companii",        label: "Companiile mele"    },
-  { id: "disclaimers",     label: "Disclaimers"        },
-  { id: "registre",        label: "Registre"           },
-  { id: "dispozitiv",      label: "Dispozitivul meu"   },
-  { id: "setari-generale", label: "Setări generale"    },
-  { id: "efactura",        label: "eFactura ANAF"      },
-  { id: "contul-meu",      label: "Contul Meu"         },
-  { id: "abonament",       label: "Abonament"          },
+const TOPIC_GROUPS = [
+  {
+    label: "Organizație",
+    items: [
+      { id: "companii",     label: "Companiile mele" },
+      { id: "locatii",      label: "Locații"         },
+      { id: "departamente", label: "Departamente"    },
+      { id: "angajati",     label: "Angajați"        },
+    ],
+  },
+  {
+    label: "Operațiuni",
+    items: [
+      { id: "produse",     label: "Produse și Servicii" },
+      { id: "disclaimers", label: "Disclaimers"         },
+      { id: "registre",    label: "Registre"            },
+    ],
+  },
+  {
+    label: "Sistem",
+    items: [
+      { id: "setari-generale", label: "Setări generale"  },
+      { id: "dispozitiv",      label: "Dispozitivul meu" },
+      { id: "efactura",        label: "eFactura ANAF"    },
+    ],
+  },
+  {
+    label: "Cont",
+    items: [
+      { id: "contul-meu", label: "Contul Meu" },
+      { id: "abonament",  label: "Abonament"  },
+    ],
+  },
 ] as const;
 
-type TopicId = typeof TOPICS[number]["id"];
+type TopicId = typeof TOPIC_GROUPS[number]["items"][number]["id"];
 
 export default function Configurari() {
   const [active, setActive] = createSignal<TopicId | null>(null);
@@ -37,13 +57,20 @@ export default function Configurari() {
     <div class="cfg-layout">
       <aside class="cfg-sidebar">
         <div class="cfg-sidebar-title">Configurări</div>
-        <For each={TOPICS}>
-          {(t) => (
-            <button
-              class="cfg-sidebar-item"
-              classList={{ "cfg-sidebar-item--active": active() === t.id }}
-              onClick={() => setActive(t.id)}
-            >{t.label}</button>
+        <For each={TOPIC_GROUPS}>
+          {(group) => (
+            <div class="cfg-sidebar-group">
+              <div class="cfg-sidebar-group-label">{group.label}</div>
+              <For each={group.items}>
+                {(t) => (
+                  <button
+                    class="cfg-sidebar-item"
+                    classList={{ "cfg-sidebar-item--active": active() === t.id }}
+                    onClick={() => setActive(t.id)}
+                  >{t.label}</button>
+                )}
+              </For>
+            </div>
           )}
         </For>
       </aside>

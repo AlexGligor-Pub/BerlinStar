@@ -7,6 +7,7 @@ export interface PosHotelContext {
   titlu: string;
   clientId: number;
   clientNume: string;
+  employeeId?: number | null;
 }
 
 function loadCtx(): PosHotelContext | null {

@@ -10,9 +10,13 @@ import {
   cazari, marci, dimensiuni, profiluri, coduriDot, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadCoduriDot, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
-  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
+  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare, mapCazare,
+  INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
+import { loadLatestMontajByPlate, POZITIE_LABELS, type MontajSuggestion } from "../store/montajRotiStore";
+
+const SHORTCUT_BTN_STYLE = "font-size:11px;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer";
 
 interface ClientVehicol {
   id: number;
@@ -254,6 +258,7 @@ function AnvelopaForm(props: {
   initialData?: Anvelopa;  // pre-populare pentru edit/copy
   onSaved: (a: Anvelopa) => void;
   onCancel: () => void;
+  compact?: boolean;  // randare cu label-uri la stânga (folosit în acordeonul de edit)
 }) {
   const [marcaId, setMarcaId] = createSignal<number | "">(props.initialData?.marcaId ?? "");
   const [dimensiuneId, setDimensiuneId] = createSignal<number | "">(props.initialData?.dimensiuneId ?? "");
@@ -261,6 +266,8 @@ function AnvelopaForm(props: {
   const [dotId, setDotId] = createSignal<number | "">(props.initialData?.dotId ?? "");
   const [tip, setTip] = createSignal<TipAnvelopa>(props.initialData?.tip ?? "vara");
   const [adancime, setAdancime] = createSignal(props.initialData?.adancime != null ? String(props.initialData.adancime) : "");
+  const [indiceViteza, setIndiceViteza] = createSignal(props.initialData?.indiceViteza ?? "");
+  const [indiceSarcina, setIndiceSarcina] = createSignal(props.initialData?.indiceSarcina != null ? String(props.initialData.indiceSarcina) : "");
   const [err, setErr] = createSignal("");
 
   onMount(() => {
@@ -327,6 +334,8 @@ function AnvelopaForm(props: {
       dotId: dotId() !== "" ? (dotId() as number) : null,
       tip: tip(),
       adancime: adancime() !== "" ? parseFloat(adancime()) : null,
+      indiceViteza: indiceViteza().trim() !== "" ? indiceViteza().trim().toUpperCase() : null,
+      indiceSarcina: indiceSarcina().trim() !== "" ? parseInt(indiceSarcina(), 10) : null,
       comments: null,
       marcaNume: marcaOption?.nume ?? null,
       dimensiuneValoare: dimOption?.valoare ?? null,
@@ -335,28 +344,90 @@ function AnvelopaForm(props: {
     });
   }
 
+  const compact = () => !!props.compact;
+  const gridStyle = () => compact()
+    ? "display:grid;grid-template-columns:110px 1fr;gap:6px 10px;align-items:center"
+    : "display:grid;gap:6px";
+  const Label = (p: { children: any }) => (
+    <Show when={compact()}>
+      <span style="font-size:12px;color:var(--text-muted);text-align:right;padding-right:4px">{p.children}</span>
+    </Show>
+  );
+
   return (
-    <div style="background:var(--bg);border:1px dashed var(--border);border-radius:8px;padding:12px;margin-top:8px">
-      <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Anvelopă nouă</div>
-      <div style="display:grid;gap:6px">
+    <div style={`background:var(--bg);border:1px dashed var(--border);border-radius:8px;padding:12px;${compact() ? "" : "margin-top:8px"}`}>
+      <Show when={!compact()}>
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">Anvelopă nouă</div>
+      </Show>
+      <div style={gridStyle()}>
         {/* Marcă */}
+        <Label>Marcă</Label>
         <SearchableSelect items={marci()} value={marcaId()} onSelect={setMarcaId} getLabel={(m) => m.nume} placeholder="Marcă" onAddNew={addMarca} />
         {/* Profil */}
         <Show when={hotelShowField("hotelAnvelopeShowProfil")}>
+          <Label>Profil</Label>
           <SearchableSelect items={profiluri()} value={profilId()} onSelect={setProfilId} getLabel={(p) => p.valoare} placeholder="Profil" onAddNew={addProfilInline} />
         </Show>
         {/* Dimensiune */}
+        <Label>Dimensiune</Label>
         <SearchableSelect items={dimensiuni()} value={dimensiuneId()} onSelect={setDimensiuneId} getLabel={(d) => d.valoare} placeholder="Dimensiune" onAddNew={addDim} />
         {/* DOT */}
         <Show when={hotelShowField("hotelAnvelopeShowDot")}>
+          <Label>DOT</Label>
           <SearchableSelect items={coduriDot()} value={dotId()} onSelect={setDotId} getLabel={(d) => d.valoare} placeholder="DOT" onAddNew={addDotInline} />
         </Show>
         {/* Adâncime */}
         <Show when={hotelShowField("hotelAnvelopeShowAdancime")}>
+          <Label>Adâncime (mm)</Label>
           <input class="input" type="number" placeholder="Adâncime (mm)" value={adancime()} onInput={(e) => setAdancime(e.currentTarget.value)} min="0" step="0.1" />
+        </Show>
+        {/* Indice Viteza */}
+        <Show when={hotelShowField("hotelAnvelopeShowIndiceViteza")}>
+          <Label>Indice Viteză</Label>
+          <div>
+            <input
+              class="input"
+              style="width:100%"
+              placeholder="Indice Viteză"
+              maxLength={4}
+              value={indiceViteza()}
+              onInput={(e) => setIndiceViteza(e.currentTarget.value.toUpperCase())}
+            />
+            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+              <For each={INDICE_VITEZA_SHORTCUTS}>
+                {(v) => (
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onClick={() => setIndiceViteza(v)}>{v}</button>
+                )}
+              </For>
+            </div>
+          </div>
+        </Show>
+        {/* Indice Sarcina */}
+        <Show when={hotelShowField("hotelAnvelopeShowIndiceSarcina")}>
+          <Label>Indice Sarcină</Label>
+          <div>
+            <input
+              class="input"
+              style="width:100%"
+              type="number"
+              placeholder="Indice Sarcină"
+              min="0"
+              step="1"
+              value={indiceSarcina()}
+              onInput={(e) => setIndiceSarcina(e.currentTarget.value)}
+            />
+            <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
+              <For each={INDICE_SARCINA_SHORTCUTS}>
+                {(v) => (
+                  <button type="button" style={SHORTCUT_BTN_STYLE} onClick={() => setIndiceSarcina(String(v))}>{v}</button>
+                )}
+              </For>
+            </div>
+          </div>
         </Show>
         {/* Tip */}
         <Show when={hotelShowField("hotelAnvelopeShowTip")}>
+          <Label>Tip</Label>
           <select class="input" value={tip()} onChange={(e) => setTip(e.currentTarget.value as TipAnvelopa)}>
             <option value="iarna">Iarnă</option>
             <option value="vara">Vară</option>
@@ -366,9 +437,9 @@ function AnvelopaForm(props: {
         </Show>
       </div>
       <Show when={err()}><p style="color:var(--danger);font-size:12px;margin:6px 0 0">{err()}</p></Show>
-      <div style="display:flex;gap:6px;margin-top:8px">
+      <div style="display:flex;gap:6px;margin-top:8px;justify-content:flex-end">
         <button class="btn btn-ghost btn-sm" onClick={props.onCancel}>Anulează</button>
-        <button class="btn btn-primary btn-sm" onClick={confirm}>Adaugă</button>
+        <button class="btn btn-primary btn-sm" onClick={confirm}>{compact() ? "Salvează" : "Adaugă"}</button>
       </div>
     </div>
   );
@@ -587,6 +658,89 @@ export default function HotelAnvelope() {
   const [combinedSaving, setCombinedSaving] = createSignal(false);
   const [combinedErr, setCombinedErr] = createSignal("");
 
+  // ── Modal Sugestie Anvelope (din istoricul montajelor) ────────────────────
+  const [montajSuggestion, setMontajSuggestion] = createSignal<MontajSuggestion | null>(null);
+  const [_suggestionTargetForm, setSuggestionTargetForm] = createSignal<"new" | "combined" | null>(null);
+
+  // ── Modal "Niciun istoric" → întreabă: Cazare nouă vs Caută în istoric ────
+  const [noHistoryPrompt, setNoHistoryPrompt] = createSignal(false);
+
+  // ── Mod "Căutare istoric" — afișează toate cazările active pentru scoatere
+  const [historySearchMode, setHistorySearchMode] = createSignal(false);
+
+  async function checkPastMounting(plate: string | null | undefined, target: "new" | "combined") {
+    const p = (plate ?? "").trim();
+    if (!p) return;
+    try {
+      const s = await loadLatestMontajByPlate(p);
+      if (!s || s.wheels.length === 0) {
+        // Niciun istoric găsit. Dacă venim din POS și e flow "cazare nouă" → întrebare
+        if (target === "new" && posHotelCtx()) setNoHistoryPrompt(true);
+        return;
+      }
+      setMontajSuggestion(s);
+      setSuggestionTargetForm(target);
+    } catch { /* silent */ }
+  }
+
+  async function enterHistorySearchMode() {
+    setNoHistoryPrompt(false);
+    setShowNewModal(false);
+    setHistorySearchMode(true);
+    setSearchName("");
+    setFilterDim("");
+    setFilterTip("");
+    setView("active");
+    // Încarcă toate cazările active (fără filtru de client) ca să poată căuta global
+    await loadCazari({ activa: true, limit: 200 });
+  }
+
+  function exitHistorySearchMode() {
+    setHistorySearchMode(false);
+    setSearchName("");
+    // Revine la cazările clientului curent dacă există context POS
+    const ctx = posHotelCtx();
+    if (ctx) void loadCazari({ clientId: ctx.clientId, activa: true, limit: 200 });
+    else void fetchCazari();
+  }
+
+  function applySuggestion() {
+    const s = montajSuggestion();
+    if (!s) return;
+    const clientId = newClient()?.id ?? null;
+    const wheelsForCazare = s.wheels.filter((w) => w.pozitie !== "rezerva").slice(0, 4);
+    const base = Date.now();
+    const drafts: Anvelopa[] = wheelsForCazare.map((w, idx) => ({
+      id: -(base + idx),
+      clientId,
+      marcaId: w.marcaId,
+      marcaNume: w.marcaNume,
+      dimensiuneId: w.dimensiuneId,
+      dimensiuneValoare: w.dimensiuneValoare,
+      profilId: w.profilId,
+      profilValoare: w.profilValoare,
+      dotId: w.dotId,
+      dotValoare: w.dotValoare,
+      tip: w.tip,
+      adancime: w.adancime,
+      indiceViteza: w.indiceViteza,
+      indiceSarcina: w.indiceSarcina,
+      comments: w.comments,
+    }));
+    setClientAnvelope((prev) => [...drafts, ...prev]);
+    setSelectedAnvIds(new Set(drafts.map((d) => d.id)));
+    setMontajSuggestion(null);
+    setSuggestionTargetForm(null);
+  }
+
+  // Curăță sugestia când se închid ambele modale părinte
+  createEffect(() => {
+    if (!showNewModal() && combinedCazare() === null) {
+      setMontajSuggestion(null);
+      setSuggestionTargetForm(null);
+    }
+  });
+
   // ── Modal Delete ───────────────────────────────────────────────────────────
   const [deleteTarget, setDeleteTarget] = createSignal<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting] = createSignal(false);
@@ -685,6 +839,8 @@ export default function HotelAnvelope() {
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare client.", "error");
       }
+      // Auto-deschide modalul de cazare nouă — declanșează și verificarea istoricului
+      openNewModal();
     } else {
       await fetchCazari();
     }
@@ -747,6 +903,8 @@ export default function HotelAnvelope() {
           id: item.anvelopa.id, clientId: item.anvelopa.client_id ?? null,
           marcaId: item.anvelopa.marca_id ?? null, dimensiuneId: item.anvelopa.dimensiune_id ?? null,
           tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
+          indiceViteza: item.anvelopa.indice_viteza ?? null,
+          indiceSarcina: item.anvelopa.indice_sarcina ?? null,
           marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
           profilValoare: item.anvelopa.profil_valoare ?? null,
           profilId: item.anvelopa.profil_id ?? null,
@@ -763,6 +921,8 @@ export default function HotelAnvelope() {
           profilId: item.anvelopa.profil_id ?? null,
           dotId: item.anvelopa.dot_id ?? null,
           tip: item.anvelopa.tip, adancime: item.anvelopa.adancime ?? null, comments: item.anvelopa.comments ?? null,
+          indiceViteza: item.anvelopa.indice_viteza ?? null,
+          indiceSarcina: item.anvelopa.indice_sarcina ?? null,
           marcaNume: item.anvelopa.marca_nume ?? null, dimensiuneValoare: item.anvelopa.dimensiune_valoare ?? null,
           profilValoare: item.anvelopa.profil_valoare ?? null,
           dotValoare: item.anvelopa.dot_valoare ?? null,
@@ -816,7 +976,11 @@ export default function HotelAnvelope() {
     const dim = filterDim().toLowerCase().trim();
     const tip = filterTip();
     return cazari().filter((c) => {
-      if (name && !(c.clientNume ?? "").toLowerCase().includes(name)) return false;
+      if (name) {
+        const matchClient = (c.clientNume ?? "").toLowerCase().includes(name);
+        const matchPlate = (c.numarMasina ?? "").toLowerCase().includes(name);
+        if (!matchClient && !matchPlate) return false;
+      }
       if (dim) {
         const hasDim = c.items.some((item) =>
           (item.anvelopa?.dimensiuneValoare ?? "").toLowerCase().includes(dim)
@@ -856,7 +1020,7 @@ export default function HotelAnvelope() {
     setSelectedAnvIds(new Set<number>());
     setShowAnvForm(false);
     setNewLocId("");
-    setNewEmpId("");
+    setNewEmpId(ctx?.employeeId ?? "");
     setNewCheckin(todayStr());
     setNewComments("");
     setNewDepAnvelope(true);
@@ -876,6 +1040,9 @@ export default function HotelAnvelope() {
     if (preClient) {
       handleClientSelect(preClient);
     }
+    // Sugestie anvelope din ultimul montaj pentru placa de pe POS context
+    const plate = ctx?.titlu ?? null;
+    if (plate) void checkPastMounting(plate, "new");
   }
 
   async function handleClientSelect(c: ClientItem | null) {
@@ -932,6 +1099,8 @@ export default function HotelAnvelope() {
             dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
+            indice_viteza: draft.indiceViteza,
+            indice_sarcina: draft.indiceSarcina,
           }),
         });
         if (!res.ok) {
@@ -998,7 +1167,7 @@ export default function HotelAnvelope() {
     setShowAnvForm(false);
     setAnvEditId(null);
     setNewLocId(c.locCazareId ?? "");
-    setNewEmpId(c.employeeId ?? "");
+    setNewEmpId(posHotelCtx()?.employeeId ?? c.employeeId ?? "");
     setNewCheckin(todayStr());
     setNewComments("");
     setNewDepAnvelope(true);
@@ -1006,33 +1175,41 @@ export default function HotelAnvelope() {
     setNewDepRotiComplete(false);
     setNewDepAntifurturi(false);
     setNewDepPrezoane(false);
-    setNewMontatePeMasina(false);
+    setNewMontatePeMasina(true);
     setNewReferintaCazareId(c.id);
     setSaveErr("");
     setCombinedErr("");
-    // Pre-select same client
-    if (c.clientId) {
+    // Pre-select clientul pentru noua cazare:
+    //  - dacă venim din POS → clientul POS (cel nou, pentru care se face devizul)
+    //  - altfel → clientul cazării vechi (comportamentul original)
+    const ctx = posHotelCtx();
+    const targetClientId = ctx?.clientId ?? c.clientId;
+    if (targetClientId) {
       try {
-        const r = await apiFetch(`/api/clienti/${c.clientId}`);
+        const r = await apiFetch(`/api/clienti/${targetClientId}`);
         if (r.ok) {
           const data = await r.json();
           const clientItem: ClientItem = {
             id: data.id,
-            nume: data.name,
+            nume: data.nume,
             cui: data.cui ?? null,
-            telefon: data.phone ?? null,
-            adresa: data.address ?? null,
+            telefon: data.telefon ?? null,
+            adresa: data.adresa ?? null,
             reprezentant: data.reprezentant ?? null,
             numar_masina: data.numar_masina ?? null,
           };
           await handleClientSelect(clientItem);
           setNewReferintaCazareId(c.id); // handleClientSelect resets it, restore
+          setNewMontatePeMasina(true);   // handleClientSelect resets it, restore
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la pregătire cazare combinată.", "error");
       }
     }
     setCombinedCazare(c);
+    // Sugestie anvelope din ultimul montaj pentru placa de pe cazare sau context POS
+    const plate = c.numarMasina ?? posHotelCtx()?.titlu ?? null;
+    if (plate) void checkPastMounting(plate, "combined");
   }
 
   async function doCombinedCheckoutNew() {
@@ -1059,6 +1236,8 @@ export default function HotelAnvelope() {
             dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
+            indice_viteza: draft.indiceViteza,
+            indice_sarcina: draft.indiceSarcina,
           }),
         });
         if (!res.ok) {
@@ -1201,6 +1380,8 @@ export default function HotelAnvelope() {
             dot_id: draft.dotId,
             tip: draft.tip,
             adancime: draft.adancime,
+            indice_viteza: draft.indiceViteza,
+            indice_sarcina: draft.indiceSarcina,
           }),
         });
         if (!res.ok) { setEditErr("Eroare la salvare anvelopă."); return; }
@@ -1259,7 +1440,7 @@ export default function HotelAnvelope() {
         setSelectedAnvIds(new Set<number>());
         setShowAnvForm(false);
         setNewLocId(c.locCazareId ?? "");
-        setNewEmpId("");
+        setNewEmpId(posHotelCtx()?.employeeId ?? "");
         setNewCheckin(todayStr());
         setNewComments("");
         setNewDepAnvelope(true);
@@ -1268,7 +1449,7 @@ export default function HotelAnvelope() {
         setNewDepAntifurturi(false);
         setNewDepPrezoane(false);
         setNewReferintaCazareId(c.id);
-        setNewMontatePeMasina(false);
+        setNewMontatePeMasina(true);
         setSaveErr("");
         // încarcă cazarile clientului pentru referință (include și cea curentă)
         try {
@@ -1459,6 +1640,21 @@ export default function HotelAnvelope() {
   return (
     <div class="page-content">
 
+      {/* ── Banner mod căutare istoric ── */}
+      <Show when={historySearchMode()}>
+        <div style="background:#fff4e5;border:1px solid #f0b400;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#b45309;flex-shrink:0">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <div style="flex:1;min-width:200px;font-size:13px;line-height:1.5;color:#8a5a00">
+            <strong>Mod căutare istoric activ.</strong> Caută o cazare după plăcuță sau client și apasă <strong>Scoatere</strong>. Anvelopele scoase vor fi montate automat pe devizul curent
+            <Show when={posHotelCtx()?.titlu}> (<strong>{posHotelCtx()!.titlu}</strong>)</Show>.
+          </div>
+          <button class="btn btn-ghost btn-sm" onClick={exitHistorySearchMode} style="flex-shrink:0">Renunță</button>
+        </div>
+      </Show>
+
       {/* ── Header ── */}
       <div class="page-header">
         <h1 class="page-title">Hotel Anvelope</h1>
@@ -1466,9 +1662,10 @@ export default function HotelAnvelope() {
           <input
             class="input reception-search"
             type="search"
-            placeholder="Caută client..."
+            placeholder={historySearchMode() ? "Caută plăcuță sau client..." : "Caută client..."}
             value={searchName()}
             onInput={(e) => setSearchName(e.currentTarget.value)}
+            autofocus={historySearchMode()}
           />
           <select
             class="input hotel-header-select"
@@ -2019,41 +2216,64 @@ export default function HotelAnvelope() {
                   </Show>
                   <div style="display:flex;flex-direction:column;gap:4px">
                     <For each={clientAnvelope()}>
-                      {(a) => (
-                        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
-                          <input
-                            type="checkbox"
-                            checked={selectedAnvIds().has(a.id)}
-                            onChange={() => toggleAnv(a.id)}
-                            style="flex-shrink:0"
-                          />
-                          <span style="flex:1;min-width:0">
-                            <strong>{a.marcaNume ?? "—"}</strong>
-                            <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                            <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                            {" · "}{TIP_LABELS[a.tip]}
-                            <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
-                            <Show when={a.id < 0}>
-                              <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
-                            </Show>
-                          </span>
-                          <button
-                            class="btn btn-ghost btn-sm"
-                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
-                            title="Editează"
-                            onClick={() => { setAnvEditId(a.id); setShowAnvForm(true); }}
-                          >Edit</button>
-                          <button
-                            class="btn btn-ghost btn-sm"
-                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
-                            title="Copiază"
-                            onClick={() => {
-                              const tempId = -Date.now();
-                              const copy = { ...a, id: tempId };
-                              setClientAnvelope((prev) => [...prev, copy]);
-                              setSelectedAnvIds((prev) => new Set([...prev, tempId]));
-                            }}
-                          >Copy</button>
+                      {(a, idx) => (
+                        <div style="display:flex;flex-direction:column">
+                          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
+                            <input
+                              type="checkbox"
+                              checked={selectedAnvIds().has(a.id)}
+                              onChange={() => toggleAnv(a.id)}
+                              style="flex-shrink:0"
+                            />
+                            <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
+                            <span style="flex:1;min-width:0">
+                              <strong>{a.marcaNume ?? "—"}</strong>
+                              <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                              <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
+                              {" · "}{TIP_LABELS[a.tip]}
+                              <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                              <Show when={a.id < 0}>
+                                <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
+                              </Show>
+                            </span>
+                            <button
+                              class="btn btn-ghost btn-sm"
+                              style={`padding:1px 6px;font-size:11px;flex-shrink:0;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
+                              title="Editează"
+                              onClick={() => {
+                                if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
+                                else { setAnvEditId(a.id); setShowAnvForm(true); }
+                              }}
+                            >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
+                            <button
+                              class="btn btn-ghost btn-sm"
+                              style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                              title="Copiază"
+                              onClick={() => {
+                                const tempId = -Date.now();
+                                const copy = { ...a, id: tempId };
+                                setClientAnvelope((prev) => [...prev, copy]);
+                                setSelectedAnvIds((prev) => new Set([...prev, tempId]));
+                              }}
+                            >Copy</button>
+                          </div>
+                          <Show when={showAnvForm() && anvEditId() === a.id}>
+                            <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
+                              <AnvelopaForm
+                                clientId={newClient()!.id}
+                                initialData={a}
+                                compact={true}
+                                onSaved={(saved) => {
+                                  const oldId = a.id;
+                                  setClientAnvelope((prev) => prev.map((x) => x.id === oldId ? saved : x));
+                                  setSelectedAnvIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(saved.id); return s; });
+                                  setShowAnvForm(false);
+                                  setAnvEditId(null);
+                                }}
+                                onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
+                              />
+                            </div>
+                          </Show>
                         </div>
                       )}
                     </For>
@@ -2080,20 +2300,13 @@ export default function HotelAnvelope() {
                       </div>
                     </div>
                   </Show>
-                  <Show when={showAnvForm()}>
+                  <Show when={showAnvForm() && anvEditId() === null}>
                     <AnvelopaForm
                       clientId={newClient()!.id}
-                      initialData={anvEditId() !== null ? clientAnvelope().find((a) => a.id === anvEditId()) : undefined}
+                      initialData={undefined}
                       onSaved={(a) => {
-                        if (anvEditId() !== null) {
-                          // înlocuiește item-ul editat
-                          const oldId = anvEditId()!;
-                          setClientAnvelope((prev) => prev.map((x) => x.id === oldId ? a : x));
-                          setSelectedAnvIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(a.id); return s; });
-                        } else {
-                          setClientAnvelope((prev) => [...prev, a]);
-                          setSelectedAnvIds((prev) => new Set([...prev, a.id]));
-                        }
+                        setClientAnvelope((prev) => [...prev, a]);
+                        setSelectedAnvIds((prev) => new Set([...prev, a.id]));
                         setShowAnvForm(false);
                         setAnvEditId(null);
                       }}
@@ -2146,6 +2359,119 @@ export default function HotelAnvelope() {
               <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>Anulează</button>
               <button class="btn btn-primary btn-sm" onClick={saveCazare} disabled={saving()}>
                 {saving() ? "Se salvează..." : "Salvează Cazarea"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal: Sugestie anvelope din ultimul montaj */}
+      <Show when={montajSuggestion()}>
+        {(_) => {
+          const s = montajSuggestion()!;
+          const currentClientId = () => newClient()?.id ?? pageSelectedClient()?.id ?? null;
+          const clientMismatch = () => s.clientId !== null && currentClientId() !== null && s.clientId !== currentClientId();
+          const dateStr = () => (s.montajCreatedAt ? s.montajCreatedAt.slice(0, 10) : null);
+          return (
+            <div class="sl-modal-overlay" style="z-index:1100">
+              <div class="sl-modal" style="width:min(900px,96vw);max-height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
+                <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
+                  <span class="sl-modal-title">Sugestie cazare</span>
+                  <button class="btn btn-ghost btn-sm" onClick={() => { setMontajSuggestion(null); setSuggestionTargetForm(null); }}>✕</button>
+                </div>
+
+                <div style="padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:14px;line-height:1.5">
+                    Pentru plăcuța <strong>{s.numarMasina}</strong> am identificat un montaj din data <strong>{fmtDate(dateStr())}</strong>.
+                    Confirmă dacă acestea sunt anvelopele care se doresc cazate.
+                  </div>
+
+                  <Show when={clientMismatch()}>
+                    <div style="background:#fff4e5;border:1px solid #f0b400;color:#8a5a00;padding:8px 10px;border-radius:6px;font-size:13px">
+                      Atenție: clientul de pe receipt-ul anterior (<strong>{s.clientNume ?? "necunoscut"}</strong>) diferă de clientul curent.
+                    </div>
+                  </Show>
+
+                  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+                    <For each={s.wheels.slice(0, 5)}>
+                      {(w) => (
+                        <div style="border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface)">
+                          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+                            <strong style="font-size:13px">{POZITIE_LABELS[w.pozitie]}</strong>
+                            <span style="font-size:11px;color:var(--text-muted);background:var(--bg-alt,#f5f5f5);padding:2px 6px;border-radius:4px">{TIP_LABELS[w.tip]}</span>
+                          </div>
+                          <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12px">
+                            <span style="color:var(--text-muted)">Marcă:</span><span>{w.marcaNume ?? "—"}</span>
+                            <span style="color:var(--text-muted)">Dimensiune:</span><span>{w.dimensiuneValoare ?? "—"}</span>
+                            <span style="color:var(--text-muted)">Profil:</span><span>{w.profilValoare ?? "—"}</span>
+                            <span style="color:var(--text-muted)">DOT:</span><span>{w.dotValoare ?? "—"}</span>
+                            <span style="color:var(--text-muted)">Adâncime:</span><span>{w.adancime != null ? `${w.adancime} mm` : "—"}</span>
+                            <span style="color:var(--text-muted)">Indice viteză:</span><span>{w.indiceViteza ?? "—"}</span>
+                            <span style="color:var(--text-muted)">Indice sarcină:</span><span>{w.indiceSarcina ?? "—"}</span>
+                            <Show when={w.comments}>
+                              <span style="color:var(--text-muted)">Note:</span><span>{w.comments}</span>
+                            </Show>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+
+                  <Show when={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}>
+                    <div style="font-size:12px;color:var(--text-muted)">Atenție: toate roțile din montajul anterior sunt marcate ca rezervă. Niciuna nu va fi pre-populată automat.</div>
+                  </Show>
+                </div>
+
+                <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0;display:flex;justify-content:flex-end;gap:8px">
+                  <button class="btn btn-ghost btn-sm" onClick={() => { setMontajSuggestion(null); setSuggestionTargetForm(null); }}>Introduc manual</button>
+                  <button
+                    class="btn btn-primary btn-sm"
+                    disabled={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}
+                    onClick={applySuggestion}
+                  >
+                    Folosește aceste anvelope
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }}
+      </Show>
+
+      {/* Modal: Niciun istoric → întrebare cazare nouă sau căutare */}
+      <Show when={noHistoryPrompt()}>
+        <div class="sl-modal-overlay" style="z-index:1100">
+          <div class="sl-modal" style="max-width:560px;width:100%;text-align:center">
+            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
+              <span class="sl-modal-title">Niciun istoric găsit</span>
+            </div>
+            <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="8" x2="12" y2="12"/>
+                <line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
+                Pentru plăcuța <strong>{posHotelCtx()?.titlu}</strong> nu există niciun montaj sau cazare anterioară.
+                <br />Cum doriți să continuați?
+              </p>
+            </div>
+            <div class="sl-modal-footer" style="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none;flex-wrap:wrap">
+              <button
+                class="btn btn-ghost"
+                style="min-width:180px;min-height:96px;font-size:15px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
+                onClick={() => setNoHistoryPrompt(false)}
+              >
+                Cazare nouă
+                <div style="font-size:11px;font-weight:400;color:var(--text-muted);margin-top:4px">Continui cu cazarea curentă</div>
+              </button>
+              <button
+                class="btn btn-primary"
+                style="min-width:180px;min-height:96px;font-size:15px;font-weight:700;border-radius:10px"
+                onClick={enterHistorySearchMode}
+              >
+                Caută în istoric
+                <div style="font-size:11px;font-weight:400;opacity:.85;margin-top:4px">Scoate anvelope de la alt client</div>
               </button>
             </div>
           </div>
@@ -2309,9 +2635,10 @@ export default function HotelAnvelope() {
                     {/* Client pre-filled */}
                     <Show when={newClient()}>
                       <div style="border:1px solid #059669;border-radius:8px;padding:10px 12px;background:rgba(5,150,105,.06)">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#065f46;margin-bottom:4px">Client (preluat)</div>
-                        <div style="font-size:13px;font-weight:600">{newClient()!.nume}</div>
-                        <Show when={newClient()!.telefon}><div style="font-size:12px;color:var(--text-muted)">{newClient()!.telefon}</div></Show>
+                        <div style="font-size:14px;font-weight:700;color:#065f46">
+                          Client <span>{newClient()!.nume}</span> preluat
+                        </div>
+                        <Show when={newClient()!.telefon}><div style="font-size:12px;color:var(--text-muted);margin-top:2px">{newClient()!.telefon}</div></Show>
                       </div>
                     </Show>
 
@@ -2327,19 +2654,45 @@ export default function HotelAnvelope() {
                         </Show>
                         <div style="display:flex;flex-direction:column;gap:4px">
                           <For each={clientAnvelope()}>
-                            {(a) => (
-                              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
-                                <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
-                                <span style="flex:1;min-width:0">
-                                  <strong>{a.marcaNume ?? "—"}</strong>
-                                  <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                                  <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                                  {" · "}{TIP_LABELS[a.tip]}
-                                  <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
-                                  <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
-                                </span>
-                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setAnvEditId(a.id); setShowAnvForm(true); }}>Edit</button>
-                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
+                            {(a, idx) => (
+                              <div style="display:flex;flex-direction:column">
+                                <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
+                                  <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
+                                  <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
+                                  <span style="flex:1;min-width:0">
+                                    <strong>{a.marcaNume ?? "—"}</strong>
+                                    <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                                    <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
+                                    {" · "}{TIP_LABELS[a.tip]}
+                                    <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                                    <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
+                                  </span>
+                                  <button
+                                    class="btn btn-ghost btn-sm"
+                                    style={`padding:1px 6px;font-size:11px;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
+                                    onClick={() => {
+                                      if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
+                                      else { setAnvEditId(a.id); setShowAnvForm(true); }
+                                    }}
+                                  >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
+                                  <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
+                                </div>
+                                <Show when={showAnvForm() && anvEditId() === a.id}>
+                                  <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
+                                    <AnvelopaForm
+                                      clientId={newClient()!.id}
+                                      initialData={a}
+                                      compact={true}
+                                      onSaved={(saved) => {
+                                        const oldId = a.id;
+                                        setClientAnvelope(p => p.map(x => x.id === oldId ? saved : x));
+                                        setSelectedAnvIds(p => { const s = new Set(p); s.delete(oldId); s.add(saved.id); return s; });
+                                        setShowAnvForm(false); setAnvEditId(null);
+                                      }}
+                                      onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
+                                    />
+                                  </div>
+                                </Show>
                               </div>
                             )}
                           </For>
@@ -2347,19 +2700,13 @@ export default function HotelAnvelope() {
                         <Show when={!showAnvForm()}>
                           <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
                         </Show>
-                        <Show when={showAnvForm()}>
+                        <Show when={showAnvForm() && anvEditId() === null}>
                           <AnvelopaForm
                             clientId={newClient()!.id}
-                            initialData={anvEditId() !== null ? clientAnvelope().find(a => a.id === anvEditId()) : undefined}
+                            initialData={undefined}
                             onSaved={(a) => {
-                              if (anvEditId() !== null) {
-                                const oldId = anvEditId()!;
-                                setClientAnvelope(p => p.map(x => x.id === oldId ? a : x));
-                                setSelectedAnvIds(p => { const s = new Set(p); s.delete(oldId); s.add(a.id); return s; });
-                              } else {
-                                setClientAnvelope(p => [...p, a]);
-                                setSelectedAnvIds(p => new Set([...p, a.id]));
-                              }
+                              setClientAnvelope(p => [...p, a]);
+                              setSelectedAnvIds(p => new Set([...p, a.id]));
                               setShowAnvForm(false); setAnvEditId(null);
                             }}
                             onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}

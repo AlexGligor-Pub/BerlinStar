@@ -140,12 +140,20 @@ export default function AccountsSection() {
   const [receiptsLoading, setReceiptsLoading] = createSignal(false);
   const [receiptsChartRef, setReceiptsChartRef] = createSignal<HTMLDivElement | undefined>(undefined);
 
+  let chartRafHandle: number | null = null;
   createEffect(() => {
     const d = receiptsDaily();
     const el = receiptsChartRef();
     if (!d || !el) return;
     if (d.total <= 0) return;
-    requestAnimationFrame(() => drawDailyCountBars(el, d.points, { label: "bonuri" }));
+    if (chartRafHandle !== null) cancelAnimationFrame(chartRafHandle);
+    chartRafHandle = requestAnimationFrame(() => {
+      chartRafHandle = null;
+      drawDailyCountBars(el, d.points, { label: "bonuri" });
+    });
+  });
+  onCleanup(() => {
+    if (chartRafHandle !== null) cancelAnimationFrame(chartRafHandle);
   });
 
   async function loadReceiptsDaily(accountId: number) {

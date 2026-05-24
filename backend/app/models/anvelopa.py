@@ -43,6 +43,8 @@ class Anvelopa(Base):
         default=TipAnvelopa.VARA,
     )
     adancime: Mapped[float | None] = mapped_column(Float, nullable=True)  # mm
+    indice_viteza: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    indice_sarcina: Mapped[int | None] = mapped_column(Integer, nullable=True)
     comments: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)

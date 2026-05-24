@@ -16,11 +16,15 @@ class GeneralSettingsPatch(BaseModel):
     montare_roti_show_tip: bool | None = None
     montare_roti_show_adancime: bool | None = None
     montare_roti_show_cuplu: bool | None = None
+    montare_roti_show_indice_viteza: bool | None = None
+    montare_roti_show_indice_sarcina: bool | None = None
 
     hotel_anvelope_show_profil: bool | None = None
     hotel_anvelope_show_dot: bool | None = None
     hotel_anvelope_show_adancime: bool | None = None
     hotel_anvelope_show_tip: bool | None = None
+    hotel_anvelope_show_indice_viteza: bool | None = None
+    hotel_anvelope_show_indice_sarcina: bool | None = None
 
 
 class GeneralSettingsRead(BaseModel):
@@ -41,8 +45,12 @@ class GeneralSettingsRead(BaseModel):
     montare_roti_show_tip: bool
     montare_roti_show_adancime: bool
     montare_roti_show_cuplu: bool
+    montare_roti_show_indice_viteza: bool
+    montare_roti_show_indice_sarcina: bool
 
     hotel_anvelope_show_profil: bool
     hotel_anvelope_show_dot: bool
     hotel_anvelope_show_adancime: bool
     hotel_anvelope_show_tip: bool
+    hotel_anvelope_show_indice_viteza: bool
+    hotel_anvelope_show_indice_sarcina: bool

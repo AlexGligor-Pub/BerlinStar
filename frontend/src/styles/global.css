@@ -2808,6 +2808,27 @@ img.pos-theme-preview {
   padding: 4px 10px 10px;
 }
 
+.cfg-sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 10px;
+}
+
+.cfg-sidebar-group:first-of-type {
+  margin-top: 0;
+}
+
+.cfg-sidebar-group-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text2);
+  padding: 6px 10px 4px;
+  opacity: 0.75;
+}
+
 .cfg-sidebar-item {
   display: flex;
   align-items: center;
@@ -3982,6 +4003,17 @@ img.pos-theme-preview {
   }
 
   .cfg-sidebar-title {
+    display: none;
+  }
+
+  .cfg-sidebar-group {
+    flex-direction: row;
+    gap: 4px;
+    margin-top: 0;
+    align-items: center;
+  }
+
+  .cfg-sidebar-group-label {
     display: none;
   }
 

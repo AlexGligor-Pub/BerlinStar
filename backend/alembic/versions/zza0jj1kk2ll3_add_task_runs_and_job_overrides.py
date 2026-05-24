@@ -17,6 +17,22 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Data fix: vechile frontend_callback_redirect-uri indicau spre AdminV2
+    # (`/adminv2?section=efactura`). Le mutam o singura data spre `/efactura`,
+    # ca pagina sa fie accesibila si userilor non-admin. Asta inlocuieste
+    # migrarea on-the-fly din runtime_config.ensure_initialized().
+    op.execute(
+        """
+        UPDATE efactura_global_settings
+        SET frontend_callback_redirect = REGEXP_REPLACE(
+            frontend_callback_redirect,
+            '/adminv2\\?section=efactura$',
+            '/efactura'
+        )
+        WHERE frontend_callback_redirect LIKE '%/adminv2?section=efactura%'
+        """
+    )
+
     op.create_table(
         "task_runs",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
@@ -29,6 +45,14 @@ def upgrade() -> None:
         sa.Column("items_failed", sa.Integer(), nullable=True),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("triggered_by", sa.String(32), nullable=False, server_default="schedule"),
+        sa.CheckConstraint(
+            "status IN ('running', 'success', 'error')",
+            name="ck_task_runs_status",
+        ),
+        sa.CheckConstraint(
+            "triggered_by IN ('schedule', 'manual')",
+            name="ck_task_runs_triggered_by",
+        ),
     )
     op.create_index("ix_task_runs_job_id", "task_runs", ["job_id"])
     op.create_index("ix_task_runs_started_at", "task_runs", ["started_at"])
@@ -42,6 +66,10 @@ def upgrade() -> None:
         sa.Column("trigger_type", sa.String(16), nullable=False, server_default="cron"),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.CheckConstraint(
+            "trigger_type IN ('cron', 'interval')",
+            name="ck_scheduled_job_overrides_trigger_type",
+        ),
     )
 
 

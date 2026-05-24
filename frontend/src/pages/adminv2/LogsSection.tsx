@@ -1,4 +1,8 @@
 import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import {
+  createSolidTable, flexRender, getCoreRowModel, getSortedRowModel,
+  type ColumnDef, type SortingState,
+} from "@tanstack/solid-table";
 import { adminFetch } from "./admin-auth";
 import { fmtDate } from "./shared";
 
@@ -45,6 +49,7 @@ export default function LogsSection() {
   const [jobsList, setJobsList] = createSignal<JobInfoMin[]>([]);
   const [expanded, setExpanded] = createSignal<number | null>(null);
   const [clearing, setClearing] = createSignal(false);
+  const [sorting, setSorting] = createSignal<SortingState>([{ id: "started_at", desc: true }]);
 
   async function loadJobsList() {
     const res = await adminFetch("/api/admin/efactura/jobs");
@@ -57,9 +62,10 @@ export default function LogsSection() {
   async function loadLogs(reset = true) {
     setLoading(true);
     try {
+      const requestedOffset = reset ? 0 : offset();
       const params = new URLSearchParams({
         limit: String(PAGE_SIZE),
-        offset: String(reset ? 0 : offset()),
+        offset: String(requestedOffset),
       });
       if (jobFilter()) params.set("job_id", jobFilter());
       if (statusFilter()) params.set("status", statusFilter());
@@ -68,20 +74,20 @@ export default function LogsSection() {
       const data: { items: TaskLog[]; total: number; offset: number } = await res.json();
       setLogs(data.items);
       setTotal(data.total);
-      setOffset(data.offset);
+      // Sincronizam offset-ul DOAR daca e reset (filtre/paginare cerute de user).
+      // La auto-refresh nu il atingem, ca sa nu apara oscilatii daca backend-ul
+      // returneaza un offset diferit (de ex. clamp la total).
+      if (reset) setOffset(requestedOffset);
     } finally {
       setLoading(false);
     }
   }
 
-  let intervalHandle: number | undefined;
   onMount(() => {
     loadJobsList();
     loadLogs();
-    intervalHandle = window.setInterval(() => loadLogs(false), 30_000);
-  });
-  onCleanup(() => {
-    if (intervalHandle !== undefined) window.clearInterval(intervalHandle);
+    const handle = window.setInterval(() => loadLogs(false), 30_000);
+    onCleanup(() => window.clearInterval(handle));
   });
 
   function applyFilters() {
@@ -116,6 +122,101 @@ export default function LogsSection() {
   function jobLabel(job_id: string): string {
     return jobsList().find((j) => j.job_id === job_id)?.label ?? job_id;
   }
+
+  const columns: ColumnDef<TaskLog>[] = [
+    {
+      id: "started_at",
+      accessorKey: "started_at",
+      header: "Pornit",
+      cell: (info) => <span style="font-size:12px">{fmtDate(info.row.original.started_at)}</span>,
+    },
+    {
+      id: "job_id",
+      accessorKey: "job_id",
+      header: "Job",
+      cell: (info) => {
+        const l = info.row.original;
+        return (
+          <div style="display:flex;flex-direction:column;gap:1px">
+            <span style="font-weight:600">{jobLabel(l.job_id)}</span>
+            <span class="text-muted" style="font-size:11px;font-family:monospace">{l.job_id}</span>
+          </div>
+        );
+      },
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: "Status",
+      cell: (info) => {
+        const l = info.row.original;
+        const s = statusInfo(l.status);
+        const isOpen = () => expanded() === l.id;
+        return (
+          <>
+            <span style={`color:${s.color};font-weight:600`}>{s.icon} {s.text}</span>
+            <Show when={l.error_message}>
+              <span class="text-muted" style="font-size:11px;margin-left:6px">
+                {isOpen() ? "▼" : "▶"} detalii
+              </span>
+            </Show>
+          </>
+        );
+      },
+    },
+    {
+      id: "duration_ms",
+      accessorKey: "duration_ms",
+      header: "Durata",
+      cell: (info) => (
+        <span style="font-size:12px;font-variant-numeric:tabular-nums">
+          {fmtDuration(info.row.original.duration_ms)}
+        </span>
+      ),
+    },
+    {
+      id: "items",
+      header: "Items",
+      enableSorting: false,
+      cell: (info) => {
+        const l = info.row.original;
+        if (l.items_processed === null && l.items_failed === null)
+          return <span class="text-muted">—</span>;
+        return (
+          <span style="font-size:12px">
+            <span>{l.items_processed ?? 0} ok</span>
+            <Show when={(l.items_failed ?? 0) > 0}>
+              <span style="color:var(--danger);margin-left:6px">/ {l.items_failed} fail</span>
+            </Show>
+          </span>
+        );
+      },
+    },
+    {
+      id: "triggered_by",
+      accessorKey: "triggered_by",
+      header: "Trigger",
+      cell: (info) => {
+        const l = info.row.original;
+        return (
+          <span
+            style={`padding:2px 6px;border-radius:3px;font-size:11px;background:var(--surface-2);${l.triggered_by === "manual" ? "color:var(--accent)" : ""}`}
+          >
+            {l.triggered_by}
+          </span>
+        );
+      },
+    },
+  ];
+
+  const table = createSolidTable({
+    get data() { return logs(); },
+    columns,
+    state: { get sorting() { return sorting(); } },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
 
   return (
     <div>
@@ -182,19 +283,32 @@ export default function LogsSection() {
         <div class="card" style="padding:0;overflow:auto">
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <thead>
-              <tr style="background:var(--surface-2);position:sticky;top:0;z-index:1">
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Pornit</th>
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Job</th>
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Status</th>
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Durata</th>
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Items</th>
-                <th style="padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border)">Trigger</th>
-              </tr>
+              <For each={table.getHeaderGroups()}>
+                {(hg) => (
+                  <tr style="background:var(--surface-2);position:sticky;top:0;z-index:1">
+                    <For each={hg.headers}>
+                      {(h) => (
+                        <th
+                          style={`padding:10px;text-align:left;font-weight:600;border-bottom:1px solid var(--border);${h.column.getCanSort() ? "cursor:pointer;user-select:none" : ""}`}
+                          onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
+                        >
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          <Show when={h.column.getIsSorted()}>
+                            <span style="margin-left:4px;font-size:10px">
+                              {h.column.getIsSorted() === "desc" ? "▼" : "▲"}
+                            </span>
+                          </Show>
+                        </th>
+                      )}
+                    </For>
+                  </tr>
+                )}
+              </For>
             </thead>
             <tbody>
-              <For each={logs()}>
-                {(l) => {
-                  const s = statusInfo(l.status);
+              <For each={table.getRowModel().rows}>
+                {(row) => {
+                  const l = row.original;
                   const isOpen = () => expanded() === l.id;
                   return (
                     <>
@@ -206,41 +320,13 @@ export default function LogsSection() {
                           }
                         }}
                       >
-                        <td style="padding:8px 10px;font-size:12px">{fmtDate(l.started_at)}</td>
-                        <td style="padding:8px 10px">
-                          <div style="display:flex;flex-direction:column;gap:1px">
-                            <span style="font-weight:600">{jobLabel(l.job_id)}</span>
-                            <span class="text-muted" style="font-size:11px;font-family:monospace">{l.job_id}</span>
-                          </div>
-                        </td>
-                        <td style="padding:8px 10px">
-                          <span style={`color:${s.color};font-weight:600`}>
-                            {s.icon} {s.text}
-                          </span>
-                          <Show when={l.error_message}>
-                            <span class="text-muted" style="font-size:11px;margin-left:6px">
-                              {isOpen() ? "▼" : "▶"} detalii
-                            </span>
-                          </Show>
-                        </td>
-                        <td style="padding:8px 10px;font-size:12px;font-variant-numeric:tabular-nums">
-                          {fmtDuration(l.duration_ms)}
-                        </td>
-                        <td style="padding:8px 10px;font-size:12px">
-                          <Show when={l.items_processed !== null || l.items_failed !== null} fallback={<span class="text-muted">—</span>}>
-                            <span>{l.items_processed ?? 0} ok</span>
-                            <Show when={(l.items_failed ?? 0) > 0}>
-                              <span style="color:var(--danger);margin-left:6px">/ {l.items_failed} fail</span>
-                            </Show>
-                          </Show>
-                        </td>
-                        <td style="padding:8px 10px;font-size:12px">
-                          <span
-                            style={`padding:2px 6px;border-radius:3px;font-size:11px;background:var(--surface-2);${l.triggered_by === "manual" ? "color:var(--accent)" : ""}`}
-                          >
-                            {l.triggered_by}
-                          </span>
-                        </td>
+                        <For each={row.getVisibleCells()}>
+                          {(cell) => (
+                            <td style="padding:8px 10px;vertical-align:top">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          )}
+                        </For>
                       </tr>
                       <Show when={isOpen() && l.error_message}>
                         <tr>
