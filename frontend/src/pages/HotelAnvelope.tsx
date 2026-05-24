@@ -661,8 +661,11 @@ export default function HotelAnvelope() {
   // ── Modal Sugestie Anvelope (din istoricul montajelor) ────────────────────
   const [montajSuggestion, setMontajSuggestion] = createSignal<MontajSuggestion | null>(null);
 
-  // ── Modal "Niciun istoric" → întreabă: Cazare nouă vs Caută în istoric ────
-  const [noHistoryPrompt, setNoHistoryPrompt] = createSignal(false);
+  // ── Prompt de intrare din POS → întreabă: Cazare nouă vs Caută în istoric ─
+  // Se afiseaza ÎNAINTE de a deschide modalul de cazare nouă, ca utilizatorul
+  // sa poata alege intentional sa scoata anvelope de la alt client (mod
+  // "Cautare istoric") in loc sa fie tarat direct in cazare noua.
+  const [entryChoicePrompt, setEntryChoicePrompt] = createSignal(false);
 
   // ── Mod "Căutare istoric" — afișează toate cazările active pentru scoatere
   const [historySearchMode, setHistorySearchMode] = createSignal(false);
@@ -672,18 +675,14 @@ export default function HotelAnvelope() {
     if (!p) return;
     try {
       const s = await loadLatestMontajByPlate(p);
-      if (!s || s.wheels.length === 0) {
-        // Niciun istoric găsit. Dacă venim din POS și e flow "cazare nouă" → întrebare
-        if (target === "new" && posHotelCtx()) setNoHistoryPrompt(true);
-        return;
-      }
+      if (!s || s.wheels.length === 0) return;
       setMontajSuggestion(s);
       void target; // ramane in API pentru viitor (sugestii in newModal vs combined)
     } catch { /* silent */ }
   }
 
   async function enterHistorySearchMode() {
-    setNoHistoryPrompt(false);
+    setEntryChoicePrompt(false);
     setShowNewModal(false);
     setHistorySearchMode(true);
     setSearchName("");
@@ -836,8 +835,9 @@ export default function HotelAnvelope() {
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare client.", "error");
       }
-      // Auto-deschide modalul de cazare nouă — declanșează și verificarea istoricului
-      openNewModal();
+      // În loc să deschidem direct modalul "Cazare nouă", arătăm un prompt cu
+      // opțiunile: cazare nouă vs căutare în istoric (scoatere de la alt client).
+      setEntryChoicePrompt(true);
     } else {
       await fetchCazari();
     }
@@ -2444,12 +2444,12 @@ export default function HotelAnvelope() {
         }}
       </Show>
 
-      {/* Modal: Niciun istoric → întrebare cazare nouă sau căutare */}
-      <Show when={noHistoryPrompt()}>
+      {/* Prompt de intrare din POS → întrebare cazare nouă sau căutare istoric */}
+      <Show when={entryChoicePrompt()}>
         <div class="sl-modal-overlay" style="z-index:1100">
           <div class="sl-modal" style="max-width:560px;width:100%;text-align:center">
             <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
-              <span class="sl-modal-title">Niciun istoric găsit</span>
+              <span class="sl-modal-title">Cum continuați?</span>
             </div>
             <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
@@ -2458,18 +2458,17 @@ export default function HotelAnvelope() {
                 <line x1="12" y1="16" x2="12.01" y2="16"/>
               </svg>
               <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
-                Pentru plăcuța <strong>{posHotelCtx()?.titlu}</strong> nu există niciun montaj sau cazare anterioară.
-                <br />Cum doriți să continuați?
+                Pentru plăcuța <strong>{posHotelCtx()?.titlu}</strong> alegeți acțiunea dorită:
               </p>
             </div>
             <div class="sl-modal-footer" style="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none;flex-wrap:wrap">
               <button
                 class="btn btn-ghost"
                 style="min-width:180px;min-height:96px;font-size:15px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
-                onClick={() => setNoHistoryPrompt(false)}
+                onClick={() => { setEntryChoicePrompt(false); openNewModal(); }}
               >
                 Cazare nouă
-                <div style="font-size:11px;font-weight:400;color:var(--text-muted);margin-top:4px">Continui cu cazarea curentă</div>
+                <div style="font-size:11px;font-weight:400;color:var(--text-muted);margin-top:4px">Adăugați anvelope noi</div>
               </button>
               <button
                 class="btn btn-primary"
