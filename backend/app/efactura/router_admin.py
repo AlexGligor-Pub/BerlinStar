@@ -563,6 +563,7 @@ async def clear_task_logs(
     """Sterge intrari din task_runs.
 
     - `keep_last_days=0` (default): sterge tot — accesibil doar super-admin.
+      Rulari cu status='running' sunt pastrate (sa nu ramana update-ul lor orfan).
     - `keep_last_days>0`: sterge doar rulari finalizate mai vechi decat cutoff.
     """
     stmt = sa_delete(TaskRun).execution_options(synchronize_session=False)
@@ -571,6 +572,9 @@ async def clear_task_logs(
         stmt = stmt.where(
             TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff,
         )
+    else:
+        # Pastram rulari active — update-ul lor de la sfarsit ar deveni un no-op silent.
+        stmt = stmt.where(TaskRun.status != "running")
     result = await db.execute(stmt)
     await db.commit()
     deleted = int(result.rowcount or 0)

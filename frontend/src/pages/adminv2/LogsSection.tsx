@@ -4,7 +4,7 @@ import {
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
 import { adminFetch } from "./admin-auth";
-import { fmtDate } from "./shared";
+import { fmtDate, statusDisplay } from "./shared";
 
 interface TaskLog {
   id: number;
@@ -31,11 +31,7 @@ function fmtDuration(ms: number | null): string {
   return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`;
 }
 
-function statusInfo(s: TaskLog["status"]) {
-  if (s === "success") return { text: "Succes", color: "var(--success)", icon: "✓" };
-  if (s === "error") return { text: "Eroare", color: "var(--danger)", icon: "✕" };
-  return { text: "Ruleaza", color: "var(--accent)", icon: "⟳" };
-}
+const statusInfo = statusDisplay;
 
 const PAGE_SIZE = 50;
 

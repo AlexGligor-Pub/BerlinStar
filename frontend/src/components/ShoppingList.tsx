@@ -624,13 +624,21 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     }
   }
 
+  // Flag setat la unmount — auto-save din POS-Hotel ruleaza in fundal dupa
+  // întoarcerea din Hotel Anvelope; daca utilizatorul navigheaza imediat,
+  // nu mai vrem sa mutam state-ul componentei dezmembrate sau sa notificam.
+  let autoSaveAborted = false;
+  onCleanup(() => { autoSaveAborted = true; });
+
   async function autoSaveMountedTiresFromHotel(receiptId: number) {
     try {
       const existing = await loadMontajRotiByReceipt(receiptId);
+      if (autoSaveAborted) return;
       if (existing.length > 0) return; // nu suprascriem montaj-ul deja salvat de utilizator
       const res = await apiFetch(`/api/cazare-anvelope?receipt_id=${receiptId}&limit=10`);
-      if (!res.ok) return;
+      if (autoSaveAborted || !res.ok) return;
       const data = await res.json() as CazariResponse;
+      if (autoSaveAborted) return;
       const cazari = data?.items ?? [];
       let mountedItems: CazareItemPayload[] | null = null;
       // 1) Scoatere simplă: cazarea are data_checkout + montate_pe_masina=true
@@ -670,7 +678,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
         }));
       if (drafts.length === 0) return;
       await bulkUpsertMontajRoti(receiptId, drafts);
+      if (autoSaveAborted) return;
       await refreshLinkedMontaje();
+      if (autoSaveAborted) return;
       notify("Rotile montate pe mașină au fost adăugate la deviz.", "success");
     } catch { /* silent — userul poate deschide manual Montare Roți */ }
   }

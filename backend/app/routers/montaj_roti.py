@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,13 +101,15 @@ async def _build_lookup_maps(
 
 @router.get("/by-license-plate")
 async def latest_montaj_by_plate(
-    numar_masina: str,
+    numar_masina: str = Query(..., min_length=1, max_length=20),
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
     plate = (numar_masina or "").strip().upper().replace(" ", "")
     if not plate:
         raise HTTPException(400, "numar_masina lipsă.")
+    if len(plate) > 16:
+        raise HTTPException(400, "numar_masina prea lung.")
 
     normalized_db = func.upper(func.replace(Vehicol.numar_masina, " ", ""))
 

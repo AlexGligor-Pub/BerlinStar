@@ -6,7 +6,7 @@ import {
 import { readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
-import { fmtDate } from "./shared";
+import { fmtDate, statusDisplay } from "./shared";
 
 interface LastRun {
   status: "running" | "success" | "error";
@@ -35,12 +35,7 @@ interface EditState {
   enabled: boolean;
 }
 
-function statusBadge(s: LastRun["status"] | null) {
-  if (s === null) return { text: "Niciodata", color: "var(--text-muted)" };
-  if (s === "success") return { text: "Succes", color: "var(--success)" };
-  if (s === "error") return { text: "Eroare", color: "var(--danger)" };
-  return { text: "Ruleaza", color: "var(--accent)" };
-}
+const statusBadge = statusDisplay;
 
 export default function TasksSection() {
   const [jobs, setJobs] = createSignal<JobInfo[]>([]);

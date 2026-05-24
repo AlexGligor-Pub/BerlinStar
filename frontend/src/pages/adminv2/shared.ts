@@ -1,5 +1,15 @@
 /** Utilitati partajate intre sectiunile AdminV2. */
 
+export type TaskRunStatus = "running" | "success" | "error";
+
+/** Mapare status -> text romanesc + culoare + icon (folosita in Tasks + Logs). */
+export function statusDisplay(s: TaskRunStatus | null) {
+  if (s === null) return { text: "Niciodata", color: "var(--text-muted)", icon: "—" };
+  if (s === "success") return { text: "Succes", color: "var(--success)", icon: "✓" };
+  if (s === "error") return { text: "Eroare", color: "var(--danger)", icon: "✕" };
+  return { text: "Ruleaza", color: "var(--accent)", icon: "⟳" };
+}
+
 /** Formateaza o data ISO la dd.MM.yyyy HH:mm in limba romana. */
 export function fmtDate(iso: string | null): string {
   if (!iso) return "—";

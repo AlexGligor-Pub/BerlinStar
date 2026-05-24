@@ -10,7 +10,7 @@ import {
   cazari, marci, dimensiuni, profiluri, coduriDot, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadCoduriDot, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
-  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare, mapCazare,
+  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
   INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
   type Cazare, type Anvelopa, type TipAnvelopa,
 } from "../store/hotelAnvelopeStore";
@@ -660,7 +660,6 @@ export default function HotelAnvelope() {
 
   // ── Modal Sugestie Anvelope (din istoricul montajelor) ────────────────────
   const [montajSuggestion, setMontajSuggestion] = createSignal<MontajSuggestion | null>(null);
-  const [_suggestionTargetForm, setSuggestionTargetForm] = createSignal<"new" | "combined" | null>(null);
 
   // ── Modal "Niciun istoric" → întreabă: Cazare nouă vs Caută în istoric ────
   const [noHistoryPrompt, setNoHistoryPrompt] = createSignal(false);
@@ -679,7 +678,7 @@ export default function HotelAnvelope() {
         return;
       }
       setMontajSuggestion(s);
-      setSuggestionTargetForm(target);
+      void target; // ramane in API pentru viitor (sugestii in newModal vs combined)
     } catch { /* silent */ }
   }
 
@@ -730,14 +729,12 @@ export default function HotelAnvelope() {
     setClientAnvelope((prev) => [...drafts, ...prev]);
     setSelectedAnvIds(new Set(drafts.map((d) => d.id)));
     setMontajSuggestion(null);
-    setSuggestionTargetForm(null);
   }
 
   // Curăță sugestia când se închid ambele modale părinte
   createEffect(() => {
     if (!showNewModal() && combinedCazare() === null) {
       setMontajSuggestion(null);
-      setSuggestionTargetForm(null);
     }
   });
 
@@ -2377,7 +2374,7 @@ export default function HotelAnvelope() {
               <div class="sl-modal" style="width:min(900px,96vw);max-height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
                 <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
                   <span class="sl-modal-title">Sugestie cazare</span>
-                  <button class="btn btn-ghost btn-sm" onClick={() => { setMontajSuggestion(null); setSuggestionTargetForm(null); }}>✕</button>
+                  <button class="btn btn-ghost btn-sm" onClick={() => setMontajSuggestion(null)}>✕</button>
                 </div>
 
                 <div style="padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px">
@@ -2423,7 +2420,7 @@ export default function HotelAnvelope() {
                 </div>
 
                 <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0;display:flex;justify-content:flex-end;gap:8px">
-                  <button class="btn btn-ghost btn-sm" onClick={() => { setMontajSuggestion(null); setSuggestionTargetForm(null); }}>Introduc manual</button>
+                  <button class="btn btn-ghost btn-sm" onClick={() => setMontajSuggestion(null)}>Introduc manual</button>
                   <button
                     class="btn btn-primary btn-sm"
                     disabled={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}

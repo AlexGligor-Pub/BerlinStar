@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 PozitieRoataStr = Literal[
@@ -21,8 +21,8 @@ class MontajRotaCreate(BaseModel):
     tip: TipAnvelopaStr = "vara"
     adancime: float | None = None
     cuplu_strangere: float | None = None
-    indice_viteza: str | None = None
-    indice_sarcina: int | None = None
+    indice_viteza: str | None = Field(default=None, max_length=4)
+    indice_sarcina: int | None = Field(default=None, ge=0)
     comments: str | None = None
 
 

@@ -1,6 +1,16 @@
 import { createSignal } from "solid-js";
 import { apiFetch, API_BASE } from "../utils/api";
-import type { TipAnvelopa } from "./hotelAnvelopeStore";
+import {
+  INDICE_VITEZA_SHORTCUTS as _IV,
+  INDICE_SARCINA_SHORTCUTS as _IS,
+  type TipAnvelopa,
+} from "./hotelAnvelopeStore";
+
+// Re-export — definitiile traiesc in hotelAnvelopeStore (proprietatile sunt
+// ale anvelopei). Pastram exporturile aici pentru ca importurile existente din
+// MontareRotiModal sa nu trebuiasca rescrise.
+export const INDICE_VITEZA_SHORTCUTS = _IV;
+export const INDICE_SARCINA_SHORTCUTS = _IS;
 
 export type PozitieRoata =
   | "dreapta_fata"
@@ -34,9 +44,6 @@ export const CUPLU_SHORTCUTS = [90, 100, 110, 120, 130, 140, 150, 160, 170, 180,
 
 export const ADANCIME_SHORTCUTS = [2, 3, 4, 5, 6];
 export const ADANCIME_DEFAULT = 5;
-
-export const INDICE_VITEZA_SHORTCUTS: string[] = ["H", "V", "T", "W", "Y", "S", "R", "Q", "P", "N"];
-export const INDICE_SARCINA_SHORTCUTS: number[] = [91, 94, 95, 88, 98, 87, 92, 96, 100, 102];
 
 export interface MontajRota {
   id: number;

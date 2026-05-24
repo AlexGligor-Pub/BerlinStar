@@ -23,6 +23,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import delete, select
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.broadcaster import broadcaster
 from app.database import AsyncSessionLocal
@@ -522,30 +523,41 @@ _TASK_RUN_RETENTION_DAYS = 90
 async def job_task_runs_cleanup() -> None:
     """Sterge log-urile de rulare mai vechi de 90 zile."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=_TASK_RUN_RETENTION_DAYS)
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            delete(TaskRun)
-            .where(TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff)
-            .execution_options(synchronize_session=False)
-        )
-        await db.commit()
-        deleted = int(result.rowcount or 0)
-        log.info("task_runs_cleanup: %d randuri sterse (cutoff=%s)", deleted, cutoff.isoformat())
-        report_items(processed=deleted)
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(
+                delete(TaskRun)
+                .where(TaskRun.finished_at.isnot(None), TaskRun.finished_at < cutoff)
+                .execution_options(synchronize_session=False)
+            )
+            await db.commit()
+            deleted = int(result.rowcount or 0)
+            log.info("task_runs_cleanup: %d randuri sterse (cutoff=%s)", deleted, cutoff.isoformat())
+            report_items(processed=deleted)
+    except SQLAlchemyError as exc:
+        log.exception("task_runs_cleanup: eroare DB: %s", exc)
+        report_items(failed=1)
+        raise
 
 
 # ---------- Helper: scrub secrete din traceback ----------
 
-# Match-uri pentru tokeni Bearer si headere Authorization in tracebackuri.
+# Match-uri pentru tokeni Bearer / Authorization / access_token / refresh_token / ?token=
 _BEARER_RE = re.compile(r"(?i)(Bearer\s+)[A-Za-z0-9._\-+/=]+")
 _AUTH_HEADER_RE = re.compile(
     r"(?i)('?Authorization'?\s*[:=]\s*['\"]?)(Bearer\s+)?[A-Za-z0-9._\-+/=]+"
 )
+_TOKEN_PARAM_RE = re.compile(
+    r"(?i)((?:access_token|refresh_token|id_token|token)['\"]?\s*[:=]\s*['\"]?)"
+    r"[A-Za-z0-9._\-+/=]+"
+)
+_TRACEBACK_MAX = 2000
 
 
 def _scrub_secrets(text: str) -> str:
     text = _BEARER_RE.sub(r"\1***REDACTED***", text)
     text = _AUTH_HEADER_RE.sub(r"\1***REDACTED***", text)
+    text = _TOKEN_PARAM_RE.sub(r"\1***REDACTED***", text)
     return text
 
 
@@ -587,8 +599,9 @@ async def _execute_logged(job_id: str, fn, triggered_by: str) -> str | None:
         status = "success"
     except Exception as exc:  # noqa: BLE001
         status = "error"
-        raw = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()[-2000:]}"
-        error_msg = _scrub_secrets(raw)
+        # Scrub INAINTE de truncare, ca sa nu lasam un Bearer/token taiat la mijloc.
+        raw = f"{type(exc).__name__}: {exc}\n\n{traceback.format_exc()}"
+        error_msg = _scrub_secrets(raw)[-_TRACEBACK_MAX:]
         log.exception("Job %s a esuat (triggered_by=%s)", job_id, triggered_by)
     finally:
         _current_run.reset(ctx_token)
@@ -805,6 +818,16 @@ JOB_LABELS: dict[str, str] = {
     "subscription_renewal_email": "Email reminder abonament expira in 7 zile",
     "subscription_anaf_poll": "Polling status SPV facturi abonament",
 }
+
+
+# Invarianta: cele trei dictionare trebuie sa aiba aceleasi chei. Daca cineva
+# adauga un job in unul si uita celalalt, vrem sa stim la import, nu la runtime.
+assert set(JOB_DEFAULTS.keys()) == set(_JOB_FN_MAP.keys()) == set(JOB_LABELS.keys()), (
+    "Divergenta chei intre JOB_DEFAULTS / _JOB_FN_MAP / JOB_LABELS: "
+    f"only-in-defaults={set(JOB_DEFAULTS) - set(_JOB_FN_MAP) - set(JOB_LABELS)}; "
+    f"only-in-fn-map={set(_JOB_FN_MAP) - set(JOB_DEFAULTS) - set(JOB_LABELS)}; "
+    f"only-in-labels={set(JOB_LABELS) - set(JOB_DEFAULTS) - set(_JOB_FN_MAP)}"
+)
 
 
 def list_known_jobs() -> list[str]:
