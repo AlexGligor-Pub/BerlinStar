@@ -1064,7 +1064,16 @@ export default function HotelAnvelope() {
         if (vRes.ok) {
           const vData: ClientVehicol[] = await vRes.json();
           setNewClientVehicole(vData);
-          if (vData.length > 0) setNewSelectedVehicol(vData[0].numar_masina);
+          if (vData.length > 0) {
+            // Preferam placuta din contextul POS (cea pe care s-a deschis devizul),
+            // altfel ar selecta mereu primul vehicol din lista clientului — care
+            // de obicei NU e cel pe care lucreaza utilizatorul.
+            const ctxPlate = (posHotelCtx()?.titlu ?? "").trim().toUpperCase().replace(/\s+/g, "");
+            const matched = ctxPlate
+              ? vData.find((v) => (v.numar_masina ?? "").trim().toUpperCase().replace(/\s+/g, "") === ctxPlate)
+              : null;
+            setNewSelectedVehicol((matched ?? vData[0]).numar_masina);
+          }
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare vehicule client.", "error");
