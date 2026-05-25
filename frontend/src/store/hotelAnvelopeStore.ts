@@ -287,6 +287,24 @@ export async function getCazareById(id: number): Promise<Cazare | null> {
   }
 }
 
+/** Returneaza cazarile ACTIVE (data_checkout NULL) pentru o placuta data.
+ *  Folosit la avertizarea utilizatorului din POS cand placuta are deja anvelope
+ *  in depozit (eventual la alt client). */
+export async function loadActiveCazariByPlate(plate: string): Promise<Cazare[]> {
+  const q = (plate ?? "").trim();
+  if (!q) return [];
+  try {
+    const res = await apiFetch(
+      `/api/cazare-anvelope?activa=true&numar_masina=${encodeURIComponent(q)}&limit=50`,
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.items ?? []).map(mapCazare);
+  } catch {
+    return [];
+  }
+}
+
 export interface VehiculInfo {
   numarMasina: string;
   marca: string | null;

@@ -537,6 +537,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
         tip: m.tip,
         adancime: m.adancime,
         cupluStrangere: m.cupluStrangere,
+        indiceViteza: m.indiceViteza,
+        indiceSarcina: m.indiceSarcina,
         imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
       }));
       await generateMontajRoti(r, company, rows, r.vehicol ?? null);
@@ -689,6 +691,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
             tip: m.tip,
             adancime: m.adancime,
             cupluStrangere: m.cupluStrangere,
+            indiceViteza: m.indiceViteza,
+            indiceSarcina: m.indiceSarcina,
             imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
           }));
         }

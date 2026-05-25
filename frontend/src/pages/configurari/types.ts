@@ -51,6 +51,7 @@ export interface EmployeeItem {
   description: string | null;
   target: string;
   image_path: string | null;
+  annual_vacation_days: number;
 }
 
 export interface Category {

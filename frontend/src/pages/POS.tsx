@@ -64,6 +64,7 @@ export default function POS() {
     setShowProduse(false);
     setShowServicii(false);
     setShowNewDevizConfirm(false);
+    loadEmployees(device()?.locationId, { force: true });
   }
 
   const unpaidFiltered = createMemo(() => {

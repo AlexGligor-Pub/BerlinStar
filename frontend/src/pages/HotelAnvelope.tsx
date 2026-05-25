@@ -12,7 +12,7 @@ import {
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
   hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
   INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
-  type Cazare, type Anvelopa, type TipAnvelopa,
+  type Cazare, type Anvelopa, type TipAnvelopa, type VehiculInfo,
 } from "../store/hotelAnvelopeStore";
 import { loadLatestMontajByPlate, POZITIE_LABELS, type MontajSuggestion } from "../store/montajRotiStore";
 
@@ -588,7 +588,20 @@ export default function HotelAnvelope() {
   const [loading, setLoading] = createSignal(false);
   const [companyData, setCompanyData] = createSignal<CompanyData | null>(null);
   const [viewOnlyCazare, setViewOnlyCazare] = createSignal<Cazare | null>(null);
+  const [viewOnlyVehicle, setViewOnlyVehicle] = createSignal<VehiculInfo | null>(null);
   const [viewPdfLoading, setViewPdfLoading] = createSignal<"checkin" | "checkout" | "combined" | null>(null);
+
+  // Cand se deschide modalul de vizualizare, incarca si detaliile vehiculului
+  // (marca, model, km, VIN, observatii) ca sa le aratam langa client.
+  createEffect(() => {
+    const c = viewOnlyCazare();
+    if (!c) { setViewOnlyVehicle(null); return; }
+    void (async () => {
+      const v = await getVehiculForCazare(c);
+      // Doar daca utilizatorul nu a inchis intre timp / a deschis alta cazare
+      if (viewOnlyCazare()?.id === c.id) setViewOnlyVehicle(v);
+    })();
+  });
   const [pageSelectedClient, setPageSelectedClient] = createSignal<ClientItem | null>(null);
 
   async function viewModalPdf(type: "checkin" | "checkout" | "combined", c: Cazare) {
@@ -837,7 +850,19 @@ export default function HotelAnvelope() {
       }
       // În loc să deschidem direct modalul "Cazare nouă", arătăm un prompt cu
       // opțiunile: cazare nouă vs căutare în istoric (scoatere de la alt client).
-      setEntryChoicePrompt(true);
+      // Suprimam prompt-ul cand:
+      //  • utilizatorul a trecut deja prin prompt-ul "cazare activa gasita" din POS
+      //    si a ales "cazare noua" (skipEntryPrompt) — alegerea e deja facuta;
+      //  • venim cu param viewCazare — utilizatorul vede o cazare existenta, nu
+      //    creeaza una noua, deci "Cum continuati?" e irelevant;
+      //  • cazarile incarcate ale clientului contin deja una pentru aceeasi placuta —
+      //    e vizibila in lista, deci utilizatorul poate alege direct ce face.
+      const normPlate = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, "").toUpperCase();
+      const ctxPlate = normPlate(ctx.titlu);
+      const plateAlreadyVisible = ctxPlate !== "" && cazari().some((c) => normPlate(c.numarMasina) === ctxPlate);
+      if (!ctx.skipEntryPrompt && !searchParams.viewCazare && !plateAlreadyVisible) {
+        setEntryChoicePrompt(true);
+      }
     } else {
       await fetchCazari();
     }
@@ -2912,9 +2937,9 @@ export default function HotelAnvelope() {
               </div>
               <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
 
-                {/* Client + Date Cazare (pe aceeasi linie) */}
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                  {/* Client + Mașină */}
+                {/* Client + Vehicul + Date Cazare (auto-fit pe latimea modalului) */}
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+                  {/* Client */}
                   <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
                     <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
                     <div style="display:grid;gap:5px;font-size:13px">
@@ -2933,11 +2958,35 @@ export default function HotelAnvelope() {
                       <Show when={c().clientReprezentant}>
                         <div><span style="color:var(--text-muted)">Reprezentant:</span> {c().clientReprezentant}</div>
                       </Show>
-                      <Show when={c().numarMasina}>
-                        <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
-                      </Show>
                     </div>
                   </div>
+
+                  {/* Vehicul */}
+                  <Show when={c().numarMasina || viewOnlyVehicle()}>
+                    <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Vehicul</div>
+                      <div style="display:grid;gap:5px;font-size:13px">
+                        <Show when={c().numarMasina}>
+                          <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
+                        </Show>
+                        <Show when={viewOnlyVehicle()?.marca || viewOnlyVehicle()?.model}>
+                          <div>
+                            <span style="color:var(--text-muted)">Marcă/Model:</span>{" "}
+                            {[viewOnlyVehicle()?.marca, viewOnlyVehicle()?.model].filter(Boolean).join(" ")}
+                          </div>
+                        </Show>
+                        <Show when={viewOnlyVehicle()?.numarKilometrii != null}>
+                          <div><span style="color:var(--text-muted)">Km:</span> {viewOnlyVehicle()!.numarKilometrii!.toLocaleString("ro-RO")}</div>
+                        </Show>
+                        <Show when={viewOnlyVehicle()?.vin}>
+                          <div><span style="color:var(--text-muted)">VIN:</span> {viewOnlyVehicle()!.vin}</div>
+                        </Show>
+                        <Show when={viewOnlyVehicle()?.observatii}>
+                          <div><span style="color:var(--text-muted)">Observații:</span> {viewOnlyVehicle()!.observatii}</div>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
 
                   {/* Date Cazare */}
                   <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">

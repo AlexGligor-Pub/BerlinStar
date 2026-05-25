@@ -8,6 +8,10 @@ export interface PosHotelContext {
   clientId: number;
   clientNume: string;
   employeeId?: number | null;
+  /** Cand utilizatorul a trecut deja prin prompt-ul "cazare activa gasita" in POS si
+   *  a ales explicit "cazare noua", suprimam prompt-ul "Cum continuati?" din pagina
+   *  Hotel — alegerea e deja facuta. */
+  skipEntryPrompt?: boolean;
 }
 
 function loadCtx(): PosHotelContext | null {

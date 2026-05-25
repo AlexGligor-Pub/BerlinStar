@@ -47,16 +47,18 @@ function toNumber(v: string | number): number {
   return typeof v === "number" ? v : parseFloat(v);
 }
 
-export async function loadEmployees(locationId?: number | null): Promise<void> {
+export async function loadEmployees(locationId?: number | null, opts?: { force?: boolean }): Promise<void> {
   const cacheKey = `${EMP_CACHE_KEY}_${locationId ?? "all"}`;
-  try {
-    const cached = localStorage.getItem(cacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached) as { ts: number; items: Employee[] };
-      if (Date.now() - parsed.ts < EMP_CACHE_TTL) { setEmployees(parsed.items); return; }
+  if (!opts?.force) {
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { ts: number; items: Employee[] };
+        if (Date.now() - parsed.ts < EMP_CACHE_TTL) { setEmployees(parsed.items); return; }
+      }
+    } catch {
+      // cache miss/corrupt — fall through to network
     }
-  } catch {
-    // cache miss/corrupt — fall through to network
   }
   try {
     const qs = locationId != null ? `&location_id=${locationId}` : "";

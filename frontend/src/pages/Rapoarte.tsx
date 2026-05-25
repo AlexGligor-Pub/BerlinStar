@@ -25,6 +25,17 @@ import {
 import StocuriSection from "./rapoarte/StocuriSection";
 import ReportsGate from "./rapoarte/ReportsGate";
 import { reportsFetch, setReportsToken } from "./rapoarte/reports-auth";
+import {
+  createSolidTable as tanstackCreate,
+  flexRender as tanstackFlexRender,
+  getCoreRowModel as tanstackCoreRowModel,
+  getSortedRowModel as tanstackSortedRowModel,
+  getFilteredRowModel as tanstackFilteredRowModel,
+  type ColumnDef as TanstackColumnDef,
+  type SortingState as TanstackSorting,
+} from "@tanstack/solid-table";
+import { exportCSV as sharedExportCSV, exportPDF as sharedExportPDF } from "./configurari/shared";
+import { ExportMenu } from "./configurari/components";
 
 /** Wrapper peste apiFetch care injecteaza tokenul de Rapoarte si, la 401,
  * curata tokenul si emite un eveniment ca gate-ul sa reia ecranul de parola.
@@ -57,6 +68,7 @@ const SECTIONS = [
   { id: "hotel-anvelope", label: "Hotel Anvelope" },
   { id: "clienti", label: "Clienți" },
   { id: "programari", label: "Programări" },
+  { id: "concedii", label: "Concedii" },
   { id: "stocuri", label: "Stocuri" },
 ] as const;
 
@@ -3213,6 +3225,397 @@ function ProgramariPanel() {
 
 // ───── ROOT ───────────────────────────────────────────────────────────────────
 
+// ────────────────────────────────────────────────────────────────────────────
+// Concedii Report Panel — heatmap zi × săptămână + TanStack table per lună
+// ────────────────────────────────────────────────────────────────────────────
+function ConcediiReportPanel() {
+  const RO_MONTHS = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
+  const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
+  const RO_DAYS   = ["L","M","M","J","V","S","D"];
+
+  const today = new Date();
+  const [y, setY] = createSignal(today.getFullYear());
+  const [m, setM] = createSignal(today.getMonth());
+  const [rows, setRows] = createSignal<RawConcedii[]>([]);
+  const [holidays, setHolidays] = createSignal<Set<string>>(new Set());
+  const [filter, setFilter] = createSignal("");
+  const [sorting, setSorting] = createSignal<TanstackSorting>([{ id: "start_date", desc: false }]);
+
+  const [isMobile, setIsMobile] = createSignal(typeof window !== "undefined" && window.innerWidth < 768);
+  function onResize() { setIsMobile(window.innerWidth < 768); }
+  onMount(() => window.addEventListener("resize", onResize));
+  onCleanup(() => window.removeEventListener("resize", onResize));
+
+  function prev() { if (m() === 0) { setY((v) => v - 1); setM(11); } else setM((v) => v - 1); }
+  function next() { if (m() === 11) { setY((v) => v + 1); setM(0); } else setM((v) => v + 1); }
+  function goToday() { setY(today.getFullYear()); setM(today.getMonth()); }
+
+  function pad2(n: number): string { return String(n).padStart(2, "0"); }
+  function ymd(yy: number, mm: number, dd: number): string { return `${yy}-${pad2(mm+1)}-${pad2(dd)}`; }
+
+  async function reload() {
+    const yy = y(), mm = m();
+    const last = new Date(yy, mm + 1, 0).getDate();
+    const mStart = ymd(yy, mm, 1);
+    const mEnd = ymd(yy, mm, last);
+    try {
+      const res = await apiFetch(`/api/leaves?date_from=${mStart}&date_to=${mEnd}`);
+      if (!res.ok) { setRows([]); return; }
+      setRows(await res.json());
+    } catch { setRows([]); }
+    try {
+      const hres = await apiFetch(`/api/leaves/holidays?year=${yy}`);
+      if (hres.ok) {
+        const hs = (await hres.json()) as { date: string; name: string }[];
+        setHolidays(new Set(hs.map((h) => h.date)));
+      }
+    } catch { /* ignore */ }
+  }
+
+  createEffect(() => { y(); m(); void reload(); });
+
+  // Heatmap data — count concedii per day (any type, non-deleted, non-rejected)
+  const dayCounts = createMemo<Map<string, RawConcedii[]>>(() => {
+    const map = new Map<string, RawConcedii[]>();
+    const yy = y(), mm = m();
+    const last = new Date(yy, mm + 1, 0).getDate();
+    for (let d = 1; d <= last; d++) {
+      const key = ymd(yy, mm, d);
+      const list: RawConcedii[] = [];
+      for (const r of rows()) {
+        if (r.is_deleted) continue;
+        if (r.status === "Rejected") continue;
+        if (key >= r.start_date && key <= r.end_date) list.push(r);
+      }
+      map.set(key, list);
+    }
+    return map;
+  });
+
+  const maxCount = createMemo(() => {
+    let max = 0;
+    for (const list of dayCounts().values()) if (list.length > max) max = list.length;
+    return max;
+  });
+
+  function intensity(n: number): string {
+    if (n === 0) return "rgba(255,255,255,0.04)";
+    // d3.interpolateBlues
+    const t = maxCount() === 0 ? 0 : n / maxCount();
+    const c = d3.interpolateBlues(0.2 + 0.7 * t);
+    return c;
+  }
+  function textColor(n: number): string {
+    if (n === 0) return "var(--text-muted,#8b90a0)";
+    const t = maxCount() === 0 ? 0 : n / maxCount();
+    return t > 0.55 ? "#fff" : "var(--text,#dbe0ea)";
+  }
+
+  // Build calendar grid (7 cols × N rows)
+  const grid = createMemo(() => {
+    const yy = y(), mm = m();
+    const firstDow = (new Date(yy, mm, 1).getDay() + 6) % 7;
+    const daysInMonth = new Date(yy, mm + 1, 0).getDate();
+    const cells: Array<{ day: number | null; date: string | null; count: number; isHoliday: boolean }> = [];
+    for (let i = 0; i < firstDow; i++) cells.push({ day: null, date: null, count: 0, isHoliday: false });
+    for (let d = 1; d <= daysInMonth; d++) {
+      const k = ymd(yy, mm, d);
+      const cnt = (dayCounts().get(k) ?? []).length;
+      cells.push({ day: d, date: k, count: cnt, isHoliday: holidays().has(k) });
+    }
+    while (cells.length % 7 !== 0) cells.push({ day: null, date: null, count: 0, isHoliday: false });
+    return cells;
+  });
+
+  // ── TanStack table ────────────────────────────────────────────────────────
+  const columns: TanstackColumnDef<RawConcedii>[] = [
+    {
+      accessorKey: "employee_name",
+      header: "Angajat",
+      cell: (info) => {
+        const r = info.row.original;
+        return (
+          <div style="display:flex;align-items:center;gap:8px">
+            <Avatar name={r.employee_name ?? "?"} imagePath={r.employee_image_path ?? null} size={28} />
+            <span>{r.employee_name ?? "?"}</span>
+          </div>
+        );
+      },
+    },
+    { accessorKey: "location_name", header: "Locație", cell: (i) => i.row.original.location_name ?? "—" },
+    {
+      accessorKey: "type", header: "Tip",
+      cell: (i) => {
+        const t = i.row.original.type;
+        const map: Record<string, string> = {
+          "Concediu de odihna": "🏖 Odihnă",
+          "Concediu medical": "🤒 Medical",
+          "Business Trip": "✈️ Business",
+          "Concediu fara plata": "📝 Învoire",
+        };
+        return map[t] ?? t;
+      },
+    },
+    {
+      accessorKey: "status", header: "Status",
+      cell: (i) => {
+        const s = i.row.original.status;
+        const color = s === "Approved" ? "#d4edda;color:#155724" : s === "Pending" ? "#fff3cd;color:#856404" : "#f8d7da;color:#721c24";
+        const txt = s === "Approved" ? "Aprobată" : s === "Pending" ? "În așteptare" : "Respinsă";
+        return <span style={`display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:${color}`}>{txt}</span>;
+      },
+    },
+    { accessorKey: "start_date", header: "De la", cell: (i) => fmtRoDate(i.row.original.start_date) },
+    { accessorKey: "end_date", header: "Până la", cell: (i) => fmtRoDate(i.row.original.end_date) },
+    { accessorKey: "working_days", header: "Zile lucr.", cell: (i) => i.row.original.working_days },
+    { accessorKey: "approver_name", header: "Aprobat de", cell: (i) => i.row.original.approver_name ?? "—" },
+    { accessorKey: "notes", header: "Motiv", cell: (i) => i.row.original.notes ?? "—" },
+  ];
+
+  const filteredRows = createMemo<RawConcedii[]>(() => rows().filter((r) => !r.is_deleted));
+
+  const table = tanstackCreate({
+    get data() { return filteredRows(); },
+    columns,
+    state: {
+      get sorting() { return sorting(); },
+      get globalFilter() { return filter(); },
+    },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setFilter,
+    globalFilterFn: (row, _id, value) => {
+      const q = String(value ?? "").toLowerCase();
+      if (!q) return true;
+      const r = row.original;
+      return (
+        (r.employee_name ?? "").toLowerCase().includes(q) ||
+        (r.location_name ?? "").toLowerCase().includes(q) ||
+        r.type.toLowerCase().includes(q) ||
+        (r.notes ?? "").toLowerCase().includes(q)
+      );
+    },
+    getCoreRowModel: tanstackCoreRowModel(),
+    getSortedRowModel: tanstackSortedRowModel(),
+    getFilteredRowModel: tanstackFilteredRowModel(),
+  });
+
+  // Stats
+  const stats = createMemo(() => {
+    const all = filteredRows();
+    const totalDays = all.reduce((s, r) => s + (r.working_days ?? 0), 0);
+    const pending = all.filter((r) => r.status === "Pending").length;
+    const approved = all.filter((r) => r.status === "Approved").length;
+    return { total: all.length, totalDays, pending, approved };
+  });
+
+  // Export helpers — folosesc tabelul filtrat & sortat curent
+  const TYPE_LABELS: Record<string, string> = {
+    "Concediu de odihna": "Concediu de odihnă",
+    "Concediu medical":   "Concediu medical",
+    "Business Trip":      "Business Trip",
+    "Concediu fara plata": "Învoire",
+  };
+  const STATUS_LABELS: Record<string, string> = { Approved: "Aprobată", Pending: "În așteptare", Rejected: "Respinsă" };
+
+  function exportRows(): string[][] {
+    return table.getRowModel().rows.map((r) => {
+      const x = r.original;
+      return [
+        x.employee_name ?? "—",
+        x.location_name ?? "—",
+        TYPE_LABELS[x.type] ?? x.type,
+        STATUS_LABELS[x.status] ?? x.status,
+        fmtRoDate(x.start_date),
+        fmtRoDate(x.end_date),
+        String(x.working_days ?? 0),
+        x.approver_name ?? "—",
+        x.notes ?? "",
+      ];
+    });
+  }
+  const EXPORT_HEADERS = ["Angajat", "Locație", "Tip", "Status", "De la", "Până la", "Zile lucr.", "Aprobat de", "Motiv"];
+  function exportTitle() { return `Concedii ${RO_MONTHS[m()]} ${y()}`; }
+  function doExportCSV() { sharedExportCSV(exportTitle(), EXPORT_HEADERS, exportRows()); }
+  function doExportPDF() { sharedExportPDF(exportTitle(), EXPORT_HEADERS, exportRows()); }
+
+  return (
+    <div class="cfg-panel concedii-report">
+      <PanelHeader title="Concedii" />
+
+      <div class="concedii-report-toolbar">
+        <div class="concedii-report-monthnav">
+          <button type="button" class="btn btn-ghost btn-sm" onClick={prev} aria-label="Luna anterioara">‹</button>
+          <button type="button" class="btn btn-ghost btn-sm" onClick={goToday}>Azi</button>
+          <h3 class="concedii-report-monthtitle">
+            {isMobile() ? RO_MONTHS_SHORT[m()] : RO_MONTHS[m()]} {y()}
+          </h3>
+          <button type="button" class="btn btn-ghost btn-sm" onClick={next} aria-label="Luna urmatoare">›</button>
+        </div>
+        <div class="concedii-report-toolbar-actions">
+          <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
+          <button type="button" class="btn btn-ghost btn-sm" onClick={reload} title="Refresh">↻</button>
+        </div>
+      </div>
+
+      <div class="concedii-report-stats">
+        <div class="locatii-chart-card concedii-report-stat"><div class="concedii-report-stat-label">Cereri totale</div><div class="concedii-report-stat-value">{stats().total}</div></div>
+        <div class="locatii-chart-card concedii-report-stat"><div class="concedii-report-stat-label">Aprobate</div><div class="concedii-report-stat-value" style="color:#198754">{stats().approved}</div></div>
+        <div class="locatii-chart-card concedii-report-stat"><div class="concedii-report-stat-label">În așteptare</div><div class="concedii-report-stat-value" style="color:#f59e0b">{stats().pending}</div></div>
+        <div class="locatii-chart-card concedii-report-stat"><div class="concedii-report-stat-label">Total zile lucr.</div><div class="concedii-report-stat-value">{stats().totalDays}</div></div>
+      </div>
+
+      <div class="locatii-chart-card concedii-report-section">
+        <div class="locatii-chart-title">Heatmap concedii — zi a lunii</div>
+        <div class="locatii-chart-subtitle">Albastru mai intens = mai mulți angajați în concediu</div>
+        <p class="chart-explanation">
+          Câți angajați sunt în concediu (aprobat sau pending) în fiecare zi. Util pentru a vedea perioadele aglomerate.
+        </p>
+        <div class="concedii-report-heatmap">
+          <div class="concedii-report-dow">
+            <For each={RO_DAYS}>{(d) => <span>{d}</span>}</For>
+          </div>
+          <div class="concedii-report-grid">
+            <For each={grid()}>
+              {(c) => {
+                if (c.day == null) return <span />;
+                const list = c.date ? (dayCounts().get(c.date) ?? []) : [];
+                const title = list.length === 0
+                  ? `Ziua ${c.day} — niciun angajat in concediu`
+                  : `Ziua ${c.day} — ${list.length} angajat(i):\n` + list.map((l) => `• ${l.employee_name} (${l.type})`).join("\n");
+                return (
+                  <div
+                    class="concedii-report-cell"
+                    classList={{ "is-holiday": c.isHoliday }}
+                    style={`background:${intensity(c.count)};color:${textColor(c.count)}`}
+                    title={title}
+                  >
+                    <div class="concedii-report-cell-day">{c.day}</div>
+                    <Show when={c.count > 0}>
+                      <div class="concedii-report-cell-count">{c.count}</div>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </div>
+      </div>
+
+      <div class="locatii-chart-card concedii-report-section">
+        <div class="locatii-chart-title">Toate cererile din {RO_MONTHS[m()]} {y()}</div>
+        <div class="concedii-report-search">
+          <input
+            class="input"
+            placeholder="🔍 Caută angajat, locație, tip, motiv..."
+            value={filter()}
+            onInput={(e) => setFilter(e.currentTarget.value)}
+          />
+          <span class="concedii-report-count">{table.getRowModel().rows.length} / {filteredRows().length}</span>
+        </div>
+
+        <Show when={table.getRowModel().rows.length === 0}>
+          <div style="padding:16px;color:var(--text-muted);text-align:center">Nicio cerere pentru această lună.</div>
+        </Show>
+
+        <Show when={isMobile() && table.getRowModel().rows.length > 0}>
+          <div class="concedii-report-cards">
+            <For each={table.getRowModel().rows}>
+              {(row) => {
+                const r = row.original;
+                const t = TYPE_LABELS[r.type] ?? r.type;
+                const s = STATUS_LABELS[r.status] ?? r.status;
+                const statusColor = r.status === "Approved" ? "#198754" : r.status === "Pending" ? "#f59e0b" : "#dc3545";
+                return (
+                  <div class="concedii-report-card" style={`border-left:4px solid ${statusColor}`}>
+                    <div class="concedii-report-card-head">
+                      <Avatar name={r.employee_name ?? "?"} imagePath={r.employee_image_path ?? null} size={32} />
+                      <div style="flex:1;min-width:0">
+                        <div style="font-weight:600">{r.employee_name ?? "?"}</div>
+                        <div style="color:var(--text-muted);font-size:12px">{r.location_name ?? "—"}</div>
+                      </div>
+                      <span style={`font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${statusColor}22;color:${statusColor}`}>{s}</span>
+                    </div>
+                    <div class="concedii-report-card-row"><span>Tip</span><strong>{t}</strong></div>
+                    <div class="concedii-report-card-row"><span>Perioadă</span><strong>{fmtRoDate(r.start_date)} → {fmtRoDate(r.end_date)}</strong></div>
+                    <div class="concedii-report-card-row"><span>Zile lucr.</span><strong>{r.working_days}</strong></div>
+                    <Show when={r.approver_name}>
+                      <div class="concedii-report-card-row"><span>Aprobat de</span><strong>{r.approver_name}</strong></div>
+                    </Show>
+                    <Show when={r.notes}>
+                      <div class="concedii-report-card-notes">{r.notes}</div>
+                    </Show>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+        </Show>
+
+        <Show when={!isMobile() && table.getRowModel().rows.length > 0}>
+          <div class="concedii-report-tablewrap">
+            <table class="concedii-report-table">
+              <thead>
+                <For each={table.getHeaderGroups()}>
+                  {(hg) => (
+                    <tr>
+                      <For each={hg.headers}>
+                        {(h) => {
+                          const sort = h.column.getIsSorted();
+                          const canSort = h.column.getCanSort();
+                          return (
+                            <th
+                              classList={{ "is-sortable": canSort }}
+                              onClick={canSort ? h.column.getToggleSortingHandler() : undefined}
+                            >
+                              <span style="display:inline-flex;align-items:center;gap:4px">
+                                {tanstackFlexRender(h.column.columnDef.header, h.getContext())}
+                                <Show when={sort === "asc"}><span style="font-size:11px">▲</span></Show>
+                                <Show when={sort === "desc"}><span style="font-size:11px">▼</span></Show>
+                              </span>
+                            </th>
+                          );
+                        }}
+                      </For>
+                    </tr>
+                  )}
+                </For>
+              </thead>
+              <tbody>
+                <For each={table.getRowModel().rows}>
+                  {(row) => (
+                    <tr>
+                      <For each={row.getVisibleCells()}>
+                        {(cell) => <td>{tanstackFlexRender(cell.column.columnDef.cell, cell.getContext())}</td>}
+                      </For>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+interface RawConcedii {
+  id: number;
+  employee_id: number;
+  employee_name: string | null;
+  employee_image_path: string | null;
+  location_id: number | null;
+  location_name: string | null;
+  type: string;
+  status: "Pending" | "Approved" | "Rejected";
+  start_date: string;
+  end_date: string;
+  working_days: number;
+  notes: string | null;
+  approver_name: string | null;
+  is_deleted: boolean;
+}
+
 export default function Rapoarte() {
   const [active, setActive] = persistedSignal<SectionId>("rapoarte_active_section", "target-angajati");
 
@@ -3258,6 +3661,7 @@ export default function Rapoarte() {
             <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
             <Match when={active() === "clienti"}><ClientiPanel /></Match>
             <Match when={active() === "programari"}><ProgramariPanel /></Match>
+            <Match when={active() === "concedii"}><ConcediiReportPanel /></Match>
             <Match when={active() === "stocuri"}><StocuriSection /></Match>
           </Switch>
         </main>

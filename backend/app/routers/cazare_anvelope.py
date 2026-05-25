@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, and_, delete as sql_delete
+from sqlalchemy import select, and_, delete as sql_delete, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,6 +149,7 @@ async def list_cazari(
     client_id: int | None = None,
     receipt_id: int | None = None,
     location_id: int | None = None,
+    numar_masina: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     last_id: int | None = None,
@@ -168,6 +169,11 @@ async def list_cazari(
         stmt = stmt.where(CazareAnvelope.receipt_id == receipt_id)
     if location_id is not None:
         stmt = stmt.where(CazareAnvelope.location_id == location_id)
+    if numar_masina is not None:
+        plate = (numar_masina or "").strip().upper().replace(" ", "")
+        if plate:
+            normalized = func.upper(func.replace(CazareAnvelope.numar_masina, " ", ""))
+            stmt = stmt.where(normalized == plate)
     if date_from:
         stmt = stmt.where(CazareAnvelope.data_checkin >= date_from)
     if date_to:

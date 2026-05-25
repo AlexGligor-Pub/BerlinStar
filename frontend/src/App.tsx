@@ -21,6 +21,7 @@ const Clienti = lazy(() => import("./pages/Clienti"));
 const ClientDetail = lazy(() => import("./pages/ClientDetail"));
 const HotelAnvelope = lazy(() => import("./pages/HotelAnvelope"));
 const Programari = lazy(() => import("./pages/Programari"));
+const Concedii = lazy(() => import("./pages/Concedii"));
 const NoAccess = lazy(() => import("./pages/NoAccess"));
 const AdminV2 = lazy(() => import("./pages/AdminV2"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
@@ -106,6 +107,7 @@ export default function App() {
         <Route path="/clienti/:id" component={() => <Protected component={ClientDetail} />} />
         <Route path="/hotel-anvelope" component={() => <Protected component={HotelAnvelope} />} />
         <Route path="/programari" component={() => <Protected component={Programari} />} />
+        <Route path="/concedii" component={() => <Protected component={Concedii} />} />
         <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
         <Route path="/factura-rapida" component={() => (
           <Show when={adminVisible()} fallback={<Navigate href="/" />}>

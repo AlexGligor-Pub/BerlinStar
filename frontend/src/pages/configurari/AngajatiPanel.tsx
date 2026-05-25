@@ -13,6 +13,7 @@ export default function AngajatiPanel() {
   const [editName, setEditName]           = createSignal("");
   const [editDesc, setEditDesc]           = createSignal("");
   const [editTarget, setEditTarget]       = createSignal("");
+  const [editVacationDays, setEditVacationDays] = createSignal("21");
   const [editImagePath, setEditImagePath] = createSignal<string | null>(null);
   const [imageUploading, setImageUploading] = createSignal(false);
   let fileInputRef: HTMLInputElement | undefined;
@@ -21,6 +22,7 @@ export default function AngajatiPanel() {
   const [newName, setNewName]     = createSignal("");
   const [newDesc, setNewDesc]     = createSignal("");
   const [newTarget, setNewTarget] = createSignal("0");
+  const [newVacationDays, setNewVacationDays] = createSignal("21");
 
   const [deleteTarget, setDeleteTarget] = createSignal<EmployeeItem | null>(null);
   const [saving, setSaving] = createSignal(false);
@@ -43,6 +45,7 @@ export default function AngajatiPanel() {
         description: e.description ?? null,
         target: e.target,
         image_path: e.image_path ?? null,
+        annual_vacation_days: e.annual_vacation_days ?? 21,
       })));
     } catch {
       setError("Eroare la încărcare.");
@@ -58,6 +61,7 @@ export default function AngajatiPanel() {
     setEditName(e.name);
     setEditDesc(e.description ?? "");
     setEditTarget(e.target);
+    setEditVacationDays(String(e.annual_vacation_days ?? 21));
     setEditImagePath(e.image_path ?? null);
     setAddMode(false);
     setError(null);
@@ -95,6 +99,7 @@ export default function AngajatiPanel() {
           name: editName().trim(),
           description: editDesc().trim() || null,
           target: parseFloat(editTarget()) || 0,
+          annual_vacation_days: Math.max(0, Math.min(365, parseInt(editVacationDays(), 10) || 0)),
         }),
       });
       if (!res.ok) throw new Error();
@@ -134,10 +139,11 @@ export default function AngajatiPanel() {
           name: newName().trim(),
           description: newDesc().trim() || null,
           target: parseFloat(newTarget()) || 0,
+          annual_vacation_days: Math.max(0, Math.min(365, parseInt(newVacationDays(), 10) || 21)),
         }),
       });
       if (!res.ok) throw new Error();
-      setNewName(""); setNewDesc(""); setNewTarget("0"); setAddMode(false);
+      setNewName(""); setNewDesc(""); setNewTarget("0"); setNewVacationDays("21"); setAddMode(false);
       await load();
     } catch {
       setError("Eroare la adăugare.");
@@ -182,9 +188,22 @@ export default function AngajatiPanel() {
       <Show when={addMode()}>
         <div class="cfg-location-row cfg-location-row--edit">
           <div class="cfg-location-fields">
-            <input class="input" placeholder="Nume *" value={newName()} onInput={(e) => setNewName(e.currentTarget.value)} />
-            <input class="input" placeholder="Descriere (opțional)" value={newDesc()} onInput={(e) => setNewDesc(e.currentTarget.value)} />
-            <input class="input" type="number" placeholder="Target lunar (0 = fără)" value={newTarget()} onInput={(e) => setNewTarget(e.currentTarget.value)} />
+            <div class="cfg-field-row">
+              <label>Nume *</label>
+              <input class="input" placeholder="Nume" value={newName()} onInput={(e) => setNewName(e.currentTarget.value)} />
+            </div>
+            <div class="cfg-field-row">
+              <label>Descriere</label>
+              <input class="input" placeholder="Opțional" value={newDesc()} onInput={(e) => setNewDesc(e.currentTarget.value)} />
+            </div>
+            <div class="cfg-field-row">
+              <label>Target lunar</label>
+              <input class="input" type="number" placeholder="0 = fără" value={newTarget()} onInput={(e) => setNewTarget(e.currentTarget.value)} />
+            </div>
+            <div class="cfg-field-row">
+              <label>Zile concediu / an</label>
+              <input class="input" type="number" min="0" max="365" placeholder="21" value={newVacationDays()} onInput={(e) => setNewVacationDays(e.currentTarget.value)} />
+            </div>
           </div>
           <div class="cfg-location-actions">
             <button class="btn btn-sm btn-primary" disabled={saving() || !newName().trim()} onClick={addItem}>Salvează</button>
@@ -222,6 +241,7 @@ export default function AngajatiPanel() {
                     <Show when={e.description}>
                       <span class="cfg-location-desc">{e.description}</span>
                     </Show>
+                    <span class="cfg-location-desc">🏖 {e.annual_vacation_days ?? 21} zile concediu/an</span>
                   </div>
                   <div class="cfg-location-actions">
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(e)}>Editează</button>
@@ -261,9 +281,22 @@ export default function AngajatiPanel() {
                       {imageUploading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
                     </button>
                   </div>
-                  <input class="input" placeholder="Nume *" value={editName()} onInput={(e) => setEditName(e.currentTarget.value)} />
-                  <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
-                  <input class="input" type="number" placeholder="Target lunar" value={editTarget()} onInput={(e) => setEditTarget(e.currentTarget.value)} />
+                  <div class="cfg-field-row">
+                    <label>Nume *</label>
+                    <input class="input" placeholder="Nume" value={editName()} onInput={(e) => setEditName(e.currentTarget.value)} />
+                  </div>
+                  <div class="cfg-field-row">
+                    <label>Descriere</label>
+                    <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
+                  </div>
+                  <div class="cfg-field-row">
+                    <label>Target lunar</label>
+                    <input class="input" type="number" placeholder="Target lunar" value={editTarget()} onInput={(e) => setEditTarget(e.currentTarget.value)} />
+                  </div>
+                  <div class="cfg-field-row">
+                    <label>Zile concediu / an</label>
+                    <input class="input" type="number" min="0" max="365" placeholder="Zile concediu" value={editVacationDays()} onInput={(e) => setEditVacationDays(e.currentTarget.value)} />
+                  </div>
                 </div>
                 <div class="cfg-location-actions">
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(e)}>Șterge</button>

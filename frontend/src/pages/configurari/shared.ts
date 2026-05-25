@@ -73,8 +73,8 @@ export function exportPDF(title: string, headers: string[], rows: string[][]): v
   body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; padding: 18mm 20mm; }
   h1 { font-size: 15pt; margin-bottom: 14px; }
   table { width:100%; border-collapse:collapse; margin-bottom:40px; }
-  th { background:#f0f0f0; font-weight:600; border:1px solid #bbb; padding:7px 10px; text-align:left; }
-  td { border:1px solid #ddd; padding:6px 10px; }
+  th { background:#f0f0f0; font-weight:600; border:1px solid #bbb; padding:12px 14px; text-align:left; }
+  td { border:1px solid #ddd; padding:11px 14px; vertical-align:top; }
   tr:nth-child(even) td { background:#fafafa; }
   footer { position:fixed; bottom:8mm; left:20mm; right:20mm; font-size:8pt; color:#555;
            border-top:1px solid #ccc; padding-top:4px;

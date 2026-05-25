@@ -12,7 +12,7 @@ import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
 import { loadMontajRotiByReceipt, bulkUpsertMontajRoti, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
-import type { TipAnvelopa } from "../store/hotelAnvelopeStore";
+import { loadActiveCazariByPlate, type Cazare, type TipAnvelopa } from "../store/hotelAnvelopeStore";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -521,6 +521,11 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
   const [linkedCazari, setLinkedCazari] = createSignal<CazareBasic[]>([]);
   const [goingToHotel, setGoingToHotel] = createSignal(false);
 
+  // Cand utilizatorul vrea sa intre in Hotel Anvelope dar placuta are deja
+  // cazari active (la acelasi sau alt client), afisam un prompt cu optiuni
+  // ca sa nu creeze accidental o cazare duplicat.
+  const [activeHotelPrompt, setActiveHotelPrompt] = createSignal<Cazare[] | null>(null);
+
   // Guard: don't save meta before onMount decides what to load
   let metaSaveEnabled = false;
 
@@ -961,6 +966,33 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       return;
     }
     if (goingToHotel()) return;
+
+    // Pre-flight: daca placuta are deja cazari active (la acest client sau la altul),
+    // afisam prompt-ul si lasam utilizatorul sa decida ce face.
+    try {
+      const active = await loadActiveCazariByPlate(titlu().trim());
+      // Daca o cazare activa pentru placuta e deja atasata acestui deviz, nu mai
+      // intram in prompt (cazarea va aparea oricum in pagina Hotel pentru client).
+      const rId = loadedReceiptId();
+      const relevant = rId != null
+        ? active.filter((c) => String(c.id) !== String(rId) && active.length > 0)
+        : active;
+      if (relevant.length > 0) {
+        setActiveHotelPrompt(relevant);
+        return;
+      }
+    } catch { /* ignora — daca lookup-ul esueaza, continua fluxul normal */ }
+
+    await proceedToHotelNew();
+  }
+
+  /** Continua fluxul "creeaza cazare noua / vezi cazarile clientului in Hotel".
+   *  Extras separat ca sa fie reutilizat dupa rezolvarea prompt-ului de cazare activa.
+   *  `skipEntryPrompt`: cand utilizatorul a confirmat deja "cazare noua" in prompt-ul
+   *  din POS, suprimam prompt-ul echivalent din pagina Hotel ("Cum continuati?"). */
+  async function proceedToHotelNew(skipEntryPrompt: boolean = false) {
+    const client = selectedClient();
+    if (!client) return;
     setGoingToHotel(true);
 
     let rId = loadedReceiptId();
@@ -1010,6 +1042,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       clientId: client.id,
       clientNume: client.nume,
       employeeId: selectedEmployee()?.id ?? null,
+      skipEntryPrompt,
     });
     setGoingToHotel(false);
     navigate("/hotel-anvelope");
@@ -1312,6 +1345,63 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
           onSaved={() => { setMontareRotiOpen(false); refreshLinkedMontaje(); }}
           onClose={() => setMontareRotiOpen(false)}
         />
+      </Show>
+
+      {/* Active hotel cazare prompt — placuta are deja anvelope in depozit */}
+      <Show when={activeHotelPrompt() !== null}>
+        <div class="sl-modal-overlay" style="z-index:450">
+          <div class="sl-modal" style="max-width:480px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Cazare activă pentru {titlu().trim()}</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setActiveHotelPrompt(null)}>✕</button>
+            </div>
+            <div style="padding:12px 16px;font-size:13px;color:var(--text)">
+              <p style="margin:0 0 10px 0">
+                Plăcuța <strong>{titlu().trim()}</strong> are deja anvelope în depozit. Ce vrei să faci?
+              </p>
+              <div style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow:auto">
+                <For each={activeHotelPrompt() ?? []}>
+                  {(c) => (
+                    <div style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px">
+                      <div style="display:flex;justify-content:space-between;gap:8px">
+                        <strong>{c.clientNume ?? "—"}</strong>
+                        <span style="color:var(--text-muted)">Cazare #{c.id}</span>
+                      </div>
+                      <div style="color:var(--text-muted);margin-top:2px">
+                        Intrare: {new Date(c.dataCheckin).toLocaleDateString("ro-RO")}
+                        <Show when={c.locCazareNume}> · Loc: {c.locCazareNume}</Show>
+                        <Show when={c.items.length > 0}> · {c.items.length} anvelope</Show>
+                      </div>
+                      <div style="margin-top:6px">
+                        <button
+                          class="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setActiveHotelPrompt(null);
+                            navigate(`/hotel-anvelope?viewCazare=${c.id}`);
+                          }}
+                        >
+                          Vezi cazarea
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+            <div class="sl-modal-footer" style="justify-content:space-between;gap:8px">
+              <button class="btn btn-ghost btn-sm" onClick={() => setActiveHotelPrompt(null)}>Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                onClick={async () => {
+                  setActiveHotelPrompt(null);
+                  await proceedToHotelNew(true);
+                }}
+              >
+                Continuă oricum (cazare nouă)
+              </button>
+            </div>
+          </div>
+        </div>
       </Show>
 
       {/* Resume modal */}

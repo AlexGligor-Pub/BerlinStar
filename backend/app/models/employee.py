@@ -29,6 +29,9 @@ class Employee(Base):
     current_target_accumulation: Mapped[Decimal] = mapped_column(
         Numeric(12, 2), nullable=False, default=Decimal("0.00")
     )
+    annual_vacation_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=21, server_default="21"
+    )
 
     locations: Mapped[list[Location]] = relationship(
         "Location", secondary="employee_locations", back_populates="employees"

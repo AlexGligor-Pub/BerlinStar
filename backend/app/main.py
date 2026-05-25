@@ -22,7 +22,7 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves
 from app.services.reports import start_scheduler, stop_scheduler
 from app.efactura import router_admin as efactura_admin
 from app.efactura import router as efactura_user
@@ -145,6 +145,7 @@ app.include_router(montaj_roti.router,     prefix="/api/montaj-roti",         ta
 app.include_router(admin.router,           prefix="/api/admin",               tags=["admin"])
 app.include_router(admin_legacy_import.router, prefix="/api/admin/legacy-import", tags=["admin-legacy-import"])
 app.include_router(programare.router,      prefix="/api/programari",           tags=["programari"])
+app.include_router(leaves.router,           prefix="/api/leaves",               tags=["leaves"])
 app.include_router(general_settings.router, prefix="/api/general-settings",    tags=["general-settings"])
 app.include_router(global_settings.router,  prefix="/api/global-settings",     tags=["global-settings"])
 app.include_router(email_settings.router,  prefix="/api/email-settings",      tags=["email-settings"])

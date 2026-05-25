@@ -621,6 +621,8 @@ export interface CazareForPdf {
       dotValoare?: string | null;
       tip: string;
       adancime: number | null;
+      indiceViteza?: string | null;
+      indiceSarcina?: number | null;
     } | null;
   }>;
   items: Array<{
@@ -631,6 +633,8 @@ export interface CazareForPdf {
       dotValoare?: string | null;
       tip: string;
       adancime: number | null;
+      indiceViteza?: string | null;
+      indiceSarcina?: number | null;
     } | null;
   }>;
 }
@@ -649,6 +653,8 @@ interface AnvelopaForTable {
   dotValoare?: string | null;
   tip: string;
   adancime: number | null;
+  indiceViteza?: string | null;
+  indiceSarcina?: number | null;
 }
 
 interface AnvelopaTableConfig {
@@ -663,7 +669,7 @@ interface AnvelopaTableConfig {
 function buildAnvelopaTable(
   items: AnvelopaForTable[],
   t: (s: string | null | undefined) => string,
-  widths: { dim: number; dot: number; profil: number; tip: number; adancime: number },
+  widths: { dim: number; dot: number; profil: number; tip: number; adancime: number; indice?: number },
 ): AnvelopaTableConfig {
   const hasMarca    = items.some((a) => !!a.marcaNume?.trim());
   const hasDim      = items.some((a) => !!a.dimensiuneValoare?.trim());
@@ -671,6 +677,7 @@ function buildAnvelopaTable(
   const hasProfil   = items.some((a) => !!a.profilValoare?.trim());
   const hasTip      = items.some((a) => !!a.tip?.trim() && (TIP_PDF_LABELS[a.tip] ?? a.tip) !== "");
   const hasAdancime = items.some((a) => a.adancime != null);
+  const hasIndice   = items.some((a) => fmtIndiceVitezaSarcina(a.indiceViteza, a.indiceSarcina) != null);
 
   const cols: Array<{ head: string; cell: (a: AnvelopaForTable, idx: number) => string; style: Record<string, unknown> }> = [];
   cols.push({ head: "#", cell: (_a, idx) => String(idx + 1), style: { halign: "center", cellWidth: 8 } });
@@ -680,6 +687,7 @@ function buildAnvelopaTable(
   if (hasProfil)   cols.push({ head: "Profil",     cell: (a) => t(a.profilValoare ?? "—"),                         style: { halign: "center", cellWidth: widths.profil } });
   if (hasTip)      cols.push({ head: "Tip",        cell: (a) => TIP_PDF_LABELS[a.tip] ?? a.tip,                    style: { halign: "center", cellWidth: widths.tip } });
   if (hasAdancime) cols.push({ head: "Adâncime",   cell: (a) => a.adancime != null ? `${a.adancime} mm` : "—",     style: { halign: "center", cellWidth: widths.adancime } });
+  if (hasIndice)   cols.push({ head: "Ind. V/S",   cell: (a) => fmtIndiceVitezaSarcina(a.indiceViteza, a.indiceSarcina) ?? "—", style: { halign: "center", cellWidth: widths.indice ?? 16 } });
 
   const head = [cols.map((c) => c.head)];
   const body = items.map((a, idx) => cols.map((c) => c.cell(a, idx)));
@@ -1627,8 +1635,19 @@ export interface MontajRotaRow {
   tip: string;
   adancime: number | null;
   cupluStrangere: number | null;
+  indiceViteza?: string | null;
+  indiceSarcina?: number | null;
   /** URL pentru imaginea specifica acestei pozitii (folosit in cardul din PDF). */
   imageUrl?: string | null;
+}
+
+/** Format "H98" combinand indicele de viteza (litera) cu cel de sarcina (numar).
+ *  Returneaza null daca ambele lipsesc. */
+function fmtIndiceVitezaSarcina(iv: string | null | undefined, is: number | null | undefined): string | null {
+  const v = iv != null && iv !== "" ? iv : "";
+  const s = is != null ? String(is) : "";
+  if (!v && !s) return null;
+  return `${v}${s}`;
 }
 
 const _POZITIE_LABELS_PDF: Record<string, string> = {
@@ -1651,7 +1670,9 @@ function _montajRotaHasData(r: MontajRotaRow): boolean {
     (r.dotValoare != null && r.dotValoare !== "") ||
     r.presiune != null ||
     r.adancime != null ||
-    r.cupluStrangere != null
+    r.cupluStrangere != null ||
+    (r.indiceViteza != null && r.indiceViteza !== "") ||
+    r.indiceSarcina != null
   );
 }
 
@@ -1793,6 +1814,8 @@ async function drawMontajRotaCard(
   if (r.adancime != null) drawKV(t("Adâncime"), `${r.adancime} mm`);
   if (r.presiune != null) drawKV("Presiune", `${r.presiune.toFixed(1)} bar`);
   if (r.cupluStrangere != null) drawKV("Cuplu", `${r.cupluStrangere} Nm`);
+  const indVitSarc = fmtIndiceVitezaSarcina(r.indiceViteza, r.indiceSarcina);
+  if (indVitSarc) drawKV(t("Indice Viteză/Sarcină"), indVitSarc);
 }
 
 /** Rand text-only pentru Rezerva / Nespecificat: titlu bold + detalii in propozitie
@@ -1825,6 +1848,8 @@ function drawMontajRotaRowTextOnly(
   parts.push(`tip ${t(TIP_PDF_LABELS[r.tip] ?? r.tip)}`);
   if (r.adancime != null) parts.push(`${t("adâncime")} ${r.adancime} mm`);
   if (r.presiune != null) parts.push(`presiune ${r.presiune.toFixed(1)} bar`);
+  const indVitSarc = fmtIndiceVitezaSarcina(r.indiceViteza, r.indiceSarcina);
+  if (indVitSarc) parts.push(`${t("indice viteză/sarcină")} ${indVitSarc}`);
   const sentence = parts.length > 0 ? parts.join(", ") + "." : "—";
 
   // Daca incape totul pe un singur rand, centram orizontal title + sentence.
