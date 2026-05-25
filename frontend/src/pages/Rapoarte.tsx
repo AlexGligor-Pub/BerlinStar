@@ -59,20 +59,40 @@ interface EmployeeReport {
   image_path: string | null;
 }
 
-const SECTIONS = [
-  { id: "target-angajati", label: "Target Angajați" },
-  { id: "locatii", label: "Locații" },
-  { id: "comparare-yoy", label: "Comparare YoY" },
-  { id: "produse-servicii", label: "Produse / Servicii" },
-  { id: "angajati", label: "Angajați" },
-  { id: "hotel-anvelope", label: "Hotel Anvelope" },
-  { id: "clienti", label: "Clienți" },
-  { id: "programari", label: "Programări" },
-  { id: "concedii", label: "Concedii" },
-  { id: "stocuri", label: "Stocuri" },
+const SECTION_GROUPS = [
+  {
+    label: "Vânzări & Venituri",
+    items: [
+      { id: "locatii",          label: "Locații"            },
+      { id: "comparare-yoy",    label: "Comparare YoY"      },
+      { id: "produse-servicii", label: "Produse / Servicii" },
+    ],
+  },
+  {
+    label: "Resurse Umane",
+    items: [
+      { id: "target-angajati", label: "Target Angajați" },
+      { id: "angajati",        label: "Angajați"        },
+      { id: "concedii",        label: "Concedii"        },
+    ],
+  },
+  {
+    label: "Operațional",
+    items: [
+      { id: "programari",     label: "Programări"     },
+      { id: "hotel-anvelope", label: "Hotel Anvelope" },
+      { id: "stocuri",        label: "Stocuri"        },
+    ],
+  },
+  {
+    label: "Clienți",
+    items: [
+      { id: "clienti", label: "Clienți" },
+    ],
+  },
 ] as const;
 
-type SectionId = typeof SECTIONS[number]["id"];
+type SectionId = typeof SECTION_GROUPS[number]["items"][number]["id"];
 
 function Avatar(props: { name: string; imagePath: string | null; size?: number }) {
   const size = () => props.size ?? 32;
@@ -3622,11 +3642,16 @@ export default function Rapoarte() {
   // Filtrare secțiuni vizibile: ascunde „Hotel Anvelope" când feature-ul e
   // dezactivat din Setări Generale. Dacă utilizatorul avea secțiunea activă
   // salvată în localStorage și acum e ascunsă, comutăm pe prima disponibilă.
-  const visibleSections = createMemo(() =>
-    SECTIONS.filter((s) =>
-      !(s.id === "hotel-anvelope" && generalSettings()?.dezactiveazaHotelAnvelope),
-    ),
+  const isHotelHidden = () => !!generalSettings()?.dezactiveazaHotelAnvelope;
+  const isItemVisible = (id: SectionId) =>
+    !(id === "hotel-anvelope" && isHotelHidden());
+
+  const visibleGroups = createMemo(() =>
+    SECTION_GROUPS
+      .map((g) => ({ label: g.label, items: g.items.filter((it) => isItemVisible(it.id)) }))
+      .filter((g) => g.items.length > 0),
   );
+  const visibleSections = createMemo(() => visibleGroups().flatMap((g) => g.items));
   createEffect(() => {
     const vis = visibleSections();
     if (!vis.some((s) => s.id === active())) {
@@ -3634,20 +3659,25 @@ export default function Rapoarte() {
     }
   });
 
-  const isHotelHidden = () => !!generalSettings()?.dezactiveazaHotelAnvelope;
-
   return (
     <ReportsGate>
       <div class="cfg-layout">
         <aside class="cfg-sidebar">
           <div class="cfg-sidebar-title">Rapoarte</div>
-          <For each={visibleSections()}>
-            {(s) => (
-              <button
-                class="cfg-sidebar-item"
-                classList={{ "cfg-sidebar-item--active": active() === s.id }}
-                onClick={() => setActive(s.id)}
-              >{s.label}</button>
+          <For each={visibleGroups()}>
+            {(group) => (
+              <div class="cfg-sidebar-group">
+                <div class="cfg-sidebar-group-label">{group.label}</div>
+                <For each={group.items}>
+                  {(s) => (
+                    <button
+                      class="cfg-sidebar-item"
+                      classList={{ "cfg-sidebar-item--active": active() === s.id }}
+                      onClick={() => setActive(s.id)}
+                    >{s.label}</button>
+                  )}
+                </For>
+              </div>
             )}
           </For>
         </aside>
