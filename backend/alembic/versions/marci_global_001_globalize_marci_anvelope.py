@@ -103,6 +103,12 @@ def upgrade() -> None:
     op.execute("ALTER TABLE marci_anvelope ALTER COLUMN status SET DEFAULT 'approved'")
 
     # 5. FK pe proposed_by_account_id catre accounts.
+    # `ADD CONSTRAINT` nu suporta IF NOT EXISTS in PG, asa ca facem drop preliminar
+    # pentru a permite re-run idempotent dupa un esec partial.
+    op.execute(
+        "ALTER TABLE marci_anvelope "
+        "DROP CONSTRAINT IF EXISTS fk_marci_anvelope_proposed_by_account_id_accounts"
+    )
     op.execute(
         "ALTER TABLE marci_anvelope "
         "ADD CONSTRAINT fk_marci_anvelope_proposed_by_account_id_accounts "
@@ -141,6 +147,17 @@ def downgrade() -> None:
     op.execute("ALTER TABLE marci_anvelope ADD COLUMN IF NOT EXISTS account_id INTEGER")
     # Pune ca proprietar contul propunator (pentru randurile seed sistem va fi NULL).
     op.execute("UPDATE marci_anvelope SET account_id = proposed_by_account_id")
+    # Schema originala avea account_id NOT NULL. Randurile seed-ate global (din
+    # marci_global_002, fara propunator) raman NULL → le stergem hard ca sa nu
+    # violam invariantul si sa nu lasam orfani la downgrade.
+    op.execute(
+        "DELETE FROM marci_anvelope WHERE account_id IS NULL"
+    )
+    op.execute("ALTER TABLE marci_anvelope ALTER COLUMN account_id SET NOT NULL")
+    op.execute(
+        "ALTER TABLE marci_anvelope "
+        "DROP CONSTRAINT IF EXISTS fk_marci_anvelope_account_id_accounts"
+    )
     op.execute(
         "ALTER TABLE marci_anvelope "
         "ADD CONSTRAINT fk_marci_anvelope_account_id_accounts "

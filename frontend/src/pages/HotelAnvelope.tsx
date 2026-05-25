@@ -2120,7 +2120,7 @@ export default function HotelAnvelope() {
             <div class="sl-modal" style="max-width:420px;width:100%">
               <div class="sl-modal-header">
                 <span class="sl-modal-title">
-                  {t().type === "loc" ? "Editare loc cazare" : t().type === "marca" ? "Editare marcă" : t().type === "dim" ? "Editare dimensiune" : "Editare profil"}
+                  {t().type === "loc" ? "Editare loc cazare" : t().type === "dim" ? "Editare dimensiune" : "Editare profil"}
                 </span>
                 <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>✕</button>
               </div>

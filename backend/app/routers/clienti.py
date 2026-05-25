@@ -190,7 +190,7 @@ async def client_receipts_summary(
     )).all()
     plates_used = [{"numar_masina": p, "count": c} for p, c in plates_rows]
 
-    # Câte devize NU au vehicol asociat
+    # Câte devize NU au vehicol asociat (FDL-urile excluse, ca peste tot)
     no_vehicol_count = (await db.execute(
         select(func.count(Receipt.id))
         .outerjoin(Vehicol, (Vehicol.receipt_id == Receipt.id) & (Vehicol.is_deleted == False))
@@ -198,6 +198,7 @@ async def client_receipts_summary(
             Receipt.account_id == account_id,
             Receipt.client_id == client_id,
             Receipt.is_deleted == False,
+            Receipt.source != "fdl",
             Vehicol.id.is_(None),
         )
     )).scalar_one()

@@ -8,9 +8,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.anvelopa import Anvelopa
+from app.models.marca_anvelopa import MarcaAnvelopa
 from app.schemas.anvelopa import AnvelopaCreate, AnvelopaUpdate, AnvelopaRead
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
+
+
+async def _assert_marca_aprobata(db: AsyncSession, marca_id: int | None) -> None:
+    """Refuza marca_id-uri pending/rejected/sterse (bypass moderare)."""
+    if marca_id is None:
+        return
+    row = (await db.execute(
+        select(MarcaAnvelopa.id).where(
+            MarcaAnvelopa.id == marca_id,
+            MarcaAnvelopa.status == "approved",
+            MarcaAnvelopa.is_deleted == False,
+        )
+    )).first()
+    if row is None:
+        raise HTTPException(400, "Marca selectată nu este aprobată sau a fost ștearsă.")
 
 router = APIRouter()
 
@@ -71,6 +87,7 @@ async def create_anvelopa(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
+    await _assert_marca_aprobata(db, body.marca_id)
     anv = Anvelopa(**body.model_dump(), account_id=account_id)
     db.add(anv)
     await db.commit()
@@ -111,7 +128,10 @@ async def update_anvelopa(
     anv = await db.get(Anvelopa, anvelopa_id)
     if anv is None or anv.account_id != account_id or anv.is_deleted:
         raise HTTPException(404, "Anvelopa nu a fost găsită.")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    payload = body.model_dump(exclude_unset=True)
+    if "marca_id" in payload:
+        await _assert_marca_aprobata(db, payload["marca_id"])
+    for k, v in payload.items():
         setattr(anv, k, v)
     anv.updated_at = datetime.now(timezone.utc)
     await db.commit()

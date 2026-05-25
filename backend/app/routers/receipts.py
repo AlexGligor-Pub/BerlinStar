@@ -535,11 +535,13 @@ async def patch_receipt_content(
     receipt.total = body.total
     if body.due_date is not None:
         receipt.due_date = body.due_date
-    # Pe FDL, păstrăm constatări/sugestii/timp; pe deviz normal, payload-ul le
-    # trimite ca None și suprascrie eventualele valori istorice (post-conversie).
-    receipt.constatari = body.constatari
-    receipt.sugestii = body.sugestii
-    receipt.timp_estimat_ore = body.timp_estimat_ore
+    # Câmpurile FDL se editează DOAR pe bonuri cu source='fdl'. Pe un deviz
+    # normal (inclusiv unul convertit din FDL), payload-ul poate trimite null,
+    # dar le păstrăm istoric — nu le ștergem la fiecare edit ulterior.
+    if receipt.source == "fdl":
+        receipt.constatari = body.constatari
+        receipt.sugestii = body.sugestii
+        receipt.timp_estimat_ore = body.timp_estimat_ore
     receipt.updated_at = datetime.now(timezone.utc)
 
     await db.execute(delete(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id))
@@ -742,8 +744,14 @@ async def convert_fdl_to_deviz(
     if receipt.source != "fdl":
         raise HTTPException(400, "Doar Fișele de Lucru pot fi transformate în deviz.")
 
+    now = datetime.now(timezone.utc)
     receipt.source = "pos"
-    receipt.updated_at = datetime.now(timezone.utc)
+    # Re-stampăm created_at la momentul conversiei: scheduler-ul de rapoarte
+    # agreghează incremental pe ziua curentă și nu reia zilele trecute. Fără
+    # re-stamp, devizul rămas „suspendat" pe ziua FDL-ului ar lipsi pentru
+    # totdeauna din rapoartele zilei respective.
+    receipt.created_at = now
+    receipt.updated_at = now
     await db.commit()
 
     result = (await db.execute(
@@ -755,6 +763,11 @@ async def convert_fdl_to_deviz(
         )
         .where(Receipt.id == receipt_id)
     )).scalar_one()
+
+    # Refresh totaluri lunare/anuale pentru angajații implicați — bonul intră
+    # acum în scope (sursa != 'fdl').
+    emp_ids: set[int] = {ri.employee_id for ri in result.receipt_items if ri.employee_id}
+    await _refresh_accumulations(db, account_id, emp_ids)
 
     broadcaster.notify(account_id)
     rec = await _load_efactura_record_for(db, receipt_id)

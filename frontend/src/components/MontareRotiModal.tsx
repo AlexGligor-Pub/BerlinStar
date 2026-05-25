@@ -74,7 +74,9 @@ export default function MontareRotiModal(props: {
   const [saving, setSaving] = createSignal(false);
   const [err, setErr] = createSignal("");
   // Confirmare propunere marca noua (devine pending pana o aproba adminul).
-  const [proposingMarca, setProposingMarca] = createSignal<string | null>(null);
+  // Tinem si uid-ul randului care a declansat propunerea: daca marca exista
+  // deja aprobata (409 status='approved'), o auto-selectam in randul corect.
+  const [proposingMarca, setProposingMarca] = createSignal<{ name: string; rowUid: number } | null>(null);
   const [proposingBusy, setProposingBusy] = createSignal(false);
 
   function imageUrlForPozitie(pozitie: PozitieRoata): string | null {
@@ -117,14 +119,15 @@ export default function MontareRotiModal(props: {
     setRows((prev) => prev.filter((r) => r.uid !== uid).map((r, i) => ({ ...r, ordine: i })));
   }
 
-  function addMarca(name: string) {
+  function addMarca(rowUid: number, name: string) {
     // Deschide modalul de confirmare; trimiterea efectiva are loc in confirmProposeMarca.
-    setProposingMarca(name.trim());
+    setProposingMarca({ name: name.trim(), rowUid });
   }
 
   async function confirmProposeMarca() {
-    const name = proposingMarca();
-    if (!name) return;
+    const pending = proposingMarca();
+    if (!pending) return;
+    const { name, rowUid } = pending;
     setProposingBusy(true);
     try {
       const res = await apiFetch("/api/marci-anvelope/propune", {
@@ -138,12 +141,17 @@ export default function MontareRotiModal(props: {
           6000,
         );
       } else if (res.status === 409) {
-        const data = await readJsonSafe<{ detail?: { status?: string; message?: string; nume?: string } }>(res);
+        const data = await readJsonSafe<{ detail?: { status?: string; message?: string; nume?: string; id?: number } }>(res);
         const detail = data?.detail;
         if (detail?.status === "approved") {
           invalidateMarciCache();
           await loadMarci(true);
-          notify(detail.message ?? `Marca „${detail.nume ?? name}” există deja.`, "info");
+          // Auto-selectam marca aprobata in randul care a declansat propunerea,
+          // ca userul sa nu fie nevoit sa deschida iar dropdown-ul.
+          if (detail.id != null) {
+            patchRow(rowUid, { marcaId: detail.id });
+          }
+          notify(detail.message ?? `Marca „${detail.nume ?? name}” există deja și a fost selectată.`, "info");
         } else if (detail?.status === "pending") {
           notify(detail.message ?? `Marca „${name}” este deja propusă și așteaptă aprobare.`, "warn", 6000);
         } else {
@@ -337,7 +345,7 @@ export default function MontareRotiModal(props: {
                                 onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
                                 getLabel={(m) => m.nume}
                                 placeholder="Marcă"
-                                onAddNew={addMarca}
+                                onAddNew={(name) => addMarca(row.uid, name)}
                               />
                             </div>
                           </Show>
@@ -655,7 +663,7 @@ export default function MontareRotiModal(props: {
             </div>
             <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
               <p style="margin:0;font-size:14px;line-height:1.5">
-                Marca <strong>„{proposingMarca()}”</strong> nu există în lista globală. Vrei să o propui adminului?
+                Marca <strong>„{proposingMarca()?.name}”</strong> nu există în lista globală. Vrei să o propui adminului?
               </p>
               <div style="background:var(--warn-bg,rgba(245,158,11,.1));border:1px solid var(--warn,#f59e0b);border-radius:6px;padding:10px;font-size:13px;line-height:1.5">
                 <strong>Atenție:</strong> marca va fi disponibilă pentru utilizare DOAR după ce administratorul o aprobă. Până atunci, rândul curent va rămâne fără marcă.

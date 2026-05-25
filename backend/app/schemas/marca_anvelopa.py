@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class MarcaCreate(BaseModel):
-    nume: str = Field(..., max_length=200)
+    nume: str = Field(..., min_length=1, max_length=200)
 
 
 class MarcaRead(BaseModel):

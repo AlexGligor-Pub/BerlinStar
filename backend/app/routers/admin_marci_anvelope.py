@@ -26,6 +26,9 @@ async def list_marci_admin(
     admin: Account = Depends(_require_super_admin),  # noqa: ARG001
 ):
     limit = min(limit, 500)
+    # last_id e folosit ca offset opac (sortare e pe nume, deci cursor pe id
+    # n-ar fi monoton). FE-ul doar repaseaza valoarea returnata in next_cursor.
+    offset = max(0, last_id or 0)
     stmt = (
         select(MarcaAnvelopa, Account.name)
         .outerjoin(Account, Account.id == MarcaAnvelopa.proposed_by_account_id)
@@ -34,10 +37,11 @@ async def list_marci_admin(
         stmt = stmt.where(MarcaAnvelopa.is_deleted == False)
     if status is not None:
         stmt = stmt.where(MarcaAnvelopa.status == status)
-    if last_id is not None:
-        stmt = stmt.where(MarcaAnvelopa.id > last_id)
-    # Sortare: pending pe top, restul alfabetic.
-    stmt = stmt.order_by(MarcaAnvelopa.nume, MarcaAnvelopa.id).limit(limit + 1)
+    stmt = (
+        stmt.order_by(MarcaAnvelopa.nume, MarcaAnvelopa.id)
+        .offset(offset)
+        .limit(limit + 1)
+    )
     rows = (await db.execute(stmt)).all()
     has_more = len(rows) > limit
     page = rows[:limit]
@@ -55,7 +59,7 @@ async def list_marci_admin(
             updated_at=marca.updated_at,
             is_deleted=marca.is_deleted,
         ))
-    next_cursor = page[-1][0].id if has_more else None
+    next_cursor = (offset + limit) if has_more else None
     return Page(items=items, next_cursor=next_cursor)
 
 

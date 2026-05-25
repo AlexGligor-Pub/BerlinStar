@@ -65,10 +65,14 @@ async def _build_lookup_maps(
     dot: dict[int, str] = {}
 
     if marca_ids:
-        # Marcile sunt globale; nu filtram pe account_id.
+        # Marcile sunt globale; nu filtram pe account_id, dar filtram pe
+        # status='approved' + nesterse — nu vrem sa "rezolvam" marci pending/
+        # rejected sau soft-deleted (eventual referite din date istorice).
         res = await db.execute(
             select(MarcaAnvelopa.id, MarcaAnvelopa.nume).where(
                 MarcaAnvelopa.id.in_(marca_ids),
+                MarcaAnvelopa.status == "approved",
+                MarcaAnvelopa.is_deleted == False,
             )
         )
         marci = {row[0]: row[1] for row in res.all()}
@@ -188,6 +192,23 @@ async def bulk_upsert(
     account_id: int = Depends(get_account_id),
 ):
     now = datetime.now(timezone.utc)
+
+    # Validare: marca_id trebuie sa fie o marca aprobata si nesteersa.
+    # Previne folosirea directa (prin POST) a marcilor pending/rejected, ceea
+    # ce ar ocoli moderarea adminului.
+    req_marca_ids = {item.marca_id for item in body.items if item.marca_id is not None}
+    if req_marca_ids:
+        res = await db.execute(
+            select(MarcaAnvelopa.id).where(
+                MarcaAnvelopa.id.in_(req_marca_ids),
+                MarcaAnvelopa.status == "approved",
+                MarcaAnvelopa.is_deleted == False,
+            )
+        )
+        valid_ids = {row[0] for row in res.all()}
+        invalid = req_marca_ids - valid_ids
+        if invalid:
+            raise HTTPException(400, f"Marcă invalidă (neaprobată sau ștearsă): {sorted(invalid)}")
 
     # Soft-delete pe roțile existente pentru acest receipt
     await db.execute(

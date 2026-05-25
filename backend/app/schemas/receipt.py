@@ -50,9 +50,10 @@ class ReceiptCreate(BaseModel):
     chitanta_nr: int = 0
     source: ReceiptSource = "reception"
     due_date: date | None = None
-    # Câmpuri specifice FDL — opționale; populate doar când source="fdl"
-    constatari: str | None = None
-    sugestii: str | None = None
+    # Câmpuri specifice FDL — opționale; populate doar când source="fdl".
+    # Limita 5000 caractere previne PDF-uri balonate / abuz de TEXT nelimitat.
+    constatari: str | None = Field(None, max_length=5000)
+    sugestii: str | None = Field(None, max_length=5000)
     timp_estimat_ore: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
@@ -105,8 +106,8 @@ class ReceiptContentPatch(BaseModel):
     items: list[ReceiptItemCreate]
     total: Decimal = Field(..., decimal_places=2)
     due_date: date | None = None
-    constatari: str | None = None
-    sugestii: str | None = None
+    constatari: str | None = Field(None, max_length=5000)
+    sugestii: str | None = Field(None, max_length=5000)
     timp_estimat_ore: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
