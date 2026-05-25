@@ -27,6 +27,11 @@ interface CartMeta {
   client: ClientItem | null;
   vehicol: VehicolData | null;
   receiptId: string | null;
+  // FDL flag + câmpuri — persistate ca să nu pierdem starea la reîncărcare/Hotel
+  fdlMode?: boolean;
+  constatari?: string;
+  sugestii?: string;
+  timpEstimatOre?: string;
 }
 
 function saveCartMeta(m: CartMeta) {
@@ -451,6 +456,61 @@ function EditClientModal(props: {
   );
 }
 
+// ─── Bullet textarea helpers ──────────────────────────────────────────────────
+// Folosite pe câmpurile FDL (constatări, sugestii) ca să formateze automat
+// liniile cu "• ". La focus pe câmp gol → pune un singur bullet; la Enter →
+// adaugă newline + bullet pe linia nouă; la input liber → curăță liniile fără
+// bullet (excepție: linia activă în curs de scriere).
+
+const BULLET = "• ";
+
+function ensureBulletPrefix(
+  setter: (v: string) => void,
+  getter: () => string,
+): (e: FocusEvent) => void {
+  return () => {
+    if (getter().trim() === "") setter(BULLET);
+  };
+}
+
+function handleBulletKeyDown(setter: (v: string) => void) {
+  return (e: KeyboardEvent) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    const { value, selectionStart, selectionEnd } = ta;
+    const before = value.slice(0, selectionStart);
+    const after = value.slice(selectionEnd);
+    const insertion = "\n" + BULLET;
+    const next = before + insertion + after;
+    setter(next);
+    queueMicrotask(() => {
+      const pos = (before + insertion).length;
+      ta.selectionStart = ta.selectionEnd = pos;
+      autoGrowTextarea(ta);
+    });
+  };
+}
+
+function handleBulletInput(
+  setter: (v: string) => void,
+  _getter: () => string,
+): (e: InputEvent) => void {
+  return (e) => {
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    setter(ta.value);
+    autoGrowTextarea(ta);
+  };
+}
+
+/** Crește înălțimea unei textarea pe măsură ce se scrie text.
+ *  Resetează la „auto" întâi (ca să se poată micșora la ștergere), apoi setează
+ *  la scrollHeight ca să cuprindă tot conținutul fără scrollbar intern. */
+function autoGrowTextarea(ta: HTMLTextAreaElement): void {
+  ta.style.height = "auto";
+  ta.style.height = `${ta.scrollHeight}px`;
+}
+
 // ─── ShoppingList ─────────────────────────────────────────────────────────────
 
 interface CazareBasic {
@@ -512,6 +572,13 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
+  // FDL mode: când e activ, „Finalizează" salvează un FDL (source="fdl") și
+  // afișează câmpurile dedicate (constatări, sugestii, timp estimat).
+  const [fdlMode, setFdlMode] = createSignal(false);
+  const [constatari, setConstatari] = createSignal("");
+  const [sugestii, setSugestii] = createSignal("");
+  const [timpEstimatOre, setTimpEstimatOre] = createSignal("");
+  const [showFdlModal, setShowFdlModal] = createSignal(false);
   const [selectedClient, setSelectedClient] = createSignal<ClientItem | null>(null);
   const [showAddClientModal, setShowAddClientModal] = createSignal(false);
   const [showEditClientModal, setShowEditClientModal] = createSignal(false);
@@ -533,8 +600,12 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
   createEffect(() => {
     const t = titlu(), d = descriere(), dt = dateTehn(), c = selectedClient(), v = vehicol();
     const rid = loadedReceiptId();
+    const fm = fdlMode(), cs = constatari(), sg = sugestii(), tm = timpEstimatOre();
     if (!metaSaveEnabled) return;
-    saveCartMeta({ titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v, receiptId: rid });
+    saveCartMeta({
+      titlu: t, descriere: d, dateTehn: dt, client: c, vehicol: v, receiptId: rid,
+      fdlMode: fm, constatari: cs, sugestii: sg, timpEstimatOre: tm,
+    });
   });
 
   const [plateSearching, setPlateSearching] = createSignal(false);
@@ -702,6 +773,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
         setSelectedClient(meta.client ?? null);
         setVehicol(meta.vehicol ?? null);
         setLoadedReceiptId(meta.receiptId ?? null);
+        setFdlMode(meta.fdlMode ?? false);
+        setConstatari(meta.constatari ?? "");
+        setSugestii(meta.sugestii ?? "");
+        setTimpEstimatOre(meta.timpEstimatOre ?? "");
       }
       metaSaveEnabled = true;
       const msg = pending.action === "scoatere_si_cazare"
@@ -725,6 +800,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       replaceCart(r.items);
       loadResumeClient(r);
       setVehicol(r.vehicol ?? null);
+      setFdlMode(r.source === "fdl");
+      setConstatari(r.constatari ?? "");
+      setSugestii(r.sugestii ?? "");
+      setTimpEstimatOre(r.timpEstimatOre != null ? String(r.timpEstimatOre) : "");
       metaSaveEnabled = true;
     } else if (cart.items.length > 0) {
       // Există o listă salvată — arată modalul de alegere
@@ -744,6 +823,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       setSelectedClient(meta.client ?? null);
       setVehicol(meta.vehicol ?? null);
       setLoadedReceiptId(meta.receiptId ?? null);
+      setFdlMode(meta.fdlMode ?? false);
+      setConstatari(meta.constatari ?? "");
+      setSugestii(meta.sugestii ?? "");
+      setTimpEstimatOre(meta.timpEstimatOre ?? "");
     }
     setShowResumeModal(false);
   }
@@ -758,6 +841,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setSelectedClient(null);
     setVehicol(null);
     setLoadedReceiptId(null);
+    setFdlMode(false);
+    setConstatari("");
+    setSugestii("");
+    setTimpEstimatOre("");
     setShowResumeModal(false);
   }
 
@@ -776,6 +863,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     replaceCart(d.items);
     loadResumeClient(d);
     setVehicol(d.vehicol ?? null);
+    setFdlMode(d.source === "fdl");
+    setConstatari(d.constatari ?? "");
+    setSugestii(d.sugestii ?? "");
+    setTimpEstimatOre(d.timpEstimatOre != null ? String(d.timpEstimatOre) : "");
   });
 
   // Încarcă cazarile legate de receiptul curent. Folosim AbortController + flag
@@ -1075,6 +1166,8 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     if (finalizing()) return;
     setFinalizing(true);
     const receiptId = loadedReceiptId();
+    const isFdl = fdlMode();
+    const timpRaw = parseFloat(timpEstimatOre());
     const receiptData = {
       date: new Date().toISOString(),
       titlu: titlu().trim(),
@@ -1090,6 +1183,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       chitantaSerie: "", chitantaNr: 0,
       programareId: loadedProgramareId(),
       locationId: device()?.locationId ?? null,
+      source: isFdl ? "fdl" : undefined,
+      constatari: isFdl ? (constatari().trim() || null) : null,
+      sugestii: isFdl ? (sugestii().trim() || null) : null,
+      timpEstimatOre: isFdl && !isNaN(timpRaw) && timpRaw > 0 ? timpRaw : null,
     };
     let saved;
     try {
@@ -1128,6 +1225,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setLoadedReceiptId(null);
     setLoadedProgramareId(null);
     setSelectedClient(null);
+    setFdlMode(false);
+    setConstatari("");
+    setSugestii("");
+    setTimpEstimatOre("");
 
     setFinalizing(false);
     if (warns.length > 0) {
@@ -1316,6 +1417,16 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
               {goingToHotel() ? "..." : "Cazare Anvelope"}
             </button>
           </Show>
+          <Show when={generalSettings()?.activeazaFisaDeLucru === true}>
+            <button
+              class="sl-square-btn"
+              classList={{ "sl-square-btn--fdl-active": fdlMode() }}
+              onClick={() => { setFdlMode(true); setShowFdlModal(true); }}
+              title={fdlMode() ? "Fișa de Lucru activă — apasă pentru a edita" : "Activează mod Fișa de Lucru"}
+            >
+              {fdlMode() ? "FDL activă" : "Fișă de Lucru"}
+            </button>
+          </Show>
           <button
             class="sl-square-btn"
             classList={{ "sl-square-btn--done": linkedMontaje().length > 0 }}
@@ -1326,15 +1437,18 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
           </button>
         </div>
         <div class="total-row">
-          <span>Total</span>
+          <span>{fdlMode() ? "Total estimat" : "Total"}</span>
           <span class="text-accent">{cartTotal().toFixed(2)} lei</span>
         </div>
         <button
           class="btn btn-primary w-full"
+          classList={{ "btn-fdl": fdlMode() }}
           disabled={cart.items.length === 0 || finalizing()}
           onClick={handleFinalize}
         >
-          {finalizing() ? "Se salvează..." : "Finalizeaza"}
+          {finalizing()
+            ? "Se salvează..."
+            : (fdlMode() ? "Salvează Fișa de Lucru" : "Finalizeaza")}
         </button>
       </div>
 
@@ -1756,6 +1870,201 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                 onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
               >
                 Salvează
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      {/* FDL modal — câmpuri specifice Fișa de Lucru */}
+      <Show when={showFdlModal()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal sl-modal--fdl">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Fișă de Lucru</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowFdlModal(false)}>✕</button>
+            </div>
+            <div class="sl-fdl-body">
+              <p class="sl-fdl-intro">
+                Fișa de Lucru este o <strong>estimare</strong> — nu intră în totaluri sau rapoarte
+                până nu este transformată în deviz din Recepție.
+              </p>
+
+              <div class="sl-fdl-grid">
+                {/* Coloana stânga: sumar Vehicul + Client (vertical) */}
+                <div class="sl-fdl-left">
+                <div class="sl-fdl-info-card">
+                  <div class="sl-fdl-info-card-header">
+                    <span class="sl-fdl-info-card-title">Vehicul</span>
+                    <button
+                      class="btn btn-ghost btn-xs"
+                      onClick={() => {
+                        const draft = vehicol() ?? { numarMasina: titlu().trim() };
+                        setVehicolDraft({ ...draft });
+                        setObsUppercase(true);
+                        // FDL state (constatari/sugestii/timp) e deja persistat
+                        // în signals + localStorage; închidem fereastra FDL ca să
+                        // se vadă clar modalul nou de Vehicul.
+                        setShowFdlModal(false);
+                        setShowVehicolModal(true);
+                      }}
+                    >
+                      {vehicol() ? "Editează" : "Adaugă"}
+                    </button>
+                  </div>
+                  <Show
+                    when={vehicol()}
+                    fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun vehicul asociat.</div>}
+                  >
+                    <div class="sl-fdl-info-card-body">
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">Nr. mașină:</span>
+                        <span class="sl-fdl-info-row-val"><strong>{vehicol()!.numarMasina}</strong></span>
+                      </div>
+                      <Show when={vehicol()!.marca || vehicol()!.model}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">Marcă / Model:</span>
+                          <span class="sl-fdl-info-row-val">
+                            {[vehicol()!.marca, vehicol()!.model].filter(Boolean).join(" ")}
+                          </span>
+                        </div>
+                      </Show>
+                      <Show when={vehicol()!.numarKilometrii != null}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">Kilometri:</span>
+                          <span class="sl-fdl-info-row-val">{vehicol()!.numarKilometrii} km</span>
+                        </div>
+                      </Show>
+                      <Show when={vehicol()!.vin}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">VIN:</span>
+                          <span class="sl-fdl-info-row-val">{vehicol()!.vin}</span>
+                        </div>
+                      </Show>
+                      <Show when={vehicol()!.observatii}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">Obs.:</span>
+                          <span class="sl-fdl-info-row-val">{vehicol()!.observatii}</span>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+
+                <div class="sl-fdl-info-card">
+                  <div class="sl-fdl-info-card-header">
+                    <span class="sl-fdl-info-card-title">Client</span>
+                    <button
+                      class="btn btn-ghost btn-xs"
+                      onClick={() => {
+                        // Închidem FDL ca să se vadă modalul de client.
+                        setShowFdlModal(false);
+                        if (selectedClient()) setShowEditClientModal(true);
+                        else setShowAddClientModal(true);
+                      }}
+                    >
+                      {selectedClient() ? "Editează" : "Adaugă"}
+                    </button>
+                  </div>
+                  <Show
+                    when={selectedClient()}
+                    fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun client asociat.</div>}
+                  >
+                    <div class="sl-fdl-info-card-body">
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">Nume:</span>
+                        <span class="sl-fdl-info-row-val"><strong>{selectedClient()!.nume}</strong></span>
+                      </div>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">Tip:</span>
+                        <span class="sl-fdl-info-row-val">
+                          {selectedClient()!.tip === "juridic" ? "Juridică" : "Fizică"}
+                        </span>
+                      </div>
+                      <Show when={selectedClient()!.cui}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">CUI:</span>
+                          <span class="sl-fdl-info-row-val">{selectedClient()!.cui}</span>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                </div>
+                </div>
+
+                {/* Coloana dreapta: câmpurile FDL */}
+                <div class="sl-fdl-right">
+              <div class="sl-fdl-field">
+                <label class="sl-fdl-label">Constatări (observații tehnician)</label>
+                <textarea
+                  ref={(el) => createEffect(() => { constatari(); queueMicrotask(() => autoGrowTextarea(el)); })}
+                  class="sl-modal-textarea sl-fdl-textarea"
+                  placeholder="• discuri uzate&#10;• suspensie defectă&#10;• lichid de frână sub nivel"
+                  rows={6}
+                  value={constatari()}
+                  onFocus={ensureBulletPrefix(setConstatari, constatari)}
+                  onInput={handleBulletInput(setConstatari, constatari)}
+                  onKeyDown={handleBulletKeyDown(setConstatari)}
+                />
+              </div>
+              <div class="sl-fdl-field">
+                <label class="sl-fdl-label">Sugestii / Recomandări către client</label>
+                <textarea
+                  ref={(el) => createEffect(() => { sugestii(); queueMicrotask(() => autoGrowTextarea(el)); })}
+                  class="sl-modal-textarea sl-fdl-textarea"
+                  placeholder="• înlocuire plăcuțe + discuri față&#10;• schimb ulei cutie"
+                  rows={5}
+                  value={sugestii()}
+                  onFocus={ensureBulletPrefix(setSugestii, sugestii)}
+                  onInput={handleBulletInput(setSugestii, sugestii)}
+                  onKeyDown={handleBulletKeyDown(setSugestii)}
+                />
+              </div>
+              <div class="sl-fdl-field">
+                <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
+                <input
+                  class="input sl-fdl-time-input"
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="Ex: 2.5"
+                  value={timpEstimatOre()}
+                  onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
+                />
+                <div class="sl-fdl-time-presets">
+                  <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
+                    {(v) => (
+                      <button
+                        class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
+                        classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
+                        onClick={() => setTimpEstimatOre(String(v))}
+                        type="button"
+                      >
+                        {v}h
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+                </div>
+              </div>
+            </div>
+            <div class="sl-modal-footer" style="justify-content:space-between">
+              <button
+                class="btn btn-danger-outline btn-sm"
+                onClick={() => {
+                  setFdlMode(false);
+                  setConstatari("");
+                  setSugestii("");
+                  setTimpEstimatOre("");
+                  setShowFdlModal(false);
+                }}
+                title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal"
+              >
+                Anulează Fișa de Lucru
+              </button>
+              <button class="btn btn-primary btn-sm" onClick={() => setShowFdlModal(false)}>
+                Salvează în Fișă
               </button>
             </div>
           </div>

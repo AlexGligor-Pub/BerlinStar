@@ -1,10 +1,12 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Show, createEffect, createSignal, onMount } from "solid-js";
 import {
   generalSettings,
   loadGeneralSettings,
   updateGeneralSettings,
+  DEFAULT_FDL_DISCLAIMER,
 } from "../../store/generalSettingsStore";
 import type { GeneralSettingsData, GeneralSettingsPatch } from "../../store/generalSettingsStore";
+import { notify } from "../../store/notificationsStore";
 
 type MontareRotiField = {
   key: keyof GeneralSettingsData;
@@ -36,19 +38,50 @@ const HOTEL_ANVELOPE_FIELDS: MontareRotiField[] = [
 
 export default function SetariGeneralePanel() {
   const [saving, setSaving] = createSignal(false);
-  const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
+  const [fdlDisclaimerDraft, setFdlDisclaimerDraft] = createSignal<string>("");
+  const [fdlSaving, setFdlSaving] = createSignal(false);
 
   onMount(() => { loadGeneralSettings(); });
 
+  // Sincronizează draft-ul cu valoarea încărcată din store (sau default).
+  createEffect(() => {
+    const s = generalSettings();
+    if (s) {
+      setFdlDisclaimerDraft(s.fdlDisclaimerText ?? DEFAULT_FDL_DISCLAIMER);
+    }
+  });
+
+  const fdlDisclaimerChanged = () => {
+    const current = generalSettings()?.fdlDisclaimerText ?? DEFAULT_FDL_DISCLAIMER;
+    return fdlDisclaimerDraft() !== current;
+  };
+
+  async function saveFdlDisclaimer() {
+    setFdlSaving(true);
+    try {
+      const value = fdlDisclaimerDraft().trim();
+      // Trimitem null dacă userul a revenit la textul default — păstrează DB curată.
+      const payload = value === DEFAULT_FDL_DISCLAIMER || value === "" ? null : value;
+      await updateGeneralSettings({ fdlDisclaimerText: payload });
+      notify("Text Fișă de Lucru salvat.", "success");
+    } catch (e: any) {
+      notify(e?.message ?? "Eroare la salvarea textului.", "error");
+    } finally {
+      setFdlSaving(false);
+    }
+  }
+
+  function resetFdlDisclaimer() {
+    setFdlDisclaimerDraft(DEFAULT_FDL_DISCLAIMER);
+  }
+
   async function handleChange(patch: GeneralSettingsPatch) {
     setSaving(true);
-    setMsg(null);
     try {
       await updateGeneralSettings(patch);
-      setMsg({ ok: true, text: "Salvat." });
-      setTimeout(() => setMsg(null), 2000);
+      notify("Setări salvate.", "success");
     } catch (e: any) {
-      setMsg({ ok: false, text: e.message ?? "Eroare la salvare." });
+      notify(e?.message ?? "Eroare la salvarea setărilor.", "error");
     } finally {
       setSaving(false);
     }
@@ -127,6 +160,62 @@ export default function SetariGeneralePanel() {
             <strong> Cazare Anvelope</strong> dispare din POS. Datele existente nu sunt șterse.
           </p>
         </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+            <input
+              type="checkbox"
+              checked={generalSettings()?.activeazaFisaDeLucru === true}
+              disabled={saving()}
+              onChange={(e) => handleChange({ activeazaFisaDeLucru: e.currentTarget.checked })}
+            />
+            <span style="font-weight:500">Activează Fișă de Lucru</span>
+          </label>
+          <p class="cfg-hint" style="margin:0 0 0 26px">
+            Când este activat, butonul <strong>Fișă de Lucru</strong> apare în POS lângă „Cazare Anvelope".
+            FDL e o estimare (constatări + sugestii + timp manoperă), nu intră în totaluri/rapoarte și
+            poate fi <strong>transformată în deviz</strong> ulterior din Recepție.
+          </p>
+        </div>
+
+        <Show when={generalSettings()?.activeazaFisaDeLucru === true}>
+          <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface)">
+            <div>
+              <h3 style="margin:0 0 4px;font-size:14px;font-weight:600">Fișă de Lucru</h3>
+              <p class="cfg-hint" style="margin:0">
+                Textul afișat în secțiunea <strong>„Document de estimare"</strong> de pe PDF-ul Fișei de Lucru.
+                Lasă gol sau apasă „Resetează" pentru a folosi textul implicit.
+              </p>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:4px">
+              <span style="font-size:0.82rem;color:var(--text-muted);font-weight:500">Text disclaimer FDL</span>
+              <textarea
+                class="input"
+                rows={6}
+                style="font-size:13px;line-height:1.5;resize:vertical;min-height:120px"
+                value={fdlDisclaimerDraft()}
+                onInput={(e) => setFdlDisclaimerDraft(e.currentTarget.value)}
+                disabled={fdlSaving()}
+              />
+            </label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={fdlSaving() || !fdlDisclaimerChanged()}
+                onClick={saveFdlDisclaimer}
+              >
+                {fdlSaving() ? "Se salvează..." : "Salvează textul"}
+              </button>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={fdlSaving() || fdlDisclaimerDraft() === DEFAULT_FDL_DISCLAIMER}
+                onClick={resetFdlDisclaimer}
+                title="Revino la textul implicit"
+              >
+                Resetează la implicit
+              </button>
+            </div>
+          </div>
+        </Show>
 
         <div style="display:flex;flex-direction:column;gap:10px;border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface)">
           <div>
@@ -182,11 +271,6 @@ export default function SetariGeneralePanel() {
           </div>
         </Show>
 
-        <Show when={msg()}>
-          <div style={{ color: msg()!.ok ? "var(--success, #3ea96a)" : "var(--danger)" }}>
-            {msg()!.text}
-          </div>
-        </Show>
       </div>
     </div>
   );

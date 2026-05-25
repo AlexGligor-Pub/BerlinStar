@@ -14,6 +14,11 @@ interface ResumeData {
   clientTip?: string | null;
   programareId?: number | null;
   vehicol?: VehicolData | null;
+  // Pentru editare FDL din Recepție: păstrăm flag-ul + câmpurile FDL la reîncărcarea în POS
+  source?: string;
+  constatari?: string | null;
+  sugestii?: string | null;
+  timpEstimatOre?: number | null;
 }
 
 const [resumeData, setResumeData] = createSignal<ResumeData | null>(null);

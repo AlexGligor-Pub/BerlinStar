@@ -2,8 +2,8 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, type Receipt } from "../store/receiptsStore";
-import { generateDeviz, generateFactura, generateChitanta, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, type Receipt } from "../store/receiptsStore";
+import { generateDeviz, generateFactura, generateChitanta, generateFisaDeLucru, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
 import {
@@ -657,6 +657,35 @@ function ReceiptCard(props: { receipt: Receipt }) {
     }
   }
 
+  async function handleFdlPdf() {
+    setDocError(null);
+    setDocLoading("fdl");
+    try {
+      const company = await fetchCompanyData();
+      await generateFisaDeLucru(r, company, generalSettings()?.fdlDisclaimerText ?? null);
+    } catch (e: any) {
+      setDocError(e?.message ?? "Eroare la generarea Fișei de Lucru.");
+    } finally {
+      setDocLoading(null);
+    }
+  }
+
+  const [convertPending, setConvertPending] = createSignal(false);
+  const [showConvertConfirm, setShowConvertConfirm] = createSignal(false);
+  async function handleConvertFdl() {
+    if (convertPending()) return;
+    setConvertPending(true);
+    try {
+      await convertFdlToDeviz(r.id);
+      setShowConvertConfirm(false);
+      notify("Fișa de Lucru a fost transformată în deviz.", "success");
+    } catch (e: any) {
+      setDocError(e?.message ?? "Eroare la conversie.");
+    } finally {
+      setConvertPending(false);
+    }
+  }
+
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
     setDocError(null);
     const locationId = device()?.locationId;
@@ -726,8 +755,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const updatedDateStr = isUpdated ? updatedDate!.toLocaleDateString("ro-RO") : null;
   const updatedTimeStr = isUpdated ? updatedDate!.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : null;
 
+  const isFdl = createMemo(() => live().source === "fdl");
+
   return (
-    <div class="rcard" classList={{ "rcard--open": expanded() }}>
+    <div class="rcard" classList={{ "rcard--open": expanded(), "rcard--fdl": isFdl() }}>
       {/* Header card — click pentru expand */}
       <div
         class="rcard-header"
@@ -739,6 +770,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
       >
         <div class="rcard-info">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <Show when={isFdl()}>
+              <span class="rcard-fdl-badge" title="Fișă de Lucru — estimare, nu intră în totaluri">FDL</span>
+            </Show>
             <span class="rcard-titlu">{r.titlu}</span>
             <Show when={r.clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
@@ -763,9 +797,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
         <div class="rcard-right">
           <div class="rcard-right-col">
             <span class="rcard-total">{r.total.toFixed(2)} lei</span>
-            <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !r.metodaPlata }}>
-              {displayMetoda(r.metodaPlata)}
-            </span>
+            <Show
+              when={!isFdl()}
+              fallback={<span class="rcard-fdl-badge" style="font-size:0.6rem">Estimare</span>}
+            >
+              <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !r.metodaPlata }}>
+                {displayMetoda(r.metodaPlata)}
+              </span>
+            </Show>
           </div>
           <Show when={!live().metodaPlata && !live().efacturaLocked}>
             <button
@@ -783,6 +822,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   clientCui: r.clientCui,
                   clientTip: r.clientTip,
                   vehicol: r.vehicol ?? null,
+                  source: live().source,
+                  constatari: live().constatari ?? null,
+                  sugestii: live().sugestii ?? null,
+                  timpEstimatOre: live().timpEstimatOre ?? null,
                 });
                 navigate("/");
               }}
@@ -801,6 +844,17 @@ function ReceiptCard(props: { receipt: Receipt }) {
           <div class="receipt">
             <div class="receipt-divider" />
 
+            <Show when={isFdl() && live().constatari?.trim()}>
+              <div class="rcard-fdl-section">
+                <div class="rcard-fdl-section-title">Constatări</div>
+                <ul class="rcard-fdl-list">
+                  <For each={(live().constatari ?? "").split(/\r?\n/).filter((l) => l.trim())}>
+                    {(linie) => <li>{linie}</li>}
+                  </For>
+                </ul>
+              </div>
+            </Show>
+
             <div class="receipt-items">
               <For each={r.items}>
                 {(item, index) => (
@@ -816,11 +870,25 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <div class="receipt-divider" />
 
             <div class="receipt-total">
-              <span>TOTAL</span>
+              <span>{isFdl() ? "TOTAL ESTIMAT" : "TOTAL"}</span>
               <span>{r.total.toFixed(2)} lei</span>
             </div>
 
-            {r.metodaPlata && (
+            <Show when={isFdl() && live().timpEstimatOre != null && live().timpEstimatOre! > 0}>
+              <div class="receipt-plata">
+                <span>Timp estimat manoperă</span>
+                <span>{live().timpEstimatOre!.toFixed(2)} ore</span>
+              </div>
+            </Show>
+
+            <Show when={isFdl() && live().sugestii?.trim()}>
+              <div class="rcard-fdl-section">
+                <div class="rcard-fdl-section-title">Sugestii / Recomandări</div>
+                <div class="rcard-fdl-text">{live().sugestii}</div>
+              </div>
+            </Show>
+
+            {!isFdl() && r.metodaPlata && (
               <div class="receipt-plata">
                 <span>Metodă de plată</span>
                 <span>{displayMetoda(r.metodaPlata)}</span>
@@ -834,15 +902,22 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <div class="receipt-actions-group">
                 <div class="receipt-actions-label">Documente:</div>
                 <div class="receipt-actions-row">
-                  <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
-                    {docLoading() === "deviz" ? "..." : "Deviz"}
-                  </button>
-                  <Show when={generalSettings()?.useFactura !== false && live().facturaNr > 0}>
+                  <Show when={isFdl()}>
+                    <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={handleFdlPdf}>
+                      {docLoading() === "fdl" ? "..." : "Fișă de Lucru"}
+                    </button>
+                  </Show>
+                  <Show when={!isFdl()}>
+                    <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("deviz")}>
+                      {docLoading() === "deviz" ? "..." : "Deviz"}
+                    </button>
+                  </Show>
+                  <Show when={!isFdl() && generalSettings()?.useFactura !== false && live().facturaNr > 0}>
                     <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("factura")}>
                       {docLoading() === "factura" ? "..." : "Factură"}
                     </button>
                   </Show>
-                  <Show when={generalSettings()?.useFactura !== false && (live().metodaPlata === "Platit cash" || live().metodaPlata === "Platit Partial")}>
+                  <Show when={!isFdl() && generalSettings()?.useFactura !== false && (live().metodaPlata === "Platit cash" || live().metodaPlata === "Platit Partial")}>
                     <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
                       {docLoading() === "chitanta" ? "..." : "Chitanță"}
                     </button>
@@ -850,8 +925,25 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </div>
               </div>
 
-              {/* Procese: actiuni care schimba starea (facturare, trimitere ANAF) */}
-              <Show when={generalSettings()?.useFactura !== false}>
+              {/* Procese FDL: conversie în deviz */}
+              <Show when={isFdl()}>
+                <div class="receipt-actions-group">
+                  <div class="receipt-actions-label">Procese:</div>
+                  <div class="receipt-actions-row">
+                    <button
+                      class="btn btn-primary btn-sm"
+                      disabled={convertPending()}
+                      onClick={() => setShowConvertConfirm(true)}
+                      title="Transformă această estimare într-un deviz real (intră în totaluri și rapoarte)"
+                    >
+                      Transformă în deviz
+                    </button>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Procese deviz: actiuni care schimba starea (facturare, trimitere ANAF) */}
+              <Show when={!isFdl() && generalSettings()?.useFactura !== false}>
                 <div class="receipt-actions-group">
                   <div class="receipt-actions-label">Procese:</div>
                   <div class="receipt-actions-row">
@@ -938,44 +1030,46 @@ function ReceiptCard(props: { receipt: Receipt }) {
           {/* Coloana dreapta */}
           <div class="rcard-extra-col">
             <ClientSection receipt={r} readOnly={live().efacturaLocked || !!live().metodaPlata} />
-            {/* Status plata */}
-            <div class="rcard-extra-card">
-              <div class="rcard-extra-title">Status plată</div>
-              <select
-                class="rcard-plata-select"
-                value={metodaDraft()}
-                onChange={(e) => setMetodaDraft(e.currentTarget.value)}
-              >
-                <option value="">Neplătit</option>
-                <For each={METODE}>
-                  {(m) => <option value={m}>{displayMetoda(m)}</option>}
-                </For>
-              </select>
-              <Show when={isPartial()}>
-                <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
-                  <input
-                    class="rcard-plata-select"
-                    type="number"
-                    min="0"
-                    step="10"
-                    value={partialDraft()}
-                    onInput={(e) => setPartialDraft(e.currentTarget.value)}
-                    style="flex:1"
-                  />
-                  <span style="font-size:0.82rem;white-space:nowrap">lei</span>
-                </div>
-              </Show>
-              <Show when={metodaChanged()}>
-                <button
-                  class="btn btn-primary btn-sm w-full"
-                  style="margin-top:8px"
-                  disabled={saving()}
-                  onClick={handleSaveMetoda}
+            {/* Status plata — ascuns pentru FDL (estimare, nu se incaseaza) */}
+            <Show when={!isFdl()}>
+              <div class="rcard-extra-card">
+                <div class="rcard-extra-title">Status plată</div>
+                <select
+                  class="rcard-plata-select"
+                  value={metodaDraft()}
+                  onChange={(e) => setMetodaDraft(e.currentTarget.value)}
                 >
-                  {saving() ? "Se salveaza..." : "Salveaza"}
-                </button>
-              </Show>
-            </div>
+                  <option value="">Neplătit</option>
+                  <For each={METODE}>
+                    {(m) => <option value={m}>{displayMetoda(m)}</option>}
+                  </For>
+                </select>
+                <Show when={isPartial()}>
+                  <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
+                    <input
+                      class="rcard-plata-select"
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={partialDraft()}
+                      onInput={(e) => setPartialDraft(e.currentTarget.value)}
+                      style="flex:1"
+                    />
+                    <span style="font-size:0.82rem;white-space:nowrap">lei</span>
+                  </div>
+                </Show>
+                <Show when={metodaChanged()}>
+                  <button
+                    class="btn btn-primary btn-sm w-full"
+                    style="margin-top:8px"
+                    disabled={saving()}
+                    onClick={handleSaveMetoda}
+                  >
+                    {saving() ? "Se salveaza..." : "Salveaza"}
+                  </button>
+                </Show>
+              </div>
+            </Show>
 
             <Show when={!!r.descriere}>
               <div class="rcard-extra-card">
@@ -1239,6 +1333,47 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
               </div>
             </Show>
+          </div>
+        </div>
+      </Show>
+
+      {/* Modal Transformă FDL în deviz */}
+      <Show when={showConvertConfirm()}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Transformă în deviz</span>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={convertPending()}
+                onClick={() => setShowConvertConfirm(false)}
+              >✕</button>
+            </div>
+            <div style="padding:0 16px 8px;font-size:0.88rem">
+              <p style="margin-bottom:10px">
+                Fișa de Lucru <strong>{r.titlu}</strong> va deveni un deviz real.
+              </p>
+              <ul style="margin:0 0 12px 16px;padding:0;color:var(--text-muted)">
+                <li>Va intra în totalurile zilei și în rapoarte.</li>
+                <li>Poți aloca număr de deviz / factură ca pentru orice deviz normal.</li>
+                <li>Constatările, sugestiile și timpul estimat sunt păstrate ca istoric.</li>
+              </ul>
+              <p style="color:var(--text-muted);margin:0">
+                Acțiunea este reversibilă doar prin ștergerea bonului.
+              </p>
+            </div>
+            <div class="sl-modal-footer">
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={convertPending()}
+                onClick={() => setShowConvertConfirm(false)}
+              >Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={convertPending()}
+                onClick={handleConvertFdl}
+              >{convertPending() ? "Se transformă..." : "Transformă în deviz"}</button>
+            </div>
           </div>
         </div>
       </Show>

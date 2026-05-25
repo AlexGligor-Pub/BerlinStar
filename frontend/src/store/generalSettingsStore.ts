@@ -1,11 +1,21 @@
 import { createSignal } from "solid-js";
 import { apiFetch } from "../utils/api";
 
+// Textul default afișat pe PDF-ul Fișei de Lucru când utilizatorul nu l-a
+// personalizat. Folosit și ca placeholder în câmpul de configurare.
+export const DEFAULT_FDL_DISCLAIMER =
+  "Acest document reprezintă o estimare a costurilor și timpului de manoperă pe baza constatărilor inițiale. " +
+  "Valorile sunt orientative și pot fi modificate la executarea efectivă a lucrării, în funcție de starea " +
+  "reală a pieselor și descoperirile pe parcursul lucrului. Devizul final cu valorile reale se emite la " +
+  "finalizarea lucrării.";
+
 export interface GeneralSettingsData {
   useFactura: boolean;
   useAviz: boolean;
   afiseazaTehnicianDeviz: boolean;
   dezactiveazaHotelAnvelope: boolean;
+  activeazaFisaDeLucru: boolean;
+  fdlDisclaimerText: string | null;
 
   montareRotiShowPresiune: boolean;
   montareRotiShowMarca: boolean;
@@ -33,6 +43,8 @@ const API_KEY_MAP: Record<keyof GeneralSettingsData, string> = {
   useAviz: "use_aviz",
   afiseazaTehnicianDeviz: "afiseaza_tehnician_deviz",
   dezactiveazaHotelAnvelope: "dezactiveaza_hotel_anvelope",
+  activeazaFisaDeLucru: "activeaza_fisa_de_lucru",
+  fdlDisclaimerText: "fdl_disclaimer_text",
   montareRotiShowPresiune: "montare_roti_show_presiune",
   montareRotiShowMarca: "montare_roti_show_marca",
   montareRotiShowProfil: "montare_roti_show_profil",
@@ -57,6 +69,8 @@ function mapFromApi(data: any): GeneralSettingsData {
     useAviz: data.use_aviz ?? true,
     afiseazaTehnicianDeviz: data.afiseaza_tehnician_deviz ?? false,
     dezactiveazaHotelAnvelope: data.dezactiveaza_hotel_anvelope ?? false,
+    activeazaFisaDeLucru: data.activeaza_fisa_de_lucru ?? false,
+    fdlDisclaimerText: data.fdl_disclaimer_text ?? null,
     montareRotiShowPresiune: data.montare_roti_show_presiune ?? true,
     montareRotiShowMarca: data.montare_roti_show_marca ?? true,
     montareRotiShowProfil: data.montare_roti_show_profil ?? true,
@@ -107,7 +121,7 @@ export async function loadGeneralSettings(): Promise<void> {
 }
 
 export async function updateGeneralSettings(patch: GeneralSettingsPatch): Promise<void> {
-  const body: Record<string, boolean> = {};
+  const body: Record<string, boolean | string | null> = {};
   for (const k of Object.keys(patch) as (keyof GeneralSettingsData)[]) {
     const value = patch[k];
     if (value !== undefined) body[API_KEY_MAP[k]] = value;

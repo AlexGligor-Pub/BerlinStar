@@ -713,6 +713,7 @@ async def reports_items_timeseries(
             FROM receipts r
             JOIN receipt_items ri ON ri.receipt_id = r.id
             WHERE r.is_deleted = false
+              AND r.source <> 'fdl'
               AND ri.item_id = ANY(:ids)
               AND (r.created_at AT TIME ZONE 'Europe/Bucharest')::date BETWEEN :d1 AND :d2
               AND r.account_id = :acc
@@ -1696,7 +1697,7 @@ async def reports_clienti(
                    ), 0) AS sum_paid_total,
                    COUNT(*) AS count_receipts_total
             FROM clienti c
-            JOIN receipts r ON r.client_id = c.id AND r.is_deleted = false
+            JOIN receipts r ON r.client_id = c.id AND r.is_deleted = false AND r.source <> 'fdl'
             WHERE c.account_id = :acc AND c.is_deleted = false
             GROUP BY c.id, c.nume, c.telefon, c.numar_masina
             HAVING MAX((r.created_at AT TIME ZONE 'Europe/Bucharest')::date) < :threshold

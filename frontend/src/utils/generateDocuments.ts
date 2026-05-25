@@ -280,6 +280,166 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   if (!append) doc.save(docFilename("deviz", r.titlu));
 }
 
+// ─── FISA DE LUCRU (FDL) ─────────────────────────────────────────────────────
+// Document de estimare: pretul si timpul de manopera sunt orientative.
+// Identificator: FDL-{id} (nu intra in plaja de devize pana la conversie).
+
+export async function generateFisaDeLucru(
+  r: Receipt,
+  company: CompanyData | null,
+  disclaimerText?: string | null,
+): Promise<void> {
+  const { jsPDF, autoTable } = await loadPdf();
+  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  await enableRomanianFont(doc);
+  const tvaPct = company?.tva_percentage ?? 0;
+  const date = fmtDate(r.date);
+
+  await drawBackground(doc, company?.background_path);
+
+  const t = makeT(true);
+  const client: ClientInfoForPdf = {
+    clientNume: r.clientNume,
+    clientCui: r.clientCui,
+    clientReprezentant: r.clientReprezentant,
+    clientAdresa: r.clientAdresa,
+    clientTelefon: r.clientTelefon,
+  };
+  const veh = r.vehicol;
+  const vehicleForPdf: VehiculForPdf | null = veh
+    ? {
+        numarMasina: veh.numarMasina,
+        marca: veh.marca,
+        model: veh.model,
+        numarKilometrii: veh.numarKilometrii,
+        vin: veh.vin,
+        observatii: veh.observatii,
+      }
+    : null;
+
+  let y = await drawDocHeader3Col(
+    doc, company ?? null, client, vehicleForPdf,
+    { title: "FISA DE LUCRU", nr: `FDL-${r.id}`, dateStr: date },
+    t, "helvetica",
+  ) + 4;
+
+  // Helper: header colorat pentru fiecare sectiune (titlu pe banda de culoare cu
+  // bara verticala stanga). Returneaza y-ul de unde poate incepe continutul.
+  function drawFdlSectionHeader(title: string, accent: [number, number, number]): number {
+    const headerH = 7;
+    const padX = 4;
+    const [ar, ag, ab] = accent;
+    // Fundal light tint
+    doc.setFillColor(
+      Math.min(255, ar + (255 - ar) * 0.88),
+      Math.min(255, ag + (255 - ag) * 0.88),
+      Math.min(255, ab + (255 - ab) * 0.88),
+    );
+    doc.rect(ML, y, CW, headerH, "F");
+    // Bara verticala accent
+    doc.setFillColor(ar, ag, ab);
+    doc.rect(ML, y, 1.5, headerH, "F");
+    // Titlu
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(ar, ag, ab);
+    doc.text(ro(title), ML + padX, y + 4.8);
+    return y + headerH + 1;
+  }
+
+  // Helper: bullet list sub o sectiune. Curata "• / - / *" din inceput.
+  function drawFdlBullets(body: string): void {
+    const linii = body.trim().split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (linii.length === 0) return;
+
+    const lineH = 4.6;
+    const padX = 5;
+    const bulletIndent = 4;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...C.black);
+
+    for (const linie of linii) {
+      let clean = linie.replace(/^[•\-\*]\s*/, "");
+      // Prima literă mare — convertim doar primul caracter alfabetic.
+      clean = clean.charAt(0).toLocaleUpperCase("ro-RO") + clean.slice(1);
+      const lines: string[] = doc.splitTextToSize(ro(clean), CW - padX * 2 - bulletIndent);
+      doc.text("•", ML + padX, y + 3.5);
+      doc.text(lines, ML + padX + bulletIndent, y + 3.5);
+      y += lines.length * lineH;
+    }
+    y += 1;
+  }
+
+  // 1) Constatări — culoare albastră (informativ)
+  if (r.constatari?.trim()) {
+    y = drawFdlSectionHeader("CONSTATĂRI", [37, 99, 235]);
+    drawFdlBullets(r.constatari);
+    y += 2;
+  }
+
+  // 2) Sugestii / Recomandări — culoare portocalie (atenție client)
+  if (r.sugestii?.trim()) {
+    y = drawFdlSectionHeader("SUGESTII / RECOMANDĂRI", [234, 88, 12]);
+    drawFdlBullets(r.sugestii);
+    y += 2;
+  }
+
+  // 3) Produse și servicii — header colorat + tabel + totaluri (doar dacă există linii)
+  if (r.items.length > 0) {
+    y = drawFdlSectionHeader("PRODUSE ȘI SERVICII", [34, 197, 94]);
+    y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
+    y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true, inlineSubtotals: true });
+  }
+
+  // 4) Timp estimat manoperă
+  if (r.timpEstimatOre != null && r.timpEstimatOre > 0) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 3;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...C.black);
+    doc.text(`Timp estimat manoperă: ${r.timpEstimatOre.toFixed(2)} ore`, ML, y);
+    y += 5;
+  }
+
+  // 5) Observații libere (date_tehn) — opțional
+  if (r.dateTehn?.trim()) {
+    hline(doc, y, C.veryLight, 0.1);
+    y += 1;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...C.black);
+    doc.text("OBSERVATII", ML, y);
+    y += 3.5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    const dtl: string[] = doc.splitTextToSize(ro(r.dateTehn.trim()), CW);
+    doc.text(dtl, ML, y);
+    y += dtl.length * 4 + 1;
+  }
+
+  // Disclaimer specific FDL — text configurabil din Setări generale.
+  // Dacă utilizatorul nu a personalizat textul (NULL în DB), folosim valoarea
+  // default din generalSettingsStore. Suportă diacritice prin font NotoSans.
+  const FDL_DEFAULT_DISCLAIMER =
+    "Acest document reprezintă o estimare a costurilor și timpului de manoperă pe baza constatărilor inițiale. " +
+    "Valorile sunt orientative și pot fi modificate la executarea efectivă a lucrării, în funcție de starea " +
+    "reală a pieselor și descoperirile pe parcursul lucrului. Devizul final cu valorile reale se emite la " +
+    "finalizarea lucrării.";
+  const disclaimer = disclaimerText?.trim() || FDL_DEFAULT_DISCLAIMER;
+  y = drawDisclaimer(doc, {
+    title: "Document de estimare",
+    text: disclaimer,
+  }, y, ro, { compact: true });
+
+  y = drawSignatures(doc, "Semnatura Angajat", "Semnatura Client", y, { pinToBottom: true });
+  await drawFooterWithBranding(doc, company?.website, { itemCount: r.items.length });
+
+  doc.save(docFilename("fisa-de-lucru", r.titlu));
+}
+
 // ─── FACTURA ──────────────────────────────────────────────────────────────────
 
 export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void> {

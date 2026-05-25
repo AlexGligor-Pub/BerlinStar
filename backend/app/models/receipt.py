@@ -63,6 +63,12 @@ class Receipt(Base):
     )
     source: Mapped[str] = mapped_column(String(20), nullable=False, server_default="reception")
 
+    # Câmpuri pentru source="fdl" (Fișă de Lucru) — populate doar pentru FDL,
+    # ignorate pentru deviz normal. Convertirea FDL→deviz le păstrează ca istoric.
+    constatari: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sugestii: Mapped[str | None] = mapped_column(Text, nullable=True)
+    timp_estimat_ore: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
+
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
     )

@@ -356,9 +356,21 @@ async def _create_employees(ctx: _Ctx) -> None:
 
 
 async def _create_tire_catalog(ctx: _Ctx) -> None:
-    # Marci
+    # Marci — GLOBALE (nu mai sunt per-cont). Reutilizam marcile existente
+    # daca exista deja (seed-ate via Alembic sau propuse anterior), si
+    # le adaugam pe cele care lipsesc ca approved direct (demo data).
+    res = await ctx.db.execute(
+        select(MarcaAnvelopa.id, MarcaAnvelopa.nume).where(
+            MarcaAnvelopa.status == "approved",
+            MarcaAnvelopa.is_deleted == False,
+            MarcaAnvelopa.nume.in_(TIRE_BRANDS),
+        )
+    )
+    existing_by_name = {row[1]: row[0] for row in res.all()}
     for nume in TIRE_BRANDS:
-        m = MarcaAnvelopa(account_id=ctx.account_id, nume=nume)
+        if nume in existing_by_name:
+            continue
+        m = MarcaAnvelopa(nume=nume, status="approved")
         ctx.db.add(m)
     # Dimensiuni
     for val in TIRE_SIZES:
@@ -370,9 +382,13 @@ async def _create_tire_catalog(ctx: _Ctx) -> None:
         ctx.db.add(p)
     await ctx.db.flush()
 
-    # Re-read IDs
+    # Re-read IDs ale marcilor (globale, fara filtru account_id).
     res = await ctx.db.execute(
-        select(MarcaAnvelopa.id).where(MarcaAnvelopa.account_id == ctx.account_id)
+        select(MarcaAnvelopa.id).where(
+            MarcaAnvelopa.status == "approved",
+            MarcaAnvelopa.is_deleted == False,
+            MarcaAnvelopa.nume.in_(TIRE_BRANDS),
+        )
     )
     ctx.marca_ids = [r[0] for r in res.all()]
 

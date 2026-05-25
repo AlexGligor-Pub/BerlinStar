@@ -7,6 +7,8 @@ class GeneralSettingsPatch(BaseModel):
     use_aviz: bool | None = None
     afiseaza_tehnician_deviz: bool | None = None
     dezactiveaza_hotel_anvelope: bool | None = None
+    activeaza_fisa_de_lucru: bool | None = None
+    fdl_disclaimer_text: str | None = None
 
     montare_roti_show_presiune: bool | None = None
     montare_roti_show_marca: bool | None = None
@@ -36,6 +38,8 @@ class GeneralSettingsRead(BaseModel):
     use_aviz: bool
     afiseaza_tehnician_deviz: bool
     dezactiveaza_hotel_anvelope: bool
+    activeaza_fisa_de_lucru: bool
+    fdl_disclaimer_text: str | None = None
 
     montare_roti_show_presiune: bool
     montare_roti_show_marca: bool

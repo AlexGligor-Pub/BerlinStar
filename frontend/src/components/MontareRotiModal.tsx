@@ -1,5 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch, API_BASE } from "../utils/api";
+import { apiFetch, API_BASE, readJsonSafe, readApiError } from "../utils/api";
+import { notify } from "../store/notificationsStore";
 import SearchableSelect from "./SearchableSelect";
 import {
   marci, dimensiuni, profiluri, coduriDot,
@@ -72,6 +73,9 @@ export default function MontareRotiModal(props: {
   const [rows, setRows] = createSignal<RowDraft[]>(seed);
   const [saving, setSaving] = createSignal(false);
   const [err, setErr] = createSignal("");
+  // Confirmare propunere marca noua (devine pending pana o aproba adminul).
+  const [proposingMarca, setProposingMarca] = createSignal<string | null>(null);
+  const [proposingBusy, setProposingBusy] = createSignal(false);
 
   function imageUrlForPozitie(pozitie: PozitieRoata): string | null {
     return montareRotiImages()[pozitie]
@@ -113,11 +117,47 @@ export default function MontareRotiModal(props: {
     setRows((prev) => prev.filter((r) => r.uid !== uid).map((r, i) => ({ ...r, ordine: i })));
   }
 
-  async function addMarca(name: string) {
-    const res = await apiFetch("/api/marci-anvelope", { method: "POST", body: JSON.stringify({ nume: name }) });
-    if (res.ok) {
-      invalidateMarciCache();
-      await loadMarci(true);
+  function addMarca(name: string) {
+    // Deschide modalul de confirmare; trimiterea efectiva are loc in confirmProposeMarca.
+    setProposingMarca(name.trim());
+  }
+
+  async function confirmProposeMarca() {
+    const name = proposingMarca();
+    if (!name) return;
+    setProposingBusy(true);
+    try {
+      const res = await apiFetch("/api/marci-anvelope/propune", {
+        method: "POST",
+        body: JSON.stringify({ nume: name }),
+      });
+      if (res.status === 201) {
+        notify(
+          `Propunere trimisă. Marca „${name}” va fi vizibilă după ce administratorul o aprobă.`,
+          "info",
+          6000,
+        );
+      } else if (res.status === 409) {
+        const data = await readJsonSafe<{ detail?: { status?: string; message?: string; nume?: string } }>(res);
+        const detail = data?.detail;
+        if (detail?.status === "approved") {
+          invalidateMarciCache();
+          await loadMarci(true);
+          notify(detail.message ?? `Marca „${detail.nume ?? name}” există deja.`, "info");
+        } else if (detail?.status === "pending") {
+          notify(detail.message ?? `Marca „${name}” este deja propusă și așteaptă aprobare.`, "warn", 6000);
+        } else {
+          notify(`Marca „${name}” există deja.`, "info");
+        }
+      } else {
+        const msg = await readApiError(res, "Eroare la trimiterea propunerii.");
+        notify(msg, "error");
+      }
+    } catch {
+      notify("Eroare de rețea la trimiterea propunerii.", "error");
+    } finally {
+      setProposingBusy(false);
+      setProposingMarca(null);
     }
   }
   async function addProfil(value: string) {
@@ -605,6 +645,37 @@ export default function MontareRotiModal(props: {
           </button>
         </div>
       </div>
+
+      {/* Modal: Confirmare propunere marca noua */}
+      <Show when={proposingMarca() !== null}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:520px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Propune marcă nouă</span>
+            </div>
+            <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+              <p style="margin:0;font-size:14px;line-height:1.5">
+                Marca <strong>„{proposingMarca()}”</strong> nu există în lista globală. Vrei să o propui adminului?
+              </p>
+              <div style="background:var(--warn-bg,rgba(245,158,11,.1));border:1px solid var(--warn,#f59e0b);border-radius:6px;padding:10px;font-size:13px;line-height:1.5">
+                <strong>Atenție:</strong> marca va fi disponibilă pentru utilizare DOAR după ce administratorul o aprobă. Până atunci, rândul curent va rămâne fără marcă.
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={proposingBusy()}
+                onClick={() => setProposingMarca(null)}
+              >Anulează</button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={proposingBusy()}
+                onClick={confirmProposeMarca}
+              >{proposingBusy() ? "Se trimite..." : "Trimite propunerea"}</button>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

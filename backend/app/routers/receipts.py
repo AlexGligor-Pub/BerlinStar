@@ -94,6 +94,7 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
             ReceiptItem.employee_id.in_(employee_ids),
             Receipt.account_id == account_id,
             Receipt.is_deleted == False,
+            Receipt.source != "fdl",
             Receipt.pay_method != PayMethod.NEPLATIT,
             extract("year",  Receipt.created_at) == now.year,
             extract("month", Receipt.created_at) == now.month,
@@ -324,6 +325,9 @@ async def create_receipt(
         partial_pay=body.partial_pay,
         source=body.source,
         due_date=body.due_date,
+        constatari=body.constatari,
+        sugestii=body.sugestii,
+        timp_estimat_ore=body.timp_estimat_ore,
     )
     db.add(receipt)
     await db.flush()
@@ -531,6 +535,11 @@ async def patch_receipt_content(
     receipt.total = body.total
     if body.due_date is not None:
         receipt.due_date = body.due_date
+    # Pe FDL, păstrăm constatări/sugestii/timp; pe deviz normal, payload-ul le
+    # trimite ca None și suprascrie eventualele valori istorice (post-conversie).
+    receipt.constatari = body.constatari
+    receipt.sugestii = body.sugestii
+    receipt.timp_estimat_ore = body.timp_estimat_ore
     receipt.updated_at = datetime.now(timezone.utc)
 
     await db.execute(delete(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id))
@@ -628,6 +637,11 @@ async def assign_number(
     if doc_type not in ("deviz", "factura", "chitanta"):
         raise HTTPException(400, "doc_type invalid.")
 
+    # FDL e doar o estimare; nu primește nr de deviz/factura/chitanta. Utilizatorul
+    # trebuie întâi să apeleze /convert-to-deviz pentru a o transforma în deviz real.
+    if receipt.source == "fdl":
+        raise HTTPException(400, "Fișa de Lucru trebuie transformată întâi în deviz.")
+
     # Daca bonul e blocat (trimis la ANAF), nu mai permitem alocarea unui nou nr de factura.
     # Devizul/chitanta pot fi re-emise pentru ca nu schimba datele bonului.
     if doc_type == "factura":
@@ -708,6 +722,43 @@ async def assign_number(
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
     return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
+
+
+@router.post("/{receipt_id}/convert-to-deviz", response_model=ReceiptRead)
+async def convert_fdl_to_deviz(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Transformă o Fișă de Lucru (FDL) într-un deviz normal.
+
+    Schimbă `source` din "fdl" în "pos" (intră în rapoarte/totaluri ca deviz
+    obișnuit). Nu asignează automat `deviz_nr` — utilizatorul îl alocă din
+    Recepție prin butonul „Deviz" (assign-number) sau direct prin „Facturează".
+    """
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
+        raise HTTPException(404, "Bonul nu a fost găsit.")
+    if receipt.source != "fdl":
+        raise HTTPException(400, "Doar Fișele de Lucru pot fi transformate în deviz.")
+
+    receipt.source = "pos"
+    receipt.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    result = (await db.execute(
+        select(Receipt)
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+            selectinload(Receipt.cazari_anvelope),
+        )
+        .where(Receipt.id == receipt_id)
+    )).scalar_one()
+
+    broadcaster.notify(account_id)
+    rec = await _load_efactura_record_for(db, receipt_id)
+    return _serialize(result, rec)
 
 
 @router.put("/{receipt_id}/vehicol", response_model=VehicolRead)

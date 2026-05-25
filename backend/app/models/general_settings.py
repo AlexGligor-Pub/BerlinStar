@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sqlalchemy import Integer, Boolean, ForeignKey
+from sqlalchemy import Integer, Boolean, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
@@ -13,6 +13,10 @@ class GeneralSettings(Base):
     use_aviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     afiseaza_tehnician_deviz: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     dezactiveaza_hotel_anvelope: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    activeaza_fisa_de_lucru: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Textul disclaimer din PDF-ul Fișei de Lucru. NULL = folosește valoarea
+    # default din frontend (vezi DEFAULT_FDL_DISCLAIMER în generalSettingsStore.ts).
+    fdl_disclaimer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     montare_roti_show_presiune: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     montare_roti_show_marca: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

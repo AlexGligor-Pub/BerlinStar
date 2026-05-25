@@ -62,6 +62,7 @@ async def build_receipts_daily(
             NOW(), NOW()
         FROM receipts r
         WHERE r.is_deleted = false
+          AND r.source <> 'fdl'
           AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
         GROUP BY 1, 2, 3
     """)
@@ -99,6 +100,7 @@ async def build_receipts_daily(
             FROM receipts r
             JOIN receipt_items ri ON ri.receipt_id = r.id
             WHERE r.is_deleted = false
+              AND r.source <> 'fdl'
               AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
             GROUP BY 1, 2, 3, 4, 5, 6
 
@@ -118,6 +120,7 @@ async def build_receipts_daily(
             LEFT JOIN items i ON i.id = ri.item_id
             LEFT JOIN categories c ON c.id = i.category_id
             WHERE r.is_deleted = false
+              AND r.source <> 'fdl'
               AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
             GROUP BY 1, 2, 3, 4, 5, 6
 
@@ -138,6 +141,7 @@ async def build_receipts_daily(
             LEFT JOIN categories c ON c.id = i.category_id
             LEFT JOIN departments d ON d.id = c.department_id
             WHERE r.is_deleted = false
+              AND r.source <> 'fdl'
               AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
             GROUP BY 1, 2, 3, 4, 5, 6
         ) breakdown
@@ -192,6 +196,7 @@ async def build_employee_daily(
         LEFT JOIN categories c ON c.id = i.category_id
         LEFT JOIN departments d ON d.id = c.department_id
         WHERE r.is_deleted = false
+          AND r.source <> 'fdl'
           AND r.pay_method::text <> 'NEPLATIT'
           AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
@@ -335,6 +340,7 @@ async def build_clients_daily(
                 COUNT(*) AS count_receipts
             FROM receipts r
             WHERE r.is_deleted = false
+              AND r.source <> 'fdl'
               AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
             GROUP BY 1, 2, 3, 4
         ) agg
@@ -342,7 +348,7 @@ async def build_clients_daily(
             SELECT r.client_id,
                    MIN((r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date) AS first_date
             FROM receipts r
-            WHERE r.is_deleted = false AND r.client_id IS NOT NULL
+            WHERE r.is_deleted = false AND r.source <> 'fdl' AND r.client_id IS NOT NULL
             GROUP BY r.client_id
         ) fv ON fv.client_id = agg.client_id
     """)
@@ -400,7 +406,7 @@ async def build_programari_daily(
         LEFT JOIN (
             SELECT DISTINCT programare_id
             FROM receipts
-            WHERE programare_id IS NOT NULL AND is_deleted = false
+            WHERE programare_id IS NOT NULL AND is_deleted = false AND source <> 'fdl'
         ) rcv ON rcv.programare_id = p.id
         WHERE p.is_deleted = false
           AND (p.start_time AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e

@@ -93,6 +93,11 @@ export default function POS() {
       clientCui: r.clientCui,
       clientTip: r.clientTip,
       vehicol: r.vehicol ?? null,
+      // Pentru FDL — restaurăm modul + câmpurile (constatări, sugestii, timp)
+      source: r.source,
+      constatari: r.constatari ?? null,
+      sugestii: r.sugestii ?? null,
+      timpEstimatOre: r.timpEstimatOre ?? null,
     });
     setShowDevizModal(false);
   }
@@ -255,7 +260,7 @@ export default function POS() {
               <div class="pos-right-col">
                 <div class="pos-right-actions">
                   <button class="btn btn-sm btn-deviz" onClick={openDevizModal}>
-                    Deschide Deviz
+                    Deschide existent
                   </button>
                   <button
                     class="btn btn-sm pos-panel-slide-btn"
@@ -453,7 +458,7 @@ export default function POS() {
         <div class="sl-modal-overlay">
           <div class="deviz-modal">
             <div class="sl-modal-header">
-              <span class="sl-modal-title">Devize neplatite</span>
+              <span class="sl-modal-title">Deschide existent</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDevizModal(false)}>✕</button>
             </div>
             <input
@@ -474,15 +479,28 @@ export default function POS() {
               }}
             >
               <Show when={unpaidFiltered().length === 0}>
-                <div class="deviz-modal-empty">Niciun deviz neplatit</div>
+                <div class="deviz-modal-empty">Nicio fișă deschisă</div>
               </Show>
               <For each={unpaidFiltered().slice(0, visibleCount())}>
-                {(r) => (
-                  <button class="deviz-modal-row" onClick={() => selectDeviz(r)}>
-                    <span class="deviz-modal-row-title">{r.titlu}</span>
-                    <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
-                  </button>
-                )}
+                {(r) => {
+                  const isFdl = r.source === "fdl";
+                  return (
+                    <button
+                      class="deviz-modal-row"
+                      classList={{ "deviz-modal-row--fdl": isFdl }}
+                      onClick={() => selectDeviz(r)}
+                    >
+                      <span
+                        class="deviz-modal-row-tag"
+                        classList={{ "deviz-modal-row-tag--fdl": isFdl, "deviz-modal-row-tag--deviz": !isFdl }}
+                      >
+                        {isFdl ? "FDL" : "DEVIZ"}
+                      </span>
+                      <span class="deviz-modal-row-title">{r.titlu}</span>
+                      <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
+                    </button>
+                  );
+                }}
               </For>
             </div>
           </div>

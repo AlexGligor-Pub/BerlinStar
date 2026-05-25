@@ -1197,6 +1197,184 @@ img.pos-theme-preview {
   font-weight: 700;
 }
 
+/* Butonul Fișă de Lucru cand modul e activ — culoare portocalie ca sa fie clar
+   ca salvarea va fi ca FDL, nu ca deviz normal. */
+.sl-square-btn--fdl-active {
+  background: #f97316 !important;
+  border-color: #f97316 !important;
+  color: #fff !important;
+}
+.sl-square-btn--fdl-active:hover {
+  background: #ea580c !important;
+  border-color: #ea580c !important;
+}
+
+/* Butonul "Finalizează" cand modul FDL e activ — varianta orange ca sa nu se
+   confunde cu salvarea unui deviz real. */
+.btn-fdl {
+  background: #f97316 !important;
+  border-color: #f97316 !important;
+}
+.btn-fdl:hover:not(:disabled) {
+  background: #ea580c !important;
+  border-color: #ea580c !important;
+}
+
+/* Modal Fișa de Lucru — mai mare, cu padding generos pentru constatări/sugestii. */
+.sl-modal--fdl {
+  max-width: 1700px;
+  width: 98%;
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Layout 2-coloane în corpul modalei: stânga = Vehicul+Client (vertical),
+   dreapta = câmpurile FDL (constatări, sugestii, timp). */
+.sl-fdl-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .sl-fdl-grid { grid-template-columns: 1fr; }
+}
+
+.sl-fdl-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sl-fdl-right {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sl-fdl-info-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 90px;
+}
+
+.sl-fdl-info-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sl-fdl-info-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.sl-fdl-info-card-body {
+  font-size: 0.88rem;
+  line-height: 1.4;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sl-fdl-info-card-body--empty {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 0.82rem;
+}
+
+.sl-fdl-info-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sl-fdl-info-row-key {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  min-width: 70px;
+}
+
+.sl-fdl-info-row-val {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.sl-fdl-body {
+  padding: 18px 24px;
+  display: grid;
+  gap: 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sl-fdl-intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface) 88%, #f97316 12%);
+  border-left: 3px solid #f97316;
+  border-radius: 4px;
+}
+
+.sl-fdl-field {
+  display: grid;
+  gap: 5px;
+}
+
+.sl-fdl-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.sl-fdl-textarea {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  min-height: 180px;
+  resize: vertical;
+}
+
+.sl-fdl-time-input {
+  max-width: 140px;
+  font-size: 0.95rem;
+}
+
+.sl-fdl-time-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.sl-fdl-time-preset-btn {
+  min-width: 42px;
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-fdl-time-preset-btn--active {
+  background: #f97316 !important;
+  border-color: #f97316 !important;
+  color: #fff !important;
+}
+
 /* Modal */
 .sl-modal-overlay {
   position: fixed;
@@ -1332,6 +1510,38 @@ img.pos-theme-preview {
 
 .deviz-modal-row:hover {
   background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+
+/* Rândul FDL în lista „Deschide existent" — fundal estompat ca în Recepție. */
+.deviz-modal-row--fdl {
+  background: color-mix(in srgb, var(--bg) 92%, #f97316 8%);
+  border-left: 3px solid #f97316;
+}
+.deviz-modal-row--fdl:hover {
+  background: color-mix(in srgb, var(--bg) 80%, #f97316 20%);
+}
+
+.deviz-modal-row-tag {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  line-height: 1;
+  min-width: 46px;
+  text-align: center;
+}
+.deviz-modal-row-tag--deviz {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.deviz-modal-row-tag--fdl {
+  background: #f97316;
+  color: #fff;
 }
 
 .deviz-modal-row-title {
@@ -2039,6 +2249,72 @@ img.pos-theme-preview {
 
 .rcard--open {
   border-color: var(--accent);
+}
+
+/* Fișa de Lucru — estimare, NU intră în totaluri. Stilizat distinct ca să fie
+   clar la prima vedere că nu e un deviz real. */
+.rcard--fdl {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--surface),
+    var(--surface) 12px,
+    color-mix(in srgb, var(--surface) 92%, #f97316 8%) 12px,
+    color-mix(in srgb, var(--surface) 92%, #f97316 8%) 24px
+  );
+  border-left: 4px dashed #f97316;
+  opacity: 0.92;
+}
+
+.rcard--fdl .rcard-titlu,
+.rcard--fdl .rcard-total {
+  color: var(--text-muted);
+}
+
+.rcard-fdl-badge {
+  display: inline-block;
+  background: #f97316;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 4px;
+  padding: 2px 6px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.rcard-fdl-section {
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--surface) 80%, #f97316 20%);
+  border-left: 3px solid #f97316;
+  border-radius: 4px;
+  margin: 6px 0;
+}
+
+.rcard-fdl-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.rcard-fdl-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.rcard-fdl-list li {
+  margin: 2px 0;
+}
+
+.rcard-fdl-text {
+  font-size: 0.82rem;
+  color: var(--text);
+  white-space: pre-wrap;
 }
 
 .rcard-header {

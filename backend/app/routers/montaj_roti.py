@@ -65,9 +65,9 @@ async def _build_lookup_maps(
     dot: dict[int, str] = {}
 
     if marca_ids:
+        # Marcile sunt globale; nu filtram pe account_id.
         res = await db.execute(
             select(MarcaAnvelopa.id, MarcaAnvelopa.nume).where(
-                MarcaAnvelopa.account_id == account_id,
                 MarcaAnvelopa.id.in_(marca_ids),
             )
         )

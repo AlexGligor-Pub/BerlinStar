@@ -269,6 +269,9 @@ function AnvelopaForm(props: {
   const [indiceViteza, setIndiceViteza] = createSignal(props.initialData?.indiceViteza ?? "");
   const [indiceSarcina, setIndiceSarcina] = createSignal(props.initialData?.indiceSarcina != null ? String(props.initialData.indiceSarcina) : "");
   const [err, setErr] = createSignal("");
+  // Confirmare propunere marca noua (devine pending pana o aproba adminul).
+  const [proposingMarca, setProposingMarca] = createSignal<string | null>(null);
+  const [proposingBusy, setProposingBusy] = createSignal(false);
 
   onMount(() => {
     loadMarci();
@@ -277,13 +280,48 @@ function AnvelopaForm(props: {
     loadCoduriDot();
   });
 
-  async function addMarca(name: string) {
-    const res = await apiFetch("/api/marci-anvelope", { method: "POST", body: JSON.stringify({ nume: name }) });
-    if (res.ok) {
-      const d = await res.json();
-      invalidateMarciCache();
-      await loadMarci(true);
-      setMarcaId(d.id);
+  function addMarca(name: string) {
+    setProposingMarca(name.trim());
+  }
+
+  async function confirmProposeMarca() {
+    const name = proposingMarca();
+    if (!name) return;
+    setProposingBusy(true);
+    try {
+      const res = await apiFetch("/api/marci-anvelope/propune", {
+        method: "POST",
+        body: JSON.stringify({ nume: name }),
+      });
+      if (res.status === 201) {
+        notify(
+          `Propunere trimisă. Marca „${name}” va fi vizibilă după ce administratorul o aprobă.`,
+          "info",
+          6000,
+        );
+      } else if (res.status === 409) {
+        const data = await (async () => {
+          try { return await res.json(); } catch { return null; }
+        })();
+        const detail = data?.detail as { status?: string; id?: number; nume?: string; message?: string } | undefined;
+        if (detail?.status === "approved") {
+          invalidateMarciCache();
+          await loadMarci(true);
+          if (typeof detail.id === "number") setMarcaId(detail.id);
+          notify(detail.message ?? `Marca „${detail.nume ?? name}” există deja, am selectat-o.`, "info");
+        } else if (detail?.status === "pending") {
+          notify(detail.message ?? `Marca „${name}” este deja propusă și așteaptă aprobare.`, "warn", 6000);
+        } else {
+          notify(`Marca „${name}” există deja.`, "info");
+        }
+      } else {
+        notify("Eroare la trimiterea propunerii.", "error");
+      }
+    } catch {
+      notify("Eroare de rețea la trimiterea propunerii.", "error");
+    } finally {
+      setProposingBusy(false);
+      setProposingMarca(null);
     }
   }
 
@@ -441,6 +479,31 @@ function AnvelopaForm(props: {
         <button class="btn btn-ghost btn-sm" onClick={props.onCancel}>Anulează</button>
         <button class="btn btn-primary btn-sm" onClick={confirm}>{compact() ? "Salvează" : "Adaugă"}</button>
       </div>
+
+      {/* Modal: Confirmare propunere marca noua */}
+      <Show when={proposingMarca() !== null}>
+        <div class="sl-modal-overlay">
+          <div class="sl-modal" style="max-width:520px;width:100%">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Propune marcă nouă</span>
+            </div>
+            <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+              <p style="margin:0;font-size:14px;line-height:1.5">
+                Marca <strong>„{proposingMarca()}”</strong> nu există în lista globală. Vrei să o propui adminului?
+              </p>
+              <div style="background:var(--warn-bg,rgba(245,158,11,.1));border:1px solid var(--warn,#f59e0b);border-radius:6px;padding:10px;font-size:13px;line-height:1.5">
+                <strong>Atenție:</strong> marca va fi disponibilă pentru utilizare DOAR după ce administratorul o aprobă. Până atunci, anvelopa va rămâne fără marcă.
+              </div>
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" disabled={proposingBusy()} onClick={() => setProposingMarca(null)}>Anulează</button>
+              <button class="btn btn-primary btn-sm" disabled={proposingBusy()} onClick={confirmProposeMarca}>
+                {proposingBusy() ? "Se trimite..." : "Trimite propunerea"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }
@@ -784,20 +847,20 @@ export default function HotelAnvelope() {
   const [filterTip, setFilterTip] = createSignal<TipAnvelopa | "">("");
 
   // ── Admin section ──────────────────────────────────────────────────────────
-  const [adminTab, setAdminTab] = createSignal<"locuri" | "marci" | "dimensiuni" | "profiluri">("locuri");
+  // Mărcile sunt acum globale (gestionate exclusiv din AdminV2 — secțiunea
+  // "Roți Mașină → Anvelope"). Aici păstrăm doar locuri/dimensiuni/profiluri.
+  const [adminTab, setAdminTab] = createSignal<"locuri" | "dimensiuni" | "profiluri">("locuri");
   const [adminOpen, setAdminOpen] = createSignal(false);
 
   // admin forms - adăugare
   const [newLocNume, setNewLocNume] = createSignal("");
   const [newLocDesc, setNewLocDesc] = createSignal("");
-  const [newMarcaNume, setNewMarcaNume] = createSignal("");
   const [newDimValoare, setNewDimValoare] = createSignal("");
   const [newProfilValoare, setNewProfilValoare] = createSignal("");
 
   // admin edit modals
   type AdminEditTarget =
     | { type: "loc"; id: number; nume: string; description: string }
-    | { type: "marca"; id: number; nume: string }
     | { type: "dim"; id: number; valoare: string }
     | { type: "profil"; id: number; valoare: string }
     | null;
@@ -809,7 +872,6 @@ export default function HotelAnvelope() {
   // admin delete modal
   const [adminDeleteTarget, setAdminDeleteTarget] = createSignal<
     | { type: "loc"; id: number; label: string }
-    | { type: "marca"; id: number; label: string }
     | { type: "dim"; id: number; label: string }
     | { type: "profil"; id: number; label: string }
     | null
@@ -1562,16 +1624,6 @@ export default function HotelAnvelope() {
     }
   }
 
-  async function addMarca() {
-    const n = newMarcaNume().trim();
-    if (!n) return;
-    await apiFetch("/api/marci-anvelope", { method: "POST", body: JSON.stringify({ nume: n }) });
-    invalidateMarciCache();
-    await loadMarci(true);
-    setNewMarcaNume("");
-  }
-
-
   async function addDim() {
     const v = newDimValoare().trim();
     if (!v) return;
@@ -1597,7 +1649,6 @@ export default function HotelAnvelope() {
     setEditAdminTarget(t);
     if (!t) return;
     if (t.type === "loc") { setEditAdminVal1(t.nume); setEditAdminVal2(t.description); }
-    else if (t.type === "marca") { setEditAdminVal1(t.nume); setEditAdminVal2(""); }
     else if (t.type === "dim") { setEditAdminVal1(t.valoare); setEditAdminVal2(""); }
     else if (t.type === "profil") { setEditAdminVal1(t.valoare); setEditAdminVal2(""); }
   }
@@ -1614,13 +1665,6 @@ export default function HotelAnvelope() {
         });
         invalidateLocuriCache();
         await loadLocuriCazare(true);
-      } else if (t.type === "marca") {
-        await apiFetch(`/api/marci-anvelope/${t.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ nume: editAdminVal1().trim() }),
-        });
-        invalidateMarciCache();
-        await loadMarci(true);
       } else if (t.type === "dim") {
         await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, {
           method: "PATCH",
@@ -1649,10 +1693,6 @@ export default function HotelAnvelope() {
         await apiFetch(`/api/loc-cazare/${t.id}`, { method: "DELETE" });
         invalidateLocuriCache();
         await loadLocuriCazare(true);
-      } else if (t.type === "marca") {
-        await apiFetch(`/api/marci-anvelope/${t.id}`, { method: "DELETE" });
-        invalidateMarciCache();
-        await loadMarci(true);
       } else if (t.type === "dim") {
         await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, { method: "DELETE" });
         invalidateDimensiuniCache();
@@ -1780,10 +1820,9 @@ export default function HotelAnvelope() {
               <button class="btn btn-ghost btn-sm" aria-label="Închide" onClick={() => setAdminOpen(false)}>✕</button>
             </div>
             <div class="sl-modal-body" style="padding:16px 20px;overflow-y:auto">
-              {/* Tab-uri admin */}
+              {/* Tab-uri admin (marcile sunt globale, gestionate in AdminV2) */}
               <div style="display:flex;gap:4px;margin-bottom:14px">
                 <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("locuri")}>Locuri</button>
-                <button class={`btn btn-sm ${adminTab() === "marci" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("marci")}>Mărci</button>
                 <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("dimensiuni")}>Dimensiuni</button>
                 <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("profiluri")}>Profiluri</button>
               </div>
@@ -1800,24 +1839,6 @@ export default function HotelAnvelope() {
                         <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
                           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
                           <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Mărci */}
-              <Show when={adminTab() === "marci"}>
-                <div style="display:flex;flex-direction:column;gap:8px">
-                  <input class="input" placeholder="Nume marcă *" value={newMarcaNume()} onInput={(e) => setNewMarcaNume(e.currentTarget.value)} />
-                  <button class="btn btn-primary btn-sm w-full" onClick={addMarca} disabled={!newMarcaNume().trim()}>+ Adaugă</button>
-                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                    <For each={marci()}>
-                      {(m) => (
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
-                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{m.nume}</span>
-                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "marca", id: m.id, nume: m.nume })}>Edit</button>
                         </div>
                       )}
                     </For>

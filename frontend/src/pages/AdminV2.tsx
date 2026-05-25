@@ -6,6 +6,7 @@ import { adminFetch, setAdminToken } from "./adminv2/admin-auth";
 import AccountsSection from "./adminv2/AccountsSection";
 import HotelAnvelopeSection from "./adminv2/HotelAnvelopeSection";
 import MontareRotiSection from "./adminv2/MontareRotiSection";
+import RotiMasinaAnvelopeSection from "./adminv2/RotiMasinaAnvelopeSection";
 import EmailSection from "./adminv2/EmailSection";
 import ReportsSection from "./adminv2/ReportsSection";
 import EFacturaSection from "./adminv2/EFacturaSection";
@@ -16,7 +17,7 @@ import SubscriptionAccountsSection from "./adminv2/SubscriptionAccountsSection";
 import TasksSection from "./adminv2/TasksSection";
 import LogsSection from "./adminv2/LogsSection";
 
-type Section = "conturi" | "hotel" | "montare" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
+type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
 
 interface NavItem { id: Section; label: string; icon: string }
 interface NavCategory { label: string; items: NavItem[] }
@@ -33,6 +34,12 @@ const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { id: "hotel", label: "Hotel Anvelope", icon: "🔧" },
       { id: "montare", label: "Montare Roți", icon: "🛞" },
+    ],
+  },
+  {
+    label: "Roți Mașină",
+    items: [
+      { id: "roti-anvelope", label: "Anvelope", icon: "🏷️" },
     ],
   },
   {
@@ -231,6 +238,9 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "montare"}>
               <MontareRotiSection />
+            </Show>
+            <Show when={section() === "roti-anvelope"}>
+              <RotiMasinaAnvelopeSection />
             </Show>
             <Show when={section() === "email"}>
               <EmailSection />

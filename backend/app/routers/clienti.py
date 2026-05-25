@@ -163,13 +163,14 @@ async def client_receipts_summary(
     if client is None or client.account_id != account_id or client.is_deleted:
         raise HTTPException(404, "Clientul nu a fost găsit.")
 
-    # Count + sum pentru devize ale clientului
+    # Count + sum pentru devize ale clientului (FDL-urile sunt estimări, nu intră în statistici)
     agg_row = (await db.execute(
         select(func.count(Receipt.id), func.coalesce(func.sum(Receipt.total), 0))
         .where(
             Receipt.account_id == account_id,
             Receipt.client_id == client_id,
             Receipt.is_deleted == False,
+            Receipt.source != "fdl",
         )
     )).one()
     count, total = agg_row
@@ -182,6 +183,7 @@ async def client_receipts_summary(
             Receipt.account_id == account_id,
             Receipt.client_id == client_id,
             Receipt.is_deleted == False,
+            Receipt.source != "fdl",
             Vehicol.is_deleted == False,
         )
         .group_by(Vehicol.numar_masina)

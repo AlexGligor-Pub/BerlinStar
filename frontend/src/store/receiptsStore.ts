@@ -47,6 +47,10 @@ export interface Receipt {
   efacturaIndexIncarcare: number | null;
   source?: string;
   dueDate?: string | null;
+  // Câmpuri FDL — populate doar pentru source="fdl"
+  constatari?: string | null;
+  sugestii?: string | null;
+  timpEstimatOre?: number | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -108,6 +112,9 @@ export interface RawReceipt {
   efactura_index_incarcare?: number | null;
   source?: string;
   due_date?: string | null;
+  constatari?: string | null;
+  sugestii?: string | null;
+  timp_estimat_ore?: string | number | null;
 }
 
 export function mapReceiptFromApi(r: RawReceipt): Receipt {
@@ -169,6 +176,11 @@ function mapFromApi(r: RawReceipt): Receipt {
     efacturaIndexIncarcare: r.efactura_index_incarcare ?? null,
     source: r.source ?? "reception",
     dueDate: r.due_date ?? null,
+    constatari: r.constatari ?? null,
+    sugestii: r.sugestii ?? null,
+    timpEstimatOre: r.timp_estimat_ore != null
+      ? (typeof r.timp_estimat_ore === "number" ? r.timp_estimat_ore : parseFloat(r.timp_estimat_ore))
+      : null,
   };
 }
 
@@ -279,6 +291,9 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
     client_id: receipt.clientId ?? null,
     source: receipt.source ?? "reception",
     due_date: receipt.dueDate ?? null,
+    constatari: receipt.constatari ?? null,
+    sugestii: receipt.sugestii ?? null,
+    timp_estimat_ore: receipt.timpEstimatOre != null ? receipt.timpEstimatOre.toFixed(2) : null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),
@@ -314,6 +329,9 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
     due_date: receipt.dueDate ?? null,
+    constatari: receipt.constatari ?? null,
+    sugestii: receipt.sugestii ?? null,
+    timp_estimat_ore: receipt.timpEstimatOre != null ? receipt.timpEstimatOre.toFixed(2) : null,
     items: receipt.items.map((i) => ({
       name: i.name,
       price: i.price.toFixed(2),
@@ -397,6 +415,20 @@ export function applyDocNumber(
   });
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
+export async function convertFdlToDeviz(id: string): Promise<Receipt> {
+  const res = await apiFetch(`/api/receipts/${id}/convert-to-deviz`, { method: "POST" });
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  const updated = mapFromApi(await res.json());
+  const next = receipts().map((r) => r.id === id ? updated : r);
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  return updated;
 }
 
 export async function deleteReceipt(id: string) {

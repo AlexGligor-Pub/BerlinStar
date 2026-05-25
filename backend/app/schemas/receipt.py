@@ -8,7 +8,7 @@ from app.models.item import ItemType
 from app.schemas.vehicol import VehicolRead
 
 
-ReceiptSource = Literal["pos", "reception", "rapida"]
+ReceiptSource = Literal["pos", "reception", "rapida", "fdl"]
 
 
 class CazareBasicRead(BaseModel):
@@ -50,6 +50,10 @@ class ReceiptCreate(BaseModel):
     chitanta_nr: int = 0
     source: ReceiptSource = "reception"
     due_date: date | None = None
+    # Câmpuri specifice FDL — opționale; populate doar când source="fdl"
+    constatari: str | None = None
+    sugestii: str | None = None
+    timp_estimat_ore: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
 class ReceiptItemRead(BaseModel):
@@ -101,6 +105,9 @@ class ReceiptContentPatch(BaseModel):
     items: list[ReceiptItemCreate]
     total: Decimal = Field(..., decimal_places=2)
     due_date: date | None = None
+    constatari: str | None = None
+    sugestii: str | None = None
+    timp_estimat_ore: Decimal | None = Field(None, ge=0, decimal_places=2)
 
 
 class ReceiptClientPatch(BaseModel):
@@ -158,3 +165,6 @@ class ReceiptRead(BaseModel):
     efactura_index_incarcare: int | None = None
     source: str = "reception"
     due_date: date | None = None
+    constatari: str | None = None
+    sugestii: str | None = None
+    timp_estimat_ore: Decimal | None = None
