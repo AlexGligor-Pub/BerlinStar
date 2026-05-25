@@ -1407,7 +1407,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
       <div class="shopping-list-footer">
         <div class="sl-square-actions">
-          <Show when={!generalSettings()?.dezactiveazaHotelAnvelope}>
+          <Show when={!fdlMode() && !generalSettings()?.dezactiveazaHotelAnvelope}>
             <button
               class="sl-square-btn"
               classList={{ "sl-square-btn--done": linkedCazari().length > 0 }}
@@ -1427,14 +1427,16 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
               {fdlMode() ? "FDL activă" : "Fișă de Lucru"}
             </button>
           </Show>
-          <button
-            class="sl-square-btn"
-            classList={{ "sl-square-btn--done": linkedMontaje().length > 0 }}
-            disabled={openingMontareRoti()}
-            onClick={handleMontareRoti}
-          >
-            {openingMontareRoti() ? "..." : "Montare Roți"}
-          </button>
+          <Show when={!fdlMode()}>
+            <button
+              class="sl-square-btn"
+              classList={{ "sl-square-btn--done": linkedMontaje().length > 0 }}
+              disabled={openingMontareRoti()}
+              onClick={handleMontareRoti}
+            >
+              {openingMontareRoti() ? "..." : "Montare Roți"}
+            </button>
+          </Show>
         </div>
         <div class="total-row">
           <span>{fdlMode() ? "Total estimat" : "Total"}</span>
@@ -2020,32 +2022,36 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                   onKeyDown={handleBulletKeyDown(setSugestii)}
                 />
               </div>
-              <div class="sl-fdl-field">
-                <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
-                <input
-                  class="input sl-fdl-time-input"
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="Ex: 2.5"
-                  value={timpEstimatOre()}
-                  onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
-                />
-                <div class="sl-fdl-time-presets">
-                  <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
-                    {(v) => (
-                      <button
-                        class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
-                        classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
-                        onClick={() => setTimpEstimatOre(String(v))}
-                        type="button"
-                      >
-                        {v}h
-                      </button>
-                    )}
-                  </For>
                 </div>
-              </div>
+
+                {/* Coloana 3: Timp estimat manoperă */}
+                <div class="sl-fdl-right">
+                  <div class="sl-fdl-field">
+                    <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
+                    <input
+                      class="input sl-fdl-time-input"
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      placeholder="Ex: 2.5"
+                      value={timpEstimatOre()}
+                      onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
+                    />
+                    <div class="sl-fdl-time-presets">
+                      <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
+                        {(v) => (
+                          <button
+                            class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
+                            classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
+                            onClick={() => setTimpEstimatOre(String(v))}
+                            type="button"
+                          >
+                            {v}h
+                          </button>
+                        )}
+                      </For>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

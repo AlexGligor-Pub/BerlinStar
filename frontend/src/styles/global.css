@@ -1220,22 +1220,28 @@ img.pos-theme-preview {
   border-color: #ea580c !important;
 }
 
-/* Modal Fișa de Lucru — mai mare, cu padding generos pentru constatări/sugestii. */
+/* Modal Fișa de Lucru — minim 60% din ecran, maxim aproape full-screen.
+   !important e necesar pentru ca regula `.sl-modal` (definita mai jos in fisier)
+   are width: min(560px, 92vw) cu aceeasi specificitate care altfel ar castiga. */
 .sl-modal--fdl {
-  max-width: 1700px;
-  width: 98%;
-  max-height: 94vh;
+  max-width: none !important;
+  width: 95vw !important;
+  min-width: min(60vw, 95vw) !important;
+  max-height: 96vh;
   display: flex;
   flex-direction: column;
 }
 
-/* Layout 2-coloane în corpul modalei: stânga = Vehicul+Client (vertical),
-   dreapta = câmpurile FDL (constatări, sugestii, timp). */
+/* Layout 3-coloane în corpul modalei:
+   stânga = Vehicul+Client | mijloc = Constatări+Sugestii | dreapta = Timp estimat. */
 .sl-fdl-grid {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 18px;
+  grid-template-columns: 260px minmax(0, 1fr) 220px;
+  gap: 24px;
   align-items: start;
+}
+@media (max-width: 1200px) {
+  .sl-fdl-grid { grid-template-columns: 230px minmax(0, 1fr) 200px; }
 }
 @media (max-width: 900px) {
   .sl-fdl-grid { grid-template-columns: 1fr; }
@@ -1352,21 +1358,25 @@ img.pos-theme-preview {
 }
 
 .sl-fdl-time-input {
-  max-width: 140px;
-  font-size: 0.95rem;
+  width: 100%;
+  font-size: 1rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .sl-fdl-time-presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
   margin-top: 4px;
 }
 
 .sl-fdl-time-preset-btn {
-  min-width: 42px;
-  padding: 4px 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
   font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
 }
 
 .sl-fdl-time-preset-btn--active {
