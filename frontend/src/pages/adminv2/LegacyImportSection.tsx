@@ -33,6 +33,8 @@ interface Verification {
   programari?: number;
   client_vehicole?: number;
   fdl_receipts?: number;
+  receipts_with_client?: number;
+  receipts_with_vehicol_no_client?: number;
   marci_anvelope_proposed_by_account?: number;
   marci_anvelope_pending_by_account?: number;
 }
@@ -64,8 +66,10 @@ const EXPECTED_BY_PROFILE: Record<Profile, Partial<Record<keyof Verification, nu
     receipts: 38724,
     receipt_items: 158759,
   },
-  // Bazat pe inventarul dump-ului AutoElite (work/AUTOELITE_IMPORT_PLAN.md).
-  // receipts include FDL (source='fdl'); receipt_items include si itemii FDL.
+  // Bazat pe inventarul dump-ului AutoElite (work/AUTOELITE_IMPORT_PLAN.md)
+  // si rularea reusita din 2026-05-27. receipts include FDL (source='fdl');
+  // receipt_items include si itemii FDL. Phase 14 ataseaza un client (PF nou
+  // sau cel existent matchuit pe placa) la fiecare receipt cu vehicol.
   autoelite: {
     companies: 2,
     locations: 1,
@@ -82,6 +86,9 @@ const EXPECTED_BY_PROFILE: Record<Profile, Partial<Record<keyof Verification, nu
     cazare_anvelope_items: 3210,
     programari: 84,
     fdl_receipts: 1173,
+    client_vehicole: 3138, // ~316 din CheckInData + ~2822 noi din placi receipts
+    receipts_with_client: 5861, // toate receipts cu vehicol → au si client
+    receipts_with_vehicol_no_client: 0, // invariant: 0
   },
 };
 
@@ -189,9 +196,11 @@ export default function LegacyImportSection() {
         { label: "Locuri cazare",       key: "locuri_cazare",       got: v.locuri_cazare ?? 0,       expected: E.locuri_cazare },
         { label: "Cazari anvelope",     key: "cazari_anvelope",     got: v.cazari_anvelope ?? 0,     expected: E.cazari_anvelope },
         { label: "Cazare items (buc.)", key: "cazare_anvelope_items", got: v.cazare_anvelope_items ?? 0, expected: E.cazare_anvelope_items },
-        { label: "Client vehicole (hotel dropdown)", key: "client_vehicole", got: v.client_vehicole ?? 0 },
+        { label: "Client vehicole (hotel dropdown)", key: "client_vehicole", got: v.client_vehicole ?? 0, expected: E.client_vehicole },
         { label: "Programari",          key: "programari",          got: v.programari ?? 0,          expected: E.programari },
         { label: "FDL (Fise de Lucru)", key: "fdl_receipts",        got: v.fdl_receipts ?? 0,        expected: E.fdl_receipts },
+        { label: "Receipts cu client (deviz+FDL)", key: "receipts_with_client", got: v.receipts_with_client ?? 0, expected: E.receipts_with_client },
+        { label: "Receipts cu vehicol DAR fara client (trebuie 0)", key: "receipts_with_vehicol_no_client", got: v.receipts_with_vehicol_no_client ?? 0, expected: E.receipts_with_vehicol_no_client },
         { label: "Marci propuse total",  key: "marci_anvelope_proposed_by_account", got: v.marci_anvelope_proposed_by_account ?? 0 },
         { label: "Marci pending (in asteptarea aprobarii)", key: "marci_anvelope_pending_by_account", got: v.marci_anvelope_pending_by_account ?? 0 },
       );
@@ -223,12 +232,15 @@ export default function LegacyImportSection() {
             class="adminv2-form__input"
           >
             <option value="vulcanizarealex">Vulcanizare Alex (faze 0-5)</option>
-            <option value="autoelite">Auto Elite (faze 0-12: + cazari, programari, etc.)</option>
+            <option value="autoelite">Auto Elite (faze 0-14: + cazari, programari, FDL, link receipts→clients)</option>
           </select>
           <p style="color:var(--text-muted);font-size:12px;margin:4px 0 0">
             Profilul AutoElite include in plus: SelledServiceManual, WheelDimensions,
-            WherehouseLocation, WheelCompany (match global cu propunere), Vehicul (enrichment marca/model/vin/km),
-            CheckInData → cazari anvelope, Programari.
+            WherehouseLocation, WheelCompany (match global cu propunere), Vehicul (enrichment
+            marca/model/vin/km), CheckInData → cazari anvelope (cu dedup placa-first si
+            inlocuire nume junk cu placa/nume real), client_vehicole pentru dropdown Hotel,
+            Programari, FDL (Fise de Lucru ca Receipt source='fdl'), si Phase 14 care leaga
+            fiecare receipt (deviz + FDL) la un client matchuit dupa placa (fara duplicari).
           </p>
         </div>
 

@@ -2004,12 +2004,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                 class="btn btn-danger-outline btn-sm"
                 onClick={() => {
                   setFdlMode(false);
-                  setConstatari("");
-                  setSugestii("");
-                  setTimpEstimatOre("");
                   setShowFdlModal(false);
                 }}
-                title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal"
+                title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal. Constatările, sugestiile și timpul estimat rămân salvate dacă reactivezi FDL."
               >
                 Transformă în deviz
               </button>

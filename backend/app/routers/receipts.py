@@ -229,6 +229,7 @@ def _serialize(receipt: Receipt, efactura_rec: EFacturaRecord | None = None) -> 
     data["efactura_locked"] = locked
     data["efactura_error"] = err
     data["efactura_index_incarcare"] = idx
+    data["fdl_finalized_at"] = receipt.fdl_finalized_at
     return data
 
 
@@ -280,8 +281,26 @@ async def list_receipts(
             range_clauses.append(Receipt.created_at < dt_to)
         date_conditions.append(and_(*range_clauses))
     if unpaid_days is not None and unpaid_days > 0:
-        past = datetime.now(timezone.utc) - timedelta(days=unpaid_days)
-        date_conditions.append(and_(Receipt.created_at >= past, Receipt.pay_method.in_([PayMethod.NEPLATIT, PayMethod.PARTIAL])))
+        now_utc = datetime.now(timezone.utc)
+        past = now_utc - timedelta(days=unpaid_days)
+        # FDL-urile sunt mereu NEPLATIT (sunt estimari, nu se incaseaza), asa ca
+        # fara o fereastra mai stransa s-ar aduna la nesfarsit in lista "AZI".
+        # Limitam la 5 zile pentru FDL; dupa expirare devin vizibile doar daca
+        # filtrul date_from/date_to acopera explicit data lor. FDL-urile marcate
+        # ca "finalizate" sunt scoase complet din fereastra "neplatit recent",
+        # deci apar doar daca filtrul prinde explicit data crearii.
+        fdl_past = now_utc - timedelta(days=5)
+        date_conditions.append(and_(
+            Receipt.pay_method.in_([PayMethod.NEPLATIT, PayMethod.PARTIAL]),
+            or_(
+                and_(Receipt.source != "fdl", Receipt.created_at >= past),
+                and_(
+                    Receipt.source == "fdl",
+                    Receipt.created_at >= fdl_past,
+                    Receipt.fdl_finalized_at.is_(None),
+                ),
+            ),
+        ))
     if date_conditions:
         stmt = stmt.where(or_(*date_conditions))
     if location_id is not None:
@@ -724,6 +743,38 @@ async def assign_number(
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
     return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
+
+
+@router.post("/{receipt_id}/finalize-fdl", response_model=ReceiptRead)
+async def finalize_fdl(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Marcheaza o Fisa de Lucru ca finalizata. Dupa finalizare, FDL-ul nu mai
+    apare in lista "AZI" prin fereastra "neplatit recent" — devine vizibil
+    doar daca filtrul de data acopera explicit ziua crearii."""
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
+        raise HTTPException(404, "Bonul nu a fost gasit.")
+    if receipt.source != "fdl":
+        raise HTTPException(400, "Doar Fisele de Lucru pot fi finalizate.")
+    if receipt.fdl_finalized_at is None:
+        receipt.fdl_finalized_at = datetime.now(timezone.utc)
+        await db.commit()
+
+    result = (await db.execute(
+        select(Receipt)
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+            selectinload(Receipt.cazari_anvelope),
+        )
+        .where(Receipt.id == receipt_id)
+    )).scalar_one()
+    broadcaster.notify(account_id)
+    rec = await _load_efactura_record_for(db, receipt_id)
+    return _serialize(result, rec)
 
 
 @router.post("/{receipt_id}/convert-to-deviz", response_model=ReceiptRead)

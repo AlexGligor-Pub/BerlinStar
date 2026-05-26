@@ -51,6 +51,7 @@ export interface Receipt {
   constatari?: string | null;
   sugestii?: string | null;
   timpEstimatOre?: number | null;
+  fdlFinalizedAt?: string | null;
 }
 
 const CACHE_KEY = "bs_receipts";
@@ -115,6 +116,7 @@ export interface RawReceipt {
   constatari?: string | null;
   sugestii?: string | null;
   timp_estimat_ore?: string | number | null;
+  fdl_finalized_at?: string | null;
 }
 
 export function mapReceiptFromApi(r: RawReceipt): Receipt {
@@ -181,6 +183,7 @@ function mapFromApi(r: RawReceipt): Receipt {
     timpEstimatOre: r.timp_estimat_ore != null
       ? (typeof r.timp_estimat_ore === "number" ? r.timp_estimat_ore : parseFloat(r.timp_estimat_ore))
       : null,
+    fdlFinalizedAt: r.fdl_finalized_at ?? null,
   };
 }
 
@@ -415,6 +418,20 @@ export function applyDocNumber(
   });
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+}
+
+export async function finalizeFdl(id: string): Promise<Receipt> {
+  const res = await apiFetch(`/api/receipts/${id}/finalize-fdl`, { method: "POST" });
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    throw new Error(msg);
+  }
+  const updated = mapFromApi(await res.json());
+  const next = receipts().map((r) => r.id === id ? updated : r);
+  setReceipts(next);
+  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  return updated;
 }
 
 export async function convertFdlToDeviz(id: string): Promise<Receipt> {

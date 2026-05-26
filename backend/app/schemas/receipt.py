@@ -169,3 +169,4 @@ class ReceiptRead(BaseModel):
     constatari: str | None = None
     sugestii: str | None = None
     timp_estimat_ore: Decimal | None = None
+    fdl_finalized_at: datetime | None = None

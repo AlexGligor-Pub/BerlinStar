@@ -2,7 +2,7 @@ import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup }
 import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, finalizeFdl, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateFisaDeLucru, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
@@ -686,6 +686,20 @@ function ReceiptCard(props: { receipt: Receipt }) {
     }
   }
 
+  const [finalizePending, setFinalizePending] = createSignal(false);
+  async function handleFinalizeFdl() {
+    if (finalizePending()) return;
+    setFinalizePending(true);
+    try {
+      await finalizeFdl(r.id);
+      notify("Fișa de Lucru a fost finalizată.", "success");
+    } catch (e: any) {
+      setDocError(e?.message ?? "Eroare la finalizare.");
+    } finally {
+      setFinalizePending(false);
+    }
+  }
+
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
     setDocError(null);
     const locationId = device()?.locationId;
@@ -925,7 +939,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </div>
               </div>
 
-              {/* Procese FDL: conversie în deviz */}
+              {/* Procese FDL: conversie în deviz + finalizare */}
               <Show when={isFdl()}>
                 <div class="receipt-actions-group">
                   <div class="receipt-actions-label">Procese:</div>
@@ -938,6 +952,21 @@ function ReceiptCard(props: { receipt: Receipt }) {
                     >
                       Transformă în deviz
                     </button>
+                    <Show when={!live().fdlFinalizedAt}>
+                      <button
+                        class="btn btn-ghost btn-sm"
+                        disabled={finalizePending()}
+                        onClick={handleFinalizeFdl}
+                        title="Marchează FDL-ul ca finalizat — după finalizare nu mai apare în „AZI” decât dacă filtrul de dată îl prinde explicit"
+                      >
+                        {finalizePending() ? "..." : "Finalizează"}
+                      </button>
+                    </Show>
+                    <Show when={live().fdlFinalizedAt}>
+                      <span class="rcard-fdl-badge" style="font-size:0.65rem;background:var(--success,#28a745)" title={`Finalizat ${new Date(live().fdlFinalizedAt!).toLocaleString("ro-RO")}`}>
+                        Finalizat
+                      </span>
+                    </Show>
                   </div>
                 </div>
               </Show>

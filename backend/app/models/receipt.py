@@ -68,6 +68,10 @@ class Receipt(Base):
     constatari: Mapped[str | None] = mapped_column(Text, nullable=True)
     sugestii: Mapped[str | None] = mapped_column(Text, nullable=True)
     timp_estimat_ore: Mapped[Decimal | None] = mapped_column(Numeric(6, 2), nullable=True)
+    # Marcaj de "finalizare" pentru FDL: dupa setare, FDL-ul iese din fereastra
+    # "neplatit recent" (5 zile) si apare doar daca filtrul de data il prinde
+    # explicit pe data crearii.
+    fdl_finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
