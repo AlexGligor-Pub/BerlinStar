@@ -753,8 +753,22 @@ async def finalize_fdl(
 ):
     """Marcheaza o Fisa de Lucru ca finalizata. Dupa finalizare, FDL-ul nu mai
     apare in lista "AZI" prin fereastra "neplatit recent" — devine vizibil
-    doar daca filtrul de data acopera explicit ziua crearii."""
-    receipt = await db.get(Receipt, receipt_id)
+    doar daca filtrul de data acopera explicit ziua crearii.
+
+    Spre deosebire de `convert_to_deviz`, NU actualizam `updated_at`: scopul
+    finalizarii e tocmai sa scoatem FDL-ul din vizor, nu sa-l aducem la varful
+    sort-ului `-activity`. Data crearii ramane neschimbata pentru ca filtrele
+    explicite de data (date_from/date_to) sa-l prinda pe ziua corecta.
+    """
+    receipt = (await db.execute(
+        select(Receipt)
+        .options(
+            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
+            selectinload(Receipt.client),
+            selectinload(Receipt.cazari_anvelope),
+        )
+        .where(Receipt.id == receipt_id)
+    )).scalar_one_or_none()
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     if receipt.source != "fdl":
@@ -763,18 +777,9 @@ async def finalize_fdl(
         receipt.fdl_finalized_at = datetime.now(timezone.utc)
         await db.commit()
 
-    result = (await db.execute(
-        select(Receipt)
-        .options(
-            selectinload(Receipt.receipt_items).selectinload(ReceiptItem.employee),
-            selectinload(Receipt.client),
-            selectinload(Receipt.cazari_anvelope),
-        )
-        .where(Receipt.id == receipt_id)
-    )).scalar_one()
     broadcaster.notify(account_id)
     rec = await _load_efactura_record_for(db, receipt_id)
-    return _serialize(result, rec)
+    return _serialize(receipt, rec)
 
 
 @router.post("/{receipt_id}/convert-to-deviz", response_model=ReceiptRead)

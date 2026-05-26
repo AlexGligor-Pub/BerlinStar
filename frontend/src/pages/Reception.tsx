@@ -939,11 +939,27 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </div>
               </div>
 
-              {/* Procese FDL: conversie în deviz + finalizare */}
+              {/* Procese FDL: finalizare + conversie în deviz */}
               <Show when={isFdl()}>
                 <div class="receipt-actions-group">
                   <div class="receipt-actions-label">Procese:</div>
                   <div class="receipt-actions-row">
+                    <Show when={!live().fdlFinalizedAt}>
+                      <button
+                        class="btn btn-sm"
+                        style="background:#28a745;border-color:#28a745;color:#fff"
+                        disabled={finalizePending()}
+                        onClick={handleFinalizeFdl}
+                        title="Marchează FDL-ul ca finalizat — după finalizare nu mai apare în „AZI” decât dacă filtrul de dată îl prinde explicit"
+                      >
+                        {finalizePending() ? "..." : "Finalizare fisa de lucru"}
+                      </button>
+                    </Show>
+                    <Show when={live().fdlFinalizedAt}>
+                      <span class="rcard-fdl-badge" style="font-size:0.65rem;background:#28a745" title={`Finalizat ${new Date(live().fdlFinalizedAt!).toLocaleString("ro-RO")}`}>
+                        Finalizat
+                      </span>
+                    </Show>
                     <button
                       class="btn btn-primary btn-sm"
                       disabled={convertPending()}
@@ -952,21 +968,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
                     >
                       Transformă în deviz
                     </button>
-                    <Show when={!live().fdlFinalizedAt}>
-                      <button
-                        class="btn btn-ghost btn-sm"
-                        disabled={finalizePending()}
-                        onClick={handleFinalizeFdl}
-                        title="Marchează FDL-ul ca finalizat — după finalizare nu mai apare în „AZI” decât dacă filtrul de dată îl prinde explicit"
-                      >
-                        {finalizePending() ? "..." : "Finalizează"}
-                      </button>
-                    </Show>
-                    <Show when={live().fdlFinalizedAt}>
-                      <span class="rcard-fdl-badge" style="font-size:0.65rem;background:var(--success,#28a745)" title={`Finalizat ${new Date(live().fdlFinalizedAt!).toLocaleString("ro-RO")}`}>
-                        Finalizat
-                      </span>
-                    </Show>
                   </div>
                 </div>
               </Show>
