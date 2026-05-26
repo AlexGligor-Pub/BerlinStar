@@ -1054,8 +1054,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     if (goingToHotel()) return;
 
     // Pre-flight: daca placuta are deja cazari active (la acest client sau la altul),
-    // ducem utilizatorul direct in pagina Hotel Anvelope cu filtrul pus pe placuta,
-    // ca sa vada cazarile existente si sa decida acolo ce face.
+    // ducem utilizatorul direct in pagina Hotel Anvelope cu lista filtrata dupa
+    // placuta (pastram contextul POS — angajat, client, deviz — ca sa revina aici
+    // dupa cazare/scoatere). Daca nu sunt cazari active, fluxul normal "cazare noua".
     try {
       const active = await loadActiveCazariByPlate(titlu().trim());
       const rId = loadedReceiptId();
@@ -1063,7 +1064,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
         ? active.filter((c) => String(c.id) !== String(rId) && active.length > 0)
         : active;
       if (relevant.length > 0) {
-        navigate(`/hotel-anvelope?searchPlate=${encodeURIComponent(titlu().trim())}`);
+        await proceedToHotelNew(true, titlu().trim());
         return;
       }
     } catch { /* ignora — daca lookup-ul esueaza, continua fluxul normal */ }
@@ -1074,8 +1075,11 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
   /** Continua fluxul "creeaza cazare noua / vezi cazarile clientului in Hotel".
    *  Extras separat ca sa fie reutilizat dupa rezolvarea prompt-ului de cazare activa.
    *  `skipEntryPrompt`: cand utilizatorul a confirmat deja "cazare noua" in prompt-ul
-   *  din POS, suprimam prompt-ul echivalent din pagina Hotel ("Cum continuati?"). */
-  async function proceedToHotelNew(skipEntryPrompt: boolean = false) {
+   *  din POS, suprimam prompt-ul echivalent din pagina Hotel ("Cum continuati?").
+   *  `filterPlate`: cand placuta are deja cazari active, navigam la Hotel cu lista
+   *  pre-filtrata dupa placuta (in loc de modal-ul de avertizare), pastrand
+   *  contextul POS (angajat, client, deviz) ca utilizatorul sa revina automat. */
+  async function proceedToHotelNew(skipEntryPrompt: boolean = false, filterPlate?: string) {
     const client = selectedClient();
     if (!client) return;
     setGoingToHotel(true);
@@ -1130,7 +1134,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       skipEntryPrompt,
     });
     setGoingToHotel(false);
-    navigate("/hotel-anvelope");
+    const url = filterPlate
+      ? `/hotel-anvelope?searchPlate=${encodeURIComponent(filterPlate)}`
+      : "/hotel-anvelope";
+    navigate(url);
   }
 
   let warnTimer: ReturnType<typeof setTimeout>;
@@ -2004,7 +2011,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                 }}
                 title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal"
               >
-                Anulează Fișa de Lucru
+                Transformă în deviz
               </button>
               <button class="btn btn-primary btn-sm" onClick={() => setShowFdlModal(false)}>
                 Salvează în Fișă

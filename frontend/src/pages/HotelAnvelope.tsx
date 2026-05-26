@@ -892,26 +892,12 @@ export default function HotelAnvelope() {
 
     loadHotelImages();
 
-    // Daca vine cu ?searchPlate=PLATE (ex: din POS, cand placuta are deja cazari
-    // active), incarca cazarile filtrate dupa placuta si pre-completeaza caseta
-    // de cautare ca utilizatorul sa vada imediat ce e in depozit pentru placuta.
+    // ?searchPlate=PLATE (vine din POS cand placuta are deja cazari active): vrem
+    // sa vedem TOATE cazarile active pentru placuta (posibil la alti clienti), nu
+    // doar cele ale clientului din context. Restul contextului POS (angajat, client,
+    // deviz) ramane intact ca user-ul sa revina automat dupa cazare/scoatere.
     const searchPlateRaw = searchParams.searchPlate;
     const searchPlateParam = (typeof searchPlateRaw === "string" ? searchPlateRaw : Array.isArray(searchPlateRaw) ? searchPlateRaw[0] ?? "" : "").trim();
-    if (searchPlateParam) {
-      setSearchName(searchPlateParam);
-      try {
-        await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
-      } catch (e: unknown) {
-        notify(e instanceof Error ? e.message : "Eroare la încărcare cazări.", "error");
-      }
-      const observer = new IntersectionObserver(
-        (entries) => { if (entries[0].isIntersecting) loadMoreCazari(); },
-        { threshold: 0.1 }
-      );
-      if (sentinelRef) observer.observe(sentinelRef);
-      onCleanup(() => observer.disconnect());
-      return;
-    }
 
     // Dacă vine din POS cu context activ → auto-selectează clientul și încarcă cazarile
     const ctx = posHotelCtx();
@@ -926,7 +912,12 @@ export default function HotelAnvelope() {
             reprezentant: c.reprezentant ?? null, numar_masina: c.numar_masina ?? null,
           };
           setPageSelectedClient(clientItem);
-          await loadCazari({ clientId: c.id, activa: true, limit: 200 });
+          if (searchPlateParam) {
+            setSearchName(searchPlateParam);
+            await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
+          } else {
+            await loadCazari({ clientId: c.id, activa: true, limit: 200 });
+          }
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare client.", "error");
@@ -938,13 +929,22 @@ export default function HotelAnvelope() {
       //    si a ales "cazare noua" (skipEntryPrompt) — alegerea e deja facuta;
       //  • venim cu param viewCazare — utilizatorul vede o cazare existenta, nu
       //    creeaza una noua, deci "Cum continuati?" e irelevant;
+      //  • venim cu searchPlate — utilizatorul vede direct lista filtrata si decide
+      //    de acolo, prompt-ul "Cum continuati?" devine zgomot;
       //  • cazarile incarcate ale clientului contin deja una pentru aceeasi placuta —
       //    e vizibila in lista, deci utilizatorul poate alege direct ce face.
       const normPlate = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, "").toUpperCase();
       const ctxPlate = normPlate(ctx.titlu);
       const plateAlreadyVisible = ctxPlate !== "" && cazari().some((c) => normPlate(c.numarMasina) === ctxPlate);
-      if (!ctx.skipEntryPrompt && !searchParams.viewCazare && !plateAlreadyVisible) {
+      if (!ctx.skipEntryPrompt && !searchParams.viewCazare && !searchPlateParam && !plateAlreadyVisible) {
         setEntryChoicePrompt(true);
+      }
+    } else if (searchPlateParam) {
+      setSearchName(searchPlateParam);
+      try {
+        await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare cazări.", "error");
       }
     } else {
       await fetchCazari();

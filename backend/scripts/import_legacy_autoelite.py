@@ -444,8 +444,11 @@ async def import_cazari_anvelope(session, dump: Path, account_id: int, id_map: d
     junk_to_real_name = 0  # junk replaced by real name found via plate
     junk_to_plate = 0      # junk replaced by plate (no known real name)
 
-    # Primary dedup: plate → client_id (covers ~95% of rows)
+    # Primary dedup: plate → client_id (covers ~95% of rows).
+    # Persisted to id_map so Phase 14 can reuse it when linking receipts
+    # (regular + FDL) to clients via license plate.
     plate_cache: dict[str, int] = {}
+    id_map["_plate_to_pf_client"] = plate_cache
     # Fallback dedup for plate-less rows: (name_lower, phone) → client_id
     namephone_cache: dict[tuple[str, str | None], int] = {}
     # (client_id, plate) pairs for Phase 11.5
@@ -937,6 +940,118 @@ async def import_fdl(
 
 
 # ---------------------------------------------------------------------------
+# Phase 14 — Link every receipt with a plate to a client
+# ---------------------------------------------------------------------------
+
+async def import_link_receipts_to_clients(
+    session, account_id: int, id_map: dict, plate_index: dict[str, dict],
+) -> dict:
+    """Every receipt+FDL with a vehicol but no client gets linked to a client
+    matched by plate. Match priority:
+      1. Existing PF client with that plate (from Phase 11) → reuse.
+      2. No existing client → create a new PF client named after the plate
+         (also create a ClientVehicol entry for the Hotel dropdown).
+
+    Receipts that already have a client_id (B2B from CompanyDetails) are
+    left untouched.
+    """
+    plate_to_client: dict[str, int] = id_map.get("_plate_to_pf_client", {})
+
+    # Find all receipts (regular + FDL) without a client but with a vehicol.
+    rows = (await session.execute(
+        text("""
+            SELECT r.id AS receipt_id, v.numar_masina AS plate, v.id AS vehicol_id
+            FROM receipts r
+            JOIN vehicole v ON v.receipt_id = r.id
+            WHERE r.account_id = :a AND r.client_id IS NULL
+        """),
+        {"a": account_id},
+    )).fetchall()
+
+    # Group receipt ids by plate, deduping plates.
+    receipts_by_plate: dict[str, list[int]] = {}
+    for r in rows:
+        if not r.plate:
+            continue
+        receipts_by_plate.setdefault(r.plate, []).append(r.receipt_id)
+    log.info(
+        "Phase 14: %d receipts without client, %d unique plates",
+        len(rows), len(receipts_by_plate),
+    )
+
+    new_pf_clients = 0
+    new_client_vehicole = 0
+    linked_existing = 0
+    linked_new = 0
+
+    # 1) Find / create a client per plate. Batch inserts of new clients.
+    for plate in receipts_by_plate.keys():
+        if plate in plate_to_client:
+            continue
+        data = plate_index.get(plate, {})
+        c = Client(
+            account_id=account_id,
+            tip="fizic",
+            nume=plate[:200],
+            numar_masina=plate,
+            is_deleted=False,
+        )
+        session.add(c)
+        await session.flush()
+        plate_to_client[plate] = c.id
+        new_pf_clients += 1
+        # Add ClientVehicol so the plate also shows in the Hotel dropdown
+        cv = ClientVehicol(
+            account_id=account_id,
+            client_id=c.id,
+            numar_masina=plate[:50],
+            marca=(data.get("marca") or "")[:100] or None,
+            model=(data.get("model") or "")[:100] or None,
+            vin=(data.get("vin") or "")[:17] or None,
+            numar_kilometrii=data.get("km"),
+            observatii=data.get("observatii"),
+            is_deleted=False,
+        )
+        session.add(cv)
+        new_client_vehicole += 1
+        if new_pf_clients % 200 == 0:
+            await session.flush()
+    await session.commit()
+
+    # 2) Bulk-update receipts.client_id, grouped by client (one UPDATE per
+    #    client carrying all its receipt ids).
+    by_client: dict[int, list[int]] = {}
+    for plate, rids in receipts_by_plate.items():
+        cid = plate_to_client[plate]
+        by_client.setdefault(cid, []).extend(rids)
+    for cid, rids in by_client.items():
+        if not rids:
+            continue
+        await session.execute(
+            text("UPDATE receipts SET client_id = :c WHERE id = ANY(:rs)"),
+            {"c": cid, "rs": rids},
+        )
+        if cid in plate_to_client.values():
+            # crude: split linked_new vs linked_existing using new_pf_clients
+            # threshold (id assigned before vs after Phase 11)
+            pass
+    await session.commit()
+    # Approximate counts (we don't need exact split here)
+    linked_total = sum(len(rids) for rids in by_client.values())
+
+    log.info(
+        "Phase 14: linked_receipts=%d unique_plates_linked=%d new_pf_clients=%d new_client_vehicole=%d",
+        linked_total, len(receipts_by_plate), new_pf_clients, new_client_vehicole,
+    )
+    return {
+        "receipts_linked": linked_total,
+        "unique_plates_linked": len(receipts_by_plate),
+        "new_pf_clients": new_pf_clients,
+        "new_client_vehicole": new_client_vehicole,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Verification (extended)
 # ---------------------------------------------------------------------------
 
@@ -962,6 +1077,11 @@ async def _verify_counts_extended(session, account_id: int) -> dict:
         "client_vehicole":       "SELECT COUNT(*) FROM client_vehicole WHERE account_id = :a",
         "programari":            "SELECT COUNT(*) FROM programari WHERE account_id = :a",
         "fdl_receipts":          "SELECT COUNT(*) FROM receipts WHERE account_id = :a AND source = 'fdl'",
+        "receipts_with_client":  "SELECT COUNT(*) FROM receipts WHERE account_id = :a AND client_id IS NOT NULL",
+        "receipts_with_vehicol_no_client": (
+            "SELECT COUNT(*) FROM receipts r JOIN vehicole v ON v.receipt_id=r.id "
+            "WHERE r.account_id = :a AND r.client_id IS NULL"
+        ),
         "marci_anvelope_proposed_by_account": (
             "SELECT COUNT(*) FROM marci_anvelope WHERE proposed_by_account_id = :a"
         ),
@@ -1143,6 +1263,14 @@ async def run_import(
         )
         phases.append({"name": "Phase 13: FDL (Fise de Lucru)",
                        "status": "ok", "counts": fdl_res})
+
+        # Phase 14
+        log.info("--- Phase 14: link receipts to clients via plate ---")
+        link_res = await import_link_receipts_to_clients(
+            session, account_id, id_map, plate_index,
+        )
+        phases.append({"name": "Phase 14: receipts → clients",
+                       "status": "ok", "counts": link_res})
 
         verification = await _verify_counts_extended(session, account_id)
 
