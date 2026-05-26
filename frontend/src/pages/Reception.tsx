@@ -917,7 +917,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                       {docLoading() === "factura" ? "..." : "Factură"}
                     </button>
                   </Show>
-                  <Show when={!isFdl() && generalSettings()?.useFactura !== false && (live().metodaPlata === "Platit cash" || live().metodaPlata === "Platit Partial")}>
+                  <Show when={!isFdl() && generalSettings()?.useFactura !== false && live().facturaNr > 0 && (live().metodaPlata === "Platit cash" || live().metodaPlata === "Platit Partial")}>
                     <button class="btn btn-ghost btn-sm" disabled={docLoading() !== null} onClick={() => handleDocDownload("chitanta")}>
                       {docLoading() === "chitanta" ? "..." : "Chitanță"}
                     </button>

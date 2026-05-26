@@ -1305,6 +1305,9 @@ export async function generateCazareCheckin(
   if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
   if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
   if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  const vehMakeModelIn = [vehicle?.marca, vehicle?.model].filter(Boolean).join(" ").trim();
+  const vehLabelIn = [cazare.numarMasina, vehMakeModelIn].filter((x) => x && x !== "").join(" - ");
+  if (vehLabelIn) { doc.text(`Vehicul: ${t(vehLabelIn)}`, col1X, yL); yL += 4.5; }
   doc.text(`Data cazare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
   y = Math.max(yL, yR) + 1;
 
@@ -1492,6 +1495,10 @@ export async function generateCazareScoatereIntroducere(
   if (checkoutCazare.locationName)  { doc.text(`Locație: ${t(checkoutCazare.locationName)}`, col1X, yL);  yL += 4.5; }
   if (checkoutCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(checkoutCazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
   if (checkoutCazare.employeeName)  { doc.text(`Angajat: ${t(checkoutCazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  const vehMakeModelOut = [vehicle?.marca, vehicle?.model].filter(Boolean).join(" ").trim();
+  const vehPlateOut = checkoutCazare.numarMasina ?? newCazare.numarMasina ?? null;
+  const vehLabelOut = [vehPlateOut, vehMakeModelOut].filter((x) => x && x !== "").join(" - ");
+  if (vehLabelOut) { doc.text(`Vehicul: ${t(vehLabelOut)}`, col1X, yL); yL += 4.5; }
   doc.text(`Data intrare: ${fmtDate(checkoutCazare.dataCheckin)}`, col2X, yR); yR += 4.5;
   doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
   const zile = Math.round(
@@ -1592,6 +1599,9 @@ export async function generateCazareScoatereIntroducere(
   if (newCazare.locationName)  { doc.text(`Locație: ${t(newCazare.locationName)}`, col1X, yL2);  yL2 += 4.5; }
   if (newCazare.locCazareNume) { doc.text(`Loc depozitare: ${t(newCazare.locCazareNume)}`, col1X, yL2); yL2 += 4.5; }
   if (newCazare.employeeName)  { doc.text(`Angajat: ${t(newCazare.employeeName)}`, col1X, yL2);  yL2 += 4.5; }
+  const vehPlateNew = newCazare.numarMasina ?? checkoutCazare.numarMasina ?? null;
+  const vehLabelNew = [vehPlateNew, vehMakeModelOut].filter((x) => x && x !== "").join(" - ");
+  if (vehLabelNew) { doc.text(`Vehicul: ${t(vehLabelNew)}`, col1X, yL2); yL2 += 4.5; }
   doc.text(`Data cazare: ${fmtDate(newCazare.dataCheckin)}`, col2X, yR2); yR2 += 4.5;
   y = Math.max(yL2, yR2) + 1;
 
@@ -1706,6 +1716,9 @@ export async function generateCazareCheckout(
   if (cazare.locationName)  { doc.text(`Locație: ${t(cazare.locationName)}`, col1X, yL);  yL += 4.5; }
   if (cazare.locCazareNume) { doc.text(`Loc depozitare: ${t(cazare.locCazareNume)}`, col1X, yL); yL += 4.5; }
   if (cazare.employeeName)  { doc.text(`Angajat: ${t(cazare.employeeName)}`, col1X, yL);  yL += 4.5; }
+  const vehMakeModel = [vehicle?.marca, vehicle?.model].filter(Boolean).join(" ").trim();
+  const vehLabel = [cazare.numarMasina, vehMakeModel].filter((x) => x && x !== "").join(" - ");
+  if (vehLabel) { doc.text(`Vehicul: ${t(vehLabel)}`, col1X, yL); yL += 4.5; }
   doc.text(`Data intrare: ${fmtDate(cazare.dataCheckin)}`, col2X, yR); yR += 4.5;
   doc.text(`Data ieșire: ${fmtDate(checkoutDate)}`, col2X, yR); yR += 4.5;
   const zile = Math.round(

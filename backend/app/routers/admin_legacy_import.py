@@ -19,7 +19,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.models.account import Account
 from app.routers.admin import _require_super_admin
-from scripts.import_legacy_vulcanizare import UsernameExists, run_import
+from scripts.import_legacy_vulcanizare import UsernameExists
+from scripts.import_legacy_vulcanizare import run_import as _run_import_vulcanizare
+from scripts.import_legacy_autoelite import run_import as _run_import_autoelite
 
 log = logging.getLogger("berlinstar")
 
@@ -33,6 +35,15 @@ MAX_DUMP_BYTES = 500 * 1024 * 1024
 CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB write chunks
 
 
+# Each profile maps a specific legacy schema variant onto the new schema. Both
+# profiles share phases 0-5; "autoelite" adds phases 6-12 for CheckInData,
+# Programari, Vehicul enrichment, etc.
+_PROFILES = {
+    "vulcanizarealex": _run_import_vulcanizare,
+    "autoelite": _run_import_autoelite,
+}
+
+
 @router.post("/import")
 async def import_legacy_dump(
     dump: UploadFile = File(...),
@@ -40,6 +51,7 @@ async def import_legacy_dump(
     password: str = Form(...),
     account_name: str = Form(...),
     dry_run: bool = Form(False),
+    profile: str = Form("vulcanizarealex"),
     _admin: Account = Depends(_require_super_admin),
 ) -> dict:
     """Upload an SSMS dump and import as a new Account.
@@ -53,6 +65,14 @@ async def import_legacy_dump(
     account_name = (account_name or "").strip()
     if not username or not password or not account_name:
         raise HTTPException(400, "username, password si account_name sunt obligatorii.")
+
+    profile = (profile or "vulcanizarealex").strip().lower()
+    run_import = _PROFILES.get(profile)
+    if run_import is None:
+        raise HTTPException(
+            400,
+            f"Profil necunoscut: '{profile}'. Optiuni: {', '.join(sorted(_PROFILES))}.",
+        )
 
     tmp_dir = Path(tempfile.gettempdir())
     raw_path = tmp_dir / f"legacy_import_{uuid.uuid4().hex}.raw.sql"

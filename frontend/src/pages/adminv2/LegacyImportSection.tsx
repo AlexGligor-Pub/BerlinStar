@@ -25,6 +25,16 @@ interface Verification {
   vehicole: number;
   receipt_items: number;
   sum_total: string;
+  // AutoElite profile extras (undefined for vulcanizarealex):
+  dimensiuni_anvelope?: number;
+  locuri_cazare?: number;
+  cazari_anvelope?: number;
+  cazare_anvelope_items?: number;
+  programari?: number;
+  client_vehicole?: number;
+  fdl_receipts?: number;
+  marci_anvelope_proposed_by_account?: number;
+  marci_anvelope_pending_by_account?: number;
 }
 
 interface ImportResult {
@@ -37,32 +47,69 @@ interface ImportResult {
   duration_seconds: number;
 }
 
-// Expected counts for Vulcanizare Alex DEVA dump. Used as the "Expected"
-// column in the verification table. If a future dump has different volumes,
-// the table still renders the imported counts — just the green ✓ won't match.
-const EXPECTED_DEFAULTS: Partial<Record<keyof Verification, number>> = {
-  companies: 2,
-  locations: 2,
-  employees: 26,
-  departments: 5,
-  categories: 20,
-  items: 238,
-  devices: 11,
-  receipts: 38724,
-  receipt_items: 158759,
+type Profile = "vulcanizarealex" | "autoelite";
+
+// Expected counts per profile. Used as the "Expected" column in the
+// verification table. If a future dump has different volumes the table still
+// renders the imported counts — the green ✓ just won't match.
+const EXPECTED_BY_PROFILE: Record<Profile, Partial<Record<keyof Verification, number>>> = {
+  vulcanizarealex: {
+    companies: 2,
+    locations: 2,
+    employees: 26,
+    departments: 5,
+    categories: 20,
+    items: 238,
+    devices: 11,
+    receipts: 38724,
+    receipt_items: 158759,
+  },
+  // Bazat pe inventarul dump-ului AutoElite (work/AUTOELITE_IMPORT_PLAN.md).
+  // receipts include FDL (source='fdl'); receipt_items include si itemii FDL.
+  autoelite: {
+    companies: 2,
+    locations: 1,
+    employees: 12,
+    departments: 13,
+    categories: 40,
+    items: 294,
+    devices: 20,
+    receipts: 6790, // 5617 normal + 1173 FDL
+    receipt_items: 32890, // 20717 + 3737 + 3651 (FDL catalog) + 4785 (FDL manual)
+    dimensiuni_anvelope: 121,
+    locuri_cazare: 43,
+    cazari_anvelope: 814,
+    cazare_anvelope_items: 3210,
+    programari: 84,
+    fdl_receipts: 1173,
+  },
+};
+
+const PROFILE_DEFAULTS: Record<Profile, { username: string; password: string; account_name: string }> = {
+  vulcanizarealex: { username: "vulcanizarealex", password: "vulcanizarealex", account_name: "Vulcanizare Alex" },
+  autoelite:       { username: "autoelite",       password: "autoelite",       account_name: "Auto Elite" },
 };
 
 // ---------- Component ----------
 
 export default function LegacyImportSection() {
   const [file, setFile] = createSignal<File | null>(null);
-  const [username, setUsername] = createSignal("vulcanizarealex");
-  const [password, setPassword] = createSignal("vulcanizarealex");
-  const [accountName, setAccountName] = createSignal("Vulcanizare Alex");
+  const [profile, setProfile] = createSignal<Profile>("vulcanizarealex");
+  const [username, setUsername] = createSignal(PROFILE_DEFAULTS.vulcanizarealex.username);
+  const [password, setPassword] = createSignal(PROFILE_DEFAULTS.vulcanizarealex.password);
+  const [accountName, setAccountName] = createSignal(PROFILE_DEFAULTS.vulcanizarealex.account_name);
   const [dryRun, setDryRun] = createSignal(false);
   const [running, setRunning] = createSignal(false);
   const [err, setErr] = createSignal("");
   const [result, setResult] = createSignal<ImportResult | null>(null);
+
+  function changeProfile(p: Profile) {
+    setProfile(p);
+    const d = PROFILE_DEFAULTS[p];
+    setUsername(d.username);
+    setPassword(d.password);
+    setAccountName(d.account_name);
+  }
 
   let fileInput!: HTMLInputElement;
 
@@ -93,6 +140,7 @@ export default function LegacyImportSection() {
       fd.append("password", password());
       fd.append("account_name", accountName().trim());
       fd.append("dry_run", String(dryRun()));
+      fd.append("profile", profile());
 
       const res = await adminUpload("/api/admin/legacy-import/import", fd);
       if (!res.ok) {
@@ -120,20 +168,35 @@ export default function LegacyImportSection() {
   }
 
   function verifRows(v: Verification): { label: string; key: keyof Verification; got: number | string; expected?: number }[] {
-    return [
-      { label: "Companies", key: "companies", got: v.companies, expected: EXPECTED_DEFAULTS.companies },
-      { label: "Locations", key: "locations", got: v.locations, expected: EXPECTED_DEFAULTS.locations },
-      { label: "Employees", key: "employees", got: v.employees, expected: EXPECTED_DEFAULTS.employees },
-      { label: "Departments", key: "departments", got: v.departments, expected: EXPECTED_DEFAULTS.departments },
-      { label: "Categories", key: "categories", got: v.categories, expected: EXPECTED_DEFAULTS.categories },
-      { label: "Items", key: "items", got: v.items, expected: EXPECTED_DEFAULTS.items },
-      { label: "Devices", key: "devices", got: v.devices, expected: EXPECTED_DEFAULTS.devices },
-      { label: "Clienti B2B", key: "clienti", got: v.clienti },
-      { label: "Receipts", key: "receipts", got: v.receipts, expected: EXPECTED_DEFAULTS.receipts },
+    const E = EXPECTED_BY_PROFILE[profile()];
+    const baseRows: { label: string; key: keyof Verification; got: number | string; expected?: number }[] = [
+      { label: "Companies", key: "companies", got: v.companies, expected: E.companies },
+      { label: "Locations", key: "locations", got: v.locations, expected: E.locations },
+      { label: "Employees", key: "employees", got: v.employees, expected: E.employees },
+      { label: "Departments", key: "departments", got: v.departments, expected: E.departments },
+      { label: "Categories", key: "categories", got: v.categories, expected: E.categories },
+      { label: "Items", key: "items", got: v.items, expected: E.items },
+      { label: "Devices", key: "devices", got: v.devices, expected: E.devices },
+      { label: "Clienti (toate)", key: "clienti", got: v.clienti },
+      { label: "Receipts", key: "receipts", got: v.receipts, expected: E.receipts },
       { label: "Vehicole", key: "vehicole", got: v.vehicole },
-      { label: "Receipt items", key: "receipt_items", got: v.receipt_items, expected: EXPECTED_DEFAULTS.receipt_items },
+      { label: "Receipt items", key: "receipt_items", got: v.receipt_items, expected: E.receipt_items },
       { label: "Sum total (RON)", key: "sum_total", got: v.sum_total },
     ];
+    if (profile() === "autoelite") {
+      baseRows.push(
+        { label: "Dimensiuni anvelope", key: "dimensiuni_anvelope", got: v.dimensiuni_anvelope ?? 0, expected: E.dimensiuni_anvelope },
+        { label: "Locuri cazare",       key: "locuri_cazare",       got: v.locuri_cazare ?? 0,       expected: E.locuri_cazare },
+        { label: "Cazari anvelope",     key: "cazari_anvelope",     got: v.cazari_anvelope ?? 0,     expected: E.cazari_anvelope },
+        { label: "Cazare items (buc.)", key: "cazare_anvelope_items", got: v.cazare_anvelope_items ?? 0, expected: E.cazare_anvelope_items },
+        { label: "Client vehicole (hotel dropdown)", key: "client_vehicole", got: v.client_vehicole ?? 0 },
+        { label: "Programari",          key: "programari",          got: v.programari ?? 0,          expected: E.programari },
+        { label: "FDL (Fise de Lucru)", key: "fdl_receipts",        got: v.fdl_receipts ?? 0,        expected: E.fdl_receipts },
+        { label: "Marci propuse total",  key: "marci_anvelope_proposed_by_account", got: v.marci_anvelope_proposed_by_account ?? 0 },
+        { label: "Marci pending (in asteptarea aprobarii)", key: "marci_anvelope_pending_by_account", got: v.marci_anvelope_pending_by_account ?? 0 },
+      );
+    }
+    return baseRows;
   }
 
   return (
@@ -150,6 +213,24 @@ export default function LegacyImportSection() {
 
       {/* ---------- Formular ---------- */}
       <form onSubmit={submit} class="adminv2-form" style="max-width:520px;display:grid;gap:12px">
+
+        <div>
+          <label class="adminv2-form__label">Profil import</label>
+          <select
+            value={profile()}
+            onChange={(e) => changeProfile(e.currentTarget.value as Profile)}
+            disabled={running()}
+            class="adminv2-form__input"
+          >
+            <option value="vulcanizarealex">Vulcanizare Alex (faze 0-5)</option>
+            <option value="autoelite">Auto Elite (faze 0-12: + cazari, programari, etc.)</option>
+          </select>
+          <p style="color:var(--text-muted);font-size:12px;margin:4px 0 0">
+            Profilul AutoElite include in plus: SelledServiceManual, WheelDimensions,
+            WherehouseLocation, WheelCompany (match global cu propunere), Vehicul (enrichment marca/model/vin/km),
+            CheckInData → cazari anvelope, Programari.
+          </p>
+        </div>
 
         <div>
           <label class="adminv2-form__label">Fisier dump (.sql)</label>
