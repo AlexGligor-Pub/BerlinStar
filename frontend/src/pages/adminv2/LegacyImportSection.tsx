@@ -126,11 +126,15 @@ export default function LegacyImportSection() {
     setErr("");
   }
 
+  // Profilul "autoelite" are dump pre-staged pe server — daca userul nu
+  // upload-uieste nimic, backendul foloseste fisierul local default.
+  const fileOptional = () => profile() === "autoelite";
+
   async function submit(e: Event) {
     e.preventDefault();
     setErr("");
     const f = file();
-    if (!f) {
+    if (!f && !fileOptional()) {
       setErr("Selecteaza un fisier .sql.");
       return;
     }
@@ -142,7 +146,9 @@ export default function LegacyImportSection() {
     setResult(null);
     try {
       const fd = new FormData();
-      fd.append("dump", f);
+      if (f) {
+        fd.append("dump", f);
+      }
       fd.append("username", username().trim());
       fd.append("password", password());
       fd.append("account_name", accountName().trim());
@@ -245,7 +251,12 @@ export default function LegacyImportSection() {
         </div>
 
         <div>
-          <label class="adminv2-form__label">Fisier dump (.sql)</label>
+          <label class="adminv2-form__label">
+            Fisier dump (.sql)
+            <Show when={fileOptional()}>
+              <span style="color:var(--text-muted);font-weight:normal;font-size:12px"> (optional pentru autoelite)</span>
+            </Show>
+          </label>
           <input
             ref={fileInput}
             type="file"
@@ -257,6 +268,13 @@ export default function LegacyImportSection() {
           <Show when={file()}>
             <p style="color:var(--text-muted);font-size:12px;margin:4px 0 0">
               {file()!.name} ({(file()!.size / 1024 / 1024).toFixed(1)} MB)
+            </p>
+          </Show>
+          <Show when={fileOptional() && !file()}>
+            <p style="color:var(--text-muted);font-size:12px;margin:4px 0 0;line-height:1.4">
+              Daca nu uploadezi fisier, serverul foloseste dump-ul commited in repo la
+              {" "}<code style="font-size:11px">Site/backup_db_berlin26.05.02026.sql</code>.
+              Override via env var <code style="font-size:11px">AUTOELITE_DEFAULT_DUMP</code>.
             </p>
           </Show>
         </div>
@@ -312,7 +330,7 @@ export default function LegacyImportSection() {
           <button
             type="submit"
             class="btn btn-primary btn-sm"
-            disabled={running() || !file()}
+            disabled={running() || (!file() && !fileOptional())}
           >
             {running() ? "Procesare ~ 1 minut..." : (dryRun() ? "Verifica (dry-run)" : "Porneste import")}
           </button>

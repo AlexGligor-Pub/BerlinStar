@@ -36,17 +36,44 @@ CHUNK_BYTES = 4 * 1024 * 1024  # 4 MB write chunks
 
 
 # Each profile maps a specific legacy schema variant onto the new schema. Both
-# profiles share phases 0-5; "autoelite" adds phases 6-12 for CheckInData,
-# Programari, Vehicul enrichment, etc.
+# profiles share phases 0-5; "autoelite" adds phases 6-14 for CheckInData,
+# Programari, Vehicul enrichment, FDL, link receipts→clients, etc.
 _PROFILES = {
     "vulcanizarealex": _run_import_vulcanizare,
     "autoelite": _run_import_autoelite,
 }
 
+# Server-side default dump per profile. When the request omits the `dump`
+# file AND the profile has an entry here, the server reads the local file.
+# Convenient for repeated dev imports — no re-upload needed. Override via env
+# vars (AUTOELITE_DEFAULT_DUMP) for custom paths.
+#
+# Default location is `Site/backup_db_berlin26.05.02026.sql` relative to the
+# project root, which is checked into the repo so prod gets it via `git pull`.
+_PROJECT_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_DUMP_PATHS: dict[str, list[str]] = {
+    "autoelite": list(filter(None, [
+        os.getenv("AUTOELITE_DEFAULT_DUMP"),
+        str(_PROJECT_ROOT / "Site" / "backup_db_berlin26.05.02026.sql"),
+        # Fallback paths for legacy deployments where the dump lives elsewhere.
+        "/opt/berlinstar/Site/backup_db_berlin26.05.02026.sql",
+        "/root/BerlinStar/Site/backup_db_berlin26.05.02026.sql",
+    ])),
+}
+
+
+def _resolve_default_dump(profile: str) -> Path | None:
+    """Return the first existing path for the profile's default dump, or None."""
+    for candidate in _DEFAULT_DUMP_PATHS.get(profile, []):
+        p = Path(candidate)
+        if p.exists():
+            return p
+    return None
+
 
 @router.post("/import")
 async def import_legacy_dump(
-    dump: UploadFile = File(...),
+    dump: UploadFile | None = File(None),
     username: str = Form(...),
     password: str = Form(...),
     account_name: str = Form(...),
@@ -77,24 +104,39 @@ async def import_legacy_dump(
     tmp_dir = Path(tempfile.gettempdir())
     raw_path = tmp_dir / f"legacy_import_{uuid.uuid4().hex}.raw.sql"
     utf8_path: Path | None = None
+    using_default = False
+
+    # Decide source: uploaded file vs server-side default for this profile.
+    has_upload = dump is not None and (dump.filename or "").strip() != ""
+    if not has_upload:
+        default = _resolve_default_dump(profile)
+        if default is None:
+            raise HTTPException(
+                400,
+                f"Fisier dump lipsa si nu exista default server-side pentru profilul '{profile}'.",
+            )
+        log.info("Legacy import: no upload; using server-side default %s", default)
+        raw_path = default
+        using_default = True
 
     bytes_written = 0
     try:
-        # 1. Stream upload to disk
-        with raw_path.open("wb") as out:
-            while True:
-                chunk = await dump.read(CHUNK_BYTES)
-                if not chunk:
-                    break
-                bytes_written += len(chunk)
-                if bytes_written > MAX_DUMP_BYTES:
-                    raise HTTPException(
-                        413, f"Fisier prea mare. Limita = {MAX_DUMP_BYTES // (1024*1024)} MB."
-                    )
-                out.write(chunk)
+        if not using_default:
+            # 1. Stream upload to disk (only when client uploaded the file)
+            with raw_path.open("wb") as out:
+                while True:
+                    chunk = await dump.read(CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    bytes_written += len(chunk)
+                    if bytes_written > MAX_DUMP_BYTES:
+                        raise HTTPException(
+                            413, f"Fisier prea mare. Limita = {MAX_DUMP_BYTES // (1024*1024)} MB."
+                        )
+                    out.write(chunk)
 
-        if bytes_written == 0:
-            raise HTTPException(400, "Fisier gol.")
+            if bytes_written == 0:
+                raise HTTPException(400, "Fisier gol.")
 
         # 2. Detect encoding via BOM, convert to UTF-8 if needed.
         with raw_path.open("rb") as f:
@@ -128,8 +170,11 @@ async def import_legacy_dump(
         return result
 
     finally:
-        # 4. Cleanup
-        for p in (raw_path, utf8_path):
+        # 4. Cleanup — NEVER delete the server-side default; only tmp files.
+        cleanup_paths: list[Path | None] = [utf8_path]
+        if not using_default:
+            cleanup_paths.append(raw_path)
+        for p in cleanup_paths:
             if p is not None and p.exists():
                 try:
                     os.unlink(p)

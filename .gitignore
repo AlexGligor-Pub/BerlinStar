@@ -15,6 +15,10 @@ venv/
 *.sql
 backup_*.sql
 
+# Exceptie: dump-ul AutoElite folosit ca default in importul legacy via AdminV2.
+# Backend-ul (admin_legacy_import.py) il citeste de aici cand userul nu uploadeaza.
+!Site/backup_db_berlin26.05.02026.sql
+
 # Alembic artefacte accidentale
 backend/=*
 
