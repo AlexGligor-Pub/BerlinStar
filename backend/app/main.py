@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.logging_config import setup_logging
-from app.middleware import RequestLoggingMiddleware
+from app.middleware import RequestLoggingMiddleware, PathNormalizationMiddleware
 from app.database import engine
 from app.rate_limit import limiter
 
@@ -107,6 +107,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
+# Adaugat ULTIMUL => devine OUTERMOST middleware, deci normalizeaza path-ul
+# inainte ca orice altceva (CORS, TrustedHost, RequestLogging, routing) sa-l
+# vada. Critic pentru cazurile cu // la inceput din edge proxy.
+app.add_middleware(PathNormalizationMiddleware)
 
 
 @app.exception_handler(IntegrityError)
