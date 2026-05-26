@@ -392,32 +392,63 @@ def _normalize_phone(s: str | None) -> str | None:
 async def import_cazari_anvelope(session, dump: Path, account_id: int, id_map: dict) -> dict:
     """Map CheckInData rows to CazareAnvelope + N CazareAnvelopaItem rows.
 
-    Strategy:
-    - Determine effective client name:
-        * If ClientName looks usable → use it.
-        * Else if LicensePlate is valid → use plate as nume (clients showed up
-          identified only by plate in the legacy UI).
-        * Else fall back to a sequential "Client necunoscut #N" placeholder.
-    - Dedup client by (effective_name_lower, normalized_phone). If two
-      different real names share the same plate, they become two clients —
-      that's correct, they're different people.
-    - location_id from SiteId mapping; if not found, skip the row.
-    - data_checkin from CheckInDate (cast to date).
-    - data_checkout from CheckOutDate iff IsCheckOut=1; else NULL.
-    - comments: pack Notes + Tip + dimensiune_text + marca_nume + "N buc." as free text.
-    - For each TireCount, create one CazareAnvelopaItem with anvelopa_id=NULL.
-    - Remember (client_id, plate) pairs to populate ClientVehicol in Phase 11.5.
+    Dedup strategy (post-2026-05-26 fix — preventing "real_name + plate_as_name"
+    duplicates for the same physical client):
+    - Pre-scan ALL CheckInData first to build a `plate -> {real_name: count}`
+      index from rows that have a non-junk ClientName.
+    - Main pass: when ClientName is junk AND plate has a known real name → use
+      THAT real name (so the row joins the real-named client instead of
+      spawning a plate-named twin).
+    - Primary dedup key is `plate` when available, falls back to
+      `(name_lower, phone)` for plate-less rows. Plate is a strong identifier;
+      same plate across legacy rows is one car = (almost always) one owner.
+    - location_id from SiteId; rows with no mapped location are skipped.
+    - For each TireCount, one CazareAnvelopaItem with anvelopa_id=NULL.
+    - Remembers (client_id, plate) pairs for Phase 11.5 (ClientVehicol).
     """
+    # --- Pre-scan: plate → most-frequent real name + phone --------------
+    plate_real_names: dict[str, dict[str, int]] = {}
+    plate_phones: dict[str, dict[str, int]] = {}
+    for row in parse_inserts(dump, "CheckInData"):
+        plate = _normalize_license_plate(_str_or_none(row.get("LicensePlate")))
+        cname_raw = _str_or_none(row.get("ClientName"))
+        if not plate:
+            continue
+        if not _is_junk_name(cname_raw):
+            name = cname_raw.strip()
+            d = plate_real_names.setdefault(plate, {})
+            d[name] = d.get(name, 0) + 1
+        ph = _normalize_phone(_str_or_none(row.get("Phone")))
+        if ph:
+            p = plate_phones.setdefault(plate, {})
+            p[ph] = p.get(ph, 0) + 1
+    # Reduce: best (most frequent) real name per plate, best phone per plate
+    plate_to_real_name: dict[str, str] = {
+        plate: max(names.items(), key=lambda kv: kv[1])[0]
+        for plate, names in plate_real_names.items() if names
+    }
+    plate_to_best_phone: dict[str, str] = {
+        plate: max(phones.items(), key=lambda kv: kv[1])[0]
+        for plate, phones in plate_phones.items() if phones
+    }
+    log.info(
+        "Phase 11 pre-scan: %d plates with real names, %d plates with phones",
+        len(plate_to_real_name), len(plate_to_best_phone),
+    )
+
     created_cazari = 0
     created_items = 0
     created_clients = 0
     skipped_no_location = 0
     skipped_no_date = 0
-    junk_name_substituted = 0
+    junk_to_real_name = 0  # junk replaced by real name found via plate
+    junk_to_plate = 0      # junk replaced by plate (no known real name)
 
-    # Cache for PF dedup: (lower(effective_name), normalized phone) -> client_id
-    pf_cache: dict[tuple[str, str | None], int] = {}
-    # Track (client_id, plate) pairs for Phase 11.5
+    # Primary dedup: plate → client_id (covers ~95% of rows)
+    plate_cache: dict[str, int] = {}
+    # Fallback dedup for plate-less rows: (name_lower, phone) → client_id
+    namephone_cache: dict[tuple[str, str | None], int] = {}
+    # (client_id, plate) pairs for Phase 11.5
     client_plate_pairs: set[tuple[int, str]] = set()
     id_map["_pf_client_plate_pairs"] = client_plate_pairs
 
@@ -445,28 +476,52 @@ async def import_cazari_anvelope(session, dump: Path, account_id: int, id_map: d
             skipped_no_date += 1
             continue
 
-        # Compute effective client name
         raw_cname = _str_or_none(row.get("ClientName"))
         plate = _normalize_license_plate(_str_or_none(row.get("LicensePlate")))
         phone = _normalize_phone(_str_or_none(row.get("Phone")))
+
+        # Effective name resolution
         if _is_junk_name(raw_cname):
-            if plate:
+            if plate and plate in plate_to_real_name:
+                effective_name = plate_to_real_name[plate]
+                junk_to_real_name += 1
+            elif plate:
                 effective_name = plate
-                junk_name_substituted += 1
+                junk_to_plate += 1
             else:
                 unknown_seq += 1
                 effective_name = f"Client necunoscut #{unknown_seq}"
         else:
             effective_name = raw_cname.strip()
 
-        key = (effective_name.lower(), phone)
-        client_id = pf_cache.get(key)
+        # Dedup lookup. We try keys in order of confidence:
+        # 1) plate (strongest — physical car identifier)
+        # 2) (real_name, phone) when both non-null (catches same-person-multiple-cars
+        #    like a customer with 7 cars all under the same phone number)
+        client_id: int | None = None
+        if plate:
+            client_id = plate_cache.get(plate)
+        # Best phone for this plate (current row's phone OR a phone seen on
+        # the same plate elsewhere). Used for both dedup lookup and storage.
+        best_phone = phone or (plate_to_best_phone.get(plate) if plate else None)
+        is_real_name = effective_name and not effective_name.startswith("Client necunoscut")
+        if (
+            client_id is None
+            and is_real_name
+            and effective_name != plate  # don't match plate-named clients via this key
+            and best_phone
+        ):
+            namephone_key = (effective_name.lower(), best_phone)
+            client_id = namephone_cache.get(namephone_key)
+            if client_id is not None and plate:
+                plate_cache[plate] = client_id  # remember plate for future plate lookups
+
         if client_id is None:
             c = Client(
                 account_id=account_id,
                 tip="fizic",
                 nume=effective_name[:200],
-                telefon=phone,
+                telefon=best_phone,
                 numar_masina=plate,
                 created_at=_aware(row.get("CreateDate")) or datetime.now(timezone.utc),
                 updated_at=_aware(row.get("UpdateDate")),
@@ -475,7 +530,10 @@ async def import_cazari_anvelope(session, dump: Path, account_id: int, id_map: d
             session.add(c)
             await session.flush()
             client_id = c.id
-            pf_cache[key] = client_id
+            if plate:
+                plate_cache[plate] = client_id
+            if is_real_name and effective_name != plate and best_phone:
+                namephone_cache[(effective_name.lower(), best_phone)] = client_id
             created_clients += 1
         if plate:
             client_plate_pairs.add((client_id, plate))
@@ -553,15 +611,16 @@ async def import_cazari_anvelope(session, dump: Path, account_id: int, id_map: d
 
     await session.commit()
     log.info(
-        "Phase 11: cazari=%d items=%d clients(PF)=%d junk_name_substituted=%d skipped(no_location)=%d skipped(no_date)=%d",
-        created_cazari, created_items, created_clients, junk_name_substituted,
-        skipped_no_location, skipped_no_date,
+        "Phase 11: cazari=%d items=%d clients(PF)=%d junk_to_real=%d junk_to_plate=%d skipped(no_location)=%d skipped(no_date)=%d",
+        created_cazari, created_items, created_clients,
+        junk_to_real_name, junk_to_plate, skipped_no_location, skipped_no_date,
     )
     return {
         "cazari_anvelope": created_cazari,
         "cazare_anvelope_items": created_items,
         "clienti_pf_creati": created_clients,
-        "junk_name_substituted": junk_name_substituted,
+        "junk_to_real_name": junk_to_real_name,
+        "junk_to_plate": junk_to_plate,
         "skipped_no_location": skipped_no_location,
         "skipped_no_date": skipped_no_date,
     }

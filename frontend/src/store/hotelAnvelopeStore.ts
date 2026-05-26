@@ -236,6 +236,7 @@ function buildCazariQs(params: Parameters<typeof loadCazari>[0], lastId?: number
   if (params?.activa !== undefined) qs.set("activa", String(params.activa));
   if (params?.clientId !== undefined) qs.set("client_id", String(params.clientId));
   if (params?.locationId !== undefined) qs.set("location_id", String(params.locationId));
+  if (params?.numarMasina) qs.set("numar_masina", params.numarMasina);
   if (params?.dateFrom) qs.set("date_from", params.dateFrom);
   if (params?.dateTo) qs.set("date_to", params.dateTo);
   if (lastId !== undefined) qs.set("last_id", String(lastId));
@@ -246,6 +247,7 @@ export async function loadCazari(params?: {
   activa?: boolean;
   clientId?: number;
   locationId?: number;
+  numarMasina?: string;
   dateFrom?: string;
   dateTo?: string;
   limit?: number;

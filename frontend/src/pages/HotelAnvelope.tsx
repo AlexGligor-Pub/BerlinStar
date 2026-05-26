@@ -892,6 +892,27 @@ export default function HotelAnvelope() {
 
     loadHotelImages();
 
+    // Daca vine cu ?searchPlate=PLATE (ex: din POS, cand placuta are deja cazari
+    // active), incarca cazarile filtrate dupa placuta si pre-completeaza caseta
+    // de cautare ca utilizatorul sa vada imediat ce e in depozit pentru placuta.
+    const searchPlateRaw = searchParams.searchPlate;
+    const searchPlateParam = (typeof searchPlateRaw === "string" ? searchPlateRaw : Array.isArray(searchPlateRaw) ? searchPlateRaw[0] ?? "" : "").trim();
+    if (searchPlateParam) {
+      setSearchName(searchPlateParam);
+      try {
+        await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
+      } catch (e: unknown) {
+        notify(e instanceof Error ? e.message : "Eroare la încărcare cazări.", "error");
+      }
+      const observer = new IntersectionObserver(
+        (entries) => { if (entries[0].isIntersecting) loadMoreCazari(); },
+        { threshold: 0.1 }
+      );
+      if (sentinelRef) observer.observe(sentinelRef);
+      onCleanup(() => observer.disconnect());
+      return;
+    }
+
     // Dacă vine din POS cu context activ → auto-selectează clientul și încarcă cazarile
     const ctx = posHotelCtx();
     if (ctx) {
