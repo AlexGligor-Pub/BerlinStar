@@ -152,7 +152,7 @@ function ClientSearch(props: {
       <Show when={searched() && !searching() && results().length === 0 && q().trim()}>
         <div style="position:absolute;left:0;right:0;z-index:200;background:var(--surface,#fff);border:1px solid var(--border);border-radius:6px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-size:13px">
           <span style="color:var(--text-muted)">Niciun client găsit. </span>
-          <a href="/clienti" target="_blank" style="color:var(--primary);text-decoration:underline">Adaugă client nou →</a>
+          <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/clienti`} target="_blank" style="color:var(--primary);text-decoration:underline">Adaugă client nou →</a>
         </div>
       </Show>
       <Show when={searching()}>
