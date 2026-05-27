@@ -2,6 +2,21 @@ import { auth, logout } from "../store/authStore";
 
 export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+/** Colapseaza orice secventa de doua sau mai multe slash-uri consecutive la
+ * unul singur, fara a strica prefixul "https://". Util ca defense-in-depth
+ * pentru cazurile cand chemarea include API_BASE + url cu / la inceput, sau
+ * cand un edge proxy injecteaza //. Backendul are si el o normalizare ASGI,
+ * dar normalizam si in browser ca request-ul sa nu loveasca un 301 inutil. */
+function _collapseSlashes(u: string): string {
+  const protoIdx = u.indexOf("://");
+  if (protoIdx >= 0) {
+    const proto = u.slice(0, protoIdx + 3);
+    const rest = u.slice(protoIdx + 3).replace(/\/{2,}/g, "/");
+    return proto + rest;
+  }
+  return u.replace(/\/{2,}/g, "/");
+}
+
 /** Dispatch un eveniment global pe care App.tsx il prinde si redirectioneaza la /login. */
 function emitUnauthorized(): void {
   try {
@@ -38,7 +53,7 @@ export function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Re
   const handleUnauthorized = options.handleUnauthorized !== false;
   const headers = buildHeaders(options);
   const { authToken: _at, handleUnauthorized: _hu, ...init } = options;
-  return fetch(API_BASE + url, { ...init, headers }).then((res) => {
+  return fetch(_collapseSlashes(API_BASE + url), { ...init, headers }).then((res) => {
     if (handleUnauthorized && res.status === 401 && auth.token) {
       logout();
       emitUnauthorized();

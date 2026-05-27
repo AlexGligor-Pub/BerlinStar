@@ -62,5 +62,11 @@ def setup_logging() -> logging.Logger:
     logging.getLogger("botocore").setLevel(logging.WARNING)
     logging.getLogger("boto3").setLevel(logging.WARNING)
     logging.getLogger("s3transfer").setLevel(logging.WARNING)
+    # APScheduler logheaza la INFO "Adding job", "Running job", "Job executed"
+    # pentru fiecare rulare — la 6 joburi cron in interval orar plus poll-uri
+    # eFactura, devine 10-20+ linii/ora fara informatie utila. Ridicam la
+    # WARNING; rapoartele si eFactura logheaza explicit start/end din codul nostru.
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
 
     return logging.getLogger("berlinstar")

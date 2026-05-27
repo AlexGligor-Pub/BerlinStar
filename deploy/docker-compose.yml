@@ -14,6 +14,12 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      # autoheal monitor: cand healthcheck devine "unhealthy" `retries` ori la
+      # rand, containerul autoheal restarteaza serviciul. `unless-stopped`
+      # SINGUR nu acopera cazul asta — el restarteaza doar la exit non-zero,
+      # nu si cand procesul ramane "in viata" dar healthcheck-ul cade.
+      autoheal: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
@@ -33,6 +39,8 @@ services:
       db:
         condition: service_healthy
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     deploy:
       resources:
         limits:
@@ -60,6 +68,8 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    labels:
+      autoheal: "true"
     command: >
       postgres
       -c max_connections=200
@@ -82,6 +92,32 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Watcher care monitorizeaza event-urile Docker si restarteaza orice container
+  # care a fost marcat (label `autoheal: "true"`) si a intrat in "unhealthy".
+  # Acopera scenariile in care procesul ramane in viata dar nu mai raspunde la
+  # /api/health, wget pe /, sau pg_isready — adica fix cazurile in care
+  # `restart: unless-stopped` SINGUR nu salveaza stack-ul.
+  #
+  # Sursa: https://github.com/willfarrell/docker-autoheal
+  # Tag-ul este pinned (nu :latest) ca sa avem build reproductibil.
+  autoheal:
+    image: willfarrell/autoheal:1.2.0
+    container_name: berlinstar_autoheal
+    restart: unless-stopped
+    environment:
+      # Monitorizam doar containerele cu label autoheal=true (in loc de all),
+      # ca sa nu atinga containere managed by other stacks daca daemonul e shared.
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      # Asteptam putin dupa pornire inainte de a evalua healthcheck-urile, ca
+      # sa nu se ia in considerare prima "starting" → "unhealthy".
+      AUTOHEAL_START_PERIOD: "10"
+      # Cat asteptam intre restart-uri consecutive ale aceluiasi container,
+      # pentru a evita restart loop-uri prea agresive.
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "10"
+      AUTOHEAL_INTERVAL: "10"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 networks:
   web:

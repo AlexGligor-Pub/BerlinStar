@@ -40,21 +40,49 @@ class PathNormalizationMiddleware:
                     scope["raw_path"] = re.sub(rb"/{2,}", b"/", bytes(raw))
         await self.app(scope, receive, send)
 
-# Paths that don't need to be logged on every call (keep logs clean)
-_SILENT_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+# Paths complet ignorate la logging (in/out). Acoperim:
+# - probe-uri (docker healthcheck, /docs, /openapi.json)
+# - SSE long-poll: o conexiune deschisa minute/ore in sir nu trebuie sa polueze
+#   logul cu un INFO per (re)conexiune cand readyState=CLOSED face client-side
+#   un retry exponential rapid (1s, 2s, ...). Erorile (4xx/5xx) se logheaza
+#   in continuare la WARNING.
+_SILENT_PATHS = {
+    "/api/health",
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/api/receipts/events",
+}
+
+# Paths pentru care logam DOAR raspunsurile non-2xx (banner-ul de subscription
+# face un poll periodic ~30min, dar nu vrem zgomot daca cresc frequency-ul).
+_QUIET_PATHS = {
+    "/api/subscription/me",
+}
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
-    """Log every request/response with method, path, status, duration, and a short request ID."""
+    """Logging articulat per request/response.
+
+    Trei niveluri de verbozitate:
+    - _SILENT_PATHS: nimic la 2xx; WARNING la >=400. DEBUG ramane disponibil cu
+      LOG_LEVEL=DEBUG pentru investigatii punctuale.
+    - _QUIET_PATHS: la fel ca _SILENT_PATHS — doar non-2xx la WARNING.
+    - restul: o linie "→" la intrare + o linie "←" la iesire (sau "!!" pe exc).
+    """
 
     async def dispatch(self, request: Request, call_next):
         rid = uuid.uuid4().hex[:8]
         client_ip = request.client.host if request.client else "unknown"
         path = request.url.path
         silent = path in _SILENT_PATHS
+        quiet = path in _QUIET_PATHS
 
-        if not silent:
+        if not silent and not quiet:
             logger.info("→ %s %s  rid=%s  ip=%s", request.method, path, rid, client_ip)
+        else:
+            logger.debug("→ %s %s  rid=%s  ip=%s", request.method, path, rid, client_ip)
 
         start = time.perf_counter()
         try:
@@ -77,16 +105,30 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             )
 
         elapsed = (time.perf_counter() - start) * 1000
+        status = response.status_code
 
-        if not silent:
-            level = logging.WARNING if response.status_code >= 400 else logging.INFO
+        if silent or quiet:
+            # Doar erorile sunt zgomotoase — un /api/health 503 sau un SSE 401
+            # chiar e ceva ce vrei sa vezi imediat.
+            if status >= 400:
+                logger.warning(
+                    "← %s %s  rid=%s  status=%d  %.1fms",
+                    request.method, path, rid, status, elapsed,
+                )
+            else:
+                logger.debug(
+                    "← %s %s  rid=%s  status=%d  %.1fms",
+                    request.method, path, rid, status, elapsed,
+                )
+        else:
+            level = logging.WARNING if status >= 400 else logging.INFO
             logger.log(
                 level,
                 "← %s %s  rid=%s  status=%d  %.1fms",
                 request.method,
                 path,
                 rid,
-                response.status_code,
+                status,
                 elapsed,
             )
 

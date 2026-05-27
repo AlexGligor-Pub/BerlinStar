@@ -20,8 +20,11 @@ const STORAGE_KEY = "bs_auth";
 // `https://host/berlinstar/login`. Prefixam manual base-ul pentru hard reloads.
 function withBase(path: string): string {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  // Daca primim accidental // la inceput, normalizam la / inainte de orice
+  // prefixare (altfel ar deveni /berlinstar//login).
+  if (path.startsWith("//")) path = path.replace(/^\/+/, "/");
   if (!base) return path;
-  if (!path.startsWith("/") || path.startsWith("//")) return path;
+  if (!path.startsWith("/")) return path;
   if (path === base || path.startsWith(base + "/")) return path;
   return base + path;
 }
