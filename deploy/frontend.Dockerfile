@@ -19,10 +19,17 @@ RUN npm run build
 # ---- Stage 2: Serve cu nginx ----
 FROM nginx:alpine
 
-# Copiază build-ul static — nginx serveste de la root, Rockhost face strip la /berlinstar
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Layout docroot unic:
+#   /                → site de marketing static (Site/)
+#   /berlinstar/     → SolidJS SPA (build-ul Vite, base=/berlinstar/)
+# Hetzner e acum edge-ul public unic; prefixul /berlinstar ajunge intact la nginx.
+COPY --from=builder /app/dist /usr/share/nginx/html/berlinstar
+COPY Site/ /usr/share/nginx/html/
 
-# Configurare nginx pentru SPA + proxy API
+# Scoate fisiere specifice RockHost / irelevante din docroot
+RUN rm -f /usr/share/nginx/html/htaccess /usr/share/nginx/html/images/README.md
+
+# Configurare nginx pentru site static + SPA + proxy API
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

@@ -1,13 +1,36 @@
 services:
 
+  # Caddy edge: termina TLS (Let's Encrypt auto) si face reverse-proxy catre
+  # containerul `frontend`. Singurul serviciu care publica porturi catre host.
+  caddy:
+    image: caddy:2-alpine
+    container_name: berlinstar_caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+    depends_on:
+      frontend:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+
   frontend:
     build:
       context: ..
       dockerfile: deploy/frontend.Dockerfile
       args:
         - VITE_BASE_PATH=${VITE_BASE_PATH:-/berlinstar/}
-    ports:
-      - "${FRONTEND_PORT:-8080}:80"
+    # Nu mai publica port catre host — Caddy ajunge la el ca `frontend:80`
+    # pe reteaua interna `web`.
+    expose:
+      - "80"
     networks:
       - web
     depends_on:
@@ -125,3 +148,5 @@ networks:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,21 @@
+# Caddy edge — TLS automat (Let's Encrypt) pentru professorprime.ro
+# Reverse-proxy catre containerul frontend (nginx) pe reteaua interna `web`.
+
+{
+    email contact@professorprime.ro
+}
+
+professorprime.ro {
+    reverse_proxy frontend:80
+}
+
+# www → redirect 301 la apex (acoperit si el de certificat)
+www.professorprime.ro {
+    redir https://professorprime.ro{uri} permanent
+}
+
+# Fallback HTTP pentru fereastra de tranzitie DNS (acces direct pe IP sau
+# request-uri proxy-ate de RockHost cu Host = IP). Serveste acelasi frontend.
+:80 {
+    reverse_proxy frontend:80
+}
