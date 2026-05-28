@@ -24,10 +24,13 @@ FROM nginx:alpine
 #   /berlinstar/     → SolidJS SPA (build-ul Vite, base=/berlinstar/)
 # Hetzner e acum edge-ul public unic; prefixul /berlinstar ajunge intact la nginx.
 COPY --from=builder /app/dist /usr/share/nginx/html/berlinstar
-COPY Site/ /usr/share/nginx/html/
 
-# Scoate fisiere specifice RockHost / irelevante din docroot
-RUN rm -f /usr/share/nginx/html/htaccess /usr/share/nginx/html/images/README.md
+# IMPORTANT: copiem DOAR continutul web (allowlist), nu tot folderul Site/.
+# Site/ contine si fisiere care NU trebuie expuse public (ex. dump-uri DB .sql,
+# documente interne .md, htaccess RockHost). Un `COPY Site/` le-ar publica.
+COPY Site/index.html Site/support.html Site/tutoriale.html /usr/share/nginx/html/
+COPY Site/images/ /usr/share/nginx/html/images/
+RUN rm -f /usr/share/nginx/html/images/README.md
 
 # Configurare nginx pentru site static + SPA + proxy API
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
