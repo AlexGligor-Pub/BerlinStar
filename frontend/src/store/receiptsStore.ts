@@ -332,6 +332,8 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
     due_date: receipt.dueDate ?? null,
+    // null = backend nu schimbă sursa; "fdl"/"pos" comută FDL <-> deviz.
+    source: receipt.source ?? null,
     constatari: receipt.constatari ?? null,
     sugestii: receipt.sugestii ?? null,
     timp_estimat_ore: receipt.timpEstimatOre != null ? receipt.timpEstimatOre.toFixed(2) : null,

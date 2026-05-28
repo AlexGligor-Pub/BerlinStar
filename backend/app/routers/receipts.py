@@ -554,6 +554,20 @@ async def patch_receipt_content(
     receipt.total = body.total
     if body.due_date is not None:
         receipt.due_date = body.due_date
+
+    # Comutare FDL <-> deviz din POS la salvare. Permitem doar între stările
+    # gestionate de POS ("fdl" <-> "pos"). Revenirea la FDL e blocată dacă bonul
+    # are deja numere de document alocate (deviz/factură/chitanță). Re-stampăm
+    # created_at la FDL->deviz, la fel ca în `convert_fdl_to_deviz` (vezi acolo
+    # motivul: scheduler-ul de rapoarte agreghează incremental pe ziua curentă).
+    if body.source is not None and body.source != receipt.source:
+        if {receipt.source, body.source} <= {"fdl", "pos"}:
+            if body.source == "fdl" and (receipt.deviz_nr or receipt.factura_nr or receipt.chitanta_nr):
+                raise HTTPException(400, "Devizul are deja numere alocate; nu mai poate redeveni Fișă de Lucru.")
+            if receipt.source == "fdl" and body.source == "pos":
+                receipt.created_at = datetime.now(timezone.utc)
+            receipt.source = body.source
+
     # Câmpurile FDL se editează DOAR pe bonuri cu source='fdl'. Pe un deviz
     # normal (inclusiv unul convertit din FDL), payload-ul poate trimite null,
     # dar le păstrăm istoric — nu le ștergem la fiecare edit ulterior.

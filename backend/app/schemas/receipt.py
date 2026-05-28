@@ -106,6 +106,8 @@ class ReceiptContentPatch(BaseModel):
     items: list[ReceiptItemCreate]
     total: Decimal = Field(..., decimal_places=2)
     due_date: date | None = None
+    # Permite comutarea FDL <-> deviz la salvarea din POS. None = nu schimba sursa.
+    source: ReceiptSource | None = None
     constatari: str | None = Field(None, max_length=5000)
     sugestii: str | None = Field(None, max_length=5000)
     timp_estimat_ore: Decimal | None = Field(None, ge=0, decimal_places=2)

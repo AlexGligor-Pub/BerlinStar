@@ -1184,7 +1184,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       chitantaSerie: "", chitantaNr: 0,
       programareId: loadedProgramareId(),
       locationId: device()?.locationId ?? null,
-      source: isFdl ? "fdl" : undefined,
+      // La un bon EXISTENT trimitem sursa explicit ca să poată comuta în ambele
+      // sensuri (FDL <-> deviz). La bon nou lăsăm backend-ul cu sursa implicită.
+      source: isFdl ? "fdl" : (receiptId !== null ? "pos" : undefined),
       constatari: isFdl ? (constatari().trim() || null) : null,
       sugestii: isFdl ? (sugestii().trim() || null) : null,
       timpEstimatOre: isFdl && !isNaN(timpRaw) && timpRaw > 0 ? timpRaw : null,
