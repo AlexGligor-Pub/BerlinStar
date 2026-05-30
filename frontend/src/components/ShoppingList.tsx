@@ -1,9 +1,9 @@
 import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, type CartItem } from "../store/cartStore";
+import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, updateItemEmployee, type CartItem } from "../store/cartStore";
 import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad, newDevizTick } from "../store/resumeStore";
-import { selectedEmployee, selectEmployee } from "../store/employeesStore";
+import { selectedEmployee, selectEmployee, employees } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
@@ -562,6 +562,9 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
   const [editItem, setEditItem] = createSignal<CartItem | null>(null);
   const [editQty, setEditQty] = createSignal("1");
   const [editPrice, setEditPrice] = createSignal("0");
+  const [editEmpId, setEditEmpId] = createSignal<number | null>(null);
+  // Lista de angajați se afișează doar după apăsarea butonului „Schimbă angajatul"
+  const [showEmpPicker, setShowEmpPicker] = createSignal(false);
 
   const [showClearConfirm, setShowClearConfirm] = createSignal(false);
 
@@ -675,6 +678,65 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setEditItem(item);
     setEditQty(String(item.qty));
     setEditPrice(String(item.price));
+    setEditEmpId(item.employeeId);
+    setShowEmpPicker(false);
+  }
+
+  // Drag-to-scroll orizontal pentru lista de angajați.
+  // Pe touch lăsăm scroll-ul nativ; pentru mouse implementăm drag manual.
+  function enableDragScroll(el: HTMLDivElement) {
+    let down = false;
+    let moved = false;
+    let captured = false;
+    let startX = 0;
+    let startScroll = 0;
+
+    el.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") return; // touch = scroll nativ
+      down = true;
+      moved = false;
+      captured = false;
+      startX = e.clientX;
+      startScroll = el.scrollLeft;
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!down) return;
+      const dx = e.clientX - startX;
+      // Capturăm pointer-ul abia când chiar începe tragerea, ca să nu blocăm
+      // click-ul de selectare (capture ar redirecționa click-ul către container).
+      if (!moved && Math.abs(dx) > 4) {
+        moved = true;
+        captured = true;
+        el.setPointerCapture(e.pointerId);
+        el.classList.add("sl-emp-dragging");
+      }
+      if (moved) el.scrollLeft = startScroll - dx;
+    });
+    const end = (e: PointerEvent) => {
+      if (!down) return;
+      down = false;
+      if (captured) {
+        try { el.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      }
+      captured = false;
+      el.classList.remove("sl-emp-dragging");
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    // Blocăm drag-ul nativ de imagine (altfel tragerea de pe poză fură scroll-ul).
+    el.addEventListener("dragstart", (e) => e.preventDefault());
+    // După un drag, anulăm click-ul ca să nu selecteze din greșeală un angajat.
+    el.addEventListener(
+      "click",
+      (e) => {
+        if (moved) {
+          e.stopPropagation();
+          e.preventDefault();
+          moved = false;
+        }
+      },
+      true,
+    );
   }
 
   function confirmEditItem() {
@@ -682,6 +744,13 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     if (!item) return;
     const qty = parseInt(editQty()) || 0;
     const price = parseFloat(editPrice()) || 0;
+    const empId = editEmpId();
+    const emp = empId != null ? employees().find((e) => e.id === empId) ?? null : null;
+    // Daca angajatul s-a schimbat fata de original, actualizam — altfel sarim
+    // peste write ca sa nu invalidam reactivitatea fara motiv.
+    if (empId !== item.employeeId) {
+      updateItemEmployee(item.lineId, empId, emp?.name ?? null);
+    }
     updateItemPrice(item.lineId, price);
     setItemQty(item.lineId, qty);
     setEditItem(null);
@@ -1558,6 +1627,70 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
               <div class="sl-edit-item-total">
                 Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
               </div>
+
+              {/* Angajat — picker interactiv: poza + nume, click pentru a schimba */}
+              <div class="sl-edit-item-row sl-edit-emp-row">
+                <label class="sl-edit-label">Angajat</label>
+                <div class="sl-edit-emp-current">
+                  <div
+                    class="sl-edit-emp-trigger"
+                    role="button"
+                    tabindex="0"
+                    onClick={() => setShowEmpPicker((v) => !v)}
+                    title="Schimbă angajatul"
+                  >
+                  {(() => {
+                    const empId = editEmpId();
+                    const emp = empId != null ? employees().find((e) => e.id === empId) : null;
+                    if (emp) {
+                      return (
+                        <>
+                          <Show
+                            when={emp.imagePath}
+                            fallback={
+                              <span class="sl-edit-emp-avatar sl-edit-emp-avatar--placeholder">
+                                {emp.name.slice(0, 1).toUpperCase()}
+                              </span>
+                            }
+                          >
+                            <img src={emp.imagePath!} class="sl-edit-emp-avatar" alt={emp.name} />
+                          </Show>
+                          <span class="sl-edit-emp-name">{emp.name}</span>
+                          <span class="sl-edit-emp-edit-tag">EDIT</span>
+                        </>
+                      );
+                    }
+                    return <span class="sl-edit-emp-none">Fără angajat asociat</span>;
+                  })()}
+                  </div>
+                </div>
+              </div>
+              <Show when={showEmpPicker()}>
+              <div class="sl-edit-emp-grid" ref={enableDragScroll}>
+                <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
+                  {(e) => (
+                    <button
+                      type="button"
+                      class="sl-edit-emp-card"
+                      classList={{ "sl-edit-emp-card--active": editEmpId() === e.id }}
+                      onClick={() => { setEditEmpId(e.id); setShowEmpPicker(false); }}
+                    >
+                      <Show
+                        when={e.imagePath}
+                        fallback={
+                          <span class="sl-edit-emp-card-avatar sl-edit-emp-card-avatar--placeholder">
+                            {e.name.slice(0, 1).toUpperCase()}
+                          </span>
+                        }
+                      >
+                        <img src={e.imagePath!} class="sl-edit-emp-card-avatar" alt={e.name} />
+                      </Show>
+                      <SplitName name={e.name} class="sl-edit-emp-card-name" />
+                    </button>
+                  )}
+                </For>
+              </div>
+              </Show>
             </div>
             <div class="sl-modal-footer">
               <button class="btn btn-danger btn-sm" onClick={() => { removeFromCart(editItem()!.lineId); setEditItem(null); }}>Sterge</button>

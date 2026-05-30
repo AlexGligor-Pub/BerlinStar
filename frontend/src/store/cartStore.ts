@@ -98,6 +98,25 @@ export function setItemQty(lineId: string, qty: number) {
   if (idx >= 0) setCart("items", idx, "qty", qty);
 }
 
+/**
+ * Schimba angajatul asociat unei linii din cos. Pastram `lineId` neschimbat —
+ * el ramane unic in cos. Daca exista o linie identica (acelasi produs, acelasi
+ * angajat nou), `addToCart` viitor o va merge-ui pe lineId-ul ei propriu;
+ * aici doar actualizam linia curenta fara fuziuni implicite, ca user-ul sa
+ * vada exact ce a modificat (fara surpriza ca linia "dispare" si cantitatea
+ * sare in alta linie).
+ */
+export function updateItemEmployee(
+  lineId: string,
+  employeeId: number | null,
+  employeeName: string | null,
+): void {
+  const idx = cart.items.findIndex((i) => i.lineId === lineId);
+  if (idx < 0) return;
+  setCart("items", idx, "employeeId", employeeId);
+  setCart("items", idx, "employeeName", employeeName);
+}
+
 let _manualCounter = 0;
 
 export function addManualItem(name: string, qty: number, price: number, unit: string) {
