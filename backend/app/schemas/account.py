@@ -20,6 +20,7 @@ class AccountUpdate(BaseModel):
     description: str | None = None
     username: str | None = Field(None, min_length=1, max_length=100, pattern=USERNAME_PATTERN)
     password: str | None = Field(None, max_length=255)
+    reports_password: str | None = Field(None, max_length=255)
     email: str | None = Field(None, max_length=255)
     image_url: str | None = Field(None, max_length=500)
     is_locked: bool | None = None

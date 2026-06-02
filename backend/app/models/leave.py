@@ -1,7 +1,8 @@
 from __future__ import annotations
 import enum
 from datetime import date, datetime, timezone
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -48,6 +49,19 @@ class Leave(Base):
     notes:         Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_by:   Mapped[int | None] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     approved_at:   Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # --- Date legale ale cererii (Codul Muncii) ---
+    request_date:  Mapped[date | None] = mapped_column(Date, nullable=True)
+    # Snapshot al datelor legale (angajat + firma + sold) la momentul cererii,
+    # pentru ca PDF-ul si istoricul sa ramana corecte chiar daca datele se schimba ulterior.
+    details_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Acord digital al angajatului
+    employee_consent:     Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    employee_consent_at:  Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Acord digital al aprobatorului (setat la /approve)
+    approver_consent:        Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    approver_name_snapshot:  Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     created_at:    Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
     )

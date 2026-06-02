@@ -84,6 +84,14 @@ class ImpersonateResponse(BaseModel):
     name: str
     is_locked: bool = False
     locked_at: datetime | None = None
+    # Token cu scope "reports" emis automat, ca adminul de suport sa vada
+    # rapoartele fara sa stie parola de Rapoarte a utilizatorului.
+    reports_access_token: str | None = None
+    reports_expires_in: int | None = None
+
+
+# TTL token Rapoarte (identic cu cel din routers/auth.py).
+REPORTS_TOKEN_TTL_SECONDS = 3600
 
 
 async def _require_super_admin(
@@ -195,9 +203,17 @@ async def impersonate_account(
     if target is None:
         raise HTTPException(404, "Contul nu exista.")
 
-    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(days=TOKEN_EXPIRE_DAYS)
     payload = {"sub": str(target.id), "name": target.name, "exp": expire}
     token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+    # Token Rapoarte emis automat (scope "reports"), ca suportul sa vada
+    # rapoartele in contul impersonat fara parola dedicata.
+    reports_expire = now + timedelta(seconds=REPORTS_TOKEN_TTL_SECONDS)
+    reports_payload = {"sub": str(target.id), "name": target.name, "scope": "reports", "exp": reports_expire}
+    reports_token = jwt.encode(reports_payload, SECRET_KEY, algorithm=ALGORITHM)
+
     log.warning(
         "Admin impersonation: admin_id=%s target_id=%s username=%s",
         admin.id, target.id, target.username,
@@ -209,6 +225,8 @@ async def impersonate_account(
         name=target.name,
         is_locked=target.is_locked,
         locked_at=target.locked_at,
+        reports_access_token=reports_token,
+        reports_expires_in=REPORTS_TOKEN_TTL_SECONDS,
     )
 
 

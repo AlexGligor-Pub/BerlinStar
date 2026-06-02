@@ -11,6 +11,8 @@ class LeaveCreate(BaseModel):
     start_date:   date
     end_date:     date
     notes:        str | None = None
+    request_date: date | None = None
+    employee_consent: bool = False
 
 
 class LeavePatch(BaseModel):
@@ -40,10 +42,20 @@ class LeaveRead(BaseModel):
     approved_by:     int | None
     approver_name:   str | None = None
     approved_at:     datetime | None
+    request_date:    date | None = None
+    employee_consent:    bool = False
+    employee_consent_at: datetime | None = None
+    approver_consent:    bool = False
+    approver_name_snapshot: str | None = None
+    details_snapshot:    dict | None = None
     created_at:      datetime
     updated_at:      datetime | None
     is_deleted:      bool
     deleted_at:      datetime | None
+
+
+class LeaveConsent(BaseModel):
+    employee_consent: bool = True
 
 
 class LeaveTypeBreakdown(BaseModel):

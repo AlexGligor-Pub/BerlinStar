@@ -12,7 +12,19 @@ import { getReportsToken, hasValidReportsToken, setReportsToken } from "./report
  * Token-ul are TTL 1h; cand expira, ascundem din nou continutul si redam
  * ecranul de parola.
  */
-export default function ReportsGate(props: { children: JSX.Element }) {
+export default function ReportsGate(props: {
+  children: JSX.Element;
+  title?: string;
+  passwordLabel?: string;
+  unlockLabel?: string;
+  notSetMsg?: string;
+  lockTitle?: string;
+}) {
+  const title = () => props.title ?? "Rapoarte";
+  const passwordLabel = () => props.passwordLabel ?? "Parola Rapoarte";
+  const unlockLabel = () => props.unlockLabel ?? "Deblochează Rapoartele";
+  const notSetMsg = () => props.notSetMsg ?? 'Parola pentru Rapoarte nu este inca setata. Configureaz-o din Configurări → „Contul Meu" → „Parola Rapoarte".';
+  const lockTitle = () => props.lockTitle ?? "Închide accesul la Rapoarte (cere parola din nou)";
   const [verified, setVerified] = createSignal(hasValidReportsToken());
   const [password, setPassword] = createSignal("");
   const [err, setErr] = createSignal("");
@@ -100,7 +112,7 @@ export default function ReportsGate(props: { children: JSX.Element }) {
         <div class="login-page">
           <div class="login-card">
             <img src={logo} alt="Berlin Star" class="login-logo" />
-            <div class="login-subtitle">Rapoarte</div>
+            <div class="login-subtitle">{title()}</div>
             <div class="login-powered">Acces protejat — introdu parola</div>
 
             <Show when={err()}>
@@ -109,14 +121,13 @@ export default function ReportsGate(props: { children: JSX.Element }) {
 
             <Show when={hasPwd() === false}>
               <div class="login-error" style="background:#f59e0b;color:#fff">
-                Parola pentru Rapoarte nu este inca setata. Configureaz-o din
-                Configurări → „Contul Meu" → „Parola Rapoarte".
+                {notSetMsg()}
               </div>
             </Show>
 
             <form onSubmit={doSubmit} autocomplete="off">
               <div class="form-group">
-                <label class="form-label">Parola Rapoarte</label>
+                <label class="form-label">{passwordLabel()}</label>
                 <input
                   class="input"
                   type="password"
@@ -132,7 +143,7 @@ export default function ReportsGate(props: { children: JSX.Element }) {
                 type="submit"
                 disabled={submitting() || hasPwd() === false}
               >
-                {submitting() ? "Se verifică..." : "Deblochează Rapoartele"}
+                {submitting() ? "Se verifică..." : unlockLabel()}
               </button>
             </form>
             <div style="margin-top:12px;font-size:0.8rem;color:var(--text-muted);text-align:center">
@@ -147,7 +158,7 @@ export default function ReportsGate(props: { children: JSX.Element }) {
           class="btn btn-ghost btn-sm"
           style="position:absolute;top:8px;right:8px;z-index:10;font-size:0.78rem"
           onClick={doLock}
-          title="Închide accesul la Rapoarte (cere parola din nou)"
+          title={lockTitle()}
         >
           🔒 Blochează
         </button>

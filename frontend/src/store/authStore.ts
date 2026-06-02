@@ -88,6 +88,8 @@ export function loginAsImpersonatedUser(
   isLocked: boolean,
   lockedAt: string | null,
   target: string,
+  reportsToken?: string | null,
+  reportsExpiresIn?: number,
 ) {
   clearAllStorage();
   const next: AuthState = { user, token, isLocked, lockedAt, displayName: null };
@@ -103,6 +105,12 @@ export function loginAsImpersonatedUser(
     );
   } catch {
     // storage quota/disabled — ignoram, userul oricum poate activa manual.
+  }
+  // Token Rapoarte emis automat la impersonare — il setam DUPA clearAllStorage
+  // (care goleste sessionStorage) ca sa supravietuiasca reload-ului si sa
+  // deblocheze automat gate-ul de Rapoarte / Date angajat.
+  if (reportsToken) {
+    setReportsToken(reportsToken, reportsExpiresIn);
   }
   window.location.assign(withBase(target));
 }

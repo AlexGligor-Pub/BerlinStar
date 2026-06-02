@@ -107,11 +107,12 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
     if account is None or account.is_deleted:
         raise HTTPException(404, "Contul nu a fost gasit.")
     patch_data = body.model_dump(exclude_unset=True)
-    if "password" in patch_data:
-        if patch_data["password"]:
-            patch_data["password"] = hash_password(patch_data["password"])
-        else:
-            patch_data.pop("password")
+    for pwd_field in ("password", "reports_password"):
+        if pwd_field in patch_data:
+            if patch_data[pwd_field]:
+                patch_data[pwd_field] = hash_password(patch_data[pwd_field])
+            else:
+                patch_data.pop(pwd_field)
     for k, v in patch_data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)

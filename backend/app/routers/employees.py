@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.employee import Employee
+from app.models.employee_detail import EmployeeDetail
+from app.models.company import Company
 from app.models.location import employee_locations
 from app.schemas.employee import EmployeeCreate, EmployeeUpdate, EmployeeRead
+from app.schemas.employee_detail import EmployeeDetailUpsert, EmployeeDetailRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.paginate import paginate
@@ -52,6 +55,18 @@ async def list_employees(
     stmt = stmt.limit(limit + 1)
 
     return await paginate(db, stmt, limit)
+
+
+@router.get("/{employee_id}", response_model=EmployeeRead)
+async def get_employee(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    employee = await db.get(Employee, employee_id)
+    if employee is None or employee.account_id != account_id or employee.is_deleted:
+        raise HTTPException(404, "Angajatul nu a fost găsit.")
+    return employee
 
 
 @router.post("", response_model=EmployeeRead, status_code=201)
@@ -116,3 +131,70 @@ async def delete_employee(
     if employee is None or employee.account_id != account_id:
         raise HTTPException(404, "Angajatul nu a fost găsit.")
     await soft_delete(db, Employee, employee_id)
+
+
+# ---- Dosar de personal (date legale) ----
+
+async def _get_owned_employee(db: AsyncSession, employee_id: int, account_id: int) -> Employee:
+    employee = await db.get(Employee, employee_id)
+    if employee is None or employee.account_id != account_id or employee.is_deleted:
+        raise HTTPException(404, "Angajatul nu a fost găsit.")
+    return employee
+
+
+@router.get("/{employee_id}/details", response_model=EmployeeDetailRead | None)
+async def get_employee_details(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    await _get_owned_employee(db, employee_id, account_id)
+    detail = await db.get(EmployeeDetail, employee_id)
+    if detail is None or detail.account_id != account_id:
+        return None
+    return detail
+
+
+@router.put("/{employee_id}/details", response_model=EmployeeDetailRead)
+async def upsert_employee_details(
+    employee_id: int,
+    body: EmployeeDetailUpsert,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    await _get_owned_employee(db, employee_id, account_id)
+
+    data = body.model_dump(exclude_unset=True)
+
+    if body.company_id is not None:
+        company = await db.get(Company, body.company_id)
+        if company is None or company.account_id != account_id or company.is_deleted:
+            raise HTTPException(400, "Firma selectată nu este validă.")
+
+    detail = await db.get(EmployeeDetail, employee_id)
+    if detail is None:
+        detail = EmployeeDetail(employee_id=employee_id, account_id=account_id, **data)
+        db.add(detail)
+    else:
+        if detail.account_id != account_id:
+            raise HTTPException(404, "Angajatul nu a fost găsit.")
+        for k, v in data.items():
+            setattr(detail, k, v)
+        detail.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    await db.refresh(detail)
+    return detail
+
+
+@router.delete("/{employee_id}/details", status_code=204)
+async def delete_employee_details(
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    await _get_owned_employee(db, employee_id, account_id)
+    detail = await db.get(EmployeeDetail, employee_id)
+    if detail is not None and detail.account_id == account_id:
+        await db.delete(detail)
+        await db.commit()

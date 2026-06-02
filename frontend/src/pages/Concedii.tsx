@@ -13,6 +13,17 @@ import {
   type Leave, type LeaveType, type LeaveStatus, type LeaveBalance,
   type RomanianHoliday,
 } from "../store/leavesStore";
+import { generateLeaveRequestPdf } from "../utils/leavePdf";
+
+/** Dosar de personal (subset folosit pentru preview-ul cererii). */
+interface EmployeeLegalDetails {
+  has: boolean;
+  cnp: string | null;
+  job_title: string | null;
+  department: string | null;
+  contract_number: string | null;
+  company_name: string | null;
+}
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 const RO_DAYS_SHORT  = ["Lu","Ma","Mi","Jo","Vi","Sâ","Du"];
@@ -256,10 +267,11 @@ interface FormState {
   startDate: string;
   endDate: string;
   notes: string;
+  employeeConsent: boolean;
 }
 
 function emptyForm(today: string): FormState {
-  return { id: null, employeeId: null, type: "Concediu de odihna", startDate: today, endDate: today, notes: "" };
+  return { id: null, employeeId: null, type: "Concediu de odihna", startDate: today, endDate: today, notes: "", employeeConsent: false };
 }
 
 export default function Concedii() {
@@ -286,6 +298,8 @@ export default function Concedii() {
   const [showForm, setShowForm] = createSignal(false);
   const [form, setForm] = createSignal<FormState>(emptyForm(todayYMD));
   const [submitting, setSubmitting] = createSignal(false);
+  const [formDetails, setFormDetails] = createSignal<EmployeeLegalDetails | null>(null);
+  const [approverConsent, setApproverConsent] = createSignal(false);
   const [detailLeave, setDetailLeave] = createSignal<Leave | null>(null);
   const [detailMonthLeaves, setDetailMonthLeaves] = createSignal<Leave[]>([]);
   const [overlapMonth, setOverlapMonth] = createSignal<{ y: number; m: number } | null>(null);
@@ -399,6 +413,46 @@ export default function Concedii() {
     const monthEnd = `${mm.y}-${String(mm.m+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
     void loadHolidays(mm.y);
     void fetchLeavesInRange(monthStart, monthEnd).then(setDetailMonthLeaves);
+  });
+
+  // Incarca datele legale ale angajatului selectat in formular (preview + verificare dosar).
+  createEffect(() => {
+    const id = form().employeeId;
+    if (id == null) { setFormDetails(null); return; }
+    void (async () => {
+      try {
+        const res = await apiFetch(`/api/employees/${id}/details`);
+        if (!res.ok) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
+        const d = await res.json();
+        if (!d) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
+        let companyName: string | null = null;
+        if (d.company_id != null) {
+          try {
+            const cr = await apiFetch("/api/companies?limit=200");
+            if (cr.ok) {
+              const cj = await cr.json();
+              companyName = (cj.items ?? []).find((c: any) => c.id === d.company_id)?.name ?? null;
+            }
+          } catch { /* ignore */ }
+        }
+        setFormDetails({
+          has: true,
+          cnp: d.cnp ?? null,
+          job_title: d.job_title ?? null,
+          department: d.department ?? null,
+          contract_number: d.contract_number ?? null,
+          company_name: companyName,
+        });
+      } catch {
+        setFormDetails(null);
+      }
+    })();
+  });
+
+  // Reset acord aprobator cand se schimba cererea afisata in modal.
+  createEffect(() => {
+    detailLeave();
+    setApproverConsent(false);
   });
 
   function shiftOverlapMonth(delta: number) {
@@ -544,6 +598,7 @@ export default function Concedii() {
     setForm({
       id: l.id, employeeId: l.employeeId, type: l.type,
       startDate: l.startDate, endDate: l.endDate, notes: l.notes ?? "",
+      employeeConsent: l.employeeConsent,
     });
     setDetailLeave(null);
     setShowForm(true);
@@ -573,6 +628,10 @@ export default function Concedii() {
       notify(`Numarul de zile (${vb.requested}) depaseste soldul disponibil (${vb.available}).`, "warn");
       return;
     }
+    if (f.id == null && !f.employeeConsent) {
+      notify("Bifează acordul angajatului pentru a trimite cererea.", "warn");
+      return;
+    }
     setSubmitting(true);
     try {
       if (f.id == null) {
@@ -580,6 +639,7 @@ export default function Concedii() {
           employeeId: f.employeeId, type: f.type,
           startDate: f.startDate, endDate: f.endDate,
           notes: f.notes || null,
+          employeeConsent: f.employeeConsent,
         });
         notify("Cerere creata cu succes.", "success");
       } else {
@@ -877,12 +937,13 @@ export default function Concedii() {
                     <th>Până la</th>
                     <th style="text-align:right">Zile lucr.</th>
                     <th>Aprobat de</th>
+                    <th>Acorduri</th>
                     <th />
                   </tr>
                 </thead>
                 <tbody>
                   <For each={sortedListLeaves()} fallback={
-                    <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-muted)">Nicio cerere pentru filtrele selectate.</td></tr>
+                    <tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text-muted)">Nicio cerere pentru filtrele selectate.</td></tr>
                   }>
                     {(l) => {
                       const t = typeMeta(l.type);
@@ -900,9 +961,15 @@ export default function Concedii() {
                           <td>{fmtRo(l.startDate)}</td>
                           <td>{fmtRo(l.endDate)}</td>
                           <td style="text-align:right">{l.workingDays}</td>
-                          <td>{l.approverName ?? "—"}</td>
+                          <td>{l.approverNameSnapshot ?? l.approverName ?? "—"}</td>
                           <td>
+                            <span title="Acord angajat">{l.employeeConsent ? "✅" : "⬜"}</span>
+                            {" "}
+                            <span title="Acord aprobator">{l.approverConsent ? "✅" : "⬜"}</span>
+                          </td>
+                          <td style="white-space:nowrap">
                             <button type="button" class="btn btn-ghost btn-sm" onClick={() => setDetailLeave(l)}>Detalii</button>
+                            <button type="button" class="btn btn-ghost btn-sm" title="Export PDF" onClick={() => void generateLeaveRequestPdf(l)}>⬇ PDF</button>
                           </td>
                         </tr>
                       );
@@ -968,7 +1035,7 @@ export default function Concedii() {
         footer={
           <>
             <button type="button" class="btn btn-ghost btn-sm" onClick={closeForm}>Anulează</button>
-            <button type="submit" form="leave-form" class="btn btn-primary btn-sm" disabled={submitting() || (vacationBalanceInfo()?.over ?? false)}>
+            <button type="submit" form="leave-form" class="btn btn-primary btn-sm" disabled={submitting() || (vacationBalanceInfo()?.over ?? false) || (form().id == null && !form().employeeConsent)}>
               {submitting() ? "..." : (form().id == null ? "Creează" : "Salvează")}
             </button>
           </>
@@ -1074,6 +1141,48 @@ export default function Concedii() {
               onInput={(e) => setForm({ ...form(), notes: e.currentTarget.value })}
             />
           </div>
+
+          {/* Date legale ale angajatului (din dosarul de personal) */}
+          <Show when={form().employeeId != null && formDetails()}>
+            {(d) => (
+              <Show
+                when={d().has}
+                fallback={
+                  <div style="padding:10px 12px;border-radius:8px;font-size:13px;background:#fff3cd;color:#856404;border:1px solid #ffeeba">
+                    ⚠ Angajatul nu are dosar de personal completat. Cererea va fi incompletă legal.
+                    Completează datele din <strong>Configurări → Angajați → Detalii Angajat</strong>.
+                  </div>
+                }
+              >
+                <div style="padding:10px 12px;border-radius:8px;font-size:13px;background:var(--surface2)">
+                  <div style="font-weight:600;margin-bottom:4px">Date legale (din dosar)</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px;color:var(--text-muted)">
+                    <Show when={d().job_title}><span>Funcție: {d().job_title}</span></Show>
+                    <Show when={d().department}><span>· Dep.: {d().department}</span></Show>
+                    <Show when={d().contract_number}><span>· CIM: {d().contract_number}</span></Show>
+                    <Show when={d().cnp}><span>· CNP: {d().cnp}</span></Show>
+                    <Show when={d().company_name}><span>· Firmă: {d().company_name}</span></Show>
+                  </div>
+                </div>
+              </Show>
+            )}
+          </Show>
+
+          {/* Acord digital angajat — necesar pentru cereri noi */}
+          <Show when={form().id == null}>
+            <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px">
+              <input
+                type="checkbox"
+                checked={form().employeeConsent}
+                onInput={(e) => setForm({ ...form(), employeeConsent: e.currentTarget.checked })}
+                style="margin-top:2px"
+              />
+              <span>
+                <strong>Acordul angajatului.</strong> Angajatul își dă acordul în mod digital pentru
+                această cerere de concediu și confirmă corectitudinea datelor de mai sus.
+              </span>
+            </label>
+          </Show>
         </form>
       </Modal>
 
@@ -1087,6 +1196,7 @@ export default function Concedii() {
           <Show when={detailLeave()}>
             {(l) => (
               <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;width:100%">
+                <button type="button" class="btn btn-ghost btn-sm" onClick={() => void generateLeaveRequestPdf(l())}>⬇ Export PDF</button>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => handleDelete(l())}>Șterge</button>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditForm(l())}>Editează</button>
                 <Show when={adminVisible()}>
@@ -1095,7 +1205,8 @@ export default function Concedii() {
                     class="btn btn-sm concedii-action-btn"
                     classList={{ "is-current": l().status === "Approved" }}
                     style="background:#d4edda;color:#155724;border-color:#155724"
-                    disabled={l().status === "Approved"}
+                    disabled={l().status === "Approved" || (l().status !== "Approved" && !approverConsent())}
+                    title={l().status !== "Approved" && !approverConsent() ? "Bifează acordul de aprobare" : undefined}
                     onClick={() => handleApprove(l())}
                   >✓ {l().status === "Approved" ? "Aprobată" : "Aprobă"}</button>
                   <button
@@ -1144,8 +1255,80 @@ export default function Concedii() {
                 </Show>
                 <Show when={l().approvedAt}>
                   <div style="font-size:13px;color:var(--text-muted)">
-                    {l().status === "Approved" ? "Aprobată" : "Respinsă"} de {l().approverName ?? "?"} la {new Date(l().approvedAt!).toLocaleString("ro-RO")}
+                    {l().status === "Approved" ? "Aprobată" : "Respinsă"} de {l().approverNameSnapshot ?? l().approverName ?? "?"} la {new Date(l().approvedAt!).toLocaleString("ro-RO")}
                   </div>
+                </Show>
+
+                {/* Date legale (snapshot la momentul cererii) */}
+                <Show when={l().detailsSnapshot}>
+                  {(snap) => (
+                    <div style="border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:10px 12px;font-size:13px">
+                      <div style="font-weight:600;margin-bottom:6px">📋 Date legale ale cererii</div>
+                      <Show when={snap().company}>
+                        {(co) => (
+                          <div style="margin-bottom:4px">
+                            <strong>{co().name}</strong>
+                            <Show when={co().cui}><span style="color:var(--text-muted)"> · CUI {co().cui}</span></Show>
+                            <Show when={co().nr_reg_com}><span style="color:var(--text-muted)"> · {co().nr_reg_com}</span></Show>
+                          </div>
+                        )}
+                      </Show>
+                      <div style="display:flex;flex-wrap:wrap;gap:8px;color:var(--text-muted)">
+                        <Show when={snap().employee.cnp}><span>CNP: {snap().employee.cnp}</span></Show>
+                        <Show when={snap().employee.job_title}><span>· Funcție: {snap().employee.job_title}</span></Show>
+                        <Show when={snap().employee.department}><span>· Dep.: {snap().employee.department}</span></Show>
+                        <Show when={snap().employee.contract_number}><span>· CIM: {snap().employee.contract_number}</span></Show>
+                      </div>
+                      <Show when={snap().vacation}>
+                        {(v) => (
+                          <div style="margin-top:4px;color:var(--text-muted)">
+                            Sold: {v().annual_allowance} zile/an · rămase după cerere: {v().remaining_after}
+                          </div>
+                        )}
+                      </Show>
+                      <Show when={!snap().has_details}>
+                        <div style="margin-top:6px;color:#856404">⚠ Dosar de personal incomplet la momentul cererii.</div>
+                      </Show>
+                    </div>
+                  )}
+                </Show>
+
+                {/* Acorduri digitale */}
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span>{l().employeeConsent ? "✅" : "⬜"}</span>
+                    <span>
+                      Acord angajat
+                      <Show when={l().employeeConsentAt}>
+                        <span style="color:var(--text-muted)"> · {new Date(l().employeeConsentAt!).toLocaleString("ro-RO")}</span>
+                      </Show>
+                    </span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <span>{l().approverConsent ? "✅" : "⬜"}</span>
+                    <span>
+                      Acord aprobator
+                      <Show when={l().approverConsent && l().approverNameSnapshot}>
+                        <span style="color:var(--text-muted)"> · {l().approverNameSnapshot}</span>
+                      </Show>
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bifa de acord pentru aprobator (admin, cerere ne-aprobată) */}
+                <Show when={adminVisible() && l().status !== "Approved"}>
+                  <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px">
+                    <input
+                      type="checkbox"
+                      checked={approverConsent()}
+                      onInput={(e) => setApproverConsent(e.currentTarget.checked)}
+                      style="margin-top:2px"
+                    />
+                    <span>
+                      <strong>Acordul aprobatorului.</strong> Îmi dau acordul în mod digital pentru aprobarea
+                      acestei cereri. (Necesar pentru a apăsa „Aprobă".)
+                    </span>
+                  </label>
                 </Show>
                 <Show when={overlapMonth()}>
                   {(mm) => (

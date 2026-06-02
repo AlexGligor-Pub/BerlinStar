@@ -15,6 +15,7 @@ interface FormState {
   name: string;
   username: string;
   password: string;
+  reports_password: string;
   email: string;
   description: string;
   image_url: string;
@@ -23,7 +24,7 @@ interface FormState {
 }
 
 function emptyForm(): FormState {
-  return { name: "", username: "", password: "", email: "", description: "", image_url: "", is_locked: false, locked_at: "" };
+  return { name: "", username: "", password: "", reports_password: "", email: "", description: "", image_url: "", is_locked: false, locked_at: "" };
 }
 
 function setField<K extends keyof FormState>(
@@ -281,6 +282,8 @@ export default function AccountsSection() {
         username: string;
         is_locked: boolean;
         locked_at: string | null;
+        reports_access_token?: string | null;
+        reports_expires_in?: number;
       } = await res.json();
       loginAsImpersonatedUser(
         data.username,
@@ -288,6 +291,8 @@ export default function AccountsSection() {
         data.is_locked,
         data.locked_at ?? null,
         "/",
+        data.reports_access_token ?? null,
+        data.reports_expires_in,
       );
     } catch {
       setSupportErr("Eroare de conexiune.");
@@ -319,7 +324,7 @@ export default function AccountsSection() {
     const a = previewAccount();
     if (!a) return;
     setEditForm({
-      name: a.name, username: a.username, password: "",
+      name: a.name, username: a.username, password: "", reports_password: "",
       email: a.email ?? "", description: a.description ?? "",
       image_url: a.image_url ?? "", is_locked: a.is_locked,
       locked_at: a.locked_at ? a.locked_at.slice(0, 16) : "",
@@ -346,6 +351,7 @@ export default function AccountsSection() {
         is_locked: f.is_locked, locked_at: f.locked_at ? new Date(f.locked_at).toISOString() : null,
       };
       if (f.password.trim()) patch.password = f.password.trim();
+      if (f.reports_password.trim()) patch.reports_password = f.reports_password.trim();
       const res = await adminFetch(`/api/accounts/${a.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       if (!res.ok) { setEditErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
       closePreview();
@@ -900,6 +906,8 @@ export default function AccountsSection() {
                       <input class="input" value={editForm().username} placeholder="doar litere mici și cifre" onInput={(e) => setField(setEditForm, "username", sanitizeUsername(e.currentTarget.value))} /></div>
                     <div class="admin-form-row"><label class="admin-form-label">Parola nouă (gol = neschimbat)</label>
                       <input class="input" type="password" value={editForm().password} onInput={(e) => setField(setEditForm, "password", e.currentTarget.value)} /></div>
+                    <div class="admin-form-row"><label class="admin-form-label">Parolă Rapoarte (gol = neschimbat)</label>
+                      <input class="input" type="password" autocomplete="new-password" value={editForm().reports_password} onInput={(e) => setField(setEditForm, "reports_password", e.currentTarget.value)} /></div>
                     <div class="admin-form-row"><label class="admin-form-label">Email</label>
                       <input class="input" value={editForm().email} onInput={(e) => setField(setEditForm, "email", e.currentTarget.value)} /></div>
                     <div class="admin-form-row"><label class="admin-form-label">Descriere</label>

@@ -5,6 +5,7 @@ from .category import Category
 from .item import Item, ItemType
 from .receipt import Receipt, ReceiptItem
 from .employee import Employee
+from .employee_detail import EmployeeDetail
 from .location import Location, employee_locations
 from .device import Device
 from .client import Client
@@ -39,4 +40,4 @@ from .report_stock_movements_daily import ReportStockMovementsDaily
 from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFacturaReceivedIndex, EFacturaGlobalSettings, TaskRun, ScheduledJobOverride
 from .subscription import PlatformAnafToken, AccountSubscription, SubscriptionPayment
 
-__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "CodDotAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "TaskRun", "ScheduledJobOverride", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment"]
+__all__ = ["Base", "Account", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "Employee", "EmployeeDetail", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "CodDotAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "TaskRun", "ScheduledJobOverride", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment"]

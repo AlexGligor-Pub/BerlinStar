@@ -1,10 +1,12 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { useNavigate } from "@solidjs/router";
 import { apiFetch, apiUpload } from "../../utils/api";
 import type { EmployeeItem } from "./types";
 import { compressToPng, exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
 export default function AngajatiPanel() {
+  const navigate = useNavigate();
   const [items, setItems]     = createSignal<EmployeeItem[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [search, setSearch]   = createSignal("");
@@ -244,6 +246,7 @@ export default function AngajatiPanel() {
                     <span class="cfg-location-desc">🏖 {e.annual_vacation_days ?? 21} zile concediu/an</span>
                   </div>
                   <div class="cfg-location-actions">
+                    <button class="btn btn-sm btn-ghost" onClick={() => navigate(`/angajati/${e.id}`)}>Detalii Angajat</button>
                     <button class="btn btn-sm btn-ghost" onClick={() => startEdit(e)}>Editează</button>
                   </div>
                 </div>

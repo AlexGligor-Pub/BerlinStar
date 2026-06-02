@@ -4,6 +4,39 @@ import { apiFetch, apiFetchJson } from "../utils/api";
 export type LeaveType = "Concediu de odihna" | "Concediu medical" | "Business Trip" | "Concediu fara plata";
 export type LeaveStatus = "Pending" | "Approved" | "Rejected";
 
+export interface LeaveSnapshotEmployee {
+  name: string | null;
+  cnp: string | null;
+  job_title: string | null;
+  department: string | null;
+  contract_number: string | null;
+  contract_date: string | null;
+  address_domicile: string | null;
+  phone: string | null;
+  personal_email: string | null;
+}
+
+export interface LeaveSnapshotCompany {
+  name: string | null;
+  cui: number | null;
+  nr_reg_com: string | null;
+  address: string | null;
+}
+
+export interface LeaveSnapshotVacation {
+  annual_allowance: number;
+  used_before_request: number;
+  requested: number;
+  remaining_after: number;
+}
+
+export interface LeaveDetailsSnapshot {
+  employee: LeaveSnapshotEmployee;
+  company: LeaveSnapshotCompany | null;
+  vacation: LeaveSnapshotVacation;
+  has_details: boolean;
+}
+
 export interface Leave {
   id: number;
   accountId: number;
@@ -21,6 +54,12 @@ export interface Leave {
   approvedBy: number | null;
   approverName: string | null;
   approvedAt: string | null;
+  requestDate: string | null;
+  employeeConsent: boolean;
+  employeeConsentAt: string | null;
+  approverConsent: boolean;
+  approverNameSnapshot: string | null;
+  detailsSnapshot: LeaveDetailsSnapshot | null;
   createdAt: string;
   updatedAt: string | null;
   isDeleted: boolean;
@@ -33,6 +72,8 @@ export interface LeaveInput {
   startDate: string;
   endDate: string;
   notes?: string | null;
+  requestDate?: string | null;
+  employeeConsent?: boolean;
 }
 
 export interface LeaveTypeBreakdown {
@@ -74,6 +115,12 @@ interface RawLeave {
   approved_by: number | null;
   approver_name?: string | null;
   approved_at: string | null;
+  request_date?: string | null;
+  employee_consent?: boolean;
+  employee_consent_at?: string | null;
+  approver_consent?: boolean;
+  approver_name_snapshot?: string | null;
+  details_snapshot?: LeaveDetailsSnapshot | null;
   created_at: string;
   updated_at: string | null;
   is_deleted: boolean;
@@ -97,6 +144,12 @@ function mapLeave(r: RawLeave): Leave {
     approvedBy: r.approved_by,
     approverName: r.approver_name ?? null,
     approvedAt: r.approved_at,
+    requestDate: r.request_date ?? null,
+    employeeConsent: r.employee_consent ?? false,
+    employeeConsentAt: r.employee_consent_at ?? null,
+    approverConsent: r.approver_consent ?? false,
+    approverNameSnapshot: r.approver_name_snapshot ?? null,
+    detailsSnapshot: r.details_snapshot ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     isDeleted: r.is_deleted,
@@ -181,6 +234,8 @@ function inputToBody(input: LeaveInput): Record<string, unknown> {
     start_date: input.startDate,
     end_date: input.endDate,
     notes: input.notes ?? null,
+    request_date: input.requestDate ?? null,
+    employee_consent: input.employeeConsent ?? false,
   };
 }
 
@@ -239,6 +294,21 @@ async function approvalAction(id: number, action: "approve" | "reject" | "reset"
 export const approveLeave = (id: number) => approvalAction(id, "approve");
 export const rejectLeave  = (id: number) => approvalAction(id, "reject");
 export const resetLeave   = (id: number) => approvalAction(id, "reset");
+
+export async function consentLeave(id: number, employeeConsent: boolean): Promise<Leave> {
+  const res = await apiFetch(`/api/leaves/${id}/consent`, {
+    method: "POST",
+    body: JSON.stringify({ employee_consent: employeeConsent }),
+  });
+  if (!res.ok) {
+    let msg = `Eroare ${res.status}`;
+    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
+    throw new Error(msg);
+  }
+  const updated = mapLeave(await res.json());
+  setLeaves(leaves().map((l) => l.id === id ? updated : l));
+  return updated;
+}
 
 // Calcul zile lucratoare in frontend (preview live in modal), refoloseste holidays-urile cache-uite.
 export function computeWorkingDays(startYMD: string, endYMD: string): number {
