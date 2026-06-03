@@ -1556,9 +1556,16 @@ export default function Reception() {
   document.addEventListener("click", onOutside);
   onCleanup(() => document.removeEventListener("click", onOutside));
 
+  // Cautare avansata: dupa denumirea articolelor din devize (item_q pe server).
+  const [itemSearch, setItemSearch] = createSignal("");
+  const [showAdvanced, setShowAdvanced] = createSignal(false);
+  const [advDraft, setAdvDraft] = createSignal("");
+
   const filtered = createMemo(() => {
     const sel = selected();
-    const q = search().toLowerCase().trim();
+    // Cand cautam dupa articol, lista vine deja filtrata de pe server; nu mai
+    // aplicam filtrul de titlu local (titlul devizului nu contine denumirea articolului).
+    const q = itemSearch() ? "" : search().toLowerCase().trim();
     return receipts().filter((r) => {
       const matchMetoda = sel.size === 0 || sel.has(r.metodaPlata ?? "Neplatit");
       const matchSearch = !q || r.titlu.toLowerCase().includes(q) || (r.clientNume ?? "").toLowerCase().includes(q);
@@ -1572,13 +1579,47 @@ export default function Reception() {
 
   createEffect(() => {
     const ss = serverSearch();
-    loadReceipts(dateStart(), dateEnd(), 200, ss, device()?.locationId ?? null);
+    const iq = itemSearch();
+    loadReceipts(dateStart(), dateEnd(), 200, ss, device()?.locationId ?? null, iq);
   });
 
   // Când search se golește, resetăm și server search-ul
   createEffect(() => {
     if (!search()) setServerSearch("");
   });
+
+  // Cautare automata pe server: daca nu exista NICIUN rezultat in lista deja
+  // incarcata in browser, lansam automat cautarea pe server (debounce). Daca
+  // exista rezultate locale, ramane butonul manual "Cauta pe server".
+  let _autoTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    const q = search().trim();
+    const localCount = filtered().length;
+    const ss = serverSearch();
+    const itemActive = !!itemSearch();
+    clearTimeout(_autoTimer);
+    if (!q || itemActive) return;       // fara termen sau in mod cautare-articol
+    if (localCount > 0) return;          // avem rezultate local -> buton manual
+    if (ss === q) return;                // deja cautat pe server pentru acest termen
+    _autoTimer = setTimeout(() => {
+      if (search().trim() === q && !itemSearch()) setServerSearch(q);
+    }, 450);
+  });
+  onCleanup(() => clearTimeout(_autoTimer));
+
+  function applyAdvancedSearch() {
+    const term = advDraft().trim();
+    if (!term) return;
+    setSearch("");          // cautarea pe articol e separata de cea pe titlu
+    setServerSearch("");
+    setItemSearch(term);
+    setShowAdvanced(false);
+  }
+
+  function clearAdvancedSearch() {
+    setItemSearch("");
+    setAdvDraft("");
+  }
 
   let sentinelRef: HTMLDivElement | undefined;
   onMount(() => {
@@ -1608,8 +1649,11 @@ export default function Reception() {
               placeholder="Cauta dupa titlu..."
               value={search()}
               onInput={(e) => setSearch(e.currentTarget.value)}
+              disabled={!!itemSearch()}
             />
-            <Show when={search()}>
+            {/* Buton manual: doar cand exista rezultate in lista locala. Daca nu
+                exista, cautarea pe server porneste automat (vezi createEffect). */}
+            <Show when={search() && filtered().length > 0 && !itemSearch()}>
               <button
                 class="btn btn-sm btn-ghost"
                 style="font-size:11px;white-space:nowrap;flex-shrink:0"
@@ -1617,6 +1661,20 @@ export default function Reception() {
               >
                 Caută pe server{serverSearch() === search() ? " ✓" : ""}
               </button>
+            </Show>
+            <button
+              class="btn btn-sm btn-ghost"
+              style="font-size:11px;white-space:nowrap;flex-shrink:0"
+              title="Cauta devizele dupa denumirea articolelor din ele"
+              onClick={() => { setAdvDraft(itemSearch()); setShowAdvanced(true); }}
+            >
+              Căutare avansată
+            </button>
+            <Show when={itemSearch()}>
+              <span class="adv-search-chip">
+                Articol: „{itemSearch()}”
+                <button class="adv-search-chip-x" title="Sterge cautarea pe articol" onClick={clearAdvancedSearch}>✕</button>
+              </span>
             </Show>
           </div>
           <div class="filter-dropdown">
@@ -1665,7 +1723,13 @@ export default function Reception() {
         fallback={
           <div class="card" style="text-align:center;padding:48px 16px">
             <div class="text-muted">
-              {receipts().length === 0 ? "Nu exista bonuri inregistrate." : "Niciun bon pentru filtrul selectat."}
+              {itemSearch()
+                ? `Niciun deviz nu contine articolul „${itemSearch()}”.`
+                : search()
+                ? `Niciun rezultat pentru „${search()}”.`
+                : receipts().length === 0
+                ? "Nu exista bonuri inregistrate."
+                : "Niciun bon pentru filtrul selectat."}
             </div>
           </div>
         }
@@ -1714,6 +1778,37 @@ export default function Reception() {
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={applyDateFilter}>Aplica</button>
+            </div>
+          </div>
+        </div>
+      </Show>
+
+      <Show when={showAdvanced()}>
+        <div class="sl-modal-overlay">
+          <div class="date-modal" style="max-width:420px">
+            <div class="sl-modal-header">
+              <span class="sl-modal-title">Căutare avansată</span>
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdvanced(false)}>✕</button>
+            </div>
+            <div style="padding:16px">
+              <div class="text-muted" style="font-size:.85rem;margin-bottom:8px">
+                Cauta devizele care contin un articol cu denumirea de mai jos.
+                Ex: <b>Roata de cauciuc</b> arata doar devizele care au acest articol.
+              </div>
+              <input
+                class="input"
+                style="width:100%"
+                type="search"
+                placeholder="Denumire articol..."
+                value={advDraft()}
+                onInput={(e) => setAdvDraft(e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") applyAdvancedSearch(); }}
+                autofocus
+              />
+            </div>
+            <div class="sl-modal-footer">
+              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdvanced(false)}>Anuleaza</button>
+              <button class="btn btn-primary btn-sm" onClick={applyAdvancedSearch} disabled={!advDraft().trim()}>Cauta</button>
             </div>
           </div>
         </div>

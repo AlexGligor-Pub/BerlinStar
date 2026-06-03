@@ -238,6 +238,7 @@ async def list_receipts(
     last_id: int | None = None,
     limit: int = 20,
     q: str | None = None,
+    item_q: str | None = None,
     filters: str | None = None,
     sort: str | None = None,
     include_deleted: bool = False,
@@ -265,6 +266,10 @@ async def list_receipts(
         stmt = stmt.where(Receipt.id < last_id)
     if q:
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
+    if item_q:
+        # Cautare avansata: doar devizele care contin macar un articol a carui
+        # denumire se potriveste (ex: "Roata de cauciuc"). EXISTS pe receipt_items.
+        stmt = stmt.where(Receipt.receipt_items.any(ReceiptItem.name.ilike(f"%{item_q}%")))
     if client_id is not None:
         stmt = stmt.where(Receipt.client_id == client_id)
     if source is not None:

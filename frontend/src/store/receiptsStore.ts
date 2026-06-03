@@ -220,6 +220,7 @@ let _lastDateFrom: string | null = null;
 let _lastDateTo: string | null = null;
 let _lastLimit: number = 10;
 let _lastSearch: string = "";
+let _lastItemSearch: string = "";
 let _lastLocationId: number | null = null;
 let _nextCursor: number | null = null;
 
@@ -227,11 +228,12 @@ const [hasMore, setHasMore] = createSignal(false);
 const [loadingMore, setLoadingMore] = createSignal(false);
 export { hasMore, loadingMore };
 
-export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string, locationId?: number | null) {
+export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string, locationId?: number | null, itemQ?: string) {
   if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
   if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
   if (limit !== undefined) _lastLimit = limit;
   if (q !== undefined) _lastSearch = q;
+  if (itemQ !== undefined) _lastItemSearch = itemQ;
   if (locationId !== undefined) _lastLocationId = locationId ?? null;
   _nextCursor = null;
   try {
@@ -239,6 +241,7 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
+    if (_lastItemSearch) qs += `&item_q=${encodeURIComponent(_lastItemSearch)}`;
     if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
@@ -262,6 +265,7 @@ export async function loadMoreReceipts() {
     if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
     if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
     if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
+    if (_lastItemSearch) qs += `&item_q=${encodeURIComponent(_lastItemSearch)}`;
     if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
