@@ -47,3 +47,6 @@ work/
 backend/logs/*.log
 backend/logs/*.log.*
 *.log
+
+# Fisier .env de pe server cu secrete — nu intra in git
+ServerDotEnvFile

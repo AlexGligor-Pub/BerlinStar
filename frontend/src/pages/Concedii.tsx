@@ -4,14 +4,15 @@ import { adminVisible } from "../store/adminStore";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees, type Employee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
+import { reportsFetch } from "./rapoarte/reports-auth";
 import type { Location } from "../types/location";
 import {
   leaves, loading, loadLeaves, loadHolidays, loadBalance, holidaysByYear,
-  fetchLeavesInRange,
+  fetchLeavesInRange, fetchLeaveSnapshot,
   createLeave, updateLeave, deleteLeave, approveLeave, rejectLeave, resetLeave,
   computeWorkingDays,
   type Leave, type LeaveType, type LeaveStatus, type LeaveBalance,
-  type RomanianHoliday,
+  type LeaveDetailsSnapshot, type RomanianHoliday,
 } from "../store/leavesStore";
 import { generateLeaveRequestPdf } from "../utils/leavePdf";
 
@@ -300,6 +301,7 @@ export default function Concedii() {
   const [submitting, setSubmitting] = createSignal(false);
   const [formDetails, setFormDetails] = createSignal<EmployeeLegalDetails | null>(null);
   const [approverConsent, setApproverConsent] = createSignal(false);
+  const [detailSnapshot, setDetailSnapshot] = createSignal<LeaveDetailsSnapshot | null>(null);
   const [detailLeave, setDetailLeave] = createSignal<Leave | null>(null);
   const [detailMonthLeaves, setDetailMonthLeaves] = createSignal<Leave[]>([]);
   const [overlapMonth, setOverlapMonth] = createSignal<{ y: number; m: number } | null>(null);
@@ -421,7 +423,11 @@ export default function Concedii() {
     if (id == null) { setFormDetails(null); return; }
     void (async () => {
       try {
-        const res = await apiFetch(`/api/employees/${id}/details`);
+        // Dosarul e protejat de gate-ul Rapoarte; apelam prin reportsFetch.
+        const res = await reportsFetch(`/api/employees/${id}/details`);
+        // Fara acces Rapoarte (401) nu putem sti daca exista dosar — nu afisam
+        // avertismentul "fara dosar" (ar fi inselator), doar ascundem preview-ul.
+        if (res.status === 401) { setFormDetails(null); return; }
         if (!res.ok) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
         const d = await res.json();
         if (!d) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
@@ -449,10 +455,17 @@ export default function Concedii() {
     })();
   });
 
-  // Reset acord aprobator cand se schimba cererea afisata in modal.
+  // Reset acord aprobator + (re)incarca snapshot-ul legal cand se schimba
+  // cererea afisata in modal. Snapshot-ul e protejat de gate-ul Rapoarte;
+  // fara token valid ramane null (sectiunea nu se afiseaza).
   createEffect(() => {
-    detailLeave();
+    const l = detailLeave();
     setApproverConsent(false);
+    setDetailSnapshot(null);
+    if (l == null) return;
+    void fetchLeaveSnapshot(l.id).then((snap) => {
+      if (detailLeave()?.id === l.id) setDetailSnapshot(snap);
+    });
   });
 
   function shiftOverlapMonth(delta: number) {
@@ -681,8 +694,12 @@ export default function Concedii() {
   }
 
   async function handleApprove(l: Leave) {
+    if (!approverConsent()) {
+      notify("Bifează acordul de aprobare pentru a aproba cererea.", "warn");
+      return;
+    }
     try {
-      const updated = await approveLeave(l.id);
+      const updated = await approveLeave(l.id, approverConsent());
       notify("Cerere aprobata.", "success");
       setDetailLeave(updated);
       await reloadBalances();
@@ -1205,7 +1222,7 @@ export default function Concedii() {
                     class="btn btn-sm concedii-action-btn"
                     classList={{ "is-current": l().status === "Approved" }}
                     style="background:#d4edda;color:#155724;border-color:#155724"
-                    disabled={l().status === "Approved" || (l().status !== "Approved" && !approverConsent())}
+                    disabled={l().status === "Approved" || !approverConsent()}
                     title={l().status !== "Approved" && !approverConsent() ? "Bifează acordul de aprobare" : undefined}
                     onClick={() => handleApprove(l())}
                   >✓ {l().status === "Approved" ? "Aprobată" : "Aprobă"}</button>
@@ -1259,8 +1276,9 @@ export default function Concedii() {
                   </div>
                 </Show>
 
-                {/* Date legale (snapshot la momentul cererii) */}
-                <Show when={l().detailsSnapshot}>
+                {/* Date legale (snapshot la momentul cererii) — protejat de
+                    gate-ul Rapoarte, adus separat prin fetchLeaveSnapshot. */}
+                <Show when={detailSnapshot()}>
                   {(snap) => (
                     <div style="border:1px solid var(--border,#2a2a2a);border-radius:8px;padding:10px 12px;font-size:13px">
                       <div style="font-weight:600;margin-bottom:6px">📋 Date legale ale cererii</div>

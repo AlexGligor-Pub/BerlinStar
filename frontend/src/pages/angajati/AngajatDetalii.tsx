@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import { apiFetch } from "../../utils/api";
+import { reportsFetch } from "../rapoarte/reports-auth";
 import { notify } from "../../store/notificationsStore";
 import ReportsGate from "../rapoarte/ReportsGate";
 
@@ -134,7 +135,7 @@ export default function AngajatDetalii() {
 
   async function loadDetails() {
     try {
-      const res = await apiFetch(`/api/employees/${employeeId()}/details`);
+      const res = await reportsFetch(`/api/employees/${employeeId()}/details`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
       if (d) {
@@ -169,7 +170,7 @@ export default function AngajatDetalii() {
   async function save() {
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/employees/${employeeId()}/details`, {
+      const res = await reportsFetch(`/api/employees/${employeeId()}/details`, {
         method: "PUT",
         body: JSON.stringify(form()),
       });
@@ -198,7 +199,7 @@ export default function AngajatDetalii() {
     if (!confirm("Ștergi dosarul de personal? Datele legale vor fi pierdute.")) return;
     setSaving(true);
     try {
-      const res = await apiFetch(`/api/employees/${employeeId()}/details`, { method: "DELETE" });
+      const res = await reportsFetch(`/api/employees/${employeeId()}/details`, { method: "DELETE" });
       if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`);
       setHasDetails(false);
       setForm({ ...EMPTY });

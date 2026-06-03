@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_reports_account_id
 from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
@@ -14,7 +14,7 @@ from app.models.account import Account
 from app.models.leave import Leave, LeaveType, LeaveStatus
 from app.schemas.leave import (
     LeaveCreate, LeavePatch, LeaveRead, LeaveBalance, LeaveTypeBreakdown, RomanianHoliday,
-    LeaveConsent,
+    LeaveConsent, LeaveApprove,
 )
 from app.utils.romanian_holidays import count_working_days, get_romanian_holidays
 from app.utils.soft_delete import soft_delete
@@ -61,7 +61,9 @@ def _serialize(l: Leave) -> LeaveRead:
         employee_consent_at=l.employee_consent_at,
         approver_consent=l.approver_consent,
         approver_name_snapshot=l.approver_name_snapshot,
-        details_snapshot=l.details_snapshot,
+        # `details_snapshot` (CNP/adresa/contact) NU se expune aici — contine
+        # date legale protejate de gate-ul Rapoarte. Se serveste doar prin
+        # GET /{leave_id}/snapshot (scope=reports).
         created_at=l.created_at,
         updated_at=l.updated_at,
         is_deleted=l.is_deleted,
@@ -438,9 +440,14 @@ async def consent_leave(
 @router.post("/{leave_id}/approve", response_model=LeaveRead)
 async def approve_leave(
     leave_id: int,
+    body: LeaveApprove,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> LeaveRead:
+    # Acordul digital al aprobatorului este obligatoriu — altfel "acord aprobator"
+    # ar fi inregistrat ca bifat fara consimtamant real (record legal eronat).
+    if not body.approver_consent:
+        raise HTTPException(400, "Acordul aprobatorului este necesar pentru aprobare.")
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:
         raise HTTPException(404, "Cererea nu a fost gasita.")
@@ -479,6 +486,23 @@ async def reset_leave(
     if loaded is None:
         raise HTTPException(500, "Eroare la resetare cerere.")
     return _serialize(loaded)
+
+
+@router.get("/{leave_id}/snapshot", response_model=dict | None)
+async def get_leave_snapshot(
+    leave_id: int,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_reports_account_id),
+) -> dict | None:
+    """Snapshot-ul datelor legale ale cererii (CNP/adresa/contact + firma).
+
+    Protejat de gate-ul Rapoarte (scope=reports), la fel ca dosarul de personal:
+    contine date sensibile care nu trebuie expuse prin lista uzuala de cereri.
+    """
+    l = await db.get(Leave, leave_id)
+    if l is None or l.account_id != account_id or l.is_deleted:
+        raise HTTPException(404, "Cererea nu a fost gasita.")
+    return l.details_snapshot
 
 
 @router.post("/{leave_id}/reject", response_model=LeaveRead)

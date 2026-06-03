@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { apiFetch, apiFetchJson } from "../utils/api";
+import { reportsFetch } from "../pages/rapoarte/reports-auth";
 
 export type LeaveType = "Concediu de odihna" | "Concediu medical" | "Business Trip" | "Concediu fara plata";
 export type LeaveStatus = "Pending" | "Approved" | "Rejected";
@@ -59,7 +60,8 @@ export interface Leave {
   employeeConsentAt: string | null;
   approverConsent: boolean;
   approverNameSnapshot: string | null;
-  detailsSnapshot: LeaveDetailsSnapshot | null;
+  // `detailsSnapshot` NU vine in lista (date legale protejate de gate-ul
+  // Rapoarte) — se aduce la cerere prin fetchLeaveSnapshot().
   createdAt: string;
   updatedAt: string | null;
   isDeleted: boolean;
@@ -120,7 +122,6 @@ interface RawLeave {
   employee_consent_at?: string | null;
   approver_consent?: boolean;
   approver_name_snapshot?: string | null;
-  details_snapshot?: LeaveDetailsSnapshot | null;
   created_at: string;
   updated_at: string | null;
   is_deleted: boolean;
@@ -149,7 +150,6 @@ function mapLeave(r: RawLeave): Leave {
     employeeConsentAt: r.employee_consent_at ?? null,
     approverConsent: r.approver_consent ?? false,
     approverNameSnapshot: r.approver_name_snapshot ?? null,
-    detailsSnapshot: r.details_snapshot ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     isDeleted: r.is_deleted,
@@ -279,8 +279,15 @@ export async function deleteLeave(id: number): Promise<void> {
   setLeaves(leaves().filter((l) => l.id !== id));
 }
 
-async function approvalAction(id: number, action: "approve" | "reject" | "reset"): Promise<Leave> {
-  const res = await apiFetch(`/api/leaves/${id}/${action}`, { method: "POST" });
+async function approvalAction(
+  id: number,
+  action: "approve" | "reject" | "reset",
+  body?: Record<string, unknown>,
+): Promise<Leave> {
+  const res = await apiFetch(`/api/leaves/${id}/${action}`, {
+    method: "POST",
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
     try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
@@ -291,9 +298,23 @@ async function approvalAction(id: number, action: "approve" | "reject" | "reset"
   return updated;
 }
 
-export const approveLeave = (id: number) => approvalAction(id, "approve");
+// Aprobarea necesita acordul digital al aprobatorului (validat si pe backend).
+export const approveLeave = (id: number, approverConsent = true) =>
+  approvalAction(id, "approve", { approver_consent: approverConsent });
 export const rejectLeave  = (id: number) => approvalAction(id, "reject");
 export const resetLeave   = (id: number) => approvalAction(id, "reset");
+
+/** Snapshot-ul datelor legale ale cererii — protejat de gate-ul Rapoarte.
+ *  Intoarce `null` daca lipseste sau daca nu exista token Rapoarte valid (401). */
+export async function fetchLeaveSnapshot(id: number): Promise<LeaveDetailsSnapshot | null> {
+  try {
+    const res = await reportsFetch(`/api/leaves/${id}/snapshot`);
+    if (!res.ok) return null;
+    return (await res.json()) as LeaveDetailsSnapshot | null;
+  } catch {
+    return null;
+  }
+}
 
 export async function consentLeave(id: number, employeeConsent: boolean): Promise<Leave> {
   const res = await apiFetch(`/api/leaves/${id}/consent`, {

@@ -47,7 +47,8 @@ class LeaveRead(BaseModel):
     employee_consent_at: datetime | None = None
     approver_consent:    bool = False
     approver_name_snapshot: str | None = None
-    details_snapshot:    dict | None = None
+    # `details_snapshot` (date legale sensibile) se serveste separat prin
+    # GET /api/leaves/{id}/snapshot (scope=reports), nu in lista uzuala.
     created_at:      datetime
     updated_at:      datetime | None
     is_deleted:      bool
@@ -56,6 +57,11 @@ class LeaveRead(BaseModel):
 
 class LeaveConsent(BaseModel):
     employee_consent: bool = True
+
+
+class LeaveApprove(BaseModel):
+    # Acordul digital al aprobatorului — obligatoriu (validat in router).
+    approver_consent: bool = False
 
 
 class LeaveTypeBreakdown(BaseModel):

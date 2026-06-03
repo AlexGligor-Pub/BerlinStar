@@ -1,5 +1,5 @@
 import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
-import type { Leave, LeaveType } from "../store/leavesStore";
+import { fetchLeaveSnapshot, type Leave, type LeaveType } from "../store/leavesStore";
 
 // ── Romanian font (NotoSans) — reutilizam acelasi asset ca generateDocuments ──
 let _roFontB64: string | null | false = false;
@@ -66,7 +66,10 @@ export async function generateLeaveRequestPdf(leave: Leave): Promise<void> {
     font = "NotoSans";
   }
 
-  const snap = leave.detailsSnapshot;
+  // Snapshot-ul cu datele legale e protejat de gate-ul Rapoarte; il aducem la
+  // cerere. Daca nu exista token Rapoarte valid, PDF-ul se genereaza fara
+  // sectiunea de date legale (numele angajatului ramane din cerere).
+  const snap = await fetchLeaveSnapshot(leave.id);
   const emp = snap?.employee ?? null;
   const company = snap?.company ?? null;
   const vac = snap?.vacation ?? null;
