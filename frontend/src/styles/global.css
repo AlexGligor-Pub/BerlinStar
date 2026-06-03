@@ -112,6 +112,28 @@ body {
   width: 100%;
 }
 
+/* Receptie: antetul (cautare + linia orizontala) ramane fix, doar lista de
+   carduri se scroleaza. Pagina umple inaltimea de sub navbar. */
+.reception-page {
+  height: calc(100dvh - var(--navbar-h, 52px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.reception-page .page-header {
+  position: static;
+  top: auto;
+  flex: 0 0 auto;
+}
+.reception-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 2px 16px;
+}
+
 /* ===== NAVBAR ===== */
 .navbar {
   background: var(--surface);
@@ -2260,6 +2282,25 @@ img.pos-theme-preview {
   min-width: 220px;
 }
 
+/* Modal cu un singur calendar (selectie interval start+end). */
+.date-modal-body--single {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-width: 260px;
+}
+
+.date-modal-range-label {
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--accent, #4f46e5);
+}
+
+.mini-cal--range {
+  min-width: 280px;
+}
+
 .date-modal .sl-modal-header {
   padding: 16px 24px 12px;
 }
@@ -2363,44 +2404,51 @@ img.pos-theme-preview {
   color: #fff;
   font-weight: 700;
 }
+/* Zilele dintre start si end ale intervalului. */
+.mini-cal-day--in-range,
+.mini-cal--range .mini-cal-day--in-range {
+  background: var(--accent-soft, rgba(99, 102, 241, 0.16));
+  color: var(--accent, #4f46e5);
+  border-radius: 0;
+}
+.mini-cal-day--in-range:hover:not(:disabled) {
+  background: var(--accent-soft, rgba(99, 102, 241, 0.24));
+}
+/* Capetele intervalului se lipesc de zona din mijloc. */
+.mini-cal-day--range-start,
+.mini-cal--range .mini-cal-day--range-start {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.mini-cal-day--range-end,
+.mini-cal--range .mini-cal-day--range-end {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
 .mini-cal-day--disabled {
   opacity: 0.25;
   cursor: default;
 }
 
-.reception-search {
-  width: 180px;
-  padding: 5px 10px;
-  font-size: 0.85rem;
-}
-
-.adv-search-chip {
-  display: inline-flex;
+/* Grupul celor doua inputuri de cautare, in header langa filtru. */
+.reception-search-group {
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 6px 3px 10px;
-  border-radius: 14px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  white-space: nowrap;
-  background: var(--accent-soft, rgba(99, 102, 241, 0.12));
-  color: var(--accent, #4f46e5);
-  border: 1px solid var(--accent, #4f46e5);
+  flex-wrap: wrap;
 }
 
-.adv-search-chip-x {
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 0.8rem;
-  line-height: 1;
-  padding: 2px 4px;
-  border-radius: 50%;
+.reception-search {
+  width: 150px;
+  height: 42px;
+  padding: 0 14px;
+  font-size: 0.85rem;
+  border-radius: 16px;
 }
 
-.adv-search-chip-x:hover {
-  background: rgba(0, 0, 0, 0.1);
+/* Inputul de cautare dupa service/produs (denumirea articolelor din devize). */
+.reception-search--item {
+  width: 190px;
 }
 
 .sse-status {

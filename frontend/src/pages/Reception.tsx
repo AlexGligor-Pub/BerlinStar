@@ -28,15 +28,21 @@ function fmtDateShort(ymd: string): string {
   return `${d.getDate()} ${RO_MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function MiniCalendar(props: {
-  value: string;
-  onChange: (v: string) => void;
-  minDate?: string;
+/** Calendar unic pentru selectarea unui interval (start + end pe acelasi calendar).
+ *  Primul click fixeaza inceputul (si reseteaza intervalul), al doilea click
+ *  fixeaza sfarsitul; daca al doilea click e inaintea primului, se inverseaza. */
+function RangeCalendar(props: {
+  start: string;
+  end: string;
+  onChange: (start: string, end: string) => void;
   maxDate: string;
 }) {
-  const initDate = new Date(props.value + "T12:00:00");
+  const initDate = new Date(props.start + "T12:00:00");
   const [viewYear, setViewYear] = createSignal(initDate.getFullYear());
   const [viewMonth, setViewMonth] = createSignal(initDate.getMonth());
+  // 0 = urmatorul click seteaza inceputul; 1 = urmatorul click seteaza sfarsitul
+  const [phase, setPhase] = createSignal<0 | 1>(0);
+  const [anchor, setAnchor] = createSignal(props.start);
 
   function prevMonth() {
     if (viewMonth() === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -47,6 +53,19 @@ function MiniCalendar(props: {
     if (viewYear() === max.getFullYear() && viewMonth() >= max.getMonth()) return;
     if (viewMonth() === 11) { setViewYear(y => y + 1); setViewMonth(0); }
     else setViewMonth(m => m + 1);
+  }
+
+  function pick(date: string) {
+    if (phase() === 0) {
+      setAnchor(date);
+      props.onChange(date, date);
+      setPhase(1);
+    } else {
+      const a = anchor();
+      if (date >= a) props.onChange(a, date);
+      else props.onChange(date, a);
+      setPhase(0);
+    }
   }
 
   const cells = createMemo(() => {
@@ -69,7 +88,7 @@ function MiniCalendar(props: {
   const todayYMD = toYMD(new Date());
 
   return (
-    <div class="mini-cal">
+    <div class="mini-cal mini-cal--range">
       <div class="mini-cal-header">
         <button class="mini-cal-nav" type="button" onClick={prevMonth}>‹</button>
         <span class="mini-cal-title">{RO_MONTHS_FULL[viewMonth()]} {viewYear()}</span>
@@ -80,20 +99,25 @@ function MiniCalendar(props: {
         <For each={cells()}>
           {(cell) => {
             if (!cell.date) return <span />;
-            const disabled = () =>
-              cell.date! > props.maxDate ||
-              (props.minDate !== undefined && cell.date! < props.minDate);
+            const disabled = () => cell.date! > props.maxDate;
+            const isStart = () => cell.date === props.start;
+            const isEnd = () => cell.date === props.end;
+            const inRange = () =>
+              props.start !== props.end && cell.date! > props.start && cell.date! < props.end;
             return (
               <button
                 type="button"
                 class="mini-cal-day"
                 classList={{
-                  "mini-cal-day--selected": cell.date === props.value,
-                  "mini-cal-day--today": cell.date === todayYMD && cell.date !== props.value,
+                  "mini-cal-day--selected": isStart() || isEnd(),
+                  "mini-cal-day--range-start": isStart() && props.start !== props.end,
+                  "mini-cal-day--range-end": isEnd() && props.start !== props.end,
+                  "mini-cal-day--in-range": inRange(),
+                  "mini-cal-day--today": cell.date === todayYMD && !isStart() && !isEnd(),
                   "mini-cal-day--disabled": disabled(),
                 }}
                 disabled={disabled()}
-                onClick={() => props.onChange(cell.date!)}
+                onClick={() => pick(cell.date!)}
               >{cell.day}</button>
             );
           }}
@@ -1556,20 +1580,22 @@ export default function Reception() {
   document.addEventListener("click", onOutside);
   onCleanup(() => document.removeEventListener("click", onOutside));
 
-  // Cautare avansata: dupa denumirea articolelor din devize (item_q pe server).
+  // Cautare dupa service/produs (denumirea articolelor din devize).
+  //  itemInput  = filtru pe lista din browser (articolele deja incarcate)
+  //  itemSearch = termenul trimis la server (item_q), ca serverSearch pt titlu
+  const [itemInput, setItemInput] = createSignal("");
   const [itemSearch, setItemSearch] = createSignal("");
-  const [showAdvanced, setShowAdvanced] = createSignal(false);
-  const [advDraft, setAdvDraft] = createSignal("");
 
   const filtered = createMemo(() => {
     const sel = selected();
-    // Cand cautam dupa articol, lista vine deja filtrata de pe server; nu mai
-    // aplicam filtrul de titlu local (titlul devizului nu contine denumirea articolului).
-    const q = itemSearch() ? "" : search().toLowerCase().trim();
+    const itemQ = itemInput().toLowerCase().trim();
+    // Cand cautam pe articol, ignoram filtrul de titlu (sunt exclusive oricum).
+    const titleQ = itemQ ? "" : search().toLowerCase().trim();
     return receipts().filter((r) => {
       const matchMetoda = sel.size === 0 || sel.has(r.metodaPlata ?? "Neplatit");
-      const matchSearch = !q || r.titlu.toLowerCase().includes(q) || (r.clientNume ?? "").toLowerCase().includes(q);
-      return matchMetoda && matchSearch;
+      if (!matchMetoda) return false;
+      if (itemQ) return r.items.some((it) => (it.name ?? "").toLowerCase().includes(itemQ));
+      return !titleQ || r.titlu.toLowerCase().includes(titleQ) || (r.clientNume ?? "").toLowerCase().includes(titleQ);
     });
   });
 
@@ -1583,77 +1609,87 @@ export default function Reception() {
     loadReceipts(dateStart(), dateEnd(), 200, ss, device()?.locationId ?? null, iq);
   });
 
-  // Când search se golește, resetăm și server search-ul
-  createEffect(() => {
-    if (!search()) setServerSearch("");
-  });
+  // Cand un input se goleste, resetam si termenul lui de server.
+  createEffect(() => { if (!search()) setServerSearch(""); });
+  createEffect(() => { if (!itemInput()) setItemSearch(""); });
 
-  // Cautare automata pe server: daca nu exista NICIUN rezultat in lista deja
-  // incarcata in browser, lansam automat cautarea pe server (debounce). Daca
-  // exista rezultate locale, ramane butonul manual "Cauta pe server".
+  // Cautare automata pe server (titlu): daca nu exista NICIUN rezultat in lista
+  // deja incarcata in browser, lansam automat cautarea pe server (debounce).
+  // Daca exista rezultate locale, ramane butonul manual "Cauta pe server".
   let _autoTimer: ReturnType<typeof setTimeout> | undefined;
   createEffect(() => {
     const q = search().trim();
     const localCount = filtered().length;
     const ss = serverSearch();
-    const itemActive = !!itemSearch();
     clearTimeout(_autoTimer);
-    if (!q || itemActive) return;       // fara termen sau in mod cautare-articol
+    if (!q || itemInput()) return;       // fara termen sau in mod cautare-articol
     if (localCount > 0) return;          // avem rezultate local -> buton manual
     if (ss === q) return;                // deja cautat pe server pentru acest termen
     _autoTimer = setTimeout(() => {
-      if (search().trim() === q && !itemSearch()) setServerSearch(q);
+      if (search().trim() === q && !itemInput()) setServerSearch(q);
     }, 450);
   });
   onCleanup(() => clearTimeout(_autoTimer));
 
-  function applyAdvancedSearch() {
-    const term = advDraft().trim();
-    if (!term) return;
-    setSearch("");          // cautarea pe articol e separata de cea pe titlu
-    setServerSearch("");
-    setItemSearch(term);
-    setShowAdvanced(false);
-  }
+  // Acelasi comportament pentru cautarea pe service/produs: intai in lista din
+  // browser, iar daca nu gaseste nimic local, cauta automat pe server (item_q).
+  let _autoItemTimer: ReturnType<typeof setTimeout> | undefined;
+  createEffect(() => {
+    const q = itemInput().trim();
+    const localCount = filtered().length;
+    const is = itemSearch();
+    clearTimeout(_autoItemTimer);
+    if (!q) return;
+    if (localCount > 0) return;          // avem rezultate local -> buton manual
+    if (is === q) return;                // deja cautat pe server pentru acest termen
+    _autoItemTimer = setTimeout(() => {
+      if (itemInput().trim() === q) setItemSearch(q);
+    }, 450);
+  });
+  onCleanup(() => clearTimeout(_autoItemTimer));
 
-  function clearAdvancedSearch() {
-    setItemSearch("");
-    setAdvDraft("");
+  // Cele doua cautari sunt exclusive: cand scrii in una, o golesti pe cealalta.
+  function onTitleInput(v: string) {
+    setSearch(v);
+    if (v && itemInput()) { setItemInput(""); setItemSearch(""); }
+  }
+  function onItemInput(v: string) {
+    setItemInput(v);
+    if (v && search()) { setSearch(""); setServerSearch(""); }
   }
 
   let sentinelRef: HTMLDivElement | undefined;
+  let scrollRef: HTMLDivElement | undefined;
   onMount(() => {
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreReceipts(); },
-      { threshold: 0.1 }
+      { root: scrollRef ?? null, threshold: 0.1 }
     );
     if (sentinelRef) observer.observe(sentinelRef);
     onCleanup(() => observer.disconnect());
   });
 
   return (
-    <div class="page-content">
+    <div class="page-content reception-page">
       <div class="page-header">
         <h1 class="page-title">
-          Receptie
+          Recepție
           <button class="btn btn-sm btn-ghost date-range-btn" onClick={openDateModal}>
             {dateRangeLabel()}
           </button>
         </h1>
         <div class="reception-header-right">
-          <div style="display:flex;align-items:center;gap:4px">
+          <div class="reception-search-group">
             <input
               class="input reception-search"
-              style="width:200px"
               type="search"
               placeholder="Cauta dupa titlu..."
               value={search()}
-              onInput={(e) => setSearch(e.currentTarget.value)}
-              disabled={!!itemSearch()}
+              onInput={(e) => onTitleInput(e.currentTarget.value)}
             />
             {/* Buton manual: doar cand exista rezultate in lista locala. Daca nu
                 exista, cautarea pe server porneste automat (vezi createEffect). */}
-            <Show when={search() && filtered().length > 0 && !itemSearch()}>
+            <Show when={search() && filtered().length > 0 && !itemInput()}>
               <button
                 class="btn btn-sm btn-ghost"
                 style="font-size:11px;white-space:nowrap;flex-shrink:0"
@@ -1662,19 +1698,23 @@ export default function Reception() {
                 Caută pe server{serverSearch() === search() ? " ✓" : ""}
               </button>
             </Show>
-            <button
-              class="btn btn-sm btn-ghost"
-              style="font-size:11px;white-space:nowrap;flex-shrink:0"
-              title="Cauta devizele dupa denumirea articolelor din ele"
-              onClick={() => { setAdvDraft(itemSearch()); setShowAdvanced(true); }}
-            >
-              Căutare avansată
-            </button>
-            <Show when={itemSearch()}>
-              <span class="adv-search-chip">
-                Articol: „{itemSearch()}”
-                <button class="adv-search-chip-x" title="Sterge cautarea pe articol" onClick={clearAdvancedSearch}>✕</button>
-              </span>
+            <input
+              class="input reception-search reception-search--item"
+              type="search"
+              placeholder="Cautare dupa service/produs..."
+              value={itemInput()}
+              onInput={(e) => onItemInput(e.currentTarget.value)}
+            />
+            {/* La fel ca la titlu: buton manual cand exista rezultate local;
+                altfel cautarea pe server (item_q) porneste automat. */}
+            <Show when={itemInput() && filtered().length > 0}>
+              <button
+                class="btn btn-sm btn-ghost"
+                style="font-size:11px;white-space:nowrap;flex-shrink:0"
+                onClick={() => setItemSearch(itemInput())}
+              >
+                Caută pe server{itemSearch() === itemInput() ? " ✓" : ""}
+              </button>
             </Show>
           </div>
           <div class="filter-dropdown">
@@ -1717,37 +1757,38 @@ export default function Reception() {
         </div>
       </div>
 
-
-      <Show
-        when={filtered().length > 0}
-        fallback={
-          <div class="card" style="text-align:center;padding:48px 16px">
-            <div class="text-muted">
-              {itemSearch()
-                ? `Niciun deviz nu contine articolul „${itemSearch()}”.`
-                : search()
-                ? `Niciun rezultat pentru „${search()}”.`
-                : receipts().length === 0
-                ? "Nu exista bonuri inregistrate."
-                : "Niciun bon pentru filtrul selectat."}
+      <div class="reception-scroll" ref={scrollRef}>
+        <Show
+          when={filtered().length > 0}
+          fallback={
+            <div class="card" style="text-align:center;padding:48px 16px">
+              <div class="text-muted">
+                {itemInput()
+                  ? `Niciun deviz nu contine articolul „${itemInput()}”.`
+                  : search()
+                  ? `Niciun rezultat pentru „${search()}”.`
+                  : receipts().length === 0
+                  ? "Nu exista bonuri inregistrate."
+                  : "Niciun bon pentru filtrul selectat."}
+              </div>
             </div>
+          }
+        >
+          <div class="rcard-list">
+            <For each={filtered()}>
+              {(r) => <ReceiptCard receipt={r} />}
+            </For>
           </div>
-        }
-      >
-        <div class="rcard-list">
-          <For each={filtered()}>
-            {(r) => <ReceiptCard receipt={r} />}
-          </For>
-        </div>
-        <div ref={sentinelRef} class="reception-sentinel">
-          <Show when={loadingMore()}>
-            <span class="text-muted" style="font-size:.85rem">Se incarca...</span>
-          </Show>
-          <Show when={!hasMore() && !loadingMore() && receipts().length > 0}>
-            <span class="text-muted" style="font-size:.85rem">Nu mai sunt bonuri.</span>
-          </Show>
-        </div>
-      </Show>
+          <div ref={sentinelRef} class="reception-sentinel">
+            <Show when={loadingMore()}>
+              <span class="text-muted" style="font-size:.85rem">Se incarca...</span>
+            </Show>
+            <Show when={!hasMore() && !loadingMore() && receipts().length > 0}>
+              <span class="text-muted" style="font-size:.85rem">Nu mai sunt bonuri.</span>
+            </Show>
+          </div>
+        </Show>
+      </div>
 
       <Show when={showDateModal()}>
         <div class="sl-modal-overlay">
@@ -1756,59 +1797,22 @@ export default function Reception() {
               <span class="sl-modal-title">Filtru dupa data</span>
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>✕</button>
             </div>
-            <div class="date-modal-body">
-              <div class="date-modal-col">
-                <div class="date-modal-col-label">Data inceput</div>
-                <MiniCalendar
-                  value={draftStart()}
-                  onChange={(v) => { setDraftStart(v); if (v > draftEnd()) setDraftEnd(v); }}
-                  maxDate={todayYMD}
-                />
+            <div class="date-modal-body date-modal-body--single">
+              <div class="date-modal-range-label">
+                {draftStart() === draftEnd()
+                  ? fmtDateShort(draftStart())
+                  : `${fmtDateShort(draftStart())} — ${fmtDateShort(draftEnd())}`}
               </div>
-              <div class="date-modal-col">
-                <div class="date-modal-col-label">Data sfarsit</div>
-                <MiniCalendar
-                  value={draftEnd()}
-                  onChange={setDraftEnd}
-                  minDate={draftStart()}
-                  maxDate={todayYMD}
-                />
-              </div>
+              <RangeCalendar
+                start={draftStart()}
+                end={draftEnd()}
+                onChange={(s, e) => { setDraftStart(s); setDraftEnd(e); }}
+                maxDate={todayYMD}
+              />
             </div>
             <div class="sl-modal-footer">
               <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>Anuleaza</button>
               <button class="btn btn-primary btn-sm" onClick={applyDateFilter}>Aplica</button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      <Show when={showAdvanced()}>
-        <div class="sl-modal-overlay">
-          <div class="date-modal" style="max-width:420px">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Căutare avansată</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdvanced(false)}>✕</button>
-            </div>
-            <div style="padding:16px">
-              <div class="text-muted" style="font-size:.85rem;margin-bottom:8px">
-                Cauta devizele care contin un articol cu denumirea de mai jos.
-                Ex: <b>Roata de cauciuc</b> arata doar devizele care au acest articol.
-              </div>
-              <input
-                class="input"
-                style="width:100%"
-                type="search"
-                placeholder="Denumire articol..."
-                value={advDraft()}
-                onInput={(e) => setAdvDraft(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") applyAdvancedSearch(); }}
-                autofocus
-              />
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdvanced(false)}>Anuleaza</button>
-              <button class="btn btn-primary btn-sm" onClick={applyAdvancedSearch} disabled={!advDraft().trim()}>Cauta</button>
             </div>
           </div>
         </div>
