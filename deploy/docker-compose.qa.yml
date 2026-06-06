@@ -1,0 +1,20 @@
+# Override pentru mediul QA (server LAN 192.168.1.136, fara domeniu/TLS).
+# Rulare:
+#   docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
+#
+# Diferente fata de productie:
+#   - frontend publica direct portul 80 catre host (nu mai trecem prin Caddy,
+#     fiindca nu avem domeniu public / certificat Let's Encrypt pe QA).
+#   - Caddy este mutat sub profile "edge" => nu porneste implicit.
+services:
+  frontend:
+    ports:
+      - "80:80"
+
+  caddy:
+    profiles:
+      - edge
+
+  db:
+    ports:
+      - "5432:5432"

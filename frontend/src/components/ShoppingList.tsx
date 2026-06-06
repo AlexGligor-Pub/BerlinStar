@@ -2156,7 +2156,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       {/* Modal */}
       <Show when={modal() !== null}>
         <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:600px;width:100%">
+          <div class="sl-modal" style="max-width:1000px;width:100%">
             <div class="sl-modal-header">
               <span class="sl-modal-title">
                 {modal() === "descriere" ? "Descriere" : "Observații"}
@@ -2165,15 +2165,29 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
             </div>
             <textarea
               class="sl-modal-textarea"
-              placeholder={modal() === "descriere" ? "Scrie o descriere..." : "Observații ..."}
+              placeholder={modal() === "descriere" ? "• Scrie o descriere..." : "• Observații ..."}
               maxlength={200}
               value={modalDraft()}
+              onFocus={() => { if (modalDraft().trim() === "") setModalDraft(BULLET); }}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                const ta = e.currentTarget as HTMLTextAreaElement;
+                const before = ta.value.slice(0, ta.selectionStart);
+                const after = ta.value.slice(ta.selectionEnd);
+                const next = before + "\n" + BULLET + after;
+                setModalDraft(modal() === "dateTehn" && modalUppercase() ? next.toUpperCase() : next);
+                queueMicrotask(() => {
+                  const pos = (before + "\n" + BULLET).length;
+                  ta.selectionStart = ta.selectionEnd = pos;
+                });
+              }}
               onInput={(e) => {
                 const val = modal() === "dateTehn" && modalUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
                 setModalDraft(val);
               }}
-              rows={14}
-              style={modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase" : ""}
+              rows={24}
+              style={`min-height:460px;${modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase;" : ""}`}
               autofocus
             />
             <Show when={modal() === "dateTehn"}>

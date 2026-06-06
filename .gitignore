@@ -50,3 +50,12 @@ backend/logs/*.log.*
 
 # Fisier .env de pe server cu secrete — nu intra in git
 ServerDotEnvFile
+
+# Chei SSH pentru serverul QA — NU intra in git
+QA_ENV/
+
+# Env QA cu secrete (SECRET_KEY, chei S3) — nu intra in git
+deploy/.env.qa
+
+# Lock-uri temporare Claude Code
+.claude/*.lock
