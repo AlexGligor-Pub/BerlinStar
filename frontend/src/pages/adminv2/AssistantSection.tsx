@@ -1,18 +1,18 @@
 import { For, Show, createSignal, onCleanup } from "solid-js";
 import { API_BASE, readJsonSafe } from "../../utils/api";
 import { adminFetch } from "./admin-auth";
-import Spinner from "../../components/ui/Spinner";
+import { renderMarkdown } from "../../utils/markdown";
 
 /**
- * Asistent AI — chat cu Claude Code agentic care ruleaza PE SERVER (host),
- * in ~/berlinstar. Backend-ul proxeaza catre agent-bridge; aici doar trimitem
- * prompt-ul si afisam stream-ul SSE (text + pasi tool).
+ * Asistent AI — widget flotant (FAB dreapta-jos) care deschide un panou de chat
+ * cu Claude Code agentic ruland PE SERVER (host) in ~/berlinstar.
+ * Backend-ul proxeaza catre agent-bridge; aici doar trimitem prompt-ul si
+ * afisam stream-ul SSE (text markdown + pasi tool). Mobile-friendly.
  *
- * ⚠️ Claude ruleaza cu autonomie totala pe host (poate rula comenzi, edita cod,
- * docker, deploy). Acces doar super-admin.
+ * ⚠️ Claude ruleaza cu autonomie totala pe host. Acces doar super-admin.
  */
 
-type Kind = "user" | "assistant" | "thinking" | "tool" | "tool_result" | "error" | "system";
+type Kind = "user" | "assistant" | "thinking" | "tool" | "tool_result" | "error";
 
 interface Msg {
   kind: Kind;
@@ -22,6 +22,7 @@ interface Msg {
 }
 
 export default function AssistantSection() {
+  const [open, setOpen] = createSignal(false);
   const [messages, setMessages] = createSignal<Msg[]>([]);
   const [input, setInput] = createSignal("");
   const [streaming, setStreaming] = createSignal(false);
@@ -39,13 +40,9 @@ export default function AssistantSection() {
   }
 
   function closeStream() {
-    if (es) {
-      es.close();
-      es = null;
-    }
+    if (es) { es.close(); es = null; }
     setStreaming(false);
   }
-
   onCleanup(closeStream);
 
   function openStream(id: string, token: string) {
@@ -55,44 +52,20 @@ export default function AssistantSection() {
     es = new EventSource(url);
     es.onmessage = (e) => {
       let data: any;
-      try {
-        data = JSON.parse(e.data);
-      } catch {
-        return;
-      }
+      try { data = JSON.parse(e.data); } catch { return; }
       switch (data.type) {
-        case "assistant_text":
-          if (data.text?.trim()) push({ kind: "assistant", text: data.text });
-          break;
-        case "thinking":
-          if (data.text?.trim()) push({ kind: "thinking", text: data.text });
-          break;
-        case "tool_use":
-          push({ kind: "tool", tool: data.name, input: data.input });
-          break;
-        case "tool_result":
-          push({ kind: "tool_result", text: data.text, ...(data.is_error ? { tool: "error" } : {}) });
-          break;
-        case "error":
-          push({ kind: "error", text: data.message ?? "Eroare." });
-          break;
-        case "result":
-          if (data.is_error) push({ kind: "error", text: "Rularea s-a încheiat cu eroare." });
-          break;
-        case "done":
-          closeStream();
-          break;
-        case "idle":
-          closeStream();
-          break;
+        case "assistant_text": if (data.text?.trim()) push({ kind: "assistant", text: data.text }); break;
+        case "thinking": if (data.text?.trim()) push({ kind: "thinking", text: data.text }); break;
+        case "tool_use": push({ kind: "tool", tool: data.name, input: data.input }); break;
+        case "tool_result": push({ kind: "tool_result", text: data.text, ...(data.is_error ? { tool: "error" } : {}) }); break;
+        case "error": push({ kind: "error", text: data.message ?? "Eroare." }); break;
+        case "result": if (data.is_error) push({ kind: "error", text: "Rularea s-a încheiat cu eroare." }); break;
+        case "done": closeStream(); break;
+        case "idle": closeStream(); break;
       }
     };
     es.onerror = () => {
-      // Cand stream-ul se inchide normal (dupa "done"), EventSource emite error.
-      if (es && es.readyState === EventSource.CLOSED) {
-        setStreaming(false);
-        es = null;
-      }
+      if (es && es.readyState === EventSource.CLOSED) { setStreaming(false); es = null; }
     };
   }
 
@@ -103,7 +76,6 @@ export default function AssistantSection() {
     setError("");
     setInput("");
     push({ kind: "user", text: prompt });
-
     const id = chatId();
     const path = id ? `/api/admin/assistant/chats/${id}/turns` : "/api/admin/assistant/chats";
     try {
@@ -115,10 +87,7 @@ export default function AssistantSection() {
       }
       const d = await readJsonSafe<{ chat_id?: string; stream_token?: string }>(res);
       const newId = d.chat_id ?? id;
-      if (!newId || !d.stream_token) {
-        setError("Răspuns invalid de la server.");
-        return;
-      }
+      if (!newId || !d.stream_token) { setError("Răspuns invalid de la server."); return; }
       if (!id && d.chat_id) setChatId(d.chat_id);
       openStream(newId, d.stream_token);
     } catch {
@@ -134,76 +103,70 @@ export default function AssistantSection() {
   }
 
   return (
-    <div>
-      <div class="page-header" style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px">
-        <h2 class="page-title" style="font-size:1.25rem">🤖 Asistent AI</h2>
-        <button class="btn btn-ghost btn-sm" onClick={resetChat} disabled={streaming()}>Conversație nouă</button>
-      </div>
-
-      <div style="background:color-mix(in srgb, var(--danger) 6%, transparent);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:.85rem;color:var(--text-muted)">
-        Claude rulează <b>agentic pe server</b> în <code>~/berlinstar</code> cu autonomie totală
-        (poate rula comenzi, edita cod, docker, deploy). Folosește cu grijă.
-      </div>
-
-      <div
-        ref={scrollEl}
-        class="card"
-        style="padding:14px;height:min(60vh,520px);overflow-y:auto;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)"
-      >
-        <Show when={messages().length === 0}>
-          <div class="text-muted" style="margin:auto;text-align:center">
-            Întreabă-l ceva — ex. „rulează <code>git status</code> și rezumă branch-ul și modificările".
-          </div>
-        </Show>
-        <For each={messages()}>
-          {(m) => <MessageBubble m={m} />}
-        </For>
-        <Show when={streaming()}>
-          <div class="text-muted" style="font-size:.8rem;display:flex;align-items:center;gap:6px">
-            <Spinner size={12} /> Claude lucrează…
-          </div>
-        </Show>
-      </div>
-
-      <Show when={error()}>
-        <div class="login-error" style="margin-top:10px">{error()}</div>
+    <>
+      <Show when={!open()}>
+        <button class="ai-fab" onClick={() => setOpen(true)} aria-label="Asistent AI" title="Asistent AI">
+          🤖
+        </button>
       </Show>
 
-      <form onSubmit={send} style="margin-top:12px;display:flex;gap:8px;align-items:flex-end">
-        <textarea
-          class="input"
-          style="flex:1;min-height:48px;max-height:160px;resize:vertical;font-family:inherit"
-          placeholder="Scrie un mesaj pentru Claude… (Enter trimite, Shift+Enter rând nou)"
-          value={input()}
-          onInput={(e) => setInput(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send(e);
-            }
-          }}
-          disabled={streaming()}
-        />
-        <button class="btn btn-primary" type="submit" disabled={streaming() || !input().trim()}>
-          {streaming() ? "…" : "Trimite"}
-        </button>
-      </form>
-    </div>
+      <Show when={open()}>
+        <div class="ai-panel">
+          <div class="ai-panel__header">
+            <span class="ai-panel__title">🤖 Asistent AI</span>
+            <div class="ai-panel__actions">
+              <button class="btn btn-ghost btn-sm" onClick={resetChat} disabled={streaming()}>Nou</button>
+              <button class="ai-panel__close" onClick={() => setOpen(false)} aria-label="Închide">✕</button>
+            </div>
+          </div>
+
+          <div ref={scrollEl} class="ai-panel__body">
+            <Show when={messages().length === 0}>
+              <div class="ai-empty">
+                Întreabă-l ceva — ex. „rulează <code>git status</code> și rezumă branch-ul".
+                <div class="ai-warn">⚠️ Rulează agentic pe server cu autonomie totală.</div>
+              </div>
+            </Show>
+            <For each={messages()}>{(m) => <MessageBubble m={m} />}</For>
+            <Show when={streaming()}>
+              <div class="ai-working"><span class="spinner ai-spinner" /> Claude lucrează…</div>
+            </Show>
+          </div>
+
+          <Show when={error()}>
+            <div class="ai-error">{error()}</div>
+          </Show>
+
+          <form onSubmit={send} class="ai-panel__input">
+            <textarea
+              class="input ai-textarea"
+              placeholder="Scrie un mesaj… (Enter trimite)"
+              value={input()}
+              onInput={(e) => setInput(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); }
+              }}
+              disabled={streaming()}
+              rows={1}
+            />
+            <button class="btn btn-primary ai-send" type="submit" disabled={streaming() || !input().trim()}>
+              {streaming() ? "…" : "➤"}
+            </button>
+          </form>
+        </div>
+      </Show>
+    </>
   );
 }
 
 function MessageBubble(props: { m: Msg }) {
   const m = props.m;
   if (m.kind === "user") {
-    return (
-      <div style="align-self:flex-end;max-width:85%;background:var(--accent);color:#fff;padding:8px 12px;border-radius:12px 12px 2px 12px;white-space:pre-wrap;word-break:break-word">
-        {m.text}
-      </div>
-    );
+    return <div class="ai-msg ai-msg--user">{m.text}</div>;
   }
   if (m.kind === "tool") {
     return (
-      <div style="align-self:flex-start;font-size:.82rem;color:var(--text-muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:ui-monospace,monospace">
+      <div class="ai-msg ai-msg--tool">
         🔧 <b>{m.tool}</b>
         <Show when={m.input && Object.keys(m.input as object).length > 0}>
           <span> · {shortInput(m.input)}</span>
@@ -212,32 +175,16 @@ function MessageBubble(props: { m: Msg }) {
     );
   }
   if (m.kind === "tool_result") {
-    return (
-      <div style={`align-self:flex-start;max-width:85%;font-size:.78rem;color:${m.tool === "error" ? "var(--danger)" : "var(--text-muted)"};background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-word;max-height:160px;overflow:auto`}>
-        {m.text}
-      </div>
-    );
+    return <div class="ai-msg ai-msg--toolres" classList={{ "ai-msg--toolerr": m.tool === "error" }}>{m.text}</div>;
   }
   if (m.kind === "thinking") {
-    return (
-      <div style="align-self:flex-start;max-width:85%;font-size:.82rem;font-style:italic;color:var(--text-muted);white-space:pre-wrap;word-break:break-word">
-        💭 {m.text}
-      </div>
-    );
+    return <div class="ai-msg ai-msg--thinking">💭 {m.text}</div>;
   }
   if (m.kind === "error") {
-    return (
-      <div style="align-self:flex-start;max-width:85%;color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,transparent);border:1px solid var(--danger);border-radius:10px;padding:8px 12px;white-space:pre-wrap">
-        ⚠️ {m.text}
-      </div>
-    );
+    return <div class="ai-msg ai-msg--error">⚠️ {m.text}</div>;
   }
-  // assistant
-  return (
-    <div style="align-self:flex-start;max-width:85%;background:var(--surface);border:1px solid var(--border);padding:8px 12px;border-radius:12px 12px 12px 2px;white-space:pre-wrap;word-break:break-word">
-      {m.text}
-    </div>
-  );
+  // assistant — markdown
+  return <div class="ai-msg ai-msg--assistant ai-md" innerHTML={renderMarkdown(m.text ?? "")} />;
 }
 
 function shortInput(input: unknown): string {
@@ -248,7 +195,7 @@ function shortInput(input: unknown): string {
     if (typeof obj?.path === "string") return obj.path as string;
     if (typeof obj?.pattern === "string") return obj.pattern as string;
     const s = JSON.stringify(input);
-    return s.length > 120 ? s.slice(0, 120) + "…" : s;
+    return s.length > 100 ? s.slice(0, 100) + "…" : s;
   } catch {
     return "";
   }
