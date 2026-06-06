@@ -14,3 +14,10 @@ TOKEN_EXPIRE_DAYS: int = 30
 # Daca dintr-un motiv anume DB-ul nu poate fi atins, runtime_config.py
 # foloseste ca fallback variabilele de mediu de mai jos. In productie acestea
 # pot lipsi — UI-ul va auto-genera cheia Fernet la prima salvare.
+
+# === Asistent AI (AdminV2) ===
+# Backend-ul nu ruleaza Claude direct — proxeaza catre "agent-bridge" de pe host
+# (vezi ops/agent-bridge/). Feature-flag OFF implicit; se activeaza pe QA.
+ASSISTANT_ENABLED: bool = os.getenv("ASSISTANT_ENABLED", "0") == "1"
+ASSISTANT_BRIDGE_URL: str = os.getenv("ASSISTANT_BRIDGE_URL", "http://host.docker.internal:8765")
+ASSISTANT_BRIDGE_SECRET: str | None = os.getenv("ASSISTANT_BRIDGE_SECRET")

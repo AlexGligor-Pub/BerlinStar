@@ -16,8 +16,9 @@ import SubscriptionSettingsSection from "./adminv2/SubscriptionSettingsSection";
 import SubscriptionAccountsSection from "./adminv2/SubscriptionAccountsSection";
 import TasksSection from "./adminv2/TasksSection";
 import LogsSection from "./adminv2/LogsSection";
+import AssistantSection from "./adminv2/AssistantSection";
 
-type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
+type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi" | "asistent-ai";
 
 interface NavItem { id: Section; label: string; icon: string }
 interface NavCategory { label: string; items: NavItem[] }
@@ -64,6 +65,7 @@ const NAV_CATEGORIES: NavCategory[] = [
       { id: "logs", label: "Logs", icon: "📜" },
       { id: "import-legacy", label: "Import Legacy", icon: "🗃️" },
       { id: "demo-seed", label: "Demo Seeder", icon: "🌱" },
+      { id: "asistent-ai", label: "Asistent AI", icon: "🤖" },
     ],
   },
 ];
@@ -268,6 +270,9 @@ export default function AdminV2() {
             </Show>
             <Show when={section() === "demo-seed"}>
               <DemoSeedSection />
+            </Show>
+            <Show when={section() === "asistent-ai"}>
+              <AssistantSection />
             </Show>
           </main>
         </div>

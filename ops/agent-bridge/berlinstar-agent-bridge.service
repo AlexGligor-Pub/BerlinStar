@@ -1,0 +1,25 @@
+# systemd --user unit pentru agent-bridge.
+# Instalare:
+#   mkdir -p ~/.config/systemd/user
+#   cp ops/agent-bridge/berlinstar-agent-bridge.service ~/.config/systemd/user/
+#   loginctl enable-linger berlinqa
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now berlinstar-agent-bridge
+[Unit]
+Description=BerlinStar agent-bridge (Claude Code agentic pe host)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/berlinstar
+EnvironmentFile=%h/.config/berlinstar-agent-bridge.env
+# claude CLI e instalat la ~/.local/bin — trebuie în PATH pentru SDK.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/agent-bridge-venv/bin/uvicorn bridge:app --host 0.0.0.0 --port 8765
+# bridge.py e în ~/berlinstar/ops/agent-bridge — îl punem pe PYTHONPATH.
+Environment=PYTHONPATH=%h/berlinstar/ops/agent-bridge
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

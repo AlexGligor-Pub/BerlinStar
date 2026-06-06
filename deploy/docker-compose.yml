@@ -55,6 +55,9 @@ services:
       dockerfile: deploy/backend.Dockerfile
     env_file:
       - .env
+    # Asistent AI: backend-ul ajunge la agent-bridge de pe host via host-gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - web
       - internal
