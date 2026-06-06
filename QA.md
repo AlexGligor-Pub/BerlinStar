@@ -133,7 +133,29 @@ docker compose -f docker-compose.yml -f docker-compose.qa.yml up -d --build
 
 ---
 
-## 7. Operații uzuale & debugging
+## 7. Claude Code pe QA (AI pe server)
+
+Claude Code e instalat pe server (binar nativ, fără Node) la `~/.local/bin/claude`.
+Cheia API (`ANTHROPIC_API_KEY`) e configurată în `~/.bashrc`, deci într-o sesiune SSH
+interactivă se încarcă automat.
+
+Folosire — pornește AI direct în folderul proiectului:
+```bash
+ssh -i /tmp/id_ed25519_siemens berlinqa@192.168.1.136
+cd ~/berlinstar
+claude
+```
+
+- Pornit din `~/berlinstar`, Claude lucrează cu tot proiectul (cod, git, docker, `deploy-qa.sh`).
+- Sesiune interactivă → cheia se încarcă singură din `~/.bashrc`.
+- Pentru rulări **non-interactive** (`ssh host 'claude -p ...'`) `.bashrc` nu se sourceaza;
+  exportă cheia explicit în acel context.
+- One-shot: `claude -p "task"`. Config: `~/.claude/`.
+- ⚠️ Cheia API e în plaintext pe server — relevant dacă serverul devine accesibil din afară.
+
+---
+
+## 8. Operații uzuale & debugging
 
 ```bash
 cd ~/berlinstar/deploy
@@ -151,7 +173,7 @@ curl -s http://localhost/api/health      # -> {"status":"ok","db":"ok"}
 
 ---
 
-## 8. De reținut (capcane)
+## 9. De reținut (capcane)
 
 - **CRLF/LF**: fișierele trebuie LF pe server (mai ales `entrypoint.sh`). `core.autocrlf=input` e setat.
 - **Secrete**: nu comite `QA_ENV/`, `deploy/.env.qa`. Sunt gitignored.
