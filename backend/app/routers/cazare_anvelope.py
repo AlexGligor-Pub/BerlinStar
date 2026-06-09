@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, and_, delete as sql_delete, func
 from sqlalchemy.orm import selectinload
@@ -14,6 +14,11 @@ from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
+
+# O cazare iesita din depozit (checkout efectuat) ramane editabila inca atatea
+# zile dupa checkout — fereastra de corectare a greselilor. Peste acest interval
+# istoricul devine read-only.
+EDIT_GRACE_DAYS = 7
 
 
 def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
@@ -275,6 +280,11 @@ async def update_cazare(
     cazare = await db.get(CazareAnvelope, cazare_id)
     if cazare is None or cazare.account_id != account_id or cazare.is_deleted:
         raise HTTPException(404, "Cazarea nu a fost găsită.")
+    if cazare.data_checkout is not None and (date.today() - cazare.data_checkout) > timedelta(days=EDIT_GRACE_DAYS):
+        raise HTTPException(
+            400,
+            f"Cazarea a fost închisă acum mai mult de {EDIT_GRACE_DAYS} zile și nu mai poate fi editată.",
+        )
     cazare.employee_id = body.employee_id
     cazare.loc_cazare_id = body.loc_cazare_id
     if body.data_checkin is not None:

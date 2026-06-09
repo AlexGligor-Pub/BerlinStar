@@ -14,13 +14,12 @@ echo "Starting server..."
 # SSE nu se propaga intre procese. Pentru ~200 utilizatori, 1 worker async
 # este suficient. Migreaza la Redis pub/sub daca cresti workerii.
 exec gunicorn app.main:app \
-  -k uvicorn.workers.UvicornWorker \
+  -k app.gunicorn_worker.BerlinStarUvicornWorker \
   -w 1 \
   --bind 0.0.0.0:8000 \
   --worker-connections 1000 \
   --timeout 600 \
   --graceful-timeout 30 \
-  --max-requests 2000 \
-  --max-requests-jitter 200 \
+  --max-requests 0 \
   --preload \
   --access-logfile -

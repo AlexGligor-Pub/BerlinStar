@@ -10,7 +10,7 @@ import {
   cazari, marci, dimensiuni, profiluri, coduriDot, locuriCazare, cazariHasMore, cazariLoadingMore,
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadCoduriDot, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
-  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare,
+  hotelImages, loadHotelImages, getCazareById, getVehiculForCazare, loadActiveCazariByPlate,
   INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
   type Cazare, type Anvelopa, type TipAnvelopa, type VehiculInfo,
 } from "../store/hotelAnvelopeStore";
@@ -51,6 +51,16 @@ function daysBetween(from: string, to: string) {
   const d1 = new Date(from);
   const d2 = new Date(to);
   return Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
+}
+
+// O cazare ramane editabila cat e activa (fara checkout) iar, dupa checkout,
+// inca EDIT_GRACE_DAYS zile — fereastra de corectare a greselilor. Trebuie sa
+// reflecte regula din backend (cazare_anvelope.py: EDIT_GRACE_DAYS).
+const EDIT_GRACE_DAYS = 7;
+
+function canEditCazare(c: Cazare): boolean {
+  if (!c.dataCheckout) return true;
+  return daysBetween(c.dataCheckout, new Date().toISOString().slice(0, 10)) <= EDIT_GRACE_DAYS;
 }
 
 function fmtDate(s: string | null) {
@@ -612,6 +622,9 @@ function CazareCard(props: {
         <Show when={!c().dataCheckout}>
           <button class="btn btn-primary btn-sm" onClick={() => props.onCheckout(c())}>Scoatere</button>
           <button class="btn btn-ghost btn-sm" onClick={() => props.onCheckoutNew(c())}>Scoatere și introducere nouă</button>
+        </Show>
+        {/* Editabil cat e activa, plus inca EDIT_GRACE_DAYS zile dupa checkout. */}
+        <Show when={canEditCazare(c())}>
           <button class="btn btn-ghost btn-sm" onClick={() => props.onEdit(c())}>Editează</button>
         </Show>
         <button class="btn btn-ghost btn-sm" onClick={() => handlePdf("checkin")} disabled={pdfLoading() === "checkin"}>
@@ -935,8 +948,17 @@ export default function HotelAnvelope() {
       //    e vizibila in lista, deci utilizatorul poate alege direct ce face.
       const normPlate = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, "").toUpperCase();
       const ctxPlate = normPlate(ctx.titlu);
-      const plateAlreadyVisible = ctxPlate !== "" && cazari().some((c) => normPlate(c.numarMasina) === ctxPlate);
-      if (!ctx.skipEntryPrompt && !searchParams.viewCazare && !searchPlateParam && !plateAlreadyVisible) {
+      // Suprimam prompt-ul cand placuta are deja cazari:
+      //  • fie vizibile in lista clientului curent,
+      //  • fie gasite printr-un lookup direct dupa placuta — acopera cazarile la
+      //    alt client sau cele legacy al caror numar_masina nu apare in lista
+      //    filtrata pe clientId, unde verificarea pe lista locala ar da gres.
+      let plateHasCazari = ctxPlate !== "" && cazari().some((c) => normPlate(c.numarMasina) === ctxPlate);
+      if (!plateHasCazari && ctxPlate !== "") {
+        try { plateHasCazari = (await loadActiveCazariByPlate(ctx.titlu)).length > 0; }
+        catch { /* ignora — daca lookup-ul esueaza, pastram comportamentul anterior */ }
+      }
+      if (!ctx.skipEntryPrompt && !searchParams.viewCazare && !searchPlateParam && !plateHasCazari) {
         setEntryChoicePrompt(true);
       }
     } else if (searchPlateParam) {
