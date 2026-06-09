@@ -1,5 +1,6 @@
 from __future__ import annotations
-from datetime import date, datetime
+from datetime import date, datetime, time
+from decimal import Decimal
 from pydantic import BaseModel, ConfigDict
 from app.models.leave import LeaveType, LeaveStatus
 
@@ -10,6 +11,10 @@ class LeaveCreate(BaseModel):
     type:         LeaveType
     start_date:   date
     end_date:     date
+    # Pentru tipurile pe ore (Invoire / Overtime / Recuperare): interval orar
+    # dintr-o singura zi; orele se calculeaza server-side din diferenta.
+    start_time:   time | None = None
+    end_time:     time | None = None
     notes:        str | None = None
     request_date: date | None = None
     employee_consent: bool = False
@@ -20,6 +25,8 @@ class LeavePatch(BaseModel):
     location_id:  int | None = None
     start_date:   date | None = None
     end_date:     date | None = None
+    start_time:   time | None = None
+    end_time:     time | None = None
     notes:        str | None = None
 
 
@@ -38,6 +45,9 @@ class LeaveRead(BaseModel):
     start_date:      date
     end_date:        date
     working_days:    int
+    start_time:      time | None = None
+    end_time:        time | None = None
+    hours:           Decimal | None = None
     notes:           str | None
     approved_by:     int | None
     approver_name:   str | None = None
@@ -79,6 +89,18 @@ class LeaveBalance(BaseModel):
     pending_vacation_days:     int
     remaining_vacation_days:   int
     breakdown:                 list[LeaveTypeBreakdown]
+    # --- Sold ore (tipuri pe ore: Invoire / Overtime / Recuperare) ---
+    # Agregate pe cereri APROBATE in anul dat:
+    overtime_hours:            float = 0.0
+    permission_hours:          float = 0.0   # ore de invoire
+    recovery_hours:            float = 0.0   # ore de recuperare
+    permission_count:          int   = 0     # numar de invoiri
+    # Sold net = overtime + recuperare - invoire (doar aprobate):
+    net_hours_balance:         float = 0.0
+    # Acelasi calcul pe cererile in asteptare (informativ):
+    pending_overtime_hours:    float = 0.0
+    pending_permission_hours:  float = 0.0
+    pending_recovery_hours:    float = 0.0
 
 
 class RomanianHoliday(BaseModel):

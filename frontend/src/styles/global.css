@@ -6700,10 +6700,13 @@ img.pos-theme-preview {
   border-radius: 50%;
   display: inline-block;
 }
-.leave-type-vacation  { background: #3b82f6; }
-.leave-type-sick      { background: #ef4444; }
-.leave-type-business  { background: #f97316; }
-.leave-type-unpaid    { background: #6b7280; }
+.leave-type-vacation   { background: #3b82f6; }
+.leave-type-sick       { background: #ef4444; }
+.leave-type-business   { background: #f97316; }
+.leave-type-unpaid     { background: #6b7280; }
+.leave-type-permission { background: #8b5cf6; }
+.leave-type-overtime   { background: #14b8a6; }
+.leave-type-recovery   { background: #f59e0b; }
 
 .concedii-layout {
   display: grid;
@@ -6822,10 +6825,13 @@ img.pos-theme-preview {
 .concedii-pill.status-approved { background: #d4edda; color: #155724; }
 .concedii-pill.status-pending  { background: #fff3cd; color: #856404; }
 .concedii-pill.status-rejected { background: #f8d7da; color: #721c24; text-decoration: line-through; }
-.concedii-pill.leave-type-vacation  { border-left-color: #3b82f6; }
-.concedii-pill.leave-type-sick      { border-left-color: #ef4444; }
-.concedii-pill.leave-type-business  { border-left-color: #f97316; }
-.concedii-pill.leave-type-unpaid    { border-left-color: #6b7280; }
+.concedii-pill.leave-type-vacation   { border-left-color: #3b82f6; }
+.concedii-pill.leave-type-sick       { border-left-color: #ef4444; }
+.concedii-pill.leave-type-business   { border-left-color: #f97316; }
+.concedii-pill.leave-type-unpaid     { border-left-color: #6b7280; }
+.concedii-pill.leave-type-permission { border-left-color: #8b5cf6; }
+.concedii-pill.leave-type-overtime   { border-left-color: #14b8a6; }
+.concedii-pill.leave-type-recovery   { border-left-color: #f59e0b; }
 .concedii-pill-emoji { flex-shrink: 0; }
 .concedii-pill-name {
   flex: 1;
@@ -6891,10 +6897,13 @@ img.pos-theme-preview {
   font-weight: 600;
   white-space: nowrap;
 }
-.concedii-type-badge.leave-type-vacation  { background: #dbeafe; color: #1e40af; }
-.concedii-type-badge.leave-type-sick      { background: #fee2e2; color: #991b1b; }
-.concedii-type-badge.leave-type-business  { background: #ffedd5; color: #9a3412; }
-.concedii-type-badge.leave-type-unpaid    { background: #e5e7eb; color: #374151; }
+.concedii-type-badge.leave-type-vacation   { background: #dbeafe; color: #1e40af; }
+.concedii-type-badge.leave-type-sick       { background: #fee2e2; color: #991b1b; }
+.concedii-type-badge.leave-type-business   { background: #ffedd5; color: #9a3412; }
+.concedii-type-badge.leave-type-unpaid     { background: #e5e7eb; color: #374151; }
+.concedii-type-badge.leave-type-permission { background: #ede9fe; color: #5b21b6; }
+.concedii-type-badge.leave-type-overtime   { background: #ccfbf1; color: #115e59; }
+.concedii-type-badge.leave-type-recovery   { background: #fef3c7; color: #92400e; }
 .concedii-status-badge.status-approved { background: #d4edda; color: #155724; }
 .concedii-status-badge.status-pending  { background: #fff3cd; color: #856404; }
 .concedii-status-badge.status-rejected { background: #f8d7da; color: #721c24; }
@@ -6969,6 +6978,21 @@ img.pos-theme-preview {
   height: 100%;
   background: var(--accent);
   transition: width 0.2s;
+}
+.concedii-balance-hours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.concedii-balance-net {
+  font-weight: 700;
+  color: #198754;
+}
+.concedii-balance-net.is-negative {
+  color: #dc3545;
 }
 
 @media (max-width: 640px) {

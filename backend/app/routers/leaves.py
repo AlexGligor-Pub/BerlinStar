@@ -1,5 +1,5 @@
 from __future__ import annotations
-from datetime import date, datetime, timezone
+from datetime import date, datetime, time, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
@@ -11,7 +11,7 @@ from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
 from app.models.account import Account
-from app.models.leave import Leave, LeaveType, LeaveStatus
+from app.models.leave import Leave, LeaveType, LeaveStatus, HOUR_BASED_TYPES
 from app.schemas.leave import (
     LeaveCreate, LeavePatch, LeaveRead, LeaveBalance, LeaveTypeBreakdown, RomanianHoliday,
     LeaveConsent, LeaveApprove,
@@ -52,6 +52,9 @@ def _serialize(l: Leave) -> LeaveRead:
         start_date=l.start_date,
         end_date=l.end_date,
         working_days=l.working_days,
+        start_time=l.start_time,
+        end_time=l.end_time,
+        hours=l.hours,
         notes=l.notes,
         approved_by=l.approved_by,
         approver_name=l.approver.name if l.approver else None,
@@ -73,6 +76,18 @@ def _serialize(l: Leave) -> LeaveRead:
 
 def _iso(d) -> str | None:
     return d.isoformat() if d is not None else None
+
+
+def _hours_between(start_time: time | None, end_time: time | None) -> float:
+    """Numarul de ore intre doua momente din aceeasi zi (zecimal, rotunjit la 2).
+    Valideaza ca ambele exista si ca end > start."""
+    if start_time is None or end_time is None:
+        raise HTTPException(400, "Pentru acest tip sunt necesare ora de inceput si ora de sfarsit.")
+    start_min = start_time.hour * 60 + start_time.minute
+    end_min = end_time.hour * 60 + end_time.minute
+    if end_min <= start_min:
+        raise HTTPException(400, "Ora de sfarsit trebuie sa fie dupa ora de inceput.")
+    return round((end_min - start_min) / 60.0, 2)
 
 
 async def _used_vacation_days(db: AsyncSession, account_id: int, employee_id: int, year: int) -> int:
@@ -231,10 +246,25 @@ async def get_balance(
         )
     )).scalars().all()
 
-    used_by_type: dict[LeaveType, int] = {t: 0 for t in LeaveType}
-    pending_by_type: dict[LeaveType, int] = {t: 0 for t in LeaveType}
+    day_types = [t for t in LeaveType if t not in HOUR_BASED_TYPES]
+    used_by_type: dict[LeaveType, int] = {t: 0 for t in day_types}
+    pending_by_type: dict[LeaveType, int] = {t: 0 for t in day_types}
+
+    # Agregate ore pe categorie (aprobate / pending).
+    hours_approved: dict[LeaveType, float] = {t: 0.0 for t in HOUR_BASED_TYPES}
+    hours_pending: dict[LeaveType, float] = {t: 0.0 for t in HOUR_BASED_TYPES}
+    permission_count = 0
 
     for r in rows:
+        if r.type in HOUR_BASED_TYPES:
+            h = float(r.hours or 0)
+            if r.status == LeaveStatus.APPROVED:
+                hours_approved[r.type] += h
+                if r.type == LeaveType.PERMISSION:
+                    permission_count += 1
+            else:
+                hours_pending[r.type] += h
+            continue
         clipped_start = max(r.start_date, year_start)
         clipped_end   = min(r.end_date, year_end)
         days = count_working_days(clipped_start, clipped_end)
@@ -245,11 +275,15 @@ async def get_balance(
 
     breakdown = [
         LeaveTypeBreakdown(type=t, used_days=used_by_type[t], pending_days=pending_by_type[t])
-        for t in LeaveType
+        for t in day_types
     ]
 
     used_vac = used_by_type[LeaveType.VACATION]
     pending_vac = pending_by_type[LeaveType.VACATION]
+
+    overtime_h = round(hours_approved[LeaveType.OVERTIME], 2)
+    permission_h = round(hours_approved[LeaveType.PERMISSION], 2)
+    recovery_h = round(hours_approved[LeaveType.PERMISSION_RECOVERY], 2)
 
     return LeaveBalance(
         employee_id=emp.id,
@@ -260,6 +294,14 @@ async def get_balance(
         pending_vacation_days=pending_vac,
         remaining_vacation_days=max(0, emp.annual_vacation_days - used_vac),
         breakdown=breakdown,
+        overtime_hours=overtime_h,
+        permission_hours=permission_h,
+        recovery_hours=recovery_h,
+        permission_count=permission_count,
+        net_hours_balance=round(overtime_h + recovery_h - permission_h, 2),
+        pending_overtime_hours=round(hours_pending[LeaveType.OVERTIME], 2),
+        pending_permission_hours=round(hours_pending[LeaveType.PERMISSION], 2),
+        pending_recovery_hours=round(hours_pending[LeaveType.PERMISSION_RECOVERY], 2),
     )
 
 
@@ -316,37 +358,56 @@ async def create_leave(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> LeaveRead:
-    if body.end_date < body.start_date:
-        raise HTTPException(400, "end_date trebuie sa fie >= start_date.")
     emp = await _validate_employee(db, account_id, body.employee_id)
-
-    working_days = count_working_days(body.start_date, body.end_date)
-
-    if body.type == LeaveType.VACATION:
-        await _check_vacation_balance(db, account_id, emp, body.start_date, body.end_date, working_days)
+    now = datetime.now(timezone.utc)
 
     location_id = body.location_id
     if location_id is None and emp.locations:
         location_id = emp.locations[0].id
 
-    snapshot = await _build_details_snapshot(db, account_id, emp, working_days, body.start_date.year)
-    now = datetime.now(timezone.utc)
+    is_hour_based = body.type in HOUR_BASED_TYPES
 
-    l = Leave(
-        account_id=account_id,
-        employee_id=body.employee_id,
-        location_id=location_id,
-        type=body.type,
-        status=LeaveStatus.PENDING,
-        start_date=body.start_date,
-        end_date=body.end_date,
-        working_days=working_days,
-        notes=body.notes,
-        request_date=body.request_date or now.date(),
-        details_snapshot=snapshot,
-        employee_consent=body.employee_consent,
-        employee_consent_at=now if body.employee_consent else None,
-    )
+    if is_hour_based:
+        # Tipuri pe ore (Invoire / Overtime / Recuperare): o singura zi, interval
+        # orar, fara zile lucratoare si fara flux legal (snapshot / acord obligatoriu).
+        hours = _hours_between(body.start_time, body.end_time)
+        l = Leave(
+            account_id=account_id,
+            employee_id=body.employee_id,
+            location_id=location_id,
+            type=body.type,
+            status=LeaveStatus.PENDING,
+            start_date=body.start_date,
+            end_date=body.start_date,
+            working_days=0,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            hours=hours,
+            notes=body.notes,
+            request_date=body.request_date or now.date(),
+        )
+    else:
+        if body.end_date < body.start_date:
+            raise HTTPException(400, "end_date trebuie sa fie >= start_date.")
+        working_days = count_working_days(body.start_date, body.end_date)
+        if body.type == LeaveType.VACATION:
+            await _check_vacation_balance(db, account_id, emp, body.start_date, body.end_date, working_days)
+        snapshot = await _build_details_snapshot(db, account_id, emp, working_days, body.start_date.year)
+        l = Leave(
+            account_id=account_id,
+            employee_id=body.employee_id,
+            location_id=location_id,
+            type=body.type,
+            status=LeaveStatus.PENDING,
+            start_date=body.start_date,
+            end_date=body.end_date,
+            working_days=working_days,
+            notes=body.notes,
+            request_date=body.request_date or now.date(),
+            details_snapshot=snapshot,
+            employee_consent=body.employee_consent,
+            employee_consent_at=now if body.employee_consent else None,
+        )
     db.add(l)
     await db.commit()
     await db.refresh(l)
@@ -383,18 +444,22 @@ async def update_leave(
     for k, v in data.items():
         setattr(l, k, v)
 
-    if l.end_date < l.start_date:
-        raise HTTPException(400, "end_date trebuie sa fie >= start_date.")
-
-    if "start_date" in data or "end_date" in data:
-        l.working_days = count_working_days(l.start_date, l.end_date)
-
-    if l.type == LeaveType.VACATION:
-        emp = await _validate_employee(db, account_id, l.employee_id)
-        await _check_vacation_balance(
-            db, account_id, emp, l.start_date, l.end_date, l.working_days,
-            exclude_leave_id=l.id,
-        )
+    if l.type in HOUR_BASED_TYPES:
+        # Tipuri pe ore: o singura zi, fara zile lucratoare; orele se recalculeaza.
+        l.end_date = l.start_date
+        l.working_days = 0
+        l.hours = _hours_between(l.start_time, l.end_time)
+    else:
+        if l.end_date < l.start_date:
+            raise HTTPException(400, "end_date trebuie sa fie >= start_date.")
+        if "start_date" in data or "end_date" in data:
+            l.working_days = count_working_days(l.start_date, l.end_date)
+        if l.type == LeaveType.VACATION:
+            emp = await _validate_employee(db, account_id, l.employee_id)
+            await _check_vacation_balance(
+                db, account_id, emp, l.start_date, l.end_date, l.working_days,
+                exclude_leave_id=l.id,
+            )
 
     l.updated_at = datetime.now(timezone.utc)
     await db.commit()

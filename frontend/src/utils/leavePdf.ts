@@ -34,6 +34,10 @@ const TYPE_LABEL: Record<LeaveType, string> = {
   "Concediu medical": "Concediu medical",
   "Business Trip": "Deplasare (Business Trip)",
   "Concediu fara plata": "Concediu fără plată",
+  // Tipuri pe ore — nu genereaza PDF (etichete doar pentru completitudine de tip).
+  "Invoire": "Învoire",
+  "Overtime": "Overtime",
+  "Recuperare Ore invoire": "Recuperare ore învoire",
 };
 
 function fmtRoDate(ymd: string | null): string {

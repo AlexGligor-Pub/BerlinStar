@@ -3305,6 +3305,9 @@ function ConcediiReportPanel() {
       for (const r of rows()) {
         if (r.is_deleted) continue;
         if (r.status === "Rejected") continue;
+        // Heatmap = absențe pe zi întreagă; tipurile pe ore (învoire/overtime/
+        // recuperare) sunt prezență/parțiale, nu se numără aici.
+        if (isConcediiHourType(r.type)) continue;
         if (key >= r.start_date && key <= r.end_date) list.push(r);
       }
       map.set(key, list);
@@ -3371,7 +3374,10 @@ function ConcediiReportPanel() {
           "Concediu de odihna": "🏖 Odihnă",
           "Concediu medical": "🤒 Medical",
           "Business Trip": "✈️ Business",
-          "Concediu fara plata": "📝 Învoire",
+          "Concediu fara plata": "📄 Fără plată",
+          "Invoire": "🕐 Învoire",
+          "Overtime": "⏱ Overtime",
+          "Recuperare Ore invoire": "↩ Recuperare",
         };
         return map[t] ?? t;
       },
@@ -3387,7 +3393,8 @@ function ConcediiReportPanel() {
     },
     { accessorKey: "start_date", header: "De la", cell: (i) => fmtRoDate(i.row.original.start_date) },
     { accessorKey: "end_date", header: "Până la", cell: (i) => fmtRoDate(i.row.original.end_date) },
-    { accessorKey: "working_days", header: "Zile lucr.", cell: (i) => i.row.original.working_days },
+    { accessorKey: "working_days", header: "Zile lucr.", cell: (i) => isConcediiHourType(i.row.original.type) ? "—" : i.row.original.working_days },
+    { accessorKey: "hours", header: "Ore", cell: (i) => isConcediiHourType(i.row.original.type) ? fmtHoursReport(concediiHours(i.row.original)) : "—" },
     { accessorKey: "approver_name", header: "Aprobat de", cell: (i) => i.row.original.approver_name ?? "—" },
     { accessorKey: "notes", header: "Motiv", cell: (i) => i.row.original.notes ?? "—" },
   ];
@@ -3428,12 +3435,55 @@ function ConcediiReportPanel() {
     return { total: all.length, totalDays, pending, approved };
   });
 
+  // ── Sold ore per angajat (Invoire / Overtime / Recuperare) ───────────────
+  // Agregat din cererile APROBATE ale lunii curente. Sold net = overtime + recuperare − invoire.
+  interface EmpHours {
+    employee_id: number; employee_name: string; employee_image_path: string | null;
+    overtime: number; permission: number; recovery: number; permissionCount: number; net: number;
+  }
+  const hoursByEmployee = createMemo<EmpHours[]>(() => {
+    const map = new Map<number, EmpHours>();
+    for (const r of rows()) {
+      if (r.is_deleted || r.status !== "Approved" || !isConcediiHourType(r.type)) continue;
+      let e = map.get(r.employee_id);
+      if (!e) {
+        e = {
+          employee_id: r.employee_id,
+          employee_name: r.employee_name ?? "?",
+          employee_image_path: r.employee_image_path ?? null,
+          overtime: 0, permission: 0, recovery: 0, permissionCount: 0, net: 0,
+        };
+        map.set(r.employee_id, e);
+      }
+      const h = concediiHours(r);
+      if (r.type === "Overtime") e.overtime += h;
+      else if (r.type === "Recuperare Ore invoire") e.recovery += h;
+      else if (r.type === "Invoire") { e.permission += h; e.permissionCount += 1; }
+    }
+    return Array.from(map.values())
+      .map((e) => ({ ...e, net: Math.round((e.overtime + e.recovery - e.permission) * 100) / 100 }))
+      .sort((a, b) => a.employee_name.localeCompare(b.employee_name));
+  });
+  const hoursTotals = createMemo(() => {
+    const all = hoursByEmployee();
+    return {
+      overtime: all.reduce((s, e) => s + e.overtime, 0),
+      permission: all.reduce((s, e) => s + e.permission, 0),
+      recovery: all.reduce((s, e) => s + e.recovery, 0),
+      permissionCount: all.reduce((s, e) => s + e.permissionCount, 0),
+      net: Math.round(all.reduce((s, e) => s + e.net, 0) * 100) / 100,
+    };
+  });
+
   // Export helpers — folosesc tabelul filtrat & sortat curent
   const TYPE_LABELS: Record<string, string> = {
     "Concediu de odihna": "Concediu de odihnă",
     "Concediu medical":   "Concediu medical",
     "Business Trip":      "Business Trip",
-    "Concediu fara plata": "Învoire",
+    "Concediu fara plata": "Concediu fără plată",
+    "Invoire":            "Învoire",
+    "Overtime":           "Overtime",
+    "Recuperare Ore invoire": "Recuperare ore învoire",
   };
   const STATUS_LABELS: Record<string, string> = { Approved: "Aprobată", Pending: "În așteptare", Rejected: "Respinsă" };
 
@@ -3447,16 +3497,33 @@ function ConcediiReportPanel() {
         STATUS_LABELS[x.status] ?? x.status,
         fmtRoDate(x.start_date),
         fmtRoDate(x.end_date),
-        String(x.working_days ?? 0),
+        isConcediiHourType(x.type) ? "—" : String(x.working_days ?? 0),
+        isConcediiHourType(x.type) ? fmtHoursReport(concediiHours(x)) : "—",
         x.approver_name ?? "—",
         x.notes ?? "",
       ];
     });
   }
-  const EXPORT_HEADERS = ["Angajat", "Locație", "Tip", "Status", "De la", "Până la", "Zile lucr.", "Aprobat de", "Motiv"];
+  const EXPORT_HEADERS = ["Angajat", "Locație", "Tip", "Status", "De la", "Până la", "Zile lucr.", "Ore", "Aprobat de", "Motiv"];
   function exportTitle() { return `Concedii ${RO_MONTHS[m()]} ${y()}`; }
   function doExportCSV() { sharedExportCSV(exportTitle(), EXPORT_HEADERS, exportRows()); }
   function doExportPDF() { sharedExportPDF(exportTitle(), EXPORT_HEADERS, exportRows()); }
+
+  // Export sold ore per angajat
+  const HOURS_EXPORT_HEADERS = ["Angajat", "Overtime", "Învoiri (nr.)", "Învoiri (ore)", "Recuperare", "Sold net"];
+  function hoursExportRows(): string[][] {
+    return hoursByEmployee().map((e) => [
+      e.employee_name,
+      fmtHoursReport(e.overtime),
+      String(e.permissionCount),
+      fmtHoursReport(e.permission),
+      fmtHoursReport(e.recovery),
+      fmtHoursReport(e.net),
+    ]);
+  }
+  function hoursExportTitle() { return `Sold ore ${RO_MONTHS[m()]} ${y()}`; }
+  function doExportHoursCSV() { sharedExportCSV(hoursExportTitle(), HOURS_EXPORT_HEADERS, hoursExportRows()); }
+  function doExportHoursPDF() { sharedExportPDF(hoursExportTitle(), HOURS_EXPORT_HEADERS, hoursExportRows()); }
 
   return (
     <div class="cfg-panel concedii-report">
@@ -3556,8 +3623,16 @@ function ConcediiReportPanel() {
                       <span style={`font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:${statusColor}22;color:${statusColor}`}>{s}</span>
                     </div>
                     <div class="concedii-report-card-row"><span>Tip</span><strong>{t}</strong></div>
-                    <div class="concedii-report-card-row"><span>Perioadă</span><strong>{fmtRoDate(r.start_date)} → {fmtRoDate(r.end_date)}</strong></div>
-                    <div class="concedii-report-card-row"><span>Zile lucr.</span><strong>{r.working_days}</strong></div>
+                    <Show
+                      when={isConcediiHourType(r.type)}
+                      fallback={<>
+                        <div class="concedii-report-card-row"><span>Perioadă</span><strong>{fmtRoDate(r.start_date)} → {fmtRoDate(r.end_date)}</strong></div>
+                        <div class="concedii-report-card-row"><span>Zile lucr.</span><strong>{r.working_days}</strong></div>
+                      </>}
+                    >
+                      <div class="concedii-report-card-row"><span>Data</span><strong>{fmtRoDate(r.start_date)} · {(r.start_time ?? "").slice(0,5)}–{(r.end_time ?? "").slice(0,5)}</strong></div>
+                      <div class="concedii-report-card-row"><span>Ore</span><strong>{fmtHoursReport(concediiHours(r))}</strong></div>
+                    </Show>
                     <Show when={r.approver_name}>
                       <div class="concedii-report-card-row"><span>Aprobat de</span><strong>{r.approver_name}</strong></div>
                     </Show>
@@ -3615,6 +3690,65 @@ function ConcediiReportPanel() {
           </div>
         </Show>
       </div>
+
+      <div class="locatii-chart-card concedii-report-section">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div>
+            <div class="locatii-chart-title">Sold ore per angajat — {RO_MONTHS[m()]} {y()}</div>
+            <div class="locatii-chart-subtitle">Învoiri, recuperări și overtime (cereri aprobate)</div>
+          </div>
+          <ExportMenu onCSV={doExportHoursCSV} onPDF={doExportHoursPDF} />
+        </div>
+        <p class="chart-explanation">
+          <strong>Sold net = Overtime + Recuperare − Învoire.</strong> Overtime și recuperarea alimentează
+          soldul, învoirile îl consumă. Un sold negativ înseamnă ore de învoire neacoperite.
+        </p>
+        <Show
+          when={hoursByEmployee().length > 0}
+          fallback={<div style="padding:16px;color:var(--text-muted);text-align:center">Nicio învoire / recuperare / overtime în această lună.</div>}
+        >
+          <div class="concedii-report-tablewrap">
+            <table class="concedii-report-table">
+              <thead>
+                <tr>
+                  <th>Angajat</th>
+                  <th style="text-align:right">⏱ Overtime</th>
+                  <th style="text-align:right">🕐 Învoiri</th>
+                  <th style="text-align:right">↩ Recuperare</th>
+                  <th style="text-align:right">Sold net</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={hoursByEmployee()}>
+                  {(e) => (
+                    <tr>
+                      <td>
+                        <div style="display:flex;align-items:center;gap:8px">
+                          <Avatar name={e.employee_name} imagePath={e.employee_image_path} size={28} />
+                          <span>{e.employee_name}</span>
+                        </div>
+                      </td>
+                      <td style="text-align:right">{fmtHoursReport(e.overtime)}</td>
+                      <td style="text-align:right">{e.permissionCount} ({fmtHoursReport(e.permission)})</td>
+                      <td style="text-align:right">{fmtHoursReport(e.recovery)}</td>
+                      <td style={`text-align:right;font-weight:700;color:${e.net < 0 ? "#dc3545" : "#198754"}`}>{fmtHoursReport(e.net)}</td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+              <tfoot>
+                <tr style="font-weight:700;border-top:2px solid var(--border,#2a2a2a)">
+                  <td>Total</td>
+                  <td style="text-align:right">{fmtHoursReport(hoursTotals().overtime)}</td>
+                  <td style="text-align:right">{hoursTotals().permissionCount} ({fmtHoursReport(hoursTotals().permission)})</td>
+                  <td style="text-align:right">{fmtHoursReport(hoursTotals().recovery)}</td>
+                  <td style={`text-align:right;color:${hoursTotals().net < 0 ? "#dc3545" : "#198754"}`}>{fmtHoursReport(hoursTotals().net)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </Show>
+      </div>
     </div>
   );
 }
@@ -3631,9 +3765,26 @@ interface RawConcedii {
   start_date: string;
   end_date: string;
   working_days: number;
+  start_time: string | null;
+  end_time: string | null;
+  hours: number | string | null;
   notes: string | null;
   approver_name: string | null;
   is_deleted: boolean;
+}
+
+// Tipuri masurate in ore (single-day), agregate separat in rapoarte.
+const CONCEDII_HOUR_TYPES = new Set<string>(["Invoire", "Overtime", "Recuperare Ore invoire"]);
+function isConcediiHourType(t: string): boolean { return CONCEDII_HOUR_TYPES.has(t); }
+function concediiHours(r: RawConcedii): number { return r.hours == null ? 0 : Number(r.hours); }
+/** Format ore zecimale pentru rapoarte: 2 -> „2h", 2.5 -> „2h 30m", -1.5 -> „-1h 30m". */
+function fmtHoursReport(h: number | null | undefined): string {
+  if (h == null) return "—";
+  const sign = h < 0 ? "-" : "";
+  const abs = Math.abs(h);
+  const whole = Math.floor(abs);
+  const mins = Math.round((abs - whole) * 60);
+  return mins === 0 ? `${sign}${whole}h` : `${sign}${whole}h ${mins}m`;
 }
 
 export default function Rapoarte() {

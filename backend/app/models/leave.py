@@ -1,17 +1,31 @@
 from __future__ import annotations
 import enum
-from datetime import date, datetime, timezone
-from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text
+from datetime import date, datetime, time, timezone
+from decimal import Decimal
+from sqlalchemy import Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, Numeric, String, Text, Time
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
 
 class LeaveType(str, enum.Enum):
-    VACATION      = "Concediu de odihna"
-    SICK          = "Concediu medical"
-    BUSINESS_TRIP = "Business Trip"
-    UNPAID        = "Concediu fara plata"
+    VACATION            = "Concediu de odihna"
+    SICK                = "Concediu medical"
+    BUSINESS_TRIP       = "Business Trip"
+    UNPAID              = "Concediu fara plata"
+    # Tipuri masurate in ore (single-day), nu in zile lucratoare:
+    PERMISSION          = "Invoire"                  # invoire — cateva ore liber
+    OVERTIME            = "Overtime"                 # ore lucrate peste program
+    PERMISSION_RECOVERY = "Recuperare Ore invoire"   # ore lucrate pentru a compensa invoirile
+
+
+# Tipuri cuantificate in ore (au start_time/end_time/hours, working_days=0,
+# fara flux legal: consimtamant / snapshot / PDF).
+HOUR_BASED_TYPES = frozenset({
+    LeaveType.PERMISSION,
+    LeaveType.OVERTIME,
+    LeaveType.PERMISSION_RECOVERY,
+})
 
 
 class LeaveStatus(str, enum.Enum):
@@ -46,6 +60,10 @@ class Leave(Base):
     start_date:    Mapped[date] = mapped_column(Date, nullable=False)
     end_date:      Mapped[date] = mapped_column(Date, nullable=False)
     working_days:  Mapped[int]  = mapped_column(Integer, nullable=False, default=0)
+    # Pentru tipurile masurate in ore (HOUR_BASED_TYPES): interval orar + total ore.
+    start_time:    Mapped[time | None] = mapped_column(Time, nullable=True)
+    end_time:      Mapped[time | None] = mapped_column(Time, nullable=True)
+    hours:         Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     notes:         Mapped[str | None] = mapped_column(Text, nullable=True)
     approved_by:   Mapped[int | None] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     approved_at:   Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

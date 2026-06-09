@@ -2,8 +2,25 @@ import { createSignal } from "solid-js";
 import { apiFetch, apiFetchJson } from "../utils/api";
 import { reportsFetch } from "../pages/rapoarte/reports-auth";
 
-export type LeaveType = "Concediu de odihna" | "Concediu medical" | "Business Trip" | "Concediu fara plata";
+export type LeaveType =
+  | "Concediu de odihna"
+  | "Concediu medical"
+  | "Business Trip"
+  | "Concediu fara plata"
+  | "Invoire"
+  | "Overtime"
+  | "Recuperare Ore invoire";
 export type LeaveStatus = "Pending" | "Approved" | "Rejected";
+
+// Tipuri masurate in ore (single-day): interval orar + ore, fara zile lucratoare.
+export const HOUR_BASED_TYPES: ReadonlySet<LeaveType> = new Set<LeaveType>([
+  "Invoire",
+  "Overtime",
+  "Recuperare Ore invoire",
+]);
+export function isHourBased(type: LeaveType): boolean {
+  return HOUR_BASED_TYPES.has(type);
+}
 
 export interface LeaveSnapshotEmployee {
   name: string | null;
@@ -51,6 +68,9 @@ export interface Leave {
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
   workingDays: number;
+  startTime: string | null; // HH:MM:SS (tipuri pe ore)
+  endTime: string | null;   // HH:MM:SS
+  hours: number | null;     // total ore (tipuri pe ore)
   notes: string | null;
   approvedBy: number | null;
   approverName: string | null;
@@ -73,6 +93,8 @@ export interface LeaveInput {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  startTime?: string | null; // HH:MM (tipuri pe ore)
+  endTime?: string | null;
   notes?: string | null;
   requestDate?: string | null;
   employeeConsent?: boolean;
@@ -93,6 +115,16 @@ export interface LeaveBalance {
   pending_vacation_days: number;
   remaining_vacation_days: number;
   breakdown: LeaveTypeBreakdown[];
+  // Sold ore (Invoire / Overtime / Recuperare) — aprobate:
+  overtime_hours: number;
+  permission_hours: number;
+  recovery_hours: number;
+  permission_count: number;
+  net_hours_balance: number; // overtime + recuperare - invoire
+  // In asteptare (informativ):
+  pending_overtime_hours: number;
+  pending_permission_hours: number;
+  pending_recovery_hours: number;
 }
 
 export interface RomanianHoliday {
@@ -113,6 +145,9 @@ interface RawLeave {
   start_date: string;
   end_date: string;
   working_days: number;
+  start_time?: string | null;
+  end_time?: string | null;
+  hours?: number | string | null;
   notes: string | null;
   approved_by: number | null;
   approver_name?: string | null;
@@ -141,6 +176,9 @@ function mapLeave(r: RawLeave): Leave {
     startDate: r.start_date,
     endDate: r.end_date,
     workingDays: r.working_days,
+    startTime: r.start_time ?? null,
+    endTime: r.end_time ?? null,
+    hours: r.hours == null ? null : Number(r.hours),
     notes: r.notes,
     approvedBy: r.approved_by,
     approverName: r.approver_name ?? null,
@@ -233,6 +271,8 @@ function inputToBody(input: LeaveInput): Record<string, unknown> {
     type: input.type,
     start_date: input.startDate,
     end_date: input.endDate,
+    start_time: input.startTime ?? null,
+    end_time: input.endTime ?? null,
     notes: input.notes ?? null,
     request_date: input.requestDate ?? null,
     employee_consent: input.employeeConsent ?? false,
@@ -257,6 +297,8 @@ export async function updateLeave(id: number, input: Partial<LeaveInput>): Promi
   if (input.locationId  !== undefined) body.location_id = input.locationId;
   if (input.startDate   !== undefined) body.start_date = input.startDate;
   if (input.endDate     !== undefined) body.end_date = input.endDate;
+  if (input.startTime   !== undefined) body.start_time = input.startTime;
+  if (input.endTime     !== undefined) body.end_time = input.endTime;
   if (input.notes       !== undefined) body.notes = input.notes;
   const res = await apiFetch(`/api/leaves/${id}`, { method: "PATCH", body: JSON.stringify(body) });
   if (!res.ok) {

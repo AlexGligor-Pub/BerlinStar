@@ -10,7 +10,7 @@ import {
   leaves, loading, loadLeaves, loadHolidays, loadBalance, holidaysByYear,
   fetchLeavesInRange, fetchLeaveSnapshot,
   createLeave, updateLeave, deleteLeave, approveLeave, rejectLeave, resetLeave,
-  computeWorkingDays,
+  computeWorkingDays, isHourBased,
   type Leave, type LeaveType, type LeaveStatus, type LeaveBalance,
   type LeaveDetailsSnapshot, type RomanianHoliday,
 } from "../store/leavesStore";
@@ -33,8 +33,36 @@ const LEAVE_TYPES: { value: LeaveType; label: string; emoji: string; cls: string
   { value: "Concediu de odihna",  label: "Odihnă",       emoji: "🏖", cls: "leave-type-vacation" },
   { value: "Concediu medical",    label: "Medical",       emoji: "🤒", cls: "leave-type-sick" },
   { value: "Business Trip",       label: "Business Trip", emoji: "✈️", cls: "leave-type-business" },
-  { value: "Concediu fara plata", label: "Învoire",       emoji: "📝", cls: "leave-type-unpaid" },
+  { value: "Concediu fara plata", label: "Fără plată",    emoji: "📄", cls: "leave-type-unpaid" },
+  { value: "Invoire",                label: "Învoire",     emoji: "🕐", cls: "leave-type-permission" },
+  { value: "Overtime",               label: "Overtime",    emoji: "⏱", cls: "leave-type-overtime" },
+  { value: "Recuperare Ore invoire", label: "Recuperare",  emoji: "↩", cls: "leave-type-recovery" },
 ];
+
+/** Format ore zecimale: 2 -> „2h", 2.5 -> „2h 30m", -1.5 -> „-1h 30m". */
+function fmtHours(h: number | null | undefined): string {
+  if (h == null) return "—";
+  const sign = h < 0 ? "-" : "";
+  const abs = Math.abs(h);
+  const whole = Math.floor(abs);
+  const mins = Math.round((abs - whole) * 60);
+  return mins === 0 ? `${sign}${whole}h` : `${sign}${whole}h ${mins}m`;
+}
+
+/** Ore intre doua „HH:MM" (zecimal), 0 daca invalid. */
+function hoursBetween(startHM: string, endHM: string): number {
+  if (!startHM || !endHM) return 0;
+  const [sh, sm] = startHM.split(":").map(Number);
+  const [eh, em] = endHM.split(":").map(Number);
+  const diff = (eh * 60 + em) - (sh * 60 + sm);
+  return diff > 0 ? Math.round((diff / 60) * 100) / 100 : 0;
+}
+
+/** Normalizeaza „HH:MM:SS" sau „HH:MM" la „HH:MM" pentru <input type=time>. */
+function toHM(t: string | null | undefined): string {
+  if (!t) return "";
+  return t.slice(0, 5);
+}
 
 const STATUS_LABELS: { value: LeaveStatus; label: string; cls: string }[] = [
   { value: "Approved", label: "Aprobate",  cls: "leave-status-approved" },
@@ -53,6 +81,14 @@ function fmtRo(ymd: string): string {
 
 function typeMeta(type: LeaveType) {
   return LEAVE_TYPES.find((t) => t.value === type)!;
+}
+
+/** Tooltip pentru pill-urile din calendar (ore pentru tipuri pe ore, zile altfel). */
+function leaveTooltip(l: Leave): string {
+  if (isHourBased(l.type)) {
+    return `${l.employeeName} — ${l.type}\n${fmtRo(l.startDate)} · ${toHM(l.startTime)}–${toHM(l.endTime)}\n${fmtHours(l.hours)}`;
+  }
+  return `${l.employeeName} — ${l.type}\n${fmtRo(l.startDate)} - ${fmtRo(l.endDate)}\n${l.workingDays} zile lucratoare`;
 }
 
 function Avatar(props: { name: string; imagePath: string | null; size?: number }) {
@@ -267,12 +303,18 @@ interface FormState {
   type: LeaveType;
   startDate: string;
   endDate: string;
+  startTime: string; // HH:MM (tipuri pe ore)
+  endTime: string;   // HH:MM
   notes: string;
   employeeConsent: boolean;
 }
 
 function emptyForm(today: string): FormState {
-  return { id: null, employeeId: null, type: "Concediu de odihna", startDate: today, endDate: today, notes: "", employeeConsent: false };
+  return {
+    id: null, employeeId: null, type: "Concediu de odihna",
+    startDate: today, endDate: today, startTime: "09:00", endTime: "17:00",
+    notes: "", employeeConsent: false,
+  };
 }
 
 export default function Concedii() {
@@ -610,7 +652,10 @@ export default function Concedii() {
   function openEditForm(l: Leave) {
     setForm({
       id: l.id, employeeId: l.employeeId, type: l.type,
-      startDate: l.startDate, endDate: l.endDate, notes: l.notes ?? "",
+      startDate: l.startDate, endDate: l.endDate,
+      startTime: toHM(l.startTime) || "09:00",
+      endTime: toHM(l.endTime) || "17:00",
+      notes: l.notes ?? "",
       employeeConsent: l.employeeConsent,
     });
     setDetailLeave(null);
@@ -635,29 +680,43 @@ export default function Concedii() {
     if (submitting()) return;
     const f = form();
     if (f.employeeId == null) { notify("Selecteaza un angajat.", "warn"); return; }
-    if (f.endDate < f.startDate) { notify("Data de sfarsit trebuie sa fie dupa data de inceput.", "warn"); return; }
-    const vb = vacationBalanceInfo();
-    if (vb && vb.over) {
-      notify(`Numarul de zile (${vb.requested}) depaseste soldul disponibil (${vb.available}).`, "warn");
-      return;
-    }
-    if (f.id == null && !f.employeeConsent) {
-      notify("Bifează acordul angajatului pentru a trimite cererea.", "warn");
-      return;
+    const hourBased = isHourBased(f.type);
+
+    if (hourBased) {
+      if (hoursBetween(f.startTime, f.endTime) <= 0) {
+        notify("Ora de sfârșit trebuie să fie după ora de început.", "warn");
+        return;
+      }
+    } else {
+      if (f.endDate < f.startDate) { notify("Data de sfarsit trebuie sa fie dupa data de inceput.", "warn"); return; }
+      const vb = vacationBalanceInfo();
+      if (vb && vb.over) {
+        notify(`Numarul de zile (${vb.requested}) depaseste soldul disponibil (${vb.available}).`, "warn");
+        return;
+      }
+      if (f.id == null && !f.employeeConsent) {
+        notify("Bifează acordul angajatului pentru a trimite cererea.", "warn");
+        return;
+      }
     }
     setSubmitting(true);
     try {
       if (f.id == null) {
         await createLeave({
           employeeId: f.employeeId, type: f.type,
-          startDate: f.startDate, endDate: f.endDate,
+          startDate: f.startDate, endDate: hourBased ? f.startDate : f.endDate,
+          startTime: hourBased ? f.startTime : null,
+          endTime: hourBased ? f.endTime : null,
           notes: f.notes || null,
-          employeeConsent: f.employeeConsent,
+          employeeConsent: hourBased ? false : f.employeeConsent,
         });
         notify("Cerere creata cu succes.", "success");
       } else {
         await updateLeave(f.id, {
-          type: f.type, startDate: f.startDate, endDate: f.endDate,
+          type: f.type,
+          startDate: f.startDate, endDate: hourBased ? f.startDate : f.endDate,
+          startTime: hourBased ? f.startTime : null,
+          endTime: hourBased ? f.endTime : null,
           notes: f.notes || null,
         });
         notify("Cerere actualizata.", "success");
@@ -694,12 +753,13 @@ export default function Concedii() {
   }
 
   async function handleApprove(l: Leave) {
-    if (!approverConsent()) {
+    const hourBased = isHourBased(l.type);
+    if (!hourBased && !approverConsent()) {
       notify("Bifează acordul de aprobare pentru a aproba cererea.", "warn");
       return;
     }
     try {
-      const updated = await approveLeave(l.id, approverConsent());
+      const updated = await approveLeave(l.id, hourBased ? true : approverConsent());
       notify("Cerere aprobata.", "success");
       setDetailLeave(updated);
       await reloadBalances();
@@ -733,6 +793,9 @@ export default function Concedii() {
 
   // Preview live for working days in form
   const formWorkingDays = createMemo(() => computeWorkingDays(form().startDate, form().endDate));
+  // Preview live ore (tipuri pe ore)
+  const formIsHourBased = createMemo(() => isHourBased(form().type));
+  const formHours = createMemo(() => hoursBetween(form().startTime, form().endTime));
 
   // Vacation balance check — only for type VACATION, compared against employee's annual cota.
   const vacationBalanceInfo = createMemo<{ over: boolean; available: number; requested: number } | null>(() => {
@@ -898,7 +961,7 @@ export default function Concedii() {
                                     [`status-${l.status.toLowerCase()}`]: true,
                                   }}
                                   onClick={(e) => { e.stopPropagation(); setDetailLeave(l); }}
-                                  title={`${l.employeeName} — ${l.type}\n${fmtRo(l.startDate)} - ${fmtRo(l.endDate)}\n${l.workingDays} zile lucratoare`}
+                                  title={leaveTooltip(l)}
                                 >
                                   <Avatar name={l.employeeName ?? "?"} imagePath={l.employeeImagePath} size={22} />
                                 </button>
@@ -923,7 +986,7 @@ export default function Concedii() {
                                     [t.cls]: true,
                                   }}
                                   onClick={(e) => { e.stopPropagation(); setDetailLeave(l); }}
-                                  title={`${l.employeeName} — ${l.type}\n${fmtRo(l.startDate)} - ${fmtRo(l.endDate)}\n${l.workingDays} zile lucratoare`}
+                                  title={leaveTooltip(l)}
                                 >
                                   <Avatar name={l.employeeName ?? "?"} imagePath={l.employeeImagePath} size={16} />
                                   <span class="concedii-pill-emoji">{t.emoji}</span>
@@ -976,8 +1039,8 @@ export default function Concedii() {
                           <td><span class={`concedii-type-badge ${t.cls}`}>{t.emoji} {t.label}</span></td>
                           <td><span class={`concedii-status-badge status-${l.status.toLowerCase()}`}>{l.status === "Approved" ? "Aprobată" : l.status === "Pending" ? "În așteptare" : "Respinsă"}</span></td>
                           <td>{fmtRo(l.startDate)}</td>
-                          <td>{fmtRo(l.endDate)}</td>
-                          <td style="text-align:right">{l.workingDays}</td>
+                          <td>{isHourBased(l.type) ? `${toHM(l.startTime)}–${toHM(l.endTime)}` : fmtRo(l.endDate)}</td>
+                          <td style="text-align:right">{isHourBased(l.type) ? fmtHours(l.hours) : `${l.workingDays} zile`}</td>
                           <td>{l.approverNameSnapshot ?? l.approverName ?? "—"}</td>
                           <td>
                             <span title="Acord angajat">{l.employeeConsent ? "✅" : "⬜"}</span>
@@ -986,7 +1049,9 @@ export default function Concedii() {
                           </td>
                           <td style="white-space:nowrap">
                             <button type="button" class="btn btn-ghost btn-sm" onClick={() => setDetailLeave(l)}>Detalii</button>
-                            <button type="button" class="btn btn-ghost btn-sm" title="Export PDF" onClick={() => void generateLeaveRequestPdf(l)}>⬇ PDF</button>
+                            <Show when={!isHourBased(l.type)}>
+                              <button type="button" class="btn btn-ghost btn-sm" title="Export PDF" onClick={() => void generateLeaveRequestPdf(l)}>⬇ PDF</button>
+                            </Show>
                           </td>
                         </tr>
                       );
@@ -1032,6 +1097,16 @@ export default function Concedii() {
                           <div class="concedii-balance-bar">
                             <div class="concedii-balance-bar-fill" style={`width:${pct()}%`} />
                           </div>
+                          <Show when={b.overtime_hours || b.permission_hours || b.recovery_hours || b.permission_count}>
+                            <div class="concedii-balance-hours" title="Sold ore: overtime + recuperare − învoire">
+                              <span>⏱ {fmtHours(b.overtime_hours)}</span>
+                              <span>🕐 {b.permission_count} ({fmtHours(b.permission_hours)})</span>
+                              <span>↩ {fmtHours(b.recovery_hours)}</span>
+                              <span class="concedii-balance-net" classList={{ "is-negative": b.net_hours_balance < 0 }}>
+                                Sold {fmtHours(b.net_hours_balance)}
+                              </span>
+                            </div>
+                          </Show>
                         </div>
                       </div>
                     </button>
@@ -1052,7 +1127,7 @@ export default function Concedii() {
         footer={
           <>
             <button type="button" class="btn btn-ghost btn-sm" onClick={closeForm}>Anulează</button>
-            <button type="submit" form="leave-form" class="btn btn-primary btn-sm" disabled={submitting() || (vacationBalanceInfo()?.over ?? false) || (form().id == null && !form().employeeConsent)}>
+            <button type="submit" form="leave-form" class="btn btn-primary btn-sm" disabled={submitting() || (vacationBalanceInfo()?.over ?? false) || (!formIsHourBased() && form().id == null && !form().employeeConsent)}>
               {submitting() ? "..." : (form().id == null ? "Creează" : "Salvează")}
             </button>
           </>
@@ -1106,47 +1181,92 @@ export default function Concedii() {
             </div>
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-            <div>
-              <label class="form-label">De la</label>
-              <MiniCalendarPicker
-                value={form().startDate}
-                onChange={(d) => setForm({ ...form(), startDate: d, endDate: d > form().endDate ? d : form().endDate })}
-              />
-            </div>
-            <div>
-              <label class="form-label">Până la</label>
-              <MiniCalendarPicker
-                value={form().endDate}
-                onChange={(d) => setForm({ ...form(), endDate: d })}
-                minDate={form().startDate}
-              />
-            </div>
-          </div>
-
-          <div style="padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px">
-            <strong>{formWorkingDays()}</strong> zile lucrătoare în interval
-            <span style="color:var(--text-muted);font-size:12px;display:block;margin-top:2px">(exclude weekend + sărbători legale RO)</span>
-          </div>
-          <Show when={vacationBalanceInfo()}>
-            {(vb) => (
-              <div
-                style={`padding:10px 12px;border-radius:8px;font-size:13px;${
-                  vb().over
-                    ? "background:#f8d7da;color:#721c24;border:1px solid #f5c2c7"
-                    : "background:#d4edda;color:#155724;border:1px solid #c3e6cb"
-                }`}
-              >
-                <Show
-                  when={vb().over}
-                  fallback={
-                    <span>✓ Soldul de concediu acoperă cererea ({vb().requested} / {vb().available} disponibile).</span>
-                  }
-                >
-                  <strong>⚠ Depășește soldul!</strong> Cerute: {vb().requested} zile, disponibile: {vb().available}.
-                </Show>
+          <Show
+            when={!formIsHourBased()}
+            fallback={
+              <>
+                <div>
+                  <label class="form-label">Data</label>
+                  <MiniCalendarPicker
+                    value={form().startDate}
+                    onChange={(d) => setForm({ ...form(), startDate: d, endDate: d })}
+                  />
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                  <div>
+                    <label class="form-label">De la (ora)</label>
+                    <input
+                      class="input"
+                      type="time"
+                      value={form().startTime}
+                      onInput={(e) => setForm({ ...form(), startTime: e.currentTarget.value })}
+                    />
+                  </div>
+                  <div>
+                    <label class="form-label">Până la (ora)</label>
+                    <input
+                      class="input"
+                      type="time"
+                      value={form().endTime}
+                      onInput={(e) => setForm({ ...form(), endTime: e.currentTarget.value })}
+                    />
+                  </div>
+                </div>
+                <div style="padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px">
+                  <strong>{fmtHours(formHours())}</strong> în interval
+                  <span style="color:var(--text-muted);font-size:12px;display:block;margin-top:2px">
+                    {form().type === "Overtime"
+                      ? "Ore peste program (alimentează soldul)."
+                      : form().type === "Recuperare Ore invoire"
+                      ? "Ore recuperate (alimentează soldul)."
+                      : "Ore de învoire (se scad din sold)."}
+                  </span>
+                </div>
+              </>
+            }
+          >
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div>
+                <label class="form-label">De la</label>
+                <MiniCalendarPicker
+                  value={form().startDate}
+                  onChange={(d) => setForm({ ...form(), startDate: d, endDate: d > form().endDate ? d : form().endDate })}
+                />
               </div>
-            )}
+              <div>
+                <label class="form-label">Până la</label>
+                <MiniCalendarPicker
+                  value={form().endDate}
+                  onChange={(d) => setForm({ ...form(), endDate: d })}
+                  minDate={form().startDate}
+                />
+              </div>
+            </div>
+
+            <div style="padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px">
+              <strong>{formWorkingDays()}</strong> zile lucrătoare în interval
+              <span style="color:var(--text-muted);font-size:12px;display:block;margin-top:2px">(exclude weekend + sărbători legale RO)</span>
+            </div>
+            <Show when={vacationBalanceInfo()}>
+              {(vb) => (
+                <div
+                  style={`padding:10px 12px;border-radius:8px;font-size:13px;${
+                    vb().over
+                      ? "background:#f8d7da;color:#721c24;border:1px solid #f5c2c7"
+                      : "background:#d4edda;color:#155724;border:1px solid #c3e6cb"
+                  }`}
+                >
+                  <Show
+                    when={vb().over}
+                    fallback={
+                      <span>✓ Soldul de concediu acoperă cererea ({vb().requested} / {vb().available} disponibile).</span>
+                    }
+                  >
+                    <strong>⚠ Depășește soldul!</strong> Cerute: {vb().requested} zile, disponibile: {vb().available}.
+                  </Show>
+                </div>
+              )}
+            </Show>
           </Show>
 
           <div>
@@ -1159,8 +1279,8 @@ export default function Concedii() {
             />
           </div>
 
-          {/* Date legale ale angajatului (din dosarul de personal) */}
-          <Show when={form().employeeId != null && formDetails()}>
+          {/* Date legale ale angajatului (din dosarul de personal) — doar tipuri pe zile */}
+          <Show when={!formIsHourBased() && form().employeeId != null && formDetails()}>
             {(d) => (
               <Show
                 when={d().has}
@@ -1185,8 +1305,8 @@ export default function Concedii() {
             )}
           </Show>
 
-          {/* Acord digital angajat — necesar pentru cereri noi */}
-          <Show when={form().id == null}>
+          {/* Acord digital angajat — necesar pentru cereri noi (doar tipuri pe zile) */}
+          <Show when={!formIsHourBased() && form().id == null}>
             <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px">
               <input
                 type="checkbox"
@@ -1213,7 +1333,9 @@ export default function Concedii() {
           <Show when={detailLeave()}>
             {(l) => (
               <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;width:100%">
-                <button type="button" class="btn btn-ghost btn-sm" onClick={() => void generateLeaveRequestPdf(l())}>⬇ Export PDF</button>
+                <Show when={!isHourBased(l().type)}>
+                  <button type="button" class="btn btn-ghost btn-sm" onClick={() => void generateLeaveRequestPdf(l())}>⬇ Export PDF</button>
+                </Show>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => handleDelete(l())}>Șterge</button>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditForm(l())}>Editează</button>
                 <Show when={adminVisible()}>
@@ -1222,8 +1344,8 @@ export default function Concedii() {
                     class="btn btn-sm concedii-action-btn"
                     classList={{ "is-current": l().status === "Approved" }}
                     style="background:#d4edda;color:#155724;border-color:#155724"
-                    disabled={l().status === "Approved" || !approverConsent()}
-                    title={l().status !== "Approved" && !approverConsent() ? "Bifează acordul de aprobare" : undefined}
+                    disabled={l().status === "Approved" || (!isHourBased(l().type) && !approverConsent())}
+                    title={l().status !== "Approved" && !isHourBased(l().type) && !approverConsent() ? "Bifează acordul de aprobare" : undefined}
                     onClick={() => handleApprove(l())}
                   >✓ {l().status === "Approved" ? "Aprobată" : "Aprobă"}</button>
                   <button
@@ -1261,10 +1383,22 @@ export default function Concedii() {
                     {l().status === "Approved" ? "Aprobată" : l().status === "Pending" ? "În așteptare" : "Respinsă"}
                   </span>
                 </div>
-                <div style="font-size:15px">
-                  <strong>{fmtRo(l().startDate)} – {fmtRo(l().endDate)}</strong>
-                  <span style="color:var(--text-muted);margin-left:8px">({l().workingDays} zile lucrătoare)</span>
-                </div>
+                <Show
+                  when={!isHourBased(l().type)}
+                  fallback={
+                    <div style="font-size:15px">
+                      <strong>{fmtRo(l().startDate)}</strong>
+                      <span style="color:var(--text-muted);margin-left:8px">
+                        {toHM(l().startTime)}–{toHM(l().endTime)} · {fmtHours(l().hours)}
+                      </span>
+                    </div>
+                  }
+                >
+                  <div style="font-size:15px">
+                    <strong>{fmtRo(l().startDate)} – {fmtRo(l().endDate)}</strong>
+                    <span style="color:var(--text-muted);margin-left:8px">({l().workingDays} zile lucrătoare)</span>
+                  </div>
+                </Show>
                 <Show when={l().notes}>
                   <div style="padding:10px 12px;border-radius:8px;background:var(--surface2);font-size:14px;white-space:pre-wrap">
                     {l().notes}
@@ -1311,7 +1445,8 @@ export default function Concedii() {
                   )}
                 </Show>
 
-                {/* Acorduri digitale */}
+                {/* Acorduri digitale — doar tipuri pe zile (flux legal) */}
+                <Show when={!isHourBased(l().type)}>
                 <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
                   <div style="display:flex;align-items:center;gap:8px">
                     <span>{l().employeeConsent ? "✅" : "⬜"}</span>
@@ -1332,9 +1467,10 @@ export default function Concedii() {
                     </span>
                   </div>
                 </div>
+                </Show>
 
-                {/* Bifa de acord pentru aprobator (admin, cerere ne-aprobată) */}
-                <Show when={adminVisible() && l().status !== "Approved"}>
+                {/* Bifa de acord pentru aprobator (admin, cerere ne-aprobată) — doar tipuri pe zile */}
+                <Show when={!isHourBased(l().type) && adminVisible() && l().status !== "Approved"}>
                   <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px">
                     <input
                       type="checkbox"
@@ -1392,7 +1528,12 @@ export default function Concedii() {
                 Ștergi cererea de absență pentru <strong>{l().employeeName ?? "?"}</strong>?
               </p>
               <div style="padding:8px 12px;border-radius:8px;background:var(--surface2);font-size:13px;color:var(--text-muted)">
-                {l().type} · {fmtRo(l().startDate)} – {fmtRo(l().endDate)} · {l().workingDays} zile lucrătoare
+                <Show
+                  when={isHourBased(l().type)}
+                  fallback={<>{l().type} · {fmtRo(l().startDate)} – {fmtRo(l().endDate)} · {l().workingDays} zile lucrătoare</>}
+                >
+                  {l().type} · {fmtRo(l().startDate)} · {toHM(l().startTime)}–{toHM(l().endTime)} · {fmtHours(l().hours)}
+                </Show>
               </div>
               <p style="margin:0;font-size:12px;color:var(--text-muted)">Această acțiune nu poate fi anulată.</p>
             </div>
