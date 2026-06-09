@@ -2166,7 +2166,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
             <textarea
               class="sl-modal-textarea"
               placeholder={modal() === "descriere" ? "• Scrie o descriere..." : "• Observații ..."}
-              maxlength={modal() === "dateTehn" ? 1500 : 200}
+              maxlength={modal() === "dateTehn" ? 5000 : 200}
               value={modalDraft()}
               onFocus={() => { if (modalDraft().trim() === "") setModalDraft(BULLET); }}
               onKeyDown={(e) => {
