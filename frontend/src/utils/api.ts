@@ -1,6 +1,21 @@
 import { auth, logout } from "../store/authStore";
+import { reportServerReachable, reportServerUnreachable } from "../store/connectivityStore";
 
 export const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+
+/**
+ * Distinge esecurile de retea (server inaccesibil) de un abort intentionat.
+ * - TypeError      -> fetch a esuat la nivel de retea ("Failed to fetch")
+ * - TimeoutError   -> AbortSignal.timeout a expirat (server lent/inaccesibil)
+ * Un AbortError "clasic" (anulare manuala de catre cod) NU e tratat ca problema de retea.
+ */
+function isNetworkError(err: unknown): boolean {
+  if (err instanceof TypeError) return true;
+  if (err && typeof err === "object" && "name" in err) {
+    return (err as { name?: string }).name === "TimeoutError";
+  }
+  return false;
+}
 
 /** Colapseaza orice secventa de doua sau mai multe slash-uri consecutive la
  * unul singur, fara a strica prefixul "https://". Util ca defense-in-depth
@@ -53,13 +68,22 @@ export function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Re
   const handleUnauthorized = options.handleUnauthorized !== false;
   const headers = buildHeaders(options);
   const { authToken: _at, handleUnauthorized: _hu, ...init } = options;
-  return fetch(_collapseSlashes(API_BASE + url), { ...init, headers }).then((res) => {
-    if (handleUnauthorized && res.status === 401 && auth.token) {
-      logout();
-      emitUnauthorized();
-    }
-    return res;
-  });
+  return fetch(_collapseSlashes(API_BASE + url), { ...init, headers }).then(
+    (res) => {
+      // Am primit un raspuns de la server -> conexiunea functioneaza.
+      reportServerReachable();
+      if (handleUnauthorized && res.status === 401 && auth.token) {
+        logout();
+        emitUnauthorized();
+      }
+      return res;
+    },
+    (err) => {
+      // Esec la nivel de retea -> semnalam store-ul de conectivitate.
+      if (isNetworkError(err)) reportServerUnreachable();
+      throw err;
+    },
+  );
 }
 
 /**

@@ -1,6 +1,6 @@
 import { useNavigate } from "@solidjs/router";
 import { auth, logout, setDisplayName, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
-import { isOffline } from "../store/productsStore";
+import { isConnected } from "../store/connectivityStore";
 import { theme, toggleTheme } from "../store/themeStore";
 import { adminVisible, setAdminVisible } from "../store/adminStore";
 import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
@@ -152,7 +152,7 @@ export default function NavBar() {
   return (
     <>
       <nav class="navbar">
-        <div class="offline-banner" classList={{ "offline-banner--online": !isOffline() }} />
+        <div class="offline-banner" classList={{ "offline-banner--online": isConnected() }} />
         <div class="logo-menu" style="position:relative;display:flex;align-items:center;gap:10px">
           <button
             class="btn-icon"

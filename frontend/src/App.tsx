@@ -9,6 +9,8 @@ import Login from "./pages/Login";
 import AppErrorBoundary from "./components/layout/AppErrorBoundary";
 import Notifications from "./components/layout/Notifications";
 import SubscriptionBanner from "./components/layout/SubscriptionBanner";
+import ConnectivityBanner from "./components/layout/ConnectivityBanner";
+import { initConnectivity } from "./store/connectivityStore";
 
 // Lazy-load route pages to enable per-route code-splitting.
 const POS = lazy(() => import("./pages/POS"));
@@ -75,8 +77,10 @@ function Protected(props: { component: () => any }) {
 }
 
 export default function App() {
+  onMount(() => initConnectivity());
   return (
     <AppErrorBoundary>
+      <ConnectivityBanner />
       <Notifications />
       <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <Route path="/health" component={HealthCheck} />
