@@ -76,7 +76,7 @@ class Receipt(Base):
     receipt_items: Mapped[list[ReceiptItem]] = relationship(
         "ReceiptItem", back_populates="receipt", cascade="all, delete-orphan", lazy="selectin"
     )
-    client: Mapped["Client | None"] = relationship("Client")
+    client: Mapped["Client | None"] = relationship("Client", lazy="selectin")
     vehicol: Mapped["Vehicol | None"] = relationship("Vehicol", back_populates="receipt", uselist=False, lazy="selectin")
     cazari_anvelope: Mapped[list["CazareAnvelope"]] = relationship(
         "CazareAnvelope", back_populates="receipt", lazy="noload"
