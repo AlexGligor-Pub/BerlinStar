@@ -173,7 +173,8 @@ def _resolve_customer_tax_info(client: Client) -> tuple[str | None, str | None]:
     """Returneaza (tax_id, party_id_scheme).
 
     Pentru clientii juridici cu CUI -> ('RO12345', None) (folosim PartyTaxScheme).
-    Pentru fizici cu CNP -> (None, '1990xxxxxxxxx') care va merge in PartyIdentification.
+    Pentru fizici, identificarea (CNP sau 13 zerouri) e tratata in build_invoice_payload
+    (CNP in PartyLegalEntity/CompanyID), nu aici — valoarea returnata pt. fizic e ignorata.
     """
     cui = (client.cui or "").strip()
     if not cui:
@@ -455,11 +456,20 @@ def build_invoice_payload(
             client.country_code or "RO",
         )
         cust_tax_id, cust_scheme = _resolve_customer_tax_info(client)
-        # Cand emitentul e neplatitor (categorie O), codul TVA al cumparatorului NU trebuie
-        # prezent (regula BR-O-02); dar CUI-ul cumparatorului TREBUIE sa apara, deci il punem
-        # in PartyLegalEntity/CompanyID (altfel ANAF: "nu a fost identificat cui cumparator").
         cust_legal_id: str | None = None
-        if not vat_payer:
+        if client.tip == "fizic":
+            # B2C: cumparator persoana fizica. CNP-ul (sau 13 zerouri daca lipseste/e invalid)
+            # merge in PartyLegalEntity/CompanyID (BT-47), conform regulilor ANAF B2C. Fara cod
+            # TVA si fara PartyIdentification. Cu 13 zerouri ANAF accepta factura (nu o livreaza
+            # in SPV-ul cumparatorului, dar e valida).
+            cnp = (client.cui or "").strip()
+            cust_legal_id = cnp if re.fullmatch(r"\d{13}", cnp) else "0000000000000"
+            cust_tax_id = None
+            cust_scheme = None
+        elif not vat_payer:
+            # Emitent neplatitor (categorie O): codul TVA al cumparatorului NU trebuie prezent
+            # (regula BR-O-02); punem CUI-ul in PartyLegalEntity/CompanyID (altfel ANAF:
+            # "nu a fost identificat cui cumparator").
             if client.cui:
                 cust_legal_id = str(client.cui).strip().upper().removeprefix("RO") or None
             cust_tax_id = None

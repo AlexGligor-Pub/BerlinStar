@@ -143,7 +143,7 @@ export function ClientSearch(props: {
                   >
                     <div style="font-weight:600">{c.nume}</div>
                     <div style="font-size:12px;color:var(--text-muted)">
-                      {c.tip === "juridic" ? `CUI ${c.cui ?? "—"}` : "Persoana fizica"}
+                      {c.tip === "juridic" ? `CUI ${c.cui ?? "—"}` : (c.cui ? `CNP ${c.cui}` : "Persoană fizică")}
                       <Show when={c.adresa}>{` · ${c.adresa}`}</Show>
                     </div>
                   </button>
@@ -163,7 +163,7 @@ export function ClientSearch(props: {
               <div>
                 <div style="font-weight:600">{c().nume}</div>
                 <div style="font-size:12px;color:var(--text-muted)">
-                  {c().tip === "juridic" ? `CUI ${c().cui ?? "—"}` : "Persoana fizica"}
+                  {c().tip === "juridic" ? `CUI ${c().cui ?? "—"}` : (c().cui ? `CNP ${c().cui}` : "Persoană fizică")}
                   <Show when={c().adresa}>{` · ${c().adresa}`}</Show>
                 </div>
               </div>
@@ -178,6 +178,59 @@ export function ClientSearch(props: {
           </div>
         )}
       </Show>
+    </div>
+  );
+}
+
+export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => void }) {
+  const [nume, setNume] = createSignal("");
+  const [cnp, setCnp] = createSignal("");
+  const [adresa, setAdresa] = createSignal("");
+  const [telefon, setTelefon] = createSignal("");
+  const [error, setError] = createSignal<string | null>(null);
+  const [loading, setLoading] = createSignal(false);
+
+  async function save() {
+    setError(null);
+    if (!nume().trim()) { setError("Numele e obligatoriu."); return; }
+    const cnpVal = cnp().trim();
+    if (cnpVal && !/^\d{13}$/.test(cnpVal)) {
+      setError("CNP invalid (trebuie 13 cifre) sau lasa gol pentru 13 zerouri.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await apiFetch("/api/clienti", {
+        method: "POST",
+        body: JSON.stringify({
+          tip: "fizic",
+          nume: nume().trim(),
+          cui: cnpVal || null,
+          adresa: adresa().trim() || null,
+          telefon: telefon().trim() || null,
+        }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setError(j.detail ?? "Eroare la salvarea clientului.");
+        return;
+      }
+      const created: ClientLite = await res.json();
+      props.onClientCreated(created);
+      setNume(""); setCnp(""); setAdresa(""); setTelefon("");
+    } finally { setLoading(false); }
+  }
+
+  return (
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <Input label="Nume *" value={nume()} placeholder="Nume si prenume" onInput={(v) => setNume(v)} />
+      <Input label="CNP (optional — gol = 13 zerouri pe e-Factura)" value={cnp()} placeholder="13 cifre sau gol" onInput={(v) => setCnp(v)} />
+      <Input label="Adresa" value={adresa()} placeholder="Adresa" onInput={(v) => setAdresa(v)} />
+      <Input label="Telefon" value={telefon()} placeholder="Telefon" onInput={(v) => setTelefon(v)} />
+      <Show when={error()}><span class="field-error" role="alert">{error()}</span></Show>
+      <button type="button" class="btn btn-primary btn-sm" onClick={save} disabled={loading() || !nume().trim()}>
+        {loading() ? "..." : "Salveaza client fizic"}
+      </button>
     </div>
   );
 }

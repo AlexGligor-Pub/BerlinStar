@@ -11,6 +11,7 @@ import {
   LocationPicker,
   ClientSearch,
   AnafLookup,
+  FizicClientForm,
   ItemsEditor,
 } from "./components";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
@@ -43,7 +44,7 @@ export default function FacturaRapidaForm(props: Props) {
   const [companyId, setCompanyId] = createSignal<number | null>(null);
   const [locationId, setLocationId] = createSignal<number | null>(null);
   const [client, setClient] = createSignal<ClientLite | null>(null);
-  const [tab, setTab] = createSignal<"search" | "anaf">("search");
+  const [tab, setTab] = createSignal<"search" | "anaf" | "fizic">("search");
   const [dueDate, setDueDate] = createSignal(todayPlusDaysISO(PAYMENT_TERM_DAYS));
   const [payMethod, setPayMethod] = createSignal<string>("Neplatit");
   const [lines, setLines] = createSignal<QuickInvoiceLine[]>([newLine()]);
@@ -287,12 +288,22 @@ export default function FacturaRapidaForm(props: Props) {
             >
               Lookup ANAF
             </button>
+            <button
+              type="button"
+              onClick={() => setTab("fizic")}
+              style={`padding:8px 12px;background:transparent;border:none;border-bottom:2px solid ${tab() === "fizic" ? "var(--accent,#5b7cfa)" : "transparent"};color:${tab() === "fizic" ? "var(--text)" : "var(--text-muted)"};font-weight:600;cursor:pointer`}
+            >
+              Pers. fizică nouă
+            </button>
           </div>
           <Show when={tab() === "search"}>
             <ClientSearch selected={client()} onSelect={setClient} />
           </Show>
           <Show when={tab() === "anaf"}>
             <AnafLookup onClientCreated={(c) => { setClient(c); setTab("search"); }} />
+          </Show>
+          <Show when={tab() === "fizic"}>
+            <FizicClientForm onClientCreated={(c) => { setClient(c); setTab("search"); }} />
           </Show>
           <Show when={errors().client}>
             <span class="field-error" role="alert">{errors().client}</span>

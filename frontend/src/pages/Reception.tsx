@@ -176,6 +176,9 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
         <input class="input" placeholder="CUI" value={f().cui} onInput={e => s({ cui: e.currentTarget.value })} />
         <input class="input" placeholder="Reprezentant" value={f().reprezentant} onInput={e => s({ reprezentant: e.currentTarget.value })} />
       </Show>
+      <Show when={f().tip === "fizic"}>
+        <input class="input" placeholder="CNP (opțional — gol = 13 zerouri pe e-Factură)" value={f().cui} onInput={e => s({ cui: e.currentTarget.value })} />
+      </Show>
       <input class="input" placeholder="Telefon" value={f().telefon} onInput={e => s({ telefon: e.currentTarget.value })} />
       <input class="input" placeholder="Email" value={f().email} onInput={e => s({ email: e.currentTarget.value })} />
       <input class="input" placeholder="Adresă" value={f().adresa} onInput={e => s({ adresa: e.currentTarget.value })} />
