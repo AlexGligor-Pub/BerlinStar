@@ -78,6 +78,9 @@
       {%- endif %}
       <cac:PartyLegalEntity>
         <cbc:RegistrationName>{{ payload.customer.legal_name or payload.customer.name | e }}</cbc:RegistrationName>
+        {%- if payload.customer.legal_id %}
+        <cbc:CompanyID>{{ payload.customer.legal_id | e }}</cbc:CompanyID>
+        {%- endif %}
       </cac:PartyLegalEntity>
       {%- if payload.customer.phone or payload.customer.email %}
       <cac:Contact>

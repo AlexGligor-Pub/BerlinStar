@@ -434,7 +434,9 @@ def build_invoice_payload(
     supplier = Party(
         name=company.name or "—",
         tax_id=(_resolve_supplier_tax_id(company) if vat_payer else None),
-        legal_id=company.nr_reg_com,
+        # Neplatitor de TVA: fara PartyTaxScheme, deci CUI-ul emitentului merge in
+        # PartyLegalEntity/CompanyID (altfel ANAF raporteaza "CUI emitent =0"). Model ANAF.
+        legal_id=(company.nr_reg_com if vat_payer else (str(company.cui).strip() or company.nr_reg_com)),
         legal_name=company.name,
         address=supplier_addr,
         phone=company.phone,
@@ -453,14 +455,18 @@ def build_invoice_payload(
             client.country_code or "RO",
         )
         cust_tax_id, cust_scheme = _resolve_customer_tax_info(client)
-        # Cand emitentul e neplatitor (categorie O), codul TVA al cumparatorului NU
-        # trebuie prezent (regula BR-O-02).
+        # Cand emitentul e neplatitor (categorie O), codul TVA al cumparatorului NU trebuie
+        # prezent (regula BR-O-02); dar CUI-ul cumparatorului TREBUIE sa apara, deci il punem
+        # in PartyLegalEntity/CompanyID (altfel ANAF: "nu a fost identificat cui cumparator").
+        cust_legal_id: str | None = None
         if not vat_payer:
+            if client.cui:
+                cust_legal_id = str(client.cui).strip().upper().removeprefix("RO") or None
             cust_tax_id = None
         customer = Party(
             name=client.nume or "—",
             tax_id=cust_tax_id,
-            legal_id=None,
+            legal_id=cust_legal_id,
             legal_name=client.nume,
             address=customer_addr,
             phone=client.telefon,
