@@ -1,7 +1,7 @@
 """HTTP client async pentru API-ul RO e-Factura ANAF.
 
 Endpoint-uri implementate:
-- POST /upload/CIUS-RO/{CUI}?standard=UBL  -> upload factura
+- POST /upload?standard=UBL&cif={CUI}       -> upload factura
 - GET  /stareMesaj/{index_incarcare}        -> verifica stare
 - GET  /descarcare/{download_id}             -> descarca ZIP raspuns
 - GET  /listaMesajeFactura                   -> lista mesaje SPV
@@ -55,8 +55,11 @@ class AnafEFacturaClient:
         extern: bool = False,
     ) -> dict[str, Any]:
         """Trimite XML factură la ANAF. Returneaza dict cu index_incarcare sau eroare."""
-        url = f"{self.base_url}/upload/{standard}/{self.cui}"
-        params: dict[str, str] = {"standard": standard}
+        # Endpoint ANAF: POST {base}/upload?standard=...&cif=...  (query params, NU segmente
+        # de path). Forma veche `/upload/{standard}/{cui}` returna 404 Not Found de la gateway-ul
+        # ANAF — niciun upload nu reusea. Vezi docs ANAF (mfinante.gov.ro prezentare API e-Factura).
+        url = f"{self.base_url}/upload"
+        params: dict[str, str] = {"standard": standard, "cif": self.cui}
         if extern:
             params["extern"] = "DA"
 
