@@ -67,6 +67,7 @@ export default function EFacturaSent() {
   const [search, setSearch] = createSignal("");
   const [statusFilter, setStatusFilter] = createSignal("");
   const [selected, setSelected] = createSignal<SentRow | null>(null);
+  const [syncing, setSyncing] = createSignal(false);
 
   async function load() {
     const cid = ctx.companyId();
@@ -137,12 +138,50 @@ export default function EFacturaSent() {
     }
   }
 
+  // Aduce din SPV ANAF toate facturile TRIMISE (inclusiv cele emise prin alt sistem)
+  // si le persista. Deduplicat dupa index_incarcare in backend.
+  async function syncFromSpv() {
+    const cid = ctx.companyId();
+    if (!cid || syncing()) return;
+    setSyncing(true);
+    try {
+      const res = await apiFetch(`/api/efactura/companies/${cid}/sent/sync`, { method: "POST" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        notify(j.detail ?? `Eroare ${res.status}`, "error");
+        return;
+      }
+      const data = await res.json();
+      notify(`Sincronizat din SPV: ${data.inserted} facturi noi (din ${data.messages} trimise găsite).`, "success");
+      pag.setPage(1);
+      void load();
+    } catch {
+      notify("Eroare de rețea la sincronizare.", "error");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const columns = createMemo<ColumnDef<SentRow>[]>(() => [
     {
       id: "status",
       header: "Status",
       cell: (info) => <StatusBadge status={info.row.original.status} anafStare={info.row.original.anaf_stare} />,
       size: 180,
+    },
+    {
+      id: "source",
+      header: "Sursă",
+      cell: (info) => {
+        const ext = info.row.original.receipt_id == null;
+        return (
+          <span style={`padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid ${ext ? "var(--text-muted)" : "var(--accent)"};color:${ext ? "var(--text-muted)" : "var(--accent)"}`}>
+            {ext ? "SPV (extern)" : "App"}
+          </span>
+        );
+      },
+      size: 110,
+      meta: { hideOnMobile: true },
     },
     {
       accessorKey: "cui",
@@ -271,6 +310,14 @@ export default function EFacturaSent() {
           <option value="rejected">Respinse</option>
           <option value="error">Eroare</option>
         </select>
+        <button
+          class="btn btn-ghost btn-sm"
+          disabled={syncing()}
+          onClick={() => void syncFromSpv()}
+          title="Aduce din SPV ANAF toate facturile trimise (inclusiv din alt sistem), ultimele 60 zile"
+        >
+          {syncing() ? "Sincronizez…" : "↻ Sync din SPV"}
+        </button>
         <div style="flex:1" />
         <span class="efactura-toolbar-count" style="font-size:12px;color:var(--text-muted)">{total()} facturi trimise</span>
       </div>

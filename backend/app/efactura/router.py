@@ -1089,6 +1089,115 @@ async def sync_received_for_company(
     return {"ok": True, "messages": len(messages), "inserted": inserted}
 
 
+@router.post("/companies/{company_id}/sent/sync")
+async def sync_sent_for_company(
+    company_id: int = Path(..., gt=0),
+    account_id: int = Depends(get_account_id),
+    db: AsyncSession = Depends(get_db),
+):
+    """Importa facturile TRIMISE din SPV ANAF in efactura_records, ca sa apara TOATE in
+    pagina Trimise — inclusiv cele trimise prin alt sistem (care nu au receipt local).
+
+    Deduplicat dupa index_incarcare; NU atinge inregistrarile gestionate de aplicatie.
+    Rndurile importate au receipt_id=NULL (marker "extern/SPV"). Limitat la ultimele 60
+    de zile (constrangere API ANAF listaMesajeFactura).
+    """
+    from datetime import date as _date
+
+    await _require_company_access(db, company_id, account_id)
+
+    token = (
+        await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
+    ).scalar_one_or_none()
+    if token is None:
+        raise HTTPException(400, "Compania nu este conectata la ANAF. Apasa Connect cu USB-ul plugat.")
+    settings = (
+        await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
+    ).scalar_one_or_none()
+    if settings is None:
+        raise HTTPException(400, "Lipsesc setarile ANAF pentru aceasta companie.")
+
+    try:
+        access_token = await oauth_service.get_valid_access_token(db, company_id)
+    except AnafTokenMissing:
+        raise HTTPException(401, "Token ANAF inexistent.")
+    except AnafTokenExpired:
+        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+    except AnafConfigError as exc:
+        raise HTTPException(400, str(exc))
+
+    client = AnafEFacturaClient(access_token, str(token.cui), use_test=settings.use_test_env)
+    try:
+        resp = await client.list_messages(days=60, filtru="T")
+    except EFacturaError as exc:
+        raise HTTPException(502, str(exc))
+
+    messages = resp.get("mesaje") or resp.get("mesajeFactura") or []
+    # Doar facturile TRIMISE de noi. Tipul ANAF e "FACTURA TRIMISA".
+    sent = [m for m in messages if str(m.get("tip") or "").upper().startswith("FACTURA TRIMISA")]
+
+    def _parse_issue_date(s: str | None) -> _date:
+        s = str(s or "")
+        if len(s) >= 8 and s[:8].isdigit():
+            try:
+                return _date(int(s[0:4]), int(s[4:6]), int(s[6:8]))
+            except ValueError:
+                pass
+        return _date.today()
+
+    # Index-urile deja prezente in efactura_records (pentru a nu dubla cele gestionate de app).
+    existing_idx = set(
+        (
+            await db.execute(
+                select(EFacturaRecord.index_incarcare).where(
+                    EFacturaRecord.company_id == company_id,
+                    EFacturaRecord.index_incarcare.isnot(None),
+                )
+            )
+        ).scalars().all()
+    )
+
+    inserted = 0
+    for m in sent:
+        idx_raw = m.get("id_solicitare") or m.get("id_incarcare")
+        if not idx_raw:
+            continue
+        try:
+            idx = int(idx_raw)
+        except (TypeError, ValueError):
+            continue
+        if idx in existing_idx:
+            continue
+        # `id` din mesaj = download id pentru /descarcare (raspunsul ANAF).
+        try:
+            download_id = int(m.get("id")) if m.get("id") else None
+        except (TypeError, ValueError):
+            download_id = None
+        issue_date = _parse_issue_date(m.get("data_creare"))
+        db.add(
+            EFacturaRecord(
+                company_id=company_id,
+                receipt_id=None,  # marker: trimisa prin alt sistem (nu exista bon local)
+                cui=str(token.cui),
+                direction="sent",
+                status="accepted",  # FACTURA TRIMISA = inregistrata cu succes in SPV
+                anaf_stare="ok",
+                index_incarcare=idx,
+                download_id=download_id,
+                data_creare_anaf=str(m.get("data_creare") or "")[:20],
+                invoice_type="380",
+                invoice_issue_date=issue_date,
+                deadline_transmit=issue_date,
+            )
+        )
+        existing_idx.add(idx)
+        inserted += 1
+
+    if inserted:
+        await db.commit()
+    return {"ok": True, "messages": len(sent), "inserted": inserted}
+
+
 @router.get("/companies/{company_id}/pending-deadlines", response_model=list[EFacturaRecordOut])
 async def list_pending_deadlines(
     company_id: int = Path(..., gt=0),
