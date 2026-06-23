@@ -12,6 +12,7 @@ Auth: Bearer token de la oauth_service.get_valid_access_token().
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import httpx
@@ -128,7 +129,21 @@ class AnafEFacturaClient:
         try:
             return resp.json()
         except Exception:
-            return {"raw": resp.text[:500]}
+            # ANAF intoarce XML, nu JSON:
+            #   <header ... stare="ok|nok|in prelucrare" id_descarcare="..."/>
+            # sau, la eroare: <header ...><Errors errorMessage="..."/></header>
+            body = resp.text
+            out: dict[str, Any] = {"raw": body[:1000]}
+            m = re.search(r'stare\s*=\s*"([^"]*)"', body)
+            if m:
+                out["stare"] = m.group(1)
+            m = re.search(r'id_descarcare\s*=\s*"([^"]*)"', body)
+            if m:
+                out["id_descarcare"] = m.group(1)
+            m = re.search(r'errorMessage\s*=\s*"([^"]*)"', body)
+            if m:
+                out["eroare"] = m.group(1)
+            return out
 
     # ---------- descarcare ----------
 

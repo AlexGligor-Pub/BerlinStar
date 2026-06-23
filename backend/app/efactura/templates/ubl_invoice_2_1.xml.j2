@@ -119,7 +119,12 @@
       <cbc:TaxAmount currencyID="{{ payload.currency }}">{{ '%.2f' % subtotal.tax_amount }}</cbc:TaxAmount>
       <cac:TaxCategory>
         <cbc:ID>{{ subtotal.vat_category }}</cbc:ID>
+        {%- if subtotal.vat_category != 'O' %}
         <cbc:Percent>{{ '%.2f' % subtotal.vat_percent }}</cbc:Percent>
+        {%- endif %}
+        {%- if subtotal.tax_exemption_reason_code %}
+        <cbc:TaxExemptionReasonCode>{{ subtotal.tax_exemption_reason_code | e }}</cbc:TaxExemptionReasonCode>
+        {%- endif %}
         <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
       </cac:TaxCategory>
     </cac:TaxSubtotal>
@@ -147,7 +152,9 @@
       {%- endif %}
       <cac:ClassifiedTaxCategory>
         <cbc:ID>{{ line.vat_category }}</cbc:ID>
+        {%- if line.vat_category != 'O' %}
         <cbc:Percent>{{ '%.2f' % line.vat_percent }}</cbc:Percent>
+        {%- endif %}
         {%- if line.tax_exemption_reason %}
         <cbc:TaxExemptionReasonCode>{{ line.tax_exemption_reason | e }}</cbc:TaxExemptionReasonCode>
         {%- endif %}

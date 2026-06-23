@@ -13,6 +13,7 @@ Reguli de fallback:
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -100,6 +101,7 @@ class TaxSubtotalData:
     tax_amount: Decimal
     vat_category: str
     vat_percent: Decimal
+    tax_exemption_reason_code: str | None = None  # BT-121 (ex. VATEX-EU-O pt. neplatitor)
 
 
 @dataclass
@@ -183,11 +185,86 @@ def _resolve_customer_tax_info(client: Client) -> tuple[str | None, str | None]:
     return None, cui  # fizic: CNP folosit ca scheme PartyIdentification
 
 
+# Cod scutire TVA pentru emitent neplatitor de TVA (BT-121), conform ghid ANAF e-Factura.
+VATEX_NON_VAT_PAYER = "VATEX-EU-O"
+
+# Judetele Romaniei: nume normalizat (fara diacritice, uppercase) -> cod ISO 3166-2:RO.
+RO_COUNTY_CODES = {
+    "ALBA": "RO-AB", "ARAD": "RO-AR", "ARGES": "RO-AG", "BACAU": "RO-BC",
+    "BIHOR": "RO-BH", "BISTRITA-NASAUD": "RO-BN", "BISTRITA NASAUD": "RO-BN",
+    "BOTOSANI": "RO-BT", "BRASOV": "RO-BV", "BRAILA": "RO-BR",
+    "BUCURESTI": "RO-B", "BUZAU": "RO-BZ", "CARAS-SEVERIN": "RO-CS",
+    "CARAS SEVERIN": "RO-CS", "CALARASI": "RO-CL", "CLUJ": "RO-CJ",
+    "CONSTANTA": "RO-CT", "COVASNA": "RO-CV", "DAMBOVITA": "RO-DB",
+    "DOLJ": "RO-DJ", "GALATI": "RO-GL", "GIURGIU": "RO-GR", "GORJ": "RO-GJ",
+    "HARGHITA": "RO-HR", "HUNEDOARA": "RO-HD", "IALOMITA": "RO-IL",
+    "IASI": "RO-IS", "ILFOV": "RO-IF", "MARAMURES": "RO-MM",
+    "MEHEDINTI": "RO-MH", "MURES": "RO-MS", "NEAMT": "RO-NT", "OLT": "RO-OT",
+    "PRAHOVA": "RO-PH", "SATU MARE": "RO-SM", "SALAJ": "RO-SJ",
+    "SIBIU": "RO-SB", "SUCEAVA": "RO-SV", "TELEORMAN": "RO-TR",
+    "TIMIS": "RO-TM", "TULCEA": "RO-TL", "VASLUI": "RO-VS", "VALCEA": "RO-VL",
+    "VRANCEA": "RO-VN",
+}
+
+
+def _strip_diacritics(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+
+def _parse_county_city(text: str | None) -> tuple[str | None, str | None]:
+    """Best-effort: extrage (cod_judet, localitate) din adresa text-liber RO.
+
+    Ex: "JUD. TIMIS, MUN. TIMISOARA, STR. GLAD, NR.60" -> ("RO-TM", "Timisoara").
+    Pentru Bucuresti, localitatea trebuie sa fie SECTORn (regula BR-RO-100).
+    Returneaza (None, None) daca nu poate determina.
+    """
+    if not text:
+        return None, None
+    up = _strip_diacritics(text).upper()
+
+    # Bucuresti / sector
+    if "BUCURESTI" in up or re.search(r"\bSECTOR(?:UL)?\s*[1-6]\b", up):
+        sm = re.search(r"SECTOR(?:UL)?\s*([1-6])", up)
+        return "RO-B", (f"SECTOR{sm.group(1)}" if sm else None)
+
+    # JUD. X / JUDETUL X
+    county_code = None
+    jm = re.search(r"JUD(?:ETUL|ET|\.)?\s+([A-Z][A-Z \-]*?)(?:,|$|\s+MUN|\s+ORAS|\s+SAT|\s+COM|\s+STR|\s+NR)", up + " ")
+    if jm:
+        name = jm.group(1).strip()
+        county_code = RO_COUNTY_CODES.get(name) or (
+            RO_COUNTY_CODES.get(name.split()[0]) if name.split() else None
+        )
+
+    # localitate: MUN./ORAS/SAT/COM.
+    city = None
+    cm = re.search(
+        r"(?:MUN(?:ICIPIUL|\.)?|ORAS(?:UL)?|SAT|COM(?:UNA|\.)?)\s+([A-Z][A-Z \-]*?)"
+        r"(?:,|$|\s+STR|\s+NR|\s+JUD|\s+COM|\s+MUN|\s+ORAS|\s+SAT)",
+        up + " ",
+    )
+    if cm:
+        city = cm.group(1).strip().title()
+    return county_code, city
+
+
 def _resolve_address(structured_parts: dict, fallback_text: str | None, country_code: str = "RO") -> PartyAddress:
     street = (structured_parts.get("street") or "").strip()
     city = (structured_parts.get("city") or "").strip()
     county_code = (structured_parts.get("county_code") or "").strip()
     postal = (structured_parts.get("postal_code") or "").strip()
+
+    # Daca lipsesc campurile structurate, deriva-le din adresa text-liber.
+    if (not county_code or not city) and fallback_text:
+        parsed_county, parsed_city = _parse_county_city(fallback_text)
+        county_code = county_code or (parsed_county or "")
+        city = city or (parsed_city or "")
+
+    # Pentru Bucuresti (RO-B), localitatea TREBUIE codificata SECTORn (regula BR-RO-100).
+    if county_code == "RO-B" and not re.match(r"^SECTOR[1-6]$", city.upper().replace(" ", "")):
+        sm = re.search(r"SECTOR(?:UL)?\s*([1-6])", _strip_diacritics(fallback_text or "").upper())
+        if sm:
+            city = f"SECTOR{sm.group(1)}"
 
     if not street and fallback_text:
         # Best-effort: pune tot textul ca street
@@ -195,7 +272,7 @@ def _resolve_address(structured_parts: dict, fallback_text: str | None, country_
     return PartyAddress(
         street=street or "—",
         city=city or "—",
-        county_code=county_code or "RO-B",  # fallback Bucuresti
+        county_code=county_code or "RO-B",  # RO-B doar ca ultim resort
         country_code=country_code or "RO",
         postal_zone=postal or None,
     )
@@ -332,6 +409,17 @@ def build_invoice_payload(
         elif not _validate_iban(company.iban):
             warnings.append(f"IBAN furnizor invalid (mod-97): {company.iban}")
 
+    # Emitent neplatitor de TVA -> linii cu categorie "O" (neimpozabil), fara cod TVA pe
+    # parti (regula BR-O-02), cod scutire VATEX-EU-O la breakdown. Ghid ANAF e-Factura.
+    # Tratam ca neplatitor DOAR cand e explicit False; daca is_vat_payer e None (necunoscut)
+    # pastram comportamentul de platitor (categorie S) ca sa NU subdeclaram TVA din greseala.
+    vat_payer = company.is_vat_payer is not False
+    if company.is_vat_payer is None:
+        warnings.append(
+            "Status TVA necunoscut (is_vat_payer=None); factura emisa ca platitor de TVA. "
+            "Verifica si reimprospateaza statusul firmei la ANAF."
+        )
+
     # build payload chiar daca avem erori — util pentru UI audit
     supplier_addr = _resolve_address(
         {
@@ -345,7 +433,7 @@ def build_invoice_payload(
     )
     supplier = Party(
         name=company.name or "—",
-        tax_id=_resolve_supplier_tax_id(company),
+        tax_id=(_resolve_supplier_tax_id(company) if vat_payer else None),
         legal_id=company.nr_reg_com,
         legal_name=company.name,
         address=supplier_addr,
@@ -365,6 +453,10 @@ def build_invoice_payload(
             client.country_code or "RO",
         )
         cust_tax_id, cust_scheme = _resolve_customer_tax_info(client)
+        # Cand emitentul e neplatitor (categorie O), codul TVA al cumparatorului NU
+        # trebuie prezent (regula BR-O-02).
+        if not vat_payer:
+            cust_tax_id = None
         customer = Party(
             name=client.nume or "—",
             tax_id=cust_tax_id,
@@ -388,8 +480,13 @@ def build_invoice_payload(
     lines_data: list[InvoiceLineData] = []
     tax_groups: dict[tuple[str, Decimal], Decimal] = {}  # (cat, pct) -> taxable
     for idx, item in enumerate(receipt.receipt_items, start=1):
-        vat_cat = (item.vat_category or "S").upper()
-        vat_pct = _resolve_vat_percent(item, company)
+        if vat_payer:
+            vat_cat = (item.vat_category or "S").upper()
+            vat_pct = _resolve_vat_percent(item, company)
+        else:
+            # Neplatitor de TVA -> categorie "O" (neimpozabil), cota 0.
+            vat_cat = "O"
+            vat_pct = Decimal("0")
         unit_code = _resolve_unit_code(item)
         line_total = _q2(Decimal(item.qty) * Decimal(item.price))
         lines_data.append(
@@ -424,6 +521,7 @@ def build_invoice_payload(
                 tax_amount=tax_amt,
                 vat_category=cat,
                 vat_percent=pct,
+                tax_exemption_reason_code=(VATEX_NON_VAT_PAYER if cat == "O" else None),
             )
         )
 
