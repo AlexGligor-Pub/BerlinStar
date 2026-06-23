@@ -682,9 +682,15 @@ async def assign_number(
     if receipt.source == "fdl":
         raise HTTPException(400, "Fișa de Lucru trebuie transformată întâi în deviz.")
 
-    # Daca bonul e blocat (trimis la ANAF), nu mai permitem alocarea unui nou nr de factura.
-    # Devizul/chitanta pot fi re-emise pentru ca nu schimba datele bonului.
-    if doc_type == "factura":
+    # Determinam nr-ul curent INAINTE de lock check: re-emiterea PDF-ului unei facturi
+    # DEJA numerotate e read-only (nu aloca nimic, nu schimba datele bonului) si trebuie
+    # permisa chiar daca bonul e blocat la ANAF — altfel butonul "Factura" nu mai descarca
+    # dupa trimiterea in SPV. Blocam DOAR alocarea unui nr NOU de factura (current_nr == 0).
+    serie_field = f"{doc_type}_serie"
+    nr_field = f"{doc_type}_nr"
+    current_nr = getattr(receipt, nr_field, 0)
+
+    if doc_type == "factura" and current_nr == 0:
         await _assert_not_locked(db, receipt_id)
 
     # Load location
@@ -698,11 +704,6 @@ async def assign_number(
     register = None
     if location.register_id:
         register = await db.get(Register, location.register_id)
-
-    # Determine current nr on receipt
-    serie_field = f"{doc_type}_serie"
-    nr_field = f"{doc_type}_nr"
-    current_nr = getattr(receipt, nr_field, 0)
 
     if current_nr == 0:
         # Assign new number from register
