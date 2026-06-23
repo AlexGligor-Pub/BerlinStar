@@ -532,7 +532,17 @@ async def upload_receipt(
             )
         )
     ).scalar_one_or_none()
-    if existing is not None and existing.status in ("pending_upload", "in_prelucrare", "accepted", "rejected"):
+    # Blocam retrimiterea doar daca factura e efectiv in flux ANAF. Un 'in_prelucrare'
+    # FARA index_incarcare e un record blocat (upload-ul nu a primit niciodata index de la
+    # ANAF) — il lasam retrimisibil ca sa nu ramana captiv (vezi fix-ul 200-fara-index).
+    # Nota: in timpul unui upload sanatos record-ul e 'pending_upload' (blocat aici), iar
+    # 'in_prelucrare' se scrie odata cu index_incarcare — deci fereastra de retrimitere
+    # accidentala a unui upload in curs e neglijabila. Pentru reincercare folositi /retry.
+    in_flux = existing is not None and (
+        existing.status in ("pending_upload", "accepted", "rejected")
+        or (existing.status == "in_prelucrare" and existing.index_incarcare is not None)
+    )
+    if in_flux:
         raise HTTPException(
             409,
             f"Factura este deja in flux ANAF (status: {existing.status}). Foloseste /retry pentru reincercare.",

@@ -4,6 +4,7 @@ Acest modul contine logica de business între anaf_client (HTTP) si DB (efactura
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -30,6 +31,20 @@ from app.models.location import Location
 from app.models.receipt import Receipt
 
 log = logging.getLogger("berlinstar.efactura.service")
+
+
+def _serialize_raw(value: object) -> str | None:
+    """Serializeaza raspunsul brut ANAF (dict sau text) ca JSON pentru anaf_raw_response.
+
+    Fallback la str() daca nu e serializabil. Trunchiat la 8000 caractere. Returneaza
+    None pentru valori goale (ex. fara raw atasat pe eroare).
+    """
+    if not value:
+        return None
+    try:
+        return json.dumps(value, default=str, ensure_ascii=False)[:8000]
+    except (TypeError, ValueError):
+        return str(value)[:8000]
 
 
 def _add_business_days(start: date, days: int) -> date:
@@ -159,12 +174,14 @@ async def prepare_and_upload(
     except AnafValidationError as exc:
         rec.status = "error"
         rec.anaf_error_message = ("Validare esuata: " + "; ".join(exc.issues))[:2000]
+        rec.anaf_raw_response = None  # eroare locala, inainte de ANAF — fara raspuns ANAF
         rec.last_attempt_at = datetime.now(timezone.utc)
         await db.commit()
         raise
     except Exception as exc:  # noqa: BLE001
         rec.status = "error"
         rec.anaf_error_message = f"Eroare la generarea XML: {exc}"[:2000]
+        rec.anaf_raw_response = None  # eroare locala, inainte de ANAF — fara raspuns ANAF
         rec.last_attempt_at = datetime.now(timezone.utc)
         await db.commit()
         raise
@@ -189,6 +206,7 @@ async def prepare_and_upload(
     except AnafTokenMissing as exc:
         rec.status = "error"
         rec.anaf_error_message = str(exc)
+        rec.anaf_raw_response = None  # eroare locala (token lipsa), inainte de ANAF
         await db.commit()
         raise
 
@@ -206,11 +224,30 @@ async def prepare_and_upload(
         rec.status = "error"
         rec.anaf_stare = "nok"
         rec.anaf_error_message = str(exc)[:2000]
+        rec.anaf_raw_response = _serialize_raw(getattr(exc, "raw", None))
         await db.commit()
         log.warning("ANAF upload rejected for receipt_id=%s: %s", receipt.id, exc)
         raise
 
-    rec.index_incarcare = int(result.get("index_incarcare") or 0) or None
+    rec.anaf_raw_response = _serialize_raw(result)
+    index = int(result.get("index_incarcare") or 0) or None
+    if index is None:
+        # Plasa de siguranta: nu marcam NICIODATA 'in_prelucrare' fara index_incarcare.
+        # (upload_invoice ridica deja AnafUploadError in acest caz; pastram verificarea aici
+        # pentru robustete — un 'in_prelucrare' fara index ar fi nepollabil si captiv.)
+        rec.status = "error"
+        rec.anaf_stare = "nok"
+        rec.anaf_error_message = (
+            "ANAF nu a returnat index_incarcare (raspuns neasteptat). Vezi anaf_raw_response."
+        )[:2000]
+        await db.commit()
+        log.warning("ANAF upload fara index pentru receipt_id=%s; marcat 'error'.", receipt.id)
+        raise AnafUploadError(
+            "ANAF nu a returnat index_incarcare",
+            raw=result if isinstance(result, dict) else None,
+        )
+
+    rec.index_incarcare = index
     rec.data_creare_anaf = str(result.get("data_creare") or "")[:20]
     rec.status = "in_prelucrare"
     rec.anaf_stare = "in prelucrare"

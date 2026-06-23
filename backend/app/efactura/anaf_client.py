@@ -84,10 +84,14 @@ class AnafEFacturaClient:
             import re
             m = re.search(r'index_incarcare[=:"\s]+(\d+)', body)
             if m:
-                return {"index_incarcare": int(m.group(1)), "raw": body[:500]}
-            raise AnafUploadError(f"Nu am putut parsa raspunsul ANAF: {body[:300]}", raw={"body": body[:500]})
+                return {"index_incarcare": int(m.group(1)), "raw": body[:2000]}
+            raise AnafUploadError(
+                f"Nu am putut parsa raspunsul ANAF (HTTP {resp.status_code}): {body[:300]}",
+                raw={"http_status": resp.status_code, "body": body[:2000]},
+            )
 
-        if "index_incarcare" in data:
+        if data.get("index_incarcare"):
+            data.setdefault("raw", body[:2000])
             return data
         if "eroare" in data or "Errors" in data:
             log.warning("ANAF upload error: %s", data)
@@ -96,7 +100,16 @@ class AnafEFacturaClient:
                 anaf_titlu=data.get("titlu"),
                 raw=data,
             )
-        return data
+        # HTTP 2xx dar corpul nu contine index_incarcare (truthy) si nici o eroare
+        # recunoscuta. ANTERIOR: `return data` -> service.prepare_and_upload marca bonul
+        # 'in_prelucrare' fara index, ramanand blocat tacit si NEpollabil (/stareMesaj
+        # cere index_incarcare). ACUM ridicam eroare cu corpul brut atasat pentru diagnostic.
+        log.warning("ANAF upload HTTP %s fara index_incarcare: %s", resp.status_code, body[:500])
+        raise AnafUploadError(
+            f"ANAF a raspuns HTTP {resp.status_code} fara index_incarcare si fara eroare "
+            "recunoscuta (raspuns neasteptat). Vezi anaf_raw_response.",
+            raw=data if isinstance(data, dict) else {"http_status": resp.status_code, "body": body[:2000]},
+        )
 
     # ---------- stareMesaj ----------
 

@@ -84,6 +84,9 @@ class EFacturaRecord(Base):
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="draft")
     anaf_stare: Mapped[str | None] = mapped_column(String(50), nullable=True)
     anaf_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Corpul brut al ultimului raspuns ANAF la upload (succes sau eroare). Pentru
+    # diagnostic — ex. cazul "HTTP 2xx fara index_incarcare". Vezi anaf_client.upload_invoice.
+    anaf_raw_response: Mapped[str | None] = mapped_column(Text, nullable=True)
     download_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     response_zip_s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     response_seal_valid: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
