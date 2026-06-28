@@ -207,9 +207,35 @@ RO_COUNTY_CODES = {
     "VRANCEA": "RO-VN",
 }
 
+_RO_COUNTY_CODE_SET = set(RO_COUNTY_CODES.values())  # {"RO-AB", ..., "RO-B"}
+
 
 def _strip_diacritics(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
+
+
+def normalize_county_code(raw: str | None) -> str:
+    """Canonicalizeaza judetul la cod ISO 3166-2:RO (ex: 'B' / 'Bucuresti' / 'RO-B ' -> 'RO-B').
+
+    Accepta: cod ISO complet ('RO-CJ'), cod scurt fara prefix ('CJ', 'B') sau numele
+    judetului ('Cluj', 'Bucuresti'). Returneaza '' daca nu poate determina codul.
+
+    Necesar deoarece <CountrySubentity> (BT-54) trebuie sa fie cod ISO valid, iar regula
+    BR-RO-100 (sector obligatoriu) se declanseaza DOAR cand judetul e exact 'RO-B'. Fara
+    canonicalizare, un judet trimis ca 'B'/'Bucuresti' ar ocoli normalize_ro_b_city si ar
+    emite si un cod de subdiviziune invalid. Vezi [[normalize_ro_b_city]].
+    """
+    if not raw:
+        return ""
+    s = _strip_diacritics(raw).strip().upper()
+    compact = s.replace(" ", "")
+    if re.fullmatch(r"RO-[A-Z]{1,2}", compact):  # deja ISO complet
+        return compact
+    if re.fullmatch(r"[A-Z]{1,2}", compact):  # cod scurt fara prefix: B, CJ, IF...
+        candidate = f"RO-{compact}"
+        if candidate in _RO_COUNTY_CODE_SET:
+            return candidate
+    return RO_COUNTY_CODES.get(s, "")  # nume de judet -> cod
 
 
 def _parse_county_city(text: str | None) -> tuple[str | None, str | None]:
@@ -223,12 +249,14 @@ def _parse_county_city(text: str | None) -> tuple[str | None, str | None]:
         return None, None
     up = _strip_diacritics(text).upper()
 
-    # Bucuresti / sector
-    if "BUCURESTI" in up or re.search(r"\bSECTOR(?:UL)?\s*[1-6]\b", up):
-        sm = re.search(r"SECTOR(?:UL)?\s*([1-6])", up)
-        return "RO-B", (f"SECTOR{sm.group(1)}" if sm else None)
+    # 1) Sector explicit -> sigur Bucuresti (BR-RO-100), indiferent de restul adresei.
+    sm = re.search(r"\bSECTOR(?:UL)?\s*([1-6])\b", up)
+    if sm:
+        return "RO-B", f"SECTOR{sm.group(1)}"
 
-    # JUD. X / JUDETUL X
+    # 2) Judet explicit "JUD. X / JUDETUL X" — are PRIORITATE fata de o mentiune de oras
+    #    (altfel o adresa din Ilfov gen "Sos. Bucuresti-Ploiesti, Otopeni, jud Ilfov" ar fi
+    #    etichetata gresit RO-B). De aceea il evaluam inaintea detectiei "BUCURESTI".
     county_code = None
     jm = re.search(r"JUD(?:ETUL|ET|\.)?\s+([A-Z][A-Z \-]*?)(?:,|$|\s+MUN|\s+ORAS|\s+SAT|\s+COM|\s+STR|\s+NR)", up + " ")
     if jm:
@@ -236,6 +264,11 @@ def _parse_county_city(text: str | None) -> tuple[str | None, str | None]:
         county_code = RO_COUNTY_CODES.get(name) or (
             RO_COUNTY_CODES.get(name.split()[0]) if name.split() else None
         )
+
+    # 3) "BUCURESTI" ca localitate de sine statatoare (NU parte dintr-un nume de strada gen
+    #    "Bucuresti-Ploiesti" sau "Bd. Bucurestiului"), doar daca nu s-a gasit alt judet.
+    if county_code is None and re.search(r"(?<![A-Z-])BUCURESTI(?![A-Z-])", up):
+        return "RO-B", None  # sector nedeterminat -> normalize_ro_b_city pune SECTOR1
 
     # localitate: MUN./ORAS/SAT/COM.
     city = None
@@ -247,6 +280,24 @@ def _parse_county_city(text: str | None) -> tuple[str | None, str | None]:
     if cm:
         city = cm.group(1).strip().title()
     return county_code, city
+
+
+def normalize_ro_b_city(county_code: str, city: str, fallback_text: str | None = None) -> str:
+    """Regula ANAF BR-RO-100: daca judetul (BT-54) e RO-B (Bucuresti), localitatea (BT-52)
+    trebuie sa fie EXACT unul din SECTOR1..6 — nu text liber ("Bucuresti") si nici variante
+    gen "Sector 3" / "SECTORUL 5". Normalizam orice forma la cea canonica, cautand numarul
+    de sector atat in localitate cat si in adresa text-liber. Daca nu-l putem determina,
+    folosim SECTOR1 ca fallback valid (ANAF accepta orice sector din lista; text liber e
+    respins si factura nu poate fi depusa deloc). Pentru alte judete, returneaza city neatins.
+    """
+    # Canonicalizam intai (accepta 'B', 'Bucuresti', 'RO-B ' etc.) ca regula sa nu fie ocolita.
+    if normalize_county_code(county_code) != "RO-B":
+        return city
+    sm = re.search(
+        r"SECTOR(?:UL)?\s*([1-6])",
+        _strip_diacritics(f"{city} {fallback_text or ''}").upper(),
+    )
+    return f"SECTOR{sm.group(1)}" if sm else "SECTOR1"
 
 
 def _resolve_address(structured_parts: dict, fallback_text: str | None, country_code: str = "RO") -> PartyAddress:
@@ -261,11 +312,12 @@ def _resolve_address(structured_parts: dict, fallback_text: str | None, country_
         county_code = county_code or (parsed_county or "")
         city = city or (parsed_city or "")
 
-    # Pentru Bucuresti (RO-B), localitatea TREBUIE codificata SECTORn (regula BR-RO-100).
-    if county_code == "RO-B" and not re.match(r"^SECTOR[1-6]$", city.upper().replace(" ", "")):
-        sm = re.search(r"SECTOR(?:UL)?\s*([1-6])", _strip_diacritics(fallback_text or "").upper())
-        if sm:
-            city = f"SECTOR{sm.group(1)}"
+    # Canonicalizeaza codul de judet (ex: 'B'/'Bucuresti' -> 'RO-B') ca <CountrySubentity>
+    # sa fie cod ISO valid; pastreaza valoarea originala daca nu poate fi mapata.
+    county_code = normalize_county_code(county_code) or county_code
+
+    # BR-RO-100: pentru RO-B localitatea trebuie codificata SECTORn (vezi normalize_ro_b_city).
+    city = normalize_ro_b_city(county_code, city, fallback_text)
 
     if not street and fallback_text:
         # Best-effort: pune tot textul ca street
@@ -455,6 +507,26 @@ def build_invoice_payload(
             client.adresa,
             client.country_code or "RO",
         )
+        # Audit: daca adresa clientului a ajuns la Bucuresti/SECTOR fara o indicatie explicita
+        # in datele sursa, valorile sunt PRESUPUSE (judet default RO-B sau sector default
+        # SECTOR1). ANAF accepta, dar pot fi gresite — le semnalam pentru verificare.
+        if customer_addr.county_code == "RO-B":
+            _src = _strip_diacritics(
+                f"{client.city or ''} {client.county_code or ''} {client.adresa or ''}"
+            ).upper()
+            if (
+                not re.search(r"(?<![A-Z-])BUCURESTI(?![A-Z-])", _src)
+                and normalize_county_code(client.county_code) != "RO-B"
+            ):
+                warnings.append(
+                    "Judetul clientului nu a putut fi determinat; presupus Bucuresti (RO-B). "
+                    "Verifica adresa clientului."
+                )
+            elif not re.search(r"\bSECTOR(?:UL)?\s*[1-6]\b", _src):
+                warnings.append(
+                    f"Sectorul Bucuresti al clientului nu a fost gasit; emis {customer_addr.city} "
+                    "implicit (BR-RO-100). Verifica sectorul corect."
+                )
         cust_tax_id, cust_scheme = _resolve_customer_tax_info(client)
         cust_legal_id: str | None = None
         if client.tip == "fizic":
@@ -489,7 +561,8 @@ def build_invoice_payload(
             tax_id=None,
             legal_id=None,
             legal_name=None,
-            address=PartyAddress(street="—", city="—", county_code="RO-B"),
+            # county RO-B impune localitate SECTORn (BR-RO-100); SECTOR1 ca fallback valid.
+            address=PartyAddress(street="—", city="SECTOR1", county_code="RO-B"),
         )
 
     # Lines

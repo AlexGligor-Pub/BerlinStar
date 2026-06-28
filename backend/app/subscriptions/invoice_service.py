@@ -30,6 +30,8 @@ from app.efactura.mapping import (
     PartyAddress,
     PaymentMeansData,
     TaxSubtotalData,
+    normalize_county_code,
+    normalize_ro_b_city,
 )
 from app.efactura.xml_builder import build_xml
 from app.models.account import Account
@@ -107,10 +109,14 @@ def _build_payload(
 ) -> InvoicePayload:
     """Construieste InvoicePayload pentru o singura linie de abonament."""
     # Supplier: BerlinStar SRL
+    # Canonicalizeaza judetul ('B'/'Bucuresti'/'RO-B ' -> 'RO-B') ca sa nu ocoleasca BR-RO-100
+    # si sa emita un <CountrySubentity> valid; RO-B doar ca ultim resort.
+    issuer_county = normalize_county_code(gs.issuer_county_code) or "RO-B"
     supplier_addr = PartyAddress(
         street=(gs.issuer_street or gs.issuer_address or "—")[:255],
-        city=gs.issuer_city or "—",
-        county_code=gs.issuer_county_code or "RO-B",
+        # BR-RO-100: pentru RO-B localitatea trebuie sa fie SECTORn, nu text liber.
+        city=normalize_ro_b_city(issuer_county, gs.issuer_city or "—", gs.issuer_address),
+        county_code=issuer_county,
         country_code=gs.issuer_country_code or "RO",
         postal_zone=gs.issuer_postal_code,
     )
@@ -129,10 +135,12 @@ def _build_payload(
 
     # Customer: snapshot la momentul platii
     cust_tip = (customer.get("tip") or "juridic").lower()
+    cust_county = normalize_county_code(customer.get("county_code")) or "RO-B"
     cust_addr = PartyAddress(
         street=(customer.get("street") or customer.get("adresa") or "—")[:255],
-        city=customer.get("city") or "—",
-        county_code=customer.get("county_code") or "RO-B",
+        # BR-RO-100: pentru RO-B localitatea trebuie sa fie SECTORn, nu text liber.
+        city=normalize_ro_b_city(cust_county, customer.get("city") or "—", customer.get("adresa")),
+        county_code=cust_county,
         country_code=customer.get("country_code") or "RO",
         postal_zone=customer.get("postal_code"),
     )
