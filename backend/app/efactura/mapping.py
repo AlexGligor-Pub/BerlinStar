@@ -312,9 +312,11 @@ def _resolve_address(structured_parts: dict, fallback_text: str | None, country_
         county_code = county_code or (parsed_county or "")
         city = city or (parsed_city or "")
 
-    # Canonicalizeaza codul de judet (ex: 'B'/'Bucuresti' -> 'RO-B') ca <CountrySubentity>
-    # sa fie cod ISO valid; pastreaza valoarea originala daca nu poate fi mapata.
-    county_code = normalize_county_code(county_code) or county_code
+    # Canonicalizeaza codul de judet (ex: 'B'/'Bucuresti' -> 'RO-B') ca <CountrySubentity> sa
+    # fie cod ISO valid. Aplicam ultim-resortul 'RO-B' AICI, INAINTE de normalizarea localitatii:
+    # altfel un client fara adresa (judet nedeterminat -> default RO-B) ar pastra city='—' cu
+    # county RO-B = respins de ANAF (BR-RO-100). Vezi normalize_ro_b_city.
+    county_code = normalize_county_code(county_code) or county_code or "RO-B"
 
     # BR-RO-100: pentru RO-B localitatea trebuie codificata SECTORn (vezi normalize_ro_b_city).
     city = normalize_ro_b_city(county_code, city, fallback_text)
@@ -325,7 +327,7 @@ def _resolve_address(structured_parts: dict, fallback_text: str | None, country_
     return PartyAddress(
         street=street or "—",
         city=city or "—",
-        county_code=county_code or "RO-B",  # RO-B doar ca ultim resort
+        county_code=county_code,
         country_code=country_code or "RO",
         postal_zone=postal or None,
     )
