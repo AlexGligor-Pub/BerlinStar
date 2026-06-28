@@ -312,6 +312,7 @@ export interface VehiculInfo {
   marca: string | null;
   model: string | null;
   numarKilometrii: number | null;
+  anFabricatie: number | null;
   vin: string | null;
   observatii: string | null;
 }
@@ -330,6 +331,7 @@ export async function getVehiculForCazare(cazare: Pick<Cazare, "clientId" | "num
       marca?: string | null;
       model?: string | null;
       numar_kilometrii?: number | null;
+      an_fabricatie?: number | null;
       vin?: string | null;
       observatii?: string | null;
     }
@@ -342,6 +344,7 @@ export async function getVehiculForCazare(cazare: Pick<Cazare, "clientId" | "num
       marca: v.marca ?? null,
       model: v.model ?? null,
       numarKilometrii: v.numar_kilometrii ?? null,
+      anFabricatie: v.an_fabricatie ?? null,
       vin: v.vin ?? null,
       observatii: v.observatii ?? null,
     };

@@ -20,6 +20,7 @@ class Vehicol(Base):
     marca: Mapped[str | None] = mapped_column(String(100), nullable=True)
     model: Mapped[str | None] = mapped_column(String(100), nullable=True)
     numar_kilometrii: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    an_fabricatie: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vin: Mapped[str | None] = mapped_column(String(17), nullable=True)
     observatii: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

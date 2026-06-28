@@ -28,6 +28,7 @@ interface ClientVehicol {
   marca: string | null;
   model: string | null;
   numar_kilometrii: number | null;
+  an_fabricatie: number | null;
   vin: string | null;
   observatii: string | null;
 }
@@ -52,7 +53,7 @@ function emptyForm() {
 }
 
 function emptyVForm() {
-  return { numar_masina: "", marca: "", model: "", numar_kilometrii: "", vin: "", observatii: "" };
+  return { numar_masina: "", marca: "", model: "", an_fabricatie: "", numar_kilometrii: "", vin: "", observatii: "" };
 }
 
 export default function Clienti() {
@@ -272,6 +273,7 @@ export default function Clienti() {
       marca: v.marca ?? "",
       model: v.model ?? "",
       numar_kilometrii: v.numar_kilometrii != null ? String(v.numar_kilometrii) : "",
+      an_fabricatie: v.an_fabricatie != null ? String(v.an_fabricatie) : "",
       vin: v.vin ?? "",
       observatii: v.observatii ?? "",
     });
@@ -290,6 +292,7 @@ export default function Clienti() {
           marca: f.marca.trim() || null,
           model: f.model.trim() || null,
           numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+          an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
           vin: f.vin.trim() || null,
           observatii: f.observatii.trim() || null,
         }),
@@ -317,6 +320,7 @@ export default function Clienti() {
           marca: f.marca.trim() || null,
           model: f.model.trim() || null,
           numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+          an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
           vin: f.vin.trim() || null,
           observatii: f.observatii.trim() || null,
         }),
@@ -363,6 +367,7 @@ export default function Clienti() {
           <input class="input" placeholder="Model" aria-label="Model" style="flex:1" value={props.f.model} onInput={(e) => props.setF({ ...props.f, model: e.currentTarget.value })} />
         </div>
         <div style="display:flex;gap:6px">
+          <input class="input" placeholder="An fabricație" aria-label="An fabricație" type="number" min="1900" max="2100" style="flex:1" value={props.f.an_fabricatie} onInput={(e) => props.setF({ ...props.f, an_fabricatie: e.currentTarget.value })} />
           <input class="input" placeholder="Km" aria-label="Kilometraj" type="number" style="flex:1" value={props.f.numar_kilometrii} onInput={(e) => props.setF({ ...props.f, numar_kilometrii: e.currentTarget.value })} />
           <input class="input" placeholder="VIN" aria-label="VIN" style="flex:2" value={props.f.vin} onInput={(e) => props.setF({ ...props.f, vin: e.currentTarget.value.toUpperCase() })} />
         </div>
@@ -566,6 +571,9 @@ export default function Clienti() {
                                 <strong>{v.numar_masina}</strong>
                                 <Show when={v.marca || v.model}>
                                   <span style="color:var(--text-muted);margin-left:6px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                                </Show>
+                                <Show when={v.an_fabricatie != null}>
+                                  <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{v.an_fabricatie}</span>
                                 </Show>
                                 <Show when={v.numar_kilometrii != null}>
                                   <span style="color:var(--text-muted);margin-left:6px;font-size:11px">{v.numar_kilometrii} km</span>

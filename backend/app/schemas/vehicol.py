@@ -8,6 +8,7 @@ class VehicolCreate(BaseModel):
     marca: str | None = Field(None, max_length=100)
     model: str | None = Field(None, max_length=100)
     numar_kilometrii: int | None = Field(None, ge=0)
+    an_fabricatie: int | None = Field(None, ge=1900, le=2100)
     vin: str | None = Field(None, max_length=17)
     observatii: str | None = None
 
@@ -22,6 +23,7 @@ class VehicolRead(BaseModel):
     marca: str | None
     model: str | None
     numar_kilometrii: int | None
+    an_fabricatie: int | None
     vin: str | None
     observatii: str | None
     created_at: datetime

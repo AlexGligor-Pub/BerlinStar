@@ -1148,6 +1148,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <Show when={r.vehicol!.marca || r.vehicol!.model}>
                     <span>{[r.vehicol!.marca, r.vehicol!.model].filter(Boolean).join(" ")}</span>
                   </Show>
+                  <Show when={r.vehicol!.anFabricatie != null}>
+                    <span>An fabricație: {r.vehicol!.anFabricatie}</span>
+                  </Show>
                   <Show when={r.vehicol!.numarKilometrii != null}>
                     <span>Km: {r.vehicol!.numarKilometrii!.toLocaleString("ro-RO")}</span>
                   </Show>

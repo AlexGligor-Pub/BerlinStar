@@ -24,6 +24,7 @@ export interface ClientVehicol {
   marca: string | null;
   model: string | null;
   numar_kilometrii?: number | null;
+  an_fabricatie?: number | null;
   vin?: string | null;
   observatii?: string | null;
 }

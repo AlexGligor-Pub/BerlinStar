@@ -180,6 +180,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
         marca: veh.marca,
         model: veh.model,
         numarKilometrii: veh.numarKilometrii,
+        anFabricatie: veh.anFabricatie,
         vin: veh.vin,
         observatii: veh.observatii,
       }
@@ -312,6 +313,7 @@ export async function generateFisaDeLucru(
         marca: veh.marca,
         model: veh.model,
         numarKilometrii: veh.numarKilometrii,
+        anFabricatie: veh.anFabricatie,
         vin: veh.vin,
         observatii: veh.observatii,
       }
@@ -466,6 +468,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
         marca: veh.marca,
         model: veh.model,
         numarKilometrii: veh.numarKilometrii,
+        anFabricatie: veh.anFabricatie,
         vin: veh.vin,
         observatii: veh.observatii,
       }
@@ -861,6 +864,7 @@ export interface VehiculForPdf {
   marca?: string | null;
   model?: string | null;
   numarKilometrii?: number | null;
+  anFabricatie?: number | null;
   vin?: string | null;
   observatii?: string | null;
 }
@@ -942,6 +946,7 @@ function _measureVehiculContent(doc: any, veh: VehiculForPdf, bw: number, t: (s:
   doc.setFontSize(7.5);
   const mm = [veh.marca, veh.model].filter(Boolean).join(" ");
   if (mm)                        h += 3.5;
+  if (veh.anFabricatie != null)  h += 3.5;
   if (veh.numarKilometrii != null) h += 3.5;
   if (veh.vin)                   h += 3.5;
   if (veh.observatii) {
@@ -1011,6 +1016,7 @@ function drawVehiculBlock(
   doc.setFontSize(7.5);
   const mm = [veh.marca, veh.model].filter(Boolean).join(" ");
   if (mm)                          { doc.text(t(mm), x, y); y += 3.5; }
+  if (veh.anFabricatie != null)    { doc.text(`An fab.: ${veh.anFabricatie}`, x, y); y += 3.5; }
   if (veh.numarKilometrii != null) { doc.text(`Km: ${veh.numarKilometrii.toLocaleString("ro-RO")}`, x, y); y += 3.5; }
   if (veh.vin)                     { doc.text(`VIN: ${veh.vin}`, x, y); y += 3.5; }
   if (veh.observatii) {

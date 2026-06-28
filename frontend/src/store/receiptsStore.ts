@@ -9,6 +9,7 @@ export interface VehicolData {
   marca?: string | null;
   model?: string | null;
   numarKilometrii?: number | null;
+  anFabricatie?: number | null;
   vin?: string | null;
   observatii?: string | null;
 }
@@ -75,6 +76,7 @@ interface RawReceiptVehicol {
   marca?: string | null;
   model?: string | null;
   numar_kilometrii?: number | null;
+  an_fabricatie?: number | null;
   vin?: string | null;
   observatii?: string | null;
 }
@@ -168,6 +170,7 @@ function mapFromApi(r: RawReceipt): Receipt {
       marca: r.vehicol.marca ?? null,
       model: r.vehicol.model ?? null,
       numarKilometrii: r.vehicol.numar_kilometrii ?? null,
+      anFabricatie: r.vehicol.an_fabricatie ?? null,
       vin: r.vehicol.vin ?? null,
       observatii: r.vehicol.observatii ?? null,
     } : null,
@@ -485,6 +488,7 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
       marca: vehicol.marca ?? null,
       model: vehicol.model ?? null,
       numar_kilometrii: vehicol.numarKilometrii ?? null,
+      an_fabricatie: vehicol.anFabricatie ?? null,
       vin: vehicol.vin ?? null,
       observatii: vehicol.observatii ?? null,
     }),

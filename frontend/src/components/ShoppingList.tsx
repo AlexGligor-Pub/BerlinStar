@@ -68,6 +68,7 @@ interface VehicolWithClient {
     marca: string | null;
     model: string | null;
     numar_kilometrii: number | null;
+    an_fabricatie: number | null;
     vin: string | null;
     observatii: string | null;
   };
@@ -616,6 +617,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       marca: item.vehicol.marca ?? null,
       model: item.vehicol.model ?? null,
       numarKilometrii: item.vehicol.numar_kilometrii ?? null,
+      anFabricatie: item.vehicol.an_fabricatie ?? null,
       vin: item.vehicol.vin ?? null,
       observatii: item.vehicol.observatii ?? null,
     });
@@ -1415,6 +1417,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                 vehicol()!.numarMasina,
                 vehicol()!.marca,
                 vehicol()!.model,
+                vehicol()!.anFabricatie != null ? `an ${vehicol()!.anFabricatie}` : null,
                 vehicol()!.numarKilometrii != null ? `${vehicol()!.numarKilometrii} km` : null,
                 vehicol()!.vin,
               ].filter(Boolean).join(" · ")}
@@ -1907,6 +1910,15 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
               <input
                 class="input"
                 type="number"
+                min="1900"
+                max="2100"
+                placeholder="Anul fabricației"
+                value={vehicolDraft().anFabricatie ?? ""}
+                onInput={(e) => setVehicolDraft((d) => ({ ...d, anFabricatie: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
+              />
+              <input
+                class="input"
+                type="number"
                 min="0"
                 placeholder="Număr kilometri"
                 value={vehicolDraft().numarKilometrii ?? ""}
@@ -2008,6 +2020,12 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                           <span class="sl-fdl-info-row-val">
                             {[vehicol()!.marca, vehicol()!.model].filter(Boolean).join(" ")}
                           </span>
+                        </div>
+                      </Show>
+                      <Show when={vehicol()!.anFabricatie != null}>
+                        <div class="sl-fdl-info-row">
+                          <span class="sl-fdl-info-row-key">An fabricație:</span>
+                          <span class="sl-fdl-info-row-val">{vehicol()!.anFabricatie}</span>
                         </div>
                       </Show>
                       <Show when={vehicol()!.numarKilometrii != null}>

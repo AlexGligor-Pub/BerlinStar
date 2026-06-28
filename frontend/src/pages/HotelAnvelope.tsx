@@ -3039,6 +3039,9 @@ export default function HotelAnvelope() {
                             {[viewOnlyVehicle()?.marca, viewOnlyVehicle()?.model].filter(Boolean).join(" ")}
                           </div>
                         </Show>
+                        <Show when={viewOnlyVehicle()?.anFabricatie != null}>
+                          <div><span style="color:var(--text-muted)">An fabricație:</span> {viewOnlyVehicle()!.anFabricatie}</div>
+                        </Show>
                         <Show when={viewOnlyVehicle()?.numarKilometrii != null}>
                           <div><span style="color:var(--text-muted)">Km:</span> {viewOnlyVehicle()!.numarKilometrii!.toLocaleString("ro-RO")}</div>
                         </Show>

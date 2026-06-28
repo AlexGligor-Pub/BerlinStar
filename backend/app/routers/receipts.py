@@ -131,6 +131,7 @@ async def _ensure_client_vehicol(db: AsyncSession, account_id: int, client_id: i
             numar_masina=vehicol.numar_masina,
             marca=vehicol.marca,
             model=vehicol.model,
+            an_fabricatie=vehicol.an_fabricatie,
             vin=vehicol.vin,
         ))
 
