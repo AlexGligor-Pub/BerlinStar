@@ -1,7 +1,7 @@
-import { For, Show, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, setItemQty, removeFromCart, addManualItem, updateItemEmployee, type CartItem } from "../store/cartStore";
-import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, type VehicolData } from "../store/receiptsStore";
+import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, receipts, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad, newDevizTick } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee, employees } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
@@ -576,6 +576,15 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
   const [loadedProgramareId, setLoadedProgramareId] = createSignal<number | null>(null);
+  // Un deviz cu numere de document alocate (deviz/factură/chitanță) nu mai poate
+  // deveni Fișă de Lucru (backend-ul respinge cu 400). Derivăm flag-ul din store
+  // pe baza bonului încărcat, ca să dezactivăm butonul FDL preventiv.
+  const loadedHasDocNumber = createMemo(() => {
+    const id = loadedReceiptId();
+    if (!id) return false;
+    const r = receipts().find((x) => x.id === id);
+    return !!(r && (r.devizNr || r.facturaNr || r.chitantaNr));
+  });
   // FDL mode: când e activ, „Finalizează" salvează un FDL (source="fdl") și
   // afișează câmpurile dedicate (constatări, sugestii, timp estimat).
   const [fdlMode, setFdlMode] = createSignal(false);
@@ -1496,8 +1505,15 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
             <button
               class="sl-square-btn"
               classList={{ "sl-square-btn--fdl-active": fdlMode() }}
+              disabled={!fdlMode() && loadedHasDocNumber()}
               onClick={() => { setFdlMode(true); setShowFdlModal(true); }}
-              title={fdlMode() ? "Fișa de Lucru activă — apasă pentru a edita" : "Activează mod Fișa de Lucru"}
+              title={
+                !fdlMode() && loadedHasDocNumber()
+                  ? "Devizul are deja numere alocate; nu mai poate deveni Fișă de Lucru."
+                  : fdlMode()
+                  ? "Fișa de Lucru activă — apasă pentru a edita"
+                  : "Activează mod Fișa de Lucru"
+              }
             >
               {fdlMode() ? "FDL activă" : "Fișă de Lucru"}
             </button>

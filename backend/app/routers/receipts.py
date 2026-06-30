@@ -561,17 +561,31 @@ async def patch_receipt_content(
     if body.due_date is not None:
         receipt.due_date = body.due_date
 
-    # Comutare FDL <-> deviz din POS la salvare. Permitem doar între stările
-    # gestionate de POS ("fdl" <-> "pos"). Revenirea la FDL e blocată dacă bonul
-    # are deja numere de document alocate (deviz/factură/chitanță). Re-stampăm
-    # created_at la FDL->deviz, la fel ca în `convert_fdl_to_deviz` (vezi acolo
-    # motivul: scheduler-ul de rapoarte agreghează incremental pe ziua curentă).
+    # Comutare FDL <-> deviz din POS la salvare. Revenirea la FDL e blocată dacă
+    # bonul are deja numere de document alocate (deviz/factură/chitanță).
+    # Un deviz creat normal are source="reception" (default-ul), nu "pos" — doar
+    # un FDL convertit înapoi ajunge "pos". Gate-ul vechi cerea ambele capete în
+    # {"fdl","pos"}, deci comutarea reception->fdl era ignorată în tăcere și
+    # devizele obișnuite nu puteau deveni Fișă de Lucru. Acceptăm orice sursă de
+    # deviz ("reception"/"pos"/"rapida") ca punct de plecare către FDL și înapoi.
+    DEVIZ_SOURCES = {"pos", "reception", "rapida"}
     if body.source is not None and body.source != receipt.source:
-        if {receipt.source, body.source} <= {"fdl", "pos"}:
-            if body.source == "fdl" and (receipt.deviz_nr or receipt.factura_nr or receipt.chitanta_nr):
+        to_fdl = body.source == "fdl" and receipt.source in DEVIZ_SOURCES
+        to_deviz = receipt.source == "fdl" and body.source in DEVIZ_SOURCES
+        if to_fdl or to_deviz:
+            if to_fdl and (receipt.deviz_nr or receipt.factura_nr or receipt.chitanta_nr):
                 raise HTTPException(400, "Devizul are deja numere alocate; nu mai poate redeveni Fișă de Lucru.")
-            if receipt.source == "fdl" and body.source == "pos":
-                receipt.created_at = datetime.now(timezone.utc)
+            if to_fdl:
+                # FDL pornit dintr-un deviz: resetăm marcajul de finalizare, altfel un
+                # FDL finalizat în trecut -> deviz -> FDL ar rămâne ascuns din lista
+                # „neplatit recent" din Recepție (care exclude fdl_finalized_at != NULL).
+                receipt.fdl_finalized_at = None
+            # Re-stampăm created_at în AMBELE sensuri ale comutării (la fel ca în
+            # `convert_fdl_to_deviz`): scheduler-ul de rapoarte agreghează incremental
+            # pe ziua curentă și nu reia zilele trecute, iar fereastra de recență a
+            # FDL-urilor din Recepție e doar 5 zile — fără re-stamp, un deviz mai vechi
+            # convertit în FDL ar dispărea din lista „AZI".
+            receipt.created_at = datetime.now(timezone.utc)
             receipt.source = body.source
 
     # Câmpurile FDL se editează DOAR pe bonuri cu source='fdl'. Pe un deviz
@@ -823,6 +837,9 @@ async def convert_fdl_to_deviz(
 
     now = datetime.now(timezone.utc)
     receipt.source = "pos"
+    # Un deviz nu mai poartă marcaj de finalizare FDL; îl curățăm ca un eventual
+    # round-trip deviz -> FDL să nu redevină ascuns din lista „neplatit recent".
+    receipt.fdl_finalized_at = None
     # Re-stampăm created_at la momentul conversiei: scheduler-ul de rapoarte
     # agreghează incremental pe ziua curentă și nu reia zilele trecute. Fără
     # re-stamp, devizul rămas „suspendat" pe ziua FDL-ului ar lipsi pentru
