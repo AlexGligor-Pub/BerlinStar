@@ -8,7 +8,7 @@ import {
 } from "../store/programariStore";
 import type { Programare, ProgramareStatus, ProgramareInput } from "../store/programariStore";
 import { triggerLoad } from "../store/resumeStore";
-import { adminVisible } from "../store/adminStore";
+import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { apiFetch } from "../utils/api";
 
@@ -775,13 +775,13 @@ export default function Programari() {
                 </Show>
               </div>
               <div class="sl-modal-footer" style="flex-wrap:wrap;gap:6px">
-                <Show when={adminVisible() && deleteConfirm() === appt().id}>
+                <Show when={canManage() && deleteConfirm() === appt().id}>
                   <span style="font-size:13px;color:var(--danger)">Confirmi?</span>
                   <button class="btn btn-sm" style="background:var(--danger,#ef4444);color:#fff" onClick={() => handleDelete(appt().id)}>Șterge</button>
                   <button class="btn btn-ghost btn-sm" onClick={() => setDeleteConfirm(null)}>Nu</button>
                 </Show>
                 <Show when={deleteConfirm() !== appt().id}>
-                  <Show when={adminVisible()}>
+                  <Show when={canManage()}>
                     <button class="btn btn-ghost btn-sm" style="color:var(--danger,#ef4444)" onClick={() => setDeleteConfirm(appt().id)}>Șterge</button>
                   </Show>
                   <div style="flex:1" />

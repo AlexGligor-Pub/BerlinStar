@@ -1,7 +1,11 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
-import { adminVisible } from "../store/adminStore";
+import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
+import PaymentsSection from "../components/PaymentsSection";
+import DiscountModal from "../components/DiscountModal";
+import { cachedPayments, loadPayments } from "../store/paymentsStore";
+import type { PaymentRowForPdf } from "../utils/pdf";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, finalizeFdl, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateFisaDeLucru, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
@@ -766,7 +770,17 @@ function ReceiptCard(props: { receipt: Receipt }) {
             imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
           }));
         }
-        await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows);
+        // Registrul de plati (avans / restituire / plata) apare pe deviz ca
+      // "SITUATIE PLATI". Il citim la generare; daca cererea eaueaza, devizul
+      // se genereaza oricum, fara sectiunea de plati.
+      let payRows: PaymentRowForPdf[] | undefined;
+      try {
+        const pr = cachedPayments(r.id) ?? (await loadPayments(r.id));
+        payRows = pr.payments.map((p) => ({
+          kind: p.kind, amount: p.amount, method: p.method, paid_at: p.paid_at, note: p.note,
+        }));
+      } catch { /* fara plati pe deviz */ }
+      await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows, payRows);
       }
       else if (docType === "factura") await generateFactura(r, ctx);
       else if (docType === "chitanta") await generateChitanta(r, ctx);
@@ -782,10 +796,37 @@ function ReceiptCard(props: { receipt: Receipt }) {
     metodaDraft() !== (r.metodaPlata ?? "") ||
     (isPartial() && partialDraft() !== (r.partialPay?.toFixed(2) ?? "100.00"));
 
+  // Incrementat dupa salvarea statusului, ca "Situatie plati" sa reciteasca
+  // registrul: backendul a inregistrat deja diferenta de bani corespunzatoare.
+  const [payRefresh, setPayRefresh] = createSignal(0);
+  const [showDiscount, setShowDiscount] = createSignal(false);
+  // Reducerea e scazuta din pretul fiecarei linii; `originalPrice` pastreaza
+  // pretul de lista, deci diferenta insumata e reducerea totala de pe bon.
+  const discountTotal = createMemo(() =>
+    live().items
+      .filter((i) => i.originalPrice != null)
+      .reduce((s, i) => s + (i.originalPrice! - i.price) * i.qty, 0),
+  );
+  /** Suma redusa, compacta pentru badge: fara zecimale cand e rotunda. */
+  const discountLabel = createMemo(() => {
+    const d = discountTotal();
+    return d % 1 === 0 ? d.toFixed(0) : d.toFixed(2);
+  });
+  /** Procentul echivalent, raportat la subtotalul dinainte de reducere. */
+  const discountPct = createMemo(() => {
+    const d = discountTotal();
+    if (d <= 0) return "";
+    const subtotal = live().total + d;
+    if (subtotal <= 0) return "";
+    const pct = (d / subtotal) * 100;
+    return `${pct.toFixed(pct % 1 === 0 ? 0 : 2)}%`;
+  });
+
   async function handleSaveMetoda() {
     setSaving(true);
     const partial = isPartial() ? parseFloat(partialDraft()) || 100 : undefined;
     await updateMetodaPlata(r.id, metodaDraft() || null, partial);
+    setPayRefresh((n) => n + 1);
     setSaving(false);
   }
   const date = new Date(r.date);
@@ -826,6 +867,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
             <Show when={live().chitantaNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--chitanta">C {live().chitantaSerie}{live().chitantaNr}</span>
+            </Show>
+            {/* Reducerea e ascunsa in preturile liniilor; badge-ul o face
+                vizibila fara sa fie nevoie sa desfaci bonul. */}
+            <Show when={discountTotal() > 0}>
+              <span
+                class="rcard-doc-tag rcard-doc-tag--reducere"
+                title={`Reducere aplicată: ${discountTotal().toFixed(2)} lei${discountPct() ? ` (${discountPct()})` : ""}`}
+              >
+                R -{discountLabel()}
+              </span>
             </Show>
           </div>
           <span class="rcard-meta">
@@ -897,11 +948,21 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
 
             <div class="receipt-items">
-              <For each={r.items}>
+              {/* `live()` si nu `r`: dupa aplicarea unei reduceri liniile se
+                  schimba, iar `r` e snapshot-ul de la montarea cardului. */}
+              <For each={live().items}>
                 {(item, index) => (
                   <div class="receipt-item">
                     <span class="receipt-item-name">{index() + 1}. {item.name}</span>
-                    <span class="receipt-item-qty">{item.qty} x {item.price.toFixed(2)}</span>
+                    <span class="receipt-item-qty">
+                      {item.qty} x{" "}
+                      <Show when={item.originalPrice != null}>
+                        <span style="text-decoration:line-through;opacity:0.55">
+                          {item.originalPrice!.toFixed(2)}
+                        </span>{" "}
+                      </Show>
+                      {item.price.toFixed(2)}
+                    </span>
                     <span class="receipt-item-total">{(item.price * item.qty).toFixed(2)}</span>
                   </div>
                 )}
@@ -910,9 +971,22 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
             <div class="receipt-divider" />
 
+            {/* Reducerea e deja scazuta din preturile liniilor; aratam explicit
+                cat s-a scazut, altfel „de ce e 336 si nu 420?" ramane un mister. */}
+            <Show when={discountTotal() > 0}>
+              <div class="receipt-plata">
+                <span>Subtotal</span>
+                <span>{(live().total + discountTotal()).toFixed(2)} lei</span>
+              </div>
+              <div class="receipt-plata">
+                <span>Reducere{discountPct() ? ` (${discountPct()})` : ""}</span>
+                <span style="color:var(--danger)">− {discountTotal().toFixed(2)} lei</span>
+              </div>
+            </Show>
+
             <div class="receipt-total">
               <span>{isFdl() ? "TOTAL ESTIMAT" : "TOTAL"}</span>
-              <span>{r.total.toFixed(2)} lei</span>
+              <span>{live().total.toFixed(2)} lei</span>
             </div>
 
             <Show when={isFdl() && live().timpEstimatOre != null && live().timpEstimatOre! > 0}>
@@ -1061,16 +1135,32 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </div>
               </Show>
 
-              {/* Administrare: actiuni de gestiune (stergere etc) */}
-              <Show when={adminVisible() && !live().efacturaLocked}>
+              {/* Administrare: actiuni de gestiune (reducere, stergere) */}
+              <Show when={canManage() && !live().efacturaLocked}>
                 <div class="receipt-actions-group">
                   <div class="receipt-actions-label">Administrare:</div>
                   <div class="receipt-actions-row">
+                    <button
+                      class="btn btn-ghost btn-sm btn-warning-text"
+                      onClick={() => setShowDiscount(true)}
+                    >
+                      {discountTotal() > 0
+                        ? `Reducere: −${discountTotal().toFixed(2)} lei`
+                        : "Aplică reducere"}
+                    </button>
                     <button class="btn btn-danger-outline btn-sm" onClick={handleDeleteClick}>
                       Șterge
                     </button>
                   </div>
                 </div>
+                <DiscountModal
+                  open={showDiscount()}
+                  receipt={live()}
+                  onClose={() => setShowDiscount(false)}
+                  // Reducerea schimba totalul, deci restul de plata din
+                  // "Situatie plati" trebuie recitit imediat.
+                  onApplied={() => setPayRefresh((n) => n + 1)}
+                />
               </Show>
             </div>
             <Show when={live().efacturaStatus === "error" && live().efacturaError}>
@@ -1126,6 +1216,24 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   </button>
                 </Show>
               </div>
+              {/* Registrul de miscari de bani: avans / plata / restituire.
+                  Separat de liniile bonului — un avans nu scade valoarea prestatiei. */}
+              <PaymentsSection
+                receiptId={r.id}
+                // Registrul se inchide odata ce bonul nu mai e „Neplatit":
+                // incasarea e consemnata, iar corectiile se fac schimband
+                // statusul (serverul inregistreaza automat diferenta), nu
+                // stergand miscari deja raportate.
+                readOnly={live().efacturaLocked || live().metodaPlata != null}
+                readOnlyReason={
+                  live().efacturaLocked
+                    ? "Bon trimis la ANAF — registrul nu mai poate fi modificat."
+                    : "Bonul are status de plată. Pentru corecții, schimbă statusul de mai sus."
+                }
+                // Amprenta starii bonului: orice schimbare de status, total sau
+                // actualizare venita prin SSE reincarca situatia platilor.
+                refreshKey={`${payRefresh()}|${live().metodaPlata ?? ""}|${live().partialPay ?? ""}|${live().total}|${live().updatedAt ?? ""}`}
+              />
             </Show>
 
             <Show when={!!r.descriere}>

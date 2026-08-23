@@ -113,6 +113,25 @@
   </cac:PaymentMeans>
   {%- endif %}
 
+  {# ---------- Reduceri la nivel de document (BG-20) ----------
+     Liniile de bon cu pret negativ ajung aici: EN16931 nu permite pret unitar
+     negativ pe linie (BR-27), dar reducerea e exprimabila standard prin
+     AllowanceCharge cu ChargeIndicator=false. #}
+  {%- for allow in payload.allowances %}
+  <cac:AllowanceCharge>
+    <cbc:ChargeIndicator>false</cbc:ChargeIndicator>
+    <cbc:AllowanceChargeReason>{{ allow.reason | e }}</cbc:AllowanceChargeReason>
+    <cbc:Amount currencyID="{{ payload.currency }}">{{ '%.2f' % allow.amount }}</cbc:Amount>
+    <cac:TaxCategory>
+      <cbc:ID>{{ allow.vat_category }}</cbc:ID>
+      {%- if allow.vat_category != 'O' %}
+      <cbc:Percent>{{ '%.2f' % allow.vat_percent }}</cbc:Percent>
+      {%- endif %}
+      <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+    </cac:TaxCategory>
+  </cac:AllowanceCharge>
+  {%- endfor %}
+
   {# ---------- TaxTotal ---------- #}
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_total }}</cbc:TaxAmount>
@@ -139,6 +158,12 @@
     <cbc:LineExtensionAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.line_extension_total }}</cbc:LineExtensionAmount>
     <cbc:TaxExclusiveAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_exclusive_total }}</cbc:TaxExclusiveAmount>
     <cbc:TaxInclusiveAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.tax_inclusive_total }}</cbc:TaxInclusiveAmount>
+    {%- if payload.allowance_total and payload.allowance_total > 0 %}
+    <cbc:AllowanceTotalAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.allowance_total }}</cbc:AllowanceTotalAmount>
+    {%- endif %}
+    {%- if payload.prepaid_amount and payload.prepaid_amount > 0 %}
+    <cbc:PrepaidAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.prepaid_amount }}</cbc:PrepaidAmount>
+    {%- endif %}
     <cbc:PayableAmount currencyID="{{ payload.currency }}">{{ '%.2f' % payload.payable_amount }}</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
 

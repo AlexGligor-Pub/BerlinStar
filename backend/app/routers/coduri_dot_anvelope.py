@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.cod_dot_anvelopa import CodDotAnvelopa
 from app.schemas.cod_dot_anvelopa import CodDotCreate, CodDotRead
 from app.schemas.common import Page
@@ -67,7 +67,9 @@ async def update_cod_dot(
 async def delete_cod_dot(
     cod_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     cod = await db.get(CodDotAnvelopa, cod_id)
     if cod is None or cod.account_id != account_id:

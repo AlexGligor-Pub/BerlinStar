@@ -1,4 +1,5 @@
-import { For, Switch, Match, createSignal } from "solid-js";
+import { For, Switch, Match, createMemo, createSignal } from "solid-js";
+import { can, type Resource } from "../store/permissions";
 import WelcomePanel from "./configurari/WelcomePanel";
 import LocatiiPanel from "./configurari/LocatiiPanel";
 import DepartamentePanel from "./configurari/DepartamentePanel";
@@ -12,6 +13,7 @@ import SetariGeneralePanel from "./configurari/SetariGeneralePanel";
 import EFacturaPanel from "./configurari/EFacturaPanel";
 import ContulMeuPanel from "./configurari/ContulMeuPanel";
 import AbonamentPanel from "./configurari/AbonamentPanel";
+import UtilizatoriPanel from "./configurari/UtilizatoriPanel";
 
 const TOPIC_GROUPS = [
   {
@@ -42,8 +44,11 @@ const TOPIC_GROUPS = [
   {
     label: "Cont",
     items: [
-      { id: "contul-meu", label: "Contul Meu" },
-      { id: "abonament",  label: "Abonament"  },
+      // `requires` = resursa ceruta; lipsa ei inseamna „vizibil tuturor
+      // rolurilor care ajung in Configurări" (adica admin + manager).
+      { id: "utilizatori", label: "Utilizatori", requires: "users" },
+      { id: "contul-meu",  label: "Contul Meu" },
+      { id: "abonament",   label: "Abonament", requires: "users" },
     ],
   },
 ] as const;
@@ -53,11 +58,22 @@ type TopicId = typeof TOPIC_GROUPS[number]["items"][number]["id"];
 export default function Configurari() {
   const [active, setActive] = createSignal<TopicId | null>(null);
 
+  // Ascundem intrarile pe care rolul curent nu le poate deschide (serverul le
+  // respinge oricum cu 403) si grupurile ramase goale.
+  const visibleGroups = createMemo(() =>
+    TOPIC_GROUPS
+      .map((g) => ({
+        label: g.label,
+        items: g.items.filter((t) => !("requires" in t) || can(t.requires as Resource)),
+      }))
+      .filter((g) => g.items.length > 0),
+  );
+
   return (
     <div class="cfg-layout">
       <aside class="cfg-sidebar">
         <div class="cfg-sidebar-title">Configurări</div>
-        <For each={TOPIC_GROUPS}>
+        <For each={visibleGroups()}>
           {(group) => (
             <div class="cfg-sidebar-group">
               <div class="cfg-sidebar-group-label">{group.label}</div>
@@ -86,6 +102,7 @@ export default function Configurari() {
           <Match when={active() === "dispozitiv"}><DispozitivulMeuPanel /></Match>
           <Match when={active() === "setari-generale"}><SetariGeneralePanel /></Match>
           <Match when={active() === "efactura"}><EFacturaPanel /></Match>
+          <Match when={active() === "utilizatori"}><UtilizatoriPanel /></Match>
           <Match when={active() === "contul-meu"}><ContulMeuPanel /></Match>
           <Match when={active() === "abonament"}><AbonamentPanel /></Match>
         </Switch>

@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.general_settings import GeneralSettings
 from app.schemas.general_settings import GeneralSettingsPatch, GeneralSettingsRead
 
@@ -36,7 +36,9 @@ async def get_general_settings(
 async def patch_general_settings(
     body: GeneralSettingsPatch,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Citirea rămâne deschisa tuturor (setarile controleaza si UI-ul operational,
+    # ex. afisarea Hotel Anvelope), dar MODIFICAREA e doar admin + manager.
+    account_id: int = Depends(get_settings_account_id),
 ):
     settings = await _get_or_create(db, account_id)
     for k, v in body.model_dump(exclude_unset=True).items():

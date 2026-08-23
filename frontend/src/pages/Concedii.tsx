@@ -1,10 +1,9 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount } from "solid-js";
 import Modal from "../components/ui/Modal";
-import { adminVisible } from "../store/adminStore";
+import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees, type Employee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
-import { reportsFetch } from "./rapoarte/reports-auth";
 import type { Location } from "../types/location";
 import {
   leaves, loading, loadLeaves, loadHolidays, loadBalance, holidaysByYear,
@@ -465,8 +464,8 @@ export default function Concedii() {
     if (id == null) { setFormDetails(null); return; }
     void (async () => {
       try {
-        // Dosarul e protejat de gate-ul Rapoarte; apelam prin reportsFetch.
-        const res = await reportsFetch(`/api/employees/${id}/details`);
+        // Dosarul de personal e permis doar rolurilor admin/manager (server-side).
+        const res = await apiFetch(`/api/employees/${id}/details`);
         // Fara acces Rapoarte (401) nu putem sti daca exista dosar — nu afisam
         // avertismentul "fara dosar" (ar fi inselator), doar ascundem preview-ul.
         if (res.status === 401) { setFormDetails(null); return; }
@@ -1338,7 +1337,7 @@ export default function Concedii() {
                 </Show>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => handleDelete(l())}>Șterge</button>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={() => openEditForm(l())}>Editează</button>
-                <Show when={adminVisible()}>
+                <Show when={canManage()}>
                   <button
                     type="button"
                     class="btn btn-sm concedii-action-btn"
@@ -1470,7 +1469,7 @@ export default function Concedii() {
                 </Show>
 
                 {/* Bifa de acord pentru aprobator (admin, cerere ne-aprobată) — doar tipuri pe zile */}
-                <Show when={!isHourBased(l().type) && adminVisible() && l().status !== "Approved"}>
+                <Show when={!isHourBased(l().type) && canManage() && l().status !== "Approved"}>
                   <label style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;background:var(--surface2);cursor:pointer;font-size:13px">
                     <input
                       type="checkbox"
@@ -1495,7 +1494,7 @@ export default function Concedii() {
                     />
                   )}
                 </Show>
-                <Show when={!adminVisible() && l().status === "Pending"}>
+                <Show when={!canManage() && l().status === "Pending"}>
                   <div style="font-size:12px;color:var(--text-muted);font-style:italic">
                     Doar administratorul poate aproba sau respinge cererea.
                   </div>

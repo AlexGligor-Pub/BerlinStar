@@ -10,6 +10,7 @@ class Account(Base):
     __table_args__ = (
         Index("ix_accounts_is_deleted_id", "is_deleted", "id"),
         Index("ix_accounts_username", "username", unique=True),
+        Index("ix_accounts_code", "code", unique=True),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -20,9 +21,13 @@ class Account(Base):
     )
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_deleted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Codul firmei — introdus la login alaturi de utilizator si parola, fiindca
+    # username-ul e unic doar in interiorul contului (vezi models/user.py).
+    code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
-    reports_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # NOTA: coloana `reports_password` mai exista in DB, dar nu mai e mapata:
+    # poarta cu parola pentru Rapoarte a fost inlocuita de roluri (rolul `admin`).
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

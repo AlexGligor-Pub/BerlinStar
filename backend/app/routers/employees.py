@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id, get_reports_account_id
+from app.dependencies import get_account_id, get_advanced_account_id
 from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
@@ -151,7 +151,7 @@ async def _get_owned_employee(db: AsyncSession, employee_id: int, account_id: in
 async def get_employee_details(
     employee_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_reports_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     await _get_owned_employee(db, employee_id, account_id)
     detail = await db.get(EmployeeDetail, employee_id)
@@ -165,7 +165,7 @@ async def upsert_employee_details(
     employee_id: int,
     body: EmployeeDetailUpsert,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_reports_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     await _get_owned_employee(db, employee_id, account_id)
 
@@ -196,7 +196,7 @@ async def upsert_employee_details(
 async def delete_employee_details(
     employee_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_reports_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     await _get_owned_employee(db, employee_id, account_id)
     detail = await db.get(EmployeeDetail, employee_id)

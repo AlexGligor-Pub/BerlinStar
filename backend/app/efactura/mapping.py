@@ -105,6 +105,21 @@ class TaxSubtotalData:
 
 
 @dataclass
+class AllowanceChargeData:
+    """Reducere la nivel de document (BG-20, ChargeIndicator=false).
+
+    EN16931 / CIUS-RO NU permite preturi unitare negative pe linii (BR-27).
+    Reducerile din POS (linii cu pret negativ, ex. "Reducere fidelitate" -100)
+    se traduc aici, cu suma in valoare absoluta si cota de TVA a liniei
+    originale — ca sa scada corect si baza impozabila a acelei cote.
+    """
+    amount: Decimal          # BT-92 (pozitiv)
+    vat_category: str        # BT-95
+    vat_percent: Decimal     # BT-96
+    reason: str              # BT-97
+
+
+@dataclass
 class PaymentMeansData:
     code: str  # ISO 4461 (10, 48, 30...)
     iban: str | None
@@ -130,6 +145,10 @@ class InvoicePayload:
     tax_exclusive_total: Decimal
     tax_inclusive_total: Decimal
     payable_amount: Decimal
+    # Reduceri la nivel de document + totalul lor (BT-107) si avansul incasat (BT-113).
+    allowances: list[AllowanceChargeData] = field(default_factory=list)
+    allowance_total: Decimal = Decimal("0.00")
+    prepaid_amount: Decimal = Decimal("0.00")
     payment_means: PaymentMeansData | None = None
     issues: list[str] = field(default_factory=list)  # warnings, non-fatale
 
@@ -413,12 +432,17 @@ def _validate_receipt_header(receipt: Receipt, errors: list[str]) -> None:
 
 def _validate_lines(lines: Iterable[ReceiptItem], errors: list[str]) -> None:
     has_line = False
+    has_positive_line = False
     for line in lines:
         has_line = True
         if line.qty <= 0:
             errors.append(f"Linia '{line.name}' are cantitate invalida: {line.qty}")
-        if line.price is None or line.price < 0:
+        if line.price is None:
             errors.append(f"Linia '{line.name}' are pret invalid: {line.price}")
+        elif line.price >= 0:
+            has_positive_line = True
+        # Pret negativ NU mai e eroare: linia devine reducere la nivel de document
+        # (cac:AllowanceCharge) in build_invoice_payload, conform EN16931 BR-27.
         if line.vat_category and line.vat_category not in ALLOWED_VAT_CATEGORIES:
             errors.append(
                 f"Linia '{line.name}' are vat_category invalid: {line.vat_category} "
@@ -432,6 +456,13 @@ def _validate_lines(lines: Iterable[ReceiptItem], errors: list[str]) -> None:
                 )
     if not has_line:
         errors.append("Factura nu are linii.")
+    elif not has_positive_line:
+        # BR-16: factura trebuie sa aiba cel putin o linie reala; o factura numai
+        # din reduceri ar avea total negativ (caz de stornare, nu de factura 380).
+        errors.append(
+            "Factura are numai linii de reducere. Trebuie sa existe cel putin un "
+            "articol facturat (BR-16)."
+        )
 
 
 # ---------- Main entrypoint ----------
@@ -567,10 +598,18 @@ def build_invoice_payload(
             address=PartyAddress(street="—", city="SECTOR1", county_code="RO-B"),
         )
 
-    # Lines
+    # Lines + reduceri
+    #
+    # Liniile cu total negativ (ex. "Reducere fidelitate" -100) NU pot fi trimise
+    # ca linii de factura: EN16931 BR-27 cere pret unitar >= 0. Standardul le
+    # exprima ca reduceri la nivel de document (BG-20 / cac:AllowanceCharge), pe
+    # cota de TVA a liniei originale, ca sa scada si baza impozabila a acelei cote.
     lines_data: list[InvoiceLineData] = []
-    tax_groups: dict[tuple[str, Decimal], Decimal] = {}  # (cat, pct) -> taxable
-    for idx, item in enumerate(receipt.receipt_items, start=1):
+    tax_groups: dict[tuple[str, Decimal], Decimal] = {}       # (cat, pct) -> net linii
+    allowance_groups: dict[tuple[str, Decimal], Decimal] = {}  # (cat, pct) -> reduceri
+    allowances: list[AllowanceChargeData] = []
+    line_no = 0
+    for item in receipt.receipt_items:
         if vat_payer:
             vat_cat = (item.vat_category or "S").upper()
             vat_pct = _resolve_vat_percent(item, company)
@@ -578,14 +617,28 @@ def build_invoice_payload(
             # Neplatitor de TVA -> categorie "O" (neimpozabil), cota 0.
             vat_cat = "O"
             vat_pct = Decimal("0")
-        unit_code = _resolve_unit_code(item)
         line_total = _q2(Decimal(item.qty) * Decimal(item.price))
+        key = (vat_cat, vat_pct)
+
+        if line_total < 0:
+            allowances.append(
+                AllowanceChargeData(
+                    amount=_q2(-line_total),
+                    vat_category=vat_cat,
+                    vat_percent=vat_pct,
+                    reason=item.name or "Reducere",
+                )
+            )
+            allowance_groups[key] = allowance_groups.get(key, Decimal("0")) + _q2(-line_total)
+            continue
+
+        line_no += 1
         lines_data.append(
             InvoiceLineData(
-                line_id=idx,
+                line_id=line_no,
                 name=item.name,
                 quantity=Decimal(item.qty),
-                unit_code=unit_code,
+                unit_code=_resolve_unit_code(item),
                 line_extension_amount=line_total,
                 unit_price=_q2(item.price),
                 vat_category=vat_cat,
@@ -594,16 +647,27 @@ def build_invoice_payload(
                 item_id_ref=item.item_id,
             )
         )
-        key = (vat_cat, vat_pct)
         tax_groups[key] = tax_groups.get(key, Decimal("0")) + line_total
 
-    # Tax subtotals
+    allowance_total = _q2(sum(allowance_groups.values(), Decimal("0")))
+
+    # Tax subtotals: baza impozabila per cota = net linii - reduceri pe aceeasi cota
+    # (BR-45). O baza negativa ar fi respinsa de ANAF, deci o semnalam ca eroare.
     tax_subtotals: list[TaxSubtotalData] = []
     tax_total = Decimal("0.00")
     line_extension_total = Decimal("0.00")
-    for (cat, pct), taxable in sorted(tax_groups.items()):
-        taxable_q = _q2(taxable)
-        line_extension_total += taxable_q
+    for key in sorted(set(tax_groups) | set(allowance_groups)):
+        cat, pct = key
+        lines_net = _q2(tax_groups.get(key, Decimal("0")))
+        reduceri = _q2(allowance_groups.get(key, Decimal("0")))
+        line_extension_total += lines_net
+        taxable_q = _q2(lines_net - reduceri)
+        if taxable_q < 0:
+            errors.append(
+                f"Reducerile pe cota TVA {pct}% ({reduceri}) depasesc valoarea "
+                f"articolelor pe aceeasi cota ({lines_net}). Factura nu poate avea "
+                "baza impozabila negativa — foloseste o factura de stornare."
+            )
         tax_amt = _q2(taxable_q * pct / Decimal("100"))
         tax_total += tax_amt
         tax_subtotals.append(
@@ -616,7 +680,8 @@ def build_invoice_payload(
             )
         )
 
-    tax_exclusive_total = _q2(line_extension_total)
+    # BT-109 = BT-106 - BT-107 (BR-CO-13)
+    tax_exclusive_total = _q2(line_extension_total - allowance_total)
     tax_total_q = _q2(tax_total)
     tax_inclusive_total = _q2(tax_exclusive_total + tax_total_q)
 
@@ -629,8 +694,10 @@ def build_invoice_payload(
                 f"Totalul calculat ({tax_inclusive_total}) difera de receipt.total ({expected}) cu {diff}"
             )
 
-    partial = receipt.partial_pay or Decimal("0")
-    payable = _q2(tax_inclusive_total - Decimal(partial))
+    # BT-113 (avans incasat) trebuie declarat explicit in XML, altfel
+    # PayableAmount != TaxInclusiveAmount - Prepaid si ANAF respinge (BR-CO-16).
+    prepaid = _q2(receipt.partial_pay or Decimal("0"))
+    payable = _q2(tax_inclusive_total - prepaid)
 
     invoice_number = _format_invoice_number(receipt)
     due_date = _calculate_due_date(receipt, payment_terms_days)
@@ -670,6 +737,9 @@ def build_invoice_payload(
         tax_exclusive_total=tax_exclusive_total,
         tax_inclusive_total=tax_inclusive_total,
         payable_amount=payable,
+        allowances=allowances,
+        allowance_total=allowance_total,
+        prepaid_amount=prepaid,
         payment_means=payment_means,
         issues=warnings,
     )

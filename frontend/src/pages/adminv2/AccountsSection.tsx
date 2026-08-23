@@ -7,6 +7,8 @@ import { readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { loginAsImpersonatedUser } from "../../store/authStore";
 import { adminFetch } from "./admin-auth";
+import Modal from "../../components/ui/Modal";
+import UsersManager from "../../components/UsersManager";
 import { fmtDate } from "./shared";
 import type { Account } from "./types";
 import { drawDailyCountBars } from "../rapoarte/charts";
@@ -15,7 +17,6 @@ interface FormState {
   name: string;
   username: string;
   password: string;
-  reports_password: string;
   email: string;
   description: string;
   image_url: string;
@@ -24,7 +25,7 @@ interface FormState {
 }
 
 function emptyForm(): FormState {
-  return { name: "", username: "", password: "", reports_password: "", email: "", description: "", image_url: "", is_locked: false, locked_at: "" };
+  return { name: "", username: "", password: "", email: "", description: "", image_url: "", is_locked: false, locked_at: "" };
 }
 
 function setField<K extends keyof FormState>(
@@ -262,6 +263,8 @@ export default function AccountsSection() {
 
   // ── Support tehnic / impersonate ─────────────────────────────────────────
   const [confirmSupportOpen, setConfirmSupportOpen] = createSignal(false);
+  // Contul pentru care e deschis modalul de utilizatori (null = inchis).
+  const [usersAccount, setUsersAccount] = createSignal<Account | null>(null);
   const [impersonating, setImpersonating] = createSignal(false);
   const [supportErr, setSupportErr] = createSignal("");
 
@@ -282,8 +285,9 @@ export default function AccountsSection() {
         username: string;
         is_locked: boolean;
         locked_at: string | null;
-        reports_access_token?: string | null;
-        reports_expires_in?: number;
+        role?: string;
+        resources?: string[];
+        code?: string | null;
       } = await res.json();
       loginAsImpersonatedUser(
         data.username,
@@ -291,8 +295,7 @@ export default function AccountsSection() {
         data.is_locked,
         data.locked_at ?? null,
         "/",
-        data.reports_access_token ?? null,
-        data.reports_expires_in,
+        { role: data.role ?? null, resources: data.resources ?? [], code: data.code ?? null },
       );
     } catch {
       setSupportErr("Eroare de conexiune.");
@@ -324,7 +327,7 @@ export default function AccountsSection() {
     const a = previewAccount();
     if (!a) return;
     setEditForm({
-      name: a.name, username: a.username, password: "", reports_password: "",
+      name: a.name, username: a.username, password: "",
       email: a.email ?? "", description: a.description ?? "",
       image_url: a.image_url ?? "", is_locked: a.is_locked,
       locked_at: a.locked_at ? a.locked_at.slice(0, 16) : "",
@@ -350,8 +353,6 @@ export default function AccountsSection() {
         image_url: f.image_url.trim() || null,
         is_locked: f.is_locked, locked_at: f.locked_at ? new Date(f.locked_at).toISOString() : null,
       };
-      if (f.password.trim()) patch.password = f.password.trim();
-      if (f.reports_password.trim()) patch.reports_password = f.reports_password.trim();
       const res = await adminFetch(`/api/accounts/${a.id}`, { method: "PATCH", body: JSON.stringify(patch) });
       if (!res.ok) { setEditErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
       closePreview();
@@ -726,6 +727,8 @@ export default function AccountsSection() {
                             class="admin-preview-grid"
                             style="grid-template-columns:110px 1fr 110px 1fr;gap:8px 16px;font-size:0.88rem"
                           >
+                            <span class="admin-form-label">Cod firmă</span>
+                            <span style="font-family:var(--font-mono,monospace)">{a().code ?? "—"}</span>
                             <span class="admin-form-label">Email</span><span>{a().email ?? "—"}</span>
                             <span class="admin-form-label">Trial expiră</span><span>{fmtDate(a().locked_at)}</span>
                             <span class="admin-form-label">Creat</span><span>{fmtDate(a().created_at)}</span>
@@ -882,6 +885,9 @@ export default function AccountsSection() {
                   >
                     Șterge
                   </button>
+                  <button class="btn btn-ghost btn-sm" onClick={() => setUsersAccount(a())}>
+                    👥 Utilizatori
+                  </button>
                   <button
                     class="btn btn-ghost btn-sm"
                     onClick={() => { setSupportErr(""); setConfirmSupportOpen(true); }}
@@ -904,10 +910,18 @@ export default function AccountsSection() {
                       <input class="input" value={editForm().name} onInput={(e) => setField(setEditForm, "name", e.currentTarget.value)} /></div>
                     <div class="admin-form-row"><label class="admin-form-label">Username *</label>
                       <input class="input" value={editForm().username} placeholder="doar litere mici și cifre" onInput={(e) => setField(setEditForm, "username", sanitizeUsername(e.currentTarget.value))} /></div>
-                    <div class="admin-form-row"><label class="admin-form-label">Parola nouă (gol = neschimbat)</label>
-                      <input class="input" type="password" value={editForm().password} onInput={(e) => setField(setEditForm, "password", e.currentTarget.value)} /></div>
-                    <div class="admin-form-row"><label class="admin-form-label">Parolă Rapoarte (gol = neschimbat)</label>
-                      <input class="input" type="password" autocomplete="new-password" value={editForm().reports_password} onInput={(e) => setField(setEditForm, "reports_password", e.currentTarget.value)} /></div>
+                    <div class="admin-form-row">
+                      <label class="admin-form-label">Parole</label>
+                      <div>
+                        <button type="button" class="btn btn-ghost btn-sm" onClick={() => setUsersAccount(a())}>
+                          👥 Utilizatori și parole
+                        </button>
+                        <div style="margin-top:4px;font-size:0.78rem;color:var(--text-muted)">
+                          Autentificarea se face pe utilizatori, nu pe cont — parolele se
+                          schimbă de acolo.
+                        </div>
+                      </div>
+                    </div>
                     <div class="admin-form-row"><label class="admin-form-label">Email</label>
                       <input class="input" value={editForm().email} onInput={(e) => setField(setEditForm, "email", e.currentTarget.value)} /></div>
                     <div class="admin-form-row"><label class="admin-form-label">Descriere</label>
@@ -974,6 +988,34 @@ export default function AccountsSection() {
       </Show>
 
       {/* Modal: confirmare logare ca support tehnic (impersonate) */}
+      {/* ── Utilizatorii unui cont (acelasi component ca pagina Utilizatori) ── */}
+      <Modal
+        open={!!usersAccount()}
+        onClose={() => setUsersAccount(null)}
+        title={`Utilizatori — ${usersAccount()?.name ?? ""}`}
+        size="lg"
+      >
+        <Show when={usersAccount()}>
+          {(acc) => (
+            <>
+              <div style="font-size:12.5px;color:var(--text-muted);margin-bottom:10px">
+                Cod firmă: <strong style="font-family:var(--font-mono,monospace)">{acc().code ?? "—"}</strong>
+                {" · "}la login se cer codul firmei, utilizatorul și parola.
+              </div>
+              <UsersManager
+                basePath={`/api/admin/accounts/${acc().id}/users`}
+                fetcher={adminFetch}
+                companyCode={acc().code}
+                embedded
+              />
+            </>
+          )}
+        </Show>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-primary btn-sm" onClick={() => setUsersAccount(null)}>Închide</button>
+        </div>
+      </Modal>
+
       <Show when={confirmSupportOpen() && previewAccount()}>
         {(a) => (
           <div class="sl-modal-overlay">

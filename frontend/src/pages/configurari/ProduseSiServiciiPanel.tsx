@@ -256,7 +256,9 @@ export default function ProduseSiServiciiPanel() {
         <input class="input" placeholder="Nume *" value={props.f.name} onInput={e => props.setF({ ...props.f, name: e.currentTarget.value })} />
         <input class="input" placeholder="Descriere" value={props.f.description} onInput={e => props.setF({ ...props.f, description: e.currentTarget.value })} />
         <div style="display:flex;gap:8px">
-          <input class="input" style="flex:1" type="number" step="0.01" min="0" placeholder="Preț *" value={props.f.price} onInput={e => props.setF({ ...props.f, price: e.currentTarget.value })} />
+          {/* Fara min="0": preturile negative sunt permise si se folosesc ca
+              linii de reducere / restituire pe bon (ex. -100 lei). */}
+          <input class="input" style="flex:1" type="number" step="0.01" placeholder="Preț * (negativ = reducere)" value={props.f.price} onInput={e => props.setF({ ...props.f, price: e.currentTarget.value })} />
           <input class="input" style="width:100px" placeholder="UM *" value={props.f.unit} onInput={e => props.setF({ ...props.f, unit: e.currentTarget.value })} />
         </div>
         <div style="display:flex;gap:8px">
@@ -422,7 +424,12 @@ export default function ProduseSiServiciiPanel() {
                         {it.type === "Service" ? "Serviciu" : "Produs"}
                       </span>
                     </span>
-                    <span class="cfg-location-desc">{it.category_name ?? ""} · {parseFloat(it.price).toFixed(2)} RON / {it.unit}</span>
+                    <span class="cfg-location-desc">
+                      {it.category_name ?? ""} · {parseFloat(it.price).toFixed(2)} RON / {it.unit}
+                      <Show when={parseFloat(it.price) < 0}>
+                        <span class="cfg-item-discount-badge" title="Preț negativ — se scade din total (reducere / restituire)">reducere</span>
+                      </Show>
+                    </span>
                     <Show when={it.description}>
                       <span class="cfg-location-desc" style="font-style:italic">{it.description}</span>
                     </Show>

@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.montaj_rota import MontajRota
 from app.models.marca_anvelopa import MarcaAnvelopa
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
@@ -256,7 +256,9 @@ async def bulk_upsert(
 async def delete_rota(
     rota_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     rec = await db.get(MontajRota, rota_id)
     if rec is None or rec.account_id != account_id or rec.is_deleted:

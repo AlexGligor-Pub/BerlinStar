@@ -40,12 +40,17 @@ _DELETE_ORDER = [
     "programari",
     "vehicole",
     "receipt_items",
+    "receipt_payments",     # registrul de plati al bonului
     "stock_movements",
     "receipts",
     "stocks",
     "items",
     "categories",
     "departments",          # location_departments are ON DELETE CASCADE
+    # Utilizatorii contului: sesiunile intai (FK pe users si devices), apoi
+    # userii (FK pe employees prin employee_id).
+    "user_sessions",
+    "users",
     "employees",            # employee_locations are ON DELETE CASCADE
     "client_vehicole",
     "clienti",

@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.client import Client
 from app.models.programare import Programare, ProgramareStatus
 from app.schemas.programare import ProgramareCreate, ProgramarePatch, ProgramareRead
@@ -179,7 +179,9 @@ async def update_programare(
 async def delete_programare(
     programare_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ) -> None:
     p = await db.get(Programare, programare_id)
     if p is None or p.account_id != account_id:

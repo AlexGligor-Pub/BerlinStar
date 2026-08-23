@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.client import Client
 from app.models.client_vehicol import ClientVehicol
 from app.models.receipt import Receipt
@@ -144,7 +144,9 @@ async def update_client(
 async def delete_client(
     client_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     client = await db.get(Client, client_id)
     if client is None or client.account_id != account_id:
@@ -276,7 +278,9 @@ async def delete_client_vehicol(
     client_id: int,
     v_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     v = await db.get(ClientVehicol, v_id)
     if v is None or v.client_id != client_id or v.account_id != account_id:

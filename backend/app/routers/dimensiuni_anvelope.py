@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.schemas.dimensiune_anvelopa import DimensiuneCreate, DimensiuneRead
 from app.schemas.common import Page
@@ -67,7 +67,9 @@ async def update_dimensiune(
 async def delete_dimensiune(
     dim_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     dim = await db.get(DimensiuneAnvelopa, dim_id)
     if dim is None or dim.account_id != account_id:

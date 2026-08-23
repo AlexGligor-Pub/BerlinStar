@@ -1,6 +1,5 @@
 import { createSignal } from "solid-js";
 import { apiFetch, apiFetchJson } from "../utils/api";
-import { reportsFetch } from "../pages/rapoarte/reports-auth";
 
 export type LeaveType =
   | "Concediu de odihna"
@@ -350,7 +349,7 @@ export const resetLeave   = (id: number) => approvalAction(id, "reset");
  *  Intoarce `null` daca lipseste sau daca nu exista token Rapoarte valid (401). */
 export async function fetchLeaveSnapshot(id: number): Promise<LeaveDetailsSnapshot | null> {
   try {
-    const res = await reportsFetch(`/api/leaves/${id}/snapshot`);
+    const res = await apiFetch(`/api/leaves/${id}/snapshot`);
     if (!res.ok) return null;
     return (await res.json()) as LeaveDetailsSnapshot | null;
   } catch {

@@ -10,6 +10,7 @@
   --accent-hover: #1d4ed8;
   --accent-text: #ffffff;
   --danger: #dc3545;
+  --warning: #d9822b;
   --success: #198754;
   --shadow: 0 1px 3px rgba(0,0,0,0.1);
   --radius: 8px;
@@ -23,6 +24,12 @@
   --bg-page: var(--bg);
   --bg-hover: var(--surface2);
   --primary: var(--accent);
+  /* Alias pentru varianta scrisa cu cratima. Numele corect al variabilei de
+     tema e `--surface2`, dar `--surface-2` s-a strecurat in ~15 fisiere. Fara
+     alias, acolo unde e folosit cu fallback deschis (`var(--surface-2,#f1f5f9)`)
+     fundalul ramanea alb si in dark mode, cu text deschis peste el — invizibil.
+     Fiind definit prin var(), urmeaza automat tema activa. */
+  --surface-2: var(--surface2);
 }
 
 [data-theme="dark"] {
@@ -36,6 +43,7 @@
   --accent-hover: #60a5fa;
   --accent-text: #ffffff;
   --danger: #f87171;
+  --warning: #f0a35e;
   --success: #4ade80;
   --shadow: 0 1px 3px rgba(0,0,0,0.4);
 }
@@ -51,6 +59,7 @@
   --accent-hover: #409cff;
   --accent-text: #ffffff;
   --danger: #ff453a;
+  --warning: #f0a35e;
   --success: #30d158;
   --shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
@@ -66,6 +75,7 @@
   --accent-hover: #60a5fa;
   --accent-text: #ffffff;
   --danger: #ff453a;
+  --warning: #f0a35e;
   --success: #34c759;
   --shadow: 0 2px 12px rgba(0,0,0,0.6);
 }
@@ -4177,6 +4187,8 @@ img.pos-theme-preview {
 .rcard-doc-tag--deviz    { background: #1e3a5f; color: #7eb8f7; }
 .rcard-doc-tag--factura  { background: #1a3d2b; color: #6dd49a; }
 .rcard-doc-tag--chitanta { background: #3d2a1a; color: #f0a96d; }
+/* Reducere aplicata pe bon — portocaliu, ca restul semnalelor de tip warning. */
+.rcard-doc-tag--reducere { background: #4a2a12; color: #f5b571; }
 
 /* ─── Employee Avatar ─── */
 .cfg-employee-avatar {
@@ -7518,4 +7530,77 @@ img.pos-theme-preview {
   }
   .ai-panel__body { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .ai-msg { max-width: 92%; }
+}
+
+/* Badge pentru articolele de catalog cu preț negativ (reducere / restituire) */
+.cfg-item-discount-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+}
+
+/* ─── Situație plăți pe bon (avans / plată / restituire) ─────────────────── */
+.pay-empty { font-size: 0.78rem; opacity: 0.6; padding: 4px 0; }
+.pay-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.pay-row {
+  display: grid;
+  grid-template-columns: 58px 1fr auto auto 20px;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(128, 128, 128, 0.18);
+}
+.pay-row-date {
+  opacity: 0.65;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.pay-row-day  { font-size: 0.68rem; }
+.pay-row-time { font-size: 0.66rem; opacity: 0.85; }
+.pay-row-kind { font-weight: 600; }
+.pay-row-kind--out { color: #dc2626; }
+.pay-row-method { opacity: 0.6; font-size: 0.72rem; }
+.pay-row-amount { font-variant-numeric: tabular-nums; white-space: nowrap; color: #16a34a; font-weight: 600; }
+.pay-row-amount--out { color: #dc2626; }
+.pay-row-del { padding: 0 4px; opacity: 0.45; }
+.pay-row-del:hover { opacity: 1; color: #dc2626; }
+
+.pay-summary { margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(128, 128, 128, 0.28); }
+.pay-summary-row { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 1px 0; }
+.pay-summary-row--muted { opacity: 0.6; font-size: 0.72rem; }
+.pay-summary-row--total { margin-top: 3px; padding-top: 3px; border-top: 1px dashed rgba(128,128,128,0.25); }
+.pay-rest--zero { color: #16a34a; }
+
+.pay-form { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pay-form-kinds { display: flex; gap: 4px; }
+.pay-form-row { display: flex; gap: 6px; }
+.pay-form-row .input { flex: 1; min-width: 0; }
+.pay-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+/* Text de avertizare pe un buton ghost — actiune care modifica bani (reducere),
+   fara sa fie distructiva ca stergerea. */
+.btn-warning-text { color: var(--warning); }
+.btn-warning-text:hover { color: var(--warning); filter: brightness(1.1); }
+
+/* Registrul de plati blocat (bon cu status de plata sau trimis la ANAF). */
+.pay-locked {
+  margin-top: 8px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 9px;
+  line-height: 1.45;
 }

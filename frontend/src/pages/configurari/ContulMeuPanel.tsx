@@ -1,7 +1,8 @@
 import { Show, createSignal, onMount } from "solid-js";
 import { apiFetch, apiUpload, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
-import { setDisplayName } from "../../store/authStore";
+import { auth, setDisplayName } from "../../store/authStore";
+import { ROLE_LABEL, canUsers } from "../../store/permissions";
 import type { ApiMessageBody } from "../../types";
 
 interface MeResponse {
@@ -11,15 +12,18 @@ interface MeResponse {
   description: string | null;
   email: string | null;
   image_url: string | null;
+  /** Codul firmei — se dă colegilor, e prima casetă de la login. */
+  code: string | null;
+  user_name: string | null;
+  user_username: string | null;
+  role: string | null;
 }
 
 /**
- * „Contul Meu" — panou in Configurari pentru parolele proprii.
+ * „Contul Meu" — panou in Configurari pentru datele si parola proprii.
  *
- *  - Parola Rapoarte: protejeaza pagina Rapoarte. La prima setare nu se cere
- *    parola veche; ulterior se cere parola veche + cea noua.
- *  - Parola Cont (login): parola de autentificare in BerlinStar. Mereu se
- *    cere parola veche.
+ *  Accesul la Rapoarte nu mai are parola separata: e decis de ROLUL
+ *  utilizatorului (doar `admin`), gestionat din pagina Utilizatori.
  */
 export default function ContulMeuPanel() {
   // ── Detalii cont ─────────────────────────────────────────────────────────
@@ -144,68 +148,6 @@ export default function ContulMeuPanel() {
     }
   }
 
-  // ── Parola Rapoarte ──────────────────────────────────────────────────────
-  const [hasReportsPwd, setHasReportsPwd] = createSignal<boolean | null>(null);
-  const [rOld, setROld] = createSignal("");
-  const [rNew, setRNew] = createSignal("");
-  const [rNew2, setRNew2] = createSignal("");
-  const [rErr, setRErr] = createSignal("");
-  const [rSaving, setRSaving] = createSignal(false);
-
-  async function loadStatus() {
-    try {
-      const res = await apiFetch("/api/auth/reports/status");
-      if (!res.ok) return;
-      const d = await readJsonSafe<{ has_password: boolean }>(res);
-      setHasReportsPwd(!!d.has_password);
-    } catch {
-      // ignore
-    }
-  }
-
-  async function doSaveReportsPwd(e: Event) {
-    e.preventDefault();
-    setRErr("");
-    if (rNew().length < 10) {
-      setRErr("Parola nouă trebuie să aibă minim 10 caractere.");
-      return;
-    }
-    if (rNew() !== rNew2()) {
-      setRErr("Parolele noi nu coincid.");
-      return;
-    }
-    if (hasReportsPwd() && !rOld()) {
-      setRErr("Introdu parola curentă pentru Rapoarte.");
-      return;
-    }
-    setRSaving(true);
-    try {
-      const body: Record<string, string> = { new_password: rNew() };
-      if (hasReportsPwd()) body.old_password = rOld();
-      const res = await apiFetch("/api/auth/reports/set-password", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const d = await readJsonSafe<ApiMessageBody>(res);
-        setRErr(d.detail ?? "Eroare la salvare.");
-        return;
-      }
-      notify(
-        hasReportsPwd()
-          ? "Parola pentru Rapoarte a fost schimbată."
-          : "Parola pentru Rapoarte a fost setată.",
-        "success",
-      );
-      setROld(""); setRNew(""); setRNew2("");
-      setHasReportsPwd(true);
-    } catch {
-      setRErr("Eroare de conexiune.");
-    } finally {
-      setRSaving(false);
-    }
-  }
-
   // ── Parola Cont (login) ──────────────────────────────────────────────────
   const [lOld, setLOld] = createSignal("");
   const [lNew, setLNew] = createSignal("");
@@ -239,7 +181,7 @@ export default function ContulMeuPanel() {
         setLErr(d.detail ?? "Eroare la salvare.");
         return;
       }
-      notify("Parola contului a fost schimbată.", "success");
+      notify("Parola ta a fost schimbată.", "success");
       setLOld(""); setLNew(""); setLNew2("");
     } catch {
       setLErr("Eroare de conexiune.");
@@ -250,22 +192,22 @@ export default function ContulMeuPanel() {
 
   onMount(() => {
     void loadMe();
-    void loadStatus();
   });
 
   return (
     <div class="cfg-panel">
       <h2 class="cfg-panel-title">Contul Meu</h2>
       <p class="cfg-hint" style="margin:0 0 18px">
-        Schimbă parolele asociate contului tău: parola pentru accesul la pagina
-        <strong> Rapoarte</strong> și parola pentru autentificarea în sistem.
+        Datele contului, <strong>codul firmei</strong> (necesar la autentificare)
+        și parola ta de acces. Drepturile pe rol se administrează din pagina
+        <strong> Utilizatori</strong>.
       </p>
 
       {/* ── Detalii cont ── */}
       <div class="account-card" style="padding:18px;margin-bottom:20px">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
           <h3 style="margin:0;font-size:1.05rem">👤 Detalii cont</h3>
-          <Show when={!editMode() && me()}>
+          <Show when={!editMode() && me() && canUsers()}>
             <button class="btn btn-ghost btn-sm" onClick={startEdit}>
               ✎ Editează
             </button>
@@ -281,7 +223,27 @@ export default function ContulMeuPanel() {
                 <div style="color:var(--text-muted)">Nume</div>
                 <div style="font-weight:500">{m().name}</div>
                 <div style="color:var(--text-muted)">Username</div>
-                <div style="font-family:var(--font-mono,monospace);background:var(--surface-2,#f1f5f9);padding:2px 8px;border-radius:4px;width:fit-content">{m().username}</div>
+                <div style="font-family:var(--font-mono,monospace);background:var(--surface2);padding:2px 8px;border-radius:4px;width:fit-content">{m().username}</div>
+                <div style="color:var(--text-muted)">Cod firmă</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <span style="font-family:var(--font-mono,monospace);background:var(--surface2);padding:2px 8px;border-radius:4px">
+                    {m().code || "—"}
+                  </span>
+                  <span style="font-size:0.78rem;color:var(--text-muted)">
+                    se introduce la autentificare, împreună cu utilizatorul și parola
+                  </span>
+                </div>
+                <div style="color:var(--text-muted)">Utilizator logat</div>
+                <div>
+                  {m().user_name || m().user_username || "—"}
+                  <Show when={m().role}>
+                    {(r) => (
+                      <span style="margin-left:8px;font-size:0.78rem;padding:2px 8px;border-radius:999px;background:var(--surface2);color:var(--text-muted)">
+                        {ROLE_LABEL[r() as keyof typeof ROLE_LABEL] ?? r()}
+                      </span>
+                    )}
+                  </Show>
+                </div>
                 <div style="color:var(--text-muted)">Email</div>
                 <div>{m().email || <span style="color:var(--text-muted);font-style:italic">—</span>}</div>
                 <div style="color:var(--text-muted)">Descriere</div>
@@ -291,7 +253,7 @@ export default function ContulMeuPanel() {
                   <Show
                     when={m().image_url}
                     fallback={
-                      <div style="width:56px;height:56px;border-radius:50%;background:var(--surface-2,#f1f5f9);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-weight:700;font-size:1.2rem">
+                      <div style="width:56px;height:56px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-weight:700;font-size:1.2rem">
                         {(m().name?.charAt(0) || "?").toUpperCase()}
                       </div>
                     }
@@ -303,6 +265,7 @@ export default function ContulMeuPanel() {
                     />
                   </Show>
                   <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <Show when={canUsers()}>
                     <button
                       type="button"
                       class="btn btn-ghost btn-sm"
@@ -321,6 +284,7 @@ export default function ContulMeuPanel() {
                       >
                         Șterge
                       </button>
+                    </Show>
                     </Show>
                   </div>
                   <input
@@ -399,76 +363,20 @@ export default function ContulMeuPanel() {
       </div>
 
       <div style="display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
-        {/* ── Parola Rapoarte ── */}
-        <div class="account-card" style="padding:18px">
-          <h3 style="margin:0 0 4px;font-size:1.05rem">🔐 Parola Rapoarte</h3>
-          <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
-            Protejează pagina <strong>Rapoarte</strong>. Accesul rămâne deschis
-            timp de 1 oră după introducerea parolei.
-          </div>
-
-          <Show when={hasReportsPwd() === null}>
-            <div style="font-size:0.82rem;color:var(--text-muted)">Se încarcă…</div>
-          </Show>
-
-          <Show when={hasReportsPwd() === false}>
-            <div style="background:#fff7ed;border:1px solid #f59e0b;color:#92400e;padding:8px 10px;border-radius:6px;font-size:0.82rem;margin-bottom:12px">
-              Nu este setată o parolă — accesul la Rapoarte este blocat până
-              configurezi una.
-            </div>
-          </Show>
-
-          <form onSubmit={doSaveReportsPwd} autocomplete="off">
-            <Show when={hasReportsPwd()}>
-              <div class="form-group">
-                <label class="form-label">Parola curentă</label>
-                <input
-                  class="input"
-                  type="password"
-                  placeholder="••••••••"
-                  value={rOld()}
-                  onInput={(e) => setROld(e.currentTarget.value)}
-                />
-              </div>
-            </Show>
-            <div class="form-group">
-              <label class="form-label">Parola nouă</label>
-              <input
-                class="input"
-                type="password"
-                placeholder="minim 10 caractere"
-                value={rNew()}
-                onInput={(e) => setRNew(e.currentTarget.value)}
-              />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Confirmă parola nouă</label>
-              <input
-                class="input"
-                type="password"
-                placeholder="••••••••"
-                value={rNew2()}
-                onInput={(e) => setRNew2(e.currentTarget.value)}
-              />
-            </div>
-            <Show when={rErr()}>
-              <div class="login-error" style="margin:8px 0">{rErr()}</div>
-            </Show>
-            <button class="btn btn-primary w-full" type="submit" disabled={rSaving()}>
-              {rSaving()
-                ? "Se salvează…"
-                : hasReportsPwd()
-                ? "Schimbă parola"
-                : "Setează parola"}
-            </button>
-          </form>
-        </div>
-
         {/* ── Parola Cont (login) ── */}
         <div class="account-card" style="padding:18px">
-          <h3 style="margin:0 0 4px;font-size:1.05rem">🔑 Parola Cont</h3>
+          <h3 style="margin:0 0 4px;font-size:1.05rem">🔑 Parola mea</h3>
           <div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:12px">
-            Parola folosită la autentificarea în BerlinStar.
+            Schimbi <strong>parola ta</strong> de autentificare, a utilizatorului{" "}
+            <strong style="font-family:var(--font-mono,monospace)">
+              {me()?.user_username ?? auth.user}
+            </strong>
+            {me()?.user_name ? ` (${me()!.user_name})` : ""} — nu a altui coleg și nu a
+            firmei. Rămâi conectat pe acest dispozitiv; celelalte sesiuni ale tale se închid.
+            <Show when={canUsers()}>
+              {" "}Parolele colegilor se schimbă din{" "}
+              <strong>Configurări → Cont → Utilizatori</strong>.
+            </Show>
           </div>
 
           <form onSubmit={doSaveLoginPwd} autocomplete="off">

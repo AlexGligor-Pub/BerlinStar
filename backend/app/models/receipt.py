@@ -108,6 +108,11 @@ class ReceiptItem(Base):
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    # Pretul dinainte de reducere. NULL = linia nu are reducere aplicata.
+    # Reducerea se scade direct din `price`, ca atribuirea pe angajat/produs si
+    # TVA-ul pe linie sa fie corecte; `original_price` permite eliminarea sau
+    # recalcularea ei fara sa se compuneze.
+    original_price: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     qty: Mapped[int] = mapped_column(Integer, nullable=False)
     unit: Mapped[str] = mapped_column(String(50), nullable=False)
     vat_category: Mapped[str] = mapped_column(String(10), nullable=False, default="S")

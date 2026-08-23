@@ -188,10 +188,19 @@ export default function StocActivitate() {
     {
       id: "employee_name",
       accessorFn: (r) => r.employee_name ?? r.created_by_user ?? "",
-      header: "Angajat / User",
+      header: "Angajat / Operator",
       cell: (info) => {
         const m = info.row.original;
-        return <span>{m.employee_name ?? m.created_by_user ?? "—"}</span>;
+        // Doua identitati diferite: angajatul care a executat lucrarea si
+        // utilizatorul care a operat POS-ul. Le aratam pe amandoua cand difera.
+        return (
+          <div>
+            <div>{m.employee_name ?? m.created_by_user ?? "—"}</div>
+            <Show when={m.created_by_user && m.employee_name}>
+              <div style="color:var(--text-muted);font-size:11px">de {m.created_by_user}</div>
+            </Show>
+          </div>
+        );
       },
     },
     {
@@ -393,8 +402,13 @@ export default function StocActivitate() {
                         </div>
                       </div>
                       <div>
-                        <div style="color:var(--text-muted);font-size:11px">Angajat / User</div>
-                        <div style="padding:2px 0">{m.employee_name ?? m.created_by_user ?? "—"}</div>
+                        <div style="color:var(--text-muted);font-size:11px">Angajat / Operator</div>
+                        <div style="padding:2px 0">
+                          {m.employee_name ?? m.created_by_user ?? "—"}
+                          <Show when={m.created_by_user && m.employee_name}>
+                            <span style="color:var(--text-muted)"> · {m.created_by_user}</span>
+                          </Show>
+                        </div>
                       </div>
                       <div>
                         <div style="color:var(--text-muted);font-size:11px">Bon</div>

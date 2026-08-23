@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.profil_anvelopa import ProfilAnvelopa
 from app.schemas.profil_anvelopa import ProfilCreate, ProfilRead
 from app.schemas.common import Page
@@ -67,7 +67,9 @@ async def update_profil(
 async def delete_profil(
     profil_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     profil = await db.get(ProfilAnvelopa, profil_id)
     if profil is None or profil.account_id != account_id:

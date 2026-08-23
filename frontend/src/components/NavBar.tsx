@@ -1,13 +1,14 @@
 import { useNavigate } from "@solidjs/router";
-import { auth, logout, setDisplayName, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
+import { auth, trialRemainingMs, TRIAL_DAYS } from "../store/authStore";
+import { logoutEverywhere } from "../store/profile";
 import { isConnected } from "../store/connectivityStore";
 import { theme, toggleTheme } from "../store/themeStore";
-import { adminVisible, setAdminVisible } from "../store/adminStore";
+import { canAdvanced, canReports, canSettings, canUsers, roleLabel } from "../store/permissions";
 import { posHotelCtx, clearPosHotelCtx } from "../store/posHotelStore";
 import { generalSettings } from "../store/generalSettingsStore";
-import { Show, createSignal, onCleanup, createMemo, onMount } from "solid-js";
+import { Show, createSignal, onCleanup, createMemo } from "solid-js";
 import logo from "../assets/logo.png";
-import { apiFetch } from "../utils/api";
+import ChangeMyPasswordModal from "./ChangeMyPasswordModal";
 
 export default function NavBar() {
   const navigate = useNavigate();
@@ -31,41 +32,19 @@ export default function NavBar() {
 
   function handleLogout() {
     setOpen(false);
-    logout();
+    // Revocam si sesiunea pe server, ca token-ul sa nu mai fie folosibil si sa
+    // dispara din lista de dispozitive a userului.
+    void logoutEverywhere();
   }
+
+  // Schimbarea propriei parole trebuie sa fie la indemana oricui: formularul din
+  // Configurari e in spatele resursei `settings`, deci un `worker` nu ar avea
+  // de unde.
+  const [showPwdModal, setShowPwdModal] = createSignal(false);
 
   function handleNavigate(path: string) {
     setOpen(false);
     navigate(path);
-  }
-
-  const [showAdminModal, setShowAdminModal] = createSignal(false);
-  const [adminPassword, setAdminPassword] = createSignal("");
-  const [adminError, setAdminError] = createSignal("");
-  const [adminLoading, setAdminLoading] = createSignal(false);
-
-  async function handleAdminSubmit(e: Event) {
-    e.preventDefault();
-    setAdminError("");
-    setAdminLoading(true);
-    try {
-      const res = await apiFetch("/api/auth/login", {
-        method: "POST",
-        handleUnauthorized: false,
-        body: JSON.stringify({ username: auth.user, password: adminPassword() }),
-      });
-      if (res.ok) {
-        setAdminVisible(true);
-        setShowAdminModal(false);
-        setAdminPassword("");
-      } else {
-        setAdminError("Parolă incorectă.");
-      }
-    } catch {
-      setAdminError("Eroare de conexiune.");
-    } finally {
-      setAdminLoading(false);
-    }
   }
 
   // ───── Fullscreen ─────────────────────────────────────────────────────────
@@ -134,19 +113,6 @@ export default function NavBar() {
   document.addEventListener("pointerdown", onOutsidePointerDown);
   onCleanup(() => document.removeEventListener("pointerdown", onOutsidePointerDown));
 
-  // Cand display-name-ul nu e in localStorage (prima vizita dupa login),
-  // il aducem din /api/auth/me. Daca utilizatorul isi schimba numele din
-  // Configurari -> Contul Meu, store-ul e actualizat direct de acolo si
-  // navbar-ul reactioneaza automat.
-  onMount(() => {
-    if (!auth.token || auth.displayName) return;
-    void apiFetch("/api/auth/me").then(async (res) => {
-      if (!res.ok) return;
-      const d = (await res.json()) as { name?: string };
-      if (d?.name) setDisplayName(d.name);
-    }).catch(() => {});
-  });
-
   const displayLabel = createMemo(() => auth.displayName?.trim() || auth.user || "");
 
   return (
@@ -214,19 +180,23 @@ export default function NavBar() {
                     <span>Hotel Anvelope</span>
                   </button>
                 </Show>
-                <Show when={adminVisible()}>
+                <Show when={canAdvanced()}>
                   <button class="logo-nav-tile" onClick={() => handleNavigate("/stocuri")}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>
                     </svg>
                     <span>Stocuri</span>
                   </button>
+                </Show>
+                <Show when={canReports()}>
                   <button class="logo-nav-tile" onClick={() => handleNavigate("/rapoarte")}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
                     </svg>
                     <span>Rapoarte</span>
                   </button>
+                </Show>
+                <Show when={canAdvanced()}>
                   <button class="logo-nav-tile" onClick={() => handleNavigate("/efactura/primite")}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
@@ -239,6 +209,16 @@ export default function NavBar() {
                     </svg>
                     <span>Factura Rapida</span>
                   </button>
+                </Show>
+                <Show when={canUsers()}>
+                  <button class="logo-nav-tile" onClick={() => handleNavigate("/utilizatori")}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11h-6"/><path d="M19 8v6"/>
+                    </svg>
+                    <span>Utilizatori</span>
+                  </button>
+                </Show>
+                <Show when={canSettings()}>
                   <button class="logo-nav-tile" onClick={() => handleNavigate("/configurari")}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                     <span>Configurări</span>
@@ -250,29 +230,28 @@ export default function NavBar() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
                 <span style="margin-left:8px">{{ light: "Light", dark: "Dark", gray: "Gray", apple: "Navy" }[theme()]}</span>
               </button>
-              <div class="logo-dropdown-divider" />
-              <Show
-                when={!adminVisible()}
-                fallback={
-                  <button class="logo-dropdown-item" onClick={() => { setAdminVisible(false); }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;flex-shrink:0">
-                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                      <line x1="1" y1="1" x2="23" y2="23"/>
-                    </svg>
-                    Anulează vizibilitate
-                  </button>
-                }
-              >
-                <button class="logo-dropdown-item" onClick={() => { setAdminPassword(""); setAdminError(""); setShowAdminModal(true); }}>
+              <Show when={auth.userName || roleLabel()}>
+                <div class="logo-dropdown-divider" />
+                <div class="logo-dropdown-item" style="cursor:default;opacity:0.85;font-size:0.82rem">
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;flex-shrink:0">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
                   </svg>
-                  Vizibilitate Admin
-                </button>
+                  <span>{auth.userName || auth.user}{roleLabel() ? ` — ${roleLabel()}` : ""}</span>
+                </div>
               </Show>
               <Show when={auth.user}>
                 <div class="logo-dropdown-divider" />
+                {/* Doar pentru rolurile care NU ajung in Configurări (adica
+                    `worker`): acolo exista deja „Contul Meu → Parola mea", si
+                    nu vrem doua intrari pentru acelasi lucru. */}
+                <Show when={!canSettings()}>
+                  <button class="logo-dropdown-item" onClick={() => { setOpen(false); setShowPwdModal(true); }}>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;flex-shrink:0">
+                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    Schimbă parola
+                  </button>
+                </Show>
                 <button class="logo-dropdown-item logo-dropdown-danger" onClick={handleLogout}>
                   Logout
                 </button>
@@ -341,38 +320,7 @@ export default function NavBar() {
         </div>
       </nav>
 
-      <Show when={showAdminModal()}>
-        <div class="sl-modal-overlay" onClick={() => setShowAdminModal(false)}>
-          <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Vizibilitate Admin</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowAdminModal(false)}>✕</button>
-            </div>
-            <form onSubmit={handleAdminSubmit}>
-              <div class="sl-modal-body" style="padding:20px 24px">
-                <p style="margin:0 0 12px;color:var(--text-muted);font-size:14px">Introdu parola contului pentru a activa vizibilitatea admin.</p>
-                <input
-                  type="password"
-                  class="input"
-                  placeholder="Parolă"
-                  value={adminPassword()}
-                  onInput={(e) => setAdminPassword(e.currentTarget.value)}
-                  autofocus
-                />
-                <Show when={adminError()}>
-                  <p style="margin:8px 0 0;color:var(--danger);font-size:13px">{adminError()}</p>
-                </Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button type="button" class="btn btn-ghost btn-sm" onClick={() => setShowAdminModal(false)}>Anulează</button>
-                <button type="submit" class="btn btn-primary btn-sm" disabled={adminLoading()}>
-                  {adminLoading() ? "..." : "Activează"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </Show>
+      <ChangeMyPasswordModal open={showPwdModal()} onClose={() => setShowPwdModal(false)} />
     </>
   );
 }

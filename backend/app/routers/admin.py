@@ -3,17 +3,19 @@ import hmac
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
-import jwt
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
+from app.config import TOKEN_EXPIRE_DAYS
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.account import Account
 from app.models.report_receipts_daily import ReportReceiptsDaily
+from app.models.user import User, UserRole
+from app.permissions import allowed_resources
+from app.services.auth_service import create_session
 from app.rate_limit import limiter
 from app.services.demo_seeder import (
     DEMO_PASSWORD,
@@ -70,9 +72,22 @@ async def verify_admin(request: Request, body: VerifyRequest, db: AsyncSession =
     if account is None:
         raise HTTPException(status_code=500, detail="Contul administrator nu este configurat.")
 
-    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(account.id), "name": account.name, "exp": expire}
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    # Sesiune reala, nu JWT ad-hoc: dependintele de autorizare valideaza userul
+    # si sesiunea din DB, deci un token fara `uid`/`jti` ar fi respins cu 401.
+    admin_user = (await db.execute(
+        select(User).where(
+            User.account_id == account.id,
+            User.role == UserRole.ADMIN,
+            User.is_active == True,
+            User.is_deleted == False,
+        ).order_by((User.username != account.username), User.id)
+    )).scalars().first()
+    if admin_user is None:
+        raise HTTPException(status_code=500, detail="Contul administrator nu are utilizator admin.")
+
+    token, _session = await create_session(
+        db, admin_user, account, request=request, device_name="AdminV2",
+    )
     return VerifyResponse(access_token=token, expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600)
 
 
@@ -84,14 +99,11 @@ class ImpersonateResponse(BaseModel):
     name: str
     is_locked: bool = False
     locked_at: datetime | None = None
-    # Token cu scope "reports" emis automat, ca adminul de suport sa vada
-    # rapoartele fara sa stie parola de Rapoarte a utilizatorului.
-    reports_access_token: str | None = None
-    reports_expires_in: int | None = None
-
-
-# TTL token Rapoarte (identic cu cel din routers/auth.py).
-REPORTS_TOKEN_TTL_SECONDS = 3600
+    # Rolul si resursele sesiunii impersonate — clientul le pune direct in store,
+    # fara sa mai treaca prin /api/auth/me.
+    role: str = "admin"
+    resources: list[str] = []
+    code: str | None = None
 
 
 async def _require_super_admin(
@@ -194,6 +206,13 @@ async def impersonate_account(
     admin: Account = Depends(_require_super_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Sesiune de suport tehnic in contul unui client.
+
+    Emitem o SESIUNE REALA pentru un utilizator `admin` al contului tinta, nu un
+    JWT ad-hoc: altfel token-ul n-ar avea `uid`/`jti`, iar toate rutele care
+    verifica rolul din DB l-ar respinge cu 401. Ca efect secundar bun, sesiunea
+    apare in pagina Utilizatori si poate fi revocata de client.
+    """
     if account_id == admin.id:
         raise HTTPException(400, "Esti deja logat ca admin.")
 
@@ -203,30 +222,43 @@ async def impersonate_account(
     if target is None:
         raise HTTPException(404, "Contul nu exista.")
 
-    now = datetime.now(timezone.utc)
-    expire = now + timedelta(days=TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(target.id), "name": target.name, "exp": expire}
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    # Preferam userul admin cu acelasi username ca al contului (cel creat la
+    # provisionare); daca lipseste, orice admin activ al contului.
+    admin_user = (await db.execute(
+        select(User).where(
+            User.account_id == target.id,
+            User.role == UserRole.ADMIN,
+            User.is_active == True,
+            User.is_deleted == False,
+        ).order_by((User.username != target.username), User.id)
+    )).scalars().first()
+    if admin_user is None:
+        raise HTTPException(
+            409,
+            "Contul nu are un utilizator administrator activ. Creeaza unul din "
+            "modalul Utilizatori inainte de a oferi support.",
+        )
 
-    # Token Rapoarte emis automat (scope "reports"), ca suportul sa vada
-    # rapoartele in contul impersonat fara parola dedicata.
-    reports_expire = now + timedelta(seconds=REPORTS_TOKEN_TTL_SECONDS)
-    reports_payload = {"sub": str(target.id), "name": target.name, "scope": "reports", "exp": reports_expire}
-    reports_token = jwt.encode(reports_payload, SECRET_KEY, algorithm=ALGORITHM)
+    token, _session = await create_session(
+        db, admin_user, target,
+        request=request,
+        device_name="Support tehnic (Professor Prime)",
+    )
 
     log.warning(
-        "Admin impersonation: admin_id=%s target_id=%s username=%s",
-        admin.id, target.id, target.username,
+        "Admin impersonation: admin_id=%s target_id=%s username=%s user_id=%s",
+        admin.id, target.id, target.username, admin_user.id,
     )
     return ImpersonateResponse(
         access_token=token,
         expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600,
-        username=target.username,
+        username=admin_user.username,
         name=target.name,
         is_locked=target.is_locked,
         locked_at=target.locked_at,
-        reports_access_token=reports_token,
-        reports_expires_in=REPORTS_TOKEN_TTL_SECONDS,
+        role=admin_user.role.value,
+        resources=allowed_resources(admin_user.role),
+        code=target.code,
     )
 
 

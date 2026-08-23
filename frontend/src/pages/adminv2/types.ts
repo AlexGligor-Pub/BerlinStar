@@ -8,6 +8,8 @@ export interface Account {
   updated_at: string | null;
   is_deleted: boolean;
   username: string;
+  /** Codul firmei, introdus la login alaturi de utilizator si parola. */
+  code: string | null;
   email: string | null;
   image_url: string | null;
   is_locked: boolean;

@@ -1,7 +1,8 @@
 import { Router, Route, useNavigate, useLocation, Navigate } from "@solidjs/router";
 import { Show, Suspense, lazy, createEffect, onCleanup, onMount } from "solid-js";
 import { auth, trialExpired } from "./store/authStore";
-import { adminVisible } from "./store/adminStore";
+import { canAdvanced, canReports, canSettings, canUsers } from "./store/permissions";
+import { refreshProfile } from "./store/profile";
 import { deviceReady } from "./store/deviceStore";
 import NavBar from "./components/NavBar";
 import DeviceSetupModal from "./components/DeviceSetupModal";
@@ -27,6 +28,7 @@ const Concedii = lazy(() => import("./pages/Concedii"));
 const AngajatDetalii = lazy(() => import("./pages/angajati/AngajatDetalii"));
 const NoAccess = lazy(() => import("./pages/NoAccess"));
 const AdminV2 = lazy(() => import("./pages/AdminV2"));
+const Utilizatori = lazy(() => import("./pages/Utilizatori"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
 const EFacturaLayout = lazy(() => import("./pages/efactura/EFacturaLayout"));
 const EFacturaReceived = lazy(() => import("./pages/efactura/EFacturaReceived"));
@@ -50,6 +52,11 @@ function Protected(props: { component: () => any }) {
       navigate("/no-access", { replace: true });
     }
   });
+
+  // Rolul si resursele se re-citesc de la server la fiecare intrare in
+  // aplicatie: daca adminul a schimbat rolul cuiva, UI-ul se aliniaza la
+  // primul refresh, fara re-login.
+  onMount(() => { void refreshProfile(); });
 
   onMount(() => {
     const handler = () => {
@@ -89,22 +96,22 @@ export default function App() {
         <Route path="/" component={() => <Protected component={POS} />} />
         <Route path="/receptie" component={() => <Protected component={Reception} />} />
         <Route path="/configurari" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canSettings()} fallback={<Navigate href="/" />}>
             <Protected component={Configurari} />
           </Show>
         )} />
         <Route path="/rapoarte" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canReports()} fallback={<Navigate href="/" />}>
             <Protected component={Rapoarte} />
           </Show>
         )} />
         <Route path="/stocuri" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canAdvanced()} fallback={<Navigate href="/" />}>
             <Protected component={Stocuri} />
           </Show>
         )} />
         <Route path="/stocuri/:itemId/activitate" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canAdvanced()} fallback={<Navigate href="/" />}>
             <Protected component={StocActivitate} />
           </Show>
         )} />
@@ -114,19 +121,24 @@ export default function App() {
         <Route path="/programari" component={() => <Protected component={Programari} />} />
         <Route path="/concedii" component={() => <Protected component={Concedii} />} />
         <Route path="/angajati/:id" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canAdvanced()} fallback={<Navigate href="/" />}>
             <Protected component={AngajatDetalii} />
+          </Show>
+        )} />
+        <Route path="/utilizatori" component={() => (
+          <Show when={canUsers()} fallback={<Navigate href="/" />}>
+            <Protected component={Utilizatori} />
           </Show>
         )} />
         <Route path="/adminv2" component={() => <Protected component={AdminV2} />} />
         <Route path="/factura-rapida" component={() => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canAdvanced()} fallback={<Navigate href="/" />}>
             <Protected component={FacturaRapida} />
           </Show>
         )} />
         <Route path="/efactura-primite" component={() => <Navigate href="/efactura/primite" />} />
         <Route path="/efactura" component={(p: any) => (
-          <Show when={adminVisible()} fallback={<Navigate href="/" />}>
+          <Show when={canAdvanced()} fallback={<Navigate href="/" />}>
             <Protected component={() => <EFacturaLayout>{p.children}</EFacturaLayout>} />
           </Show>
         )}>

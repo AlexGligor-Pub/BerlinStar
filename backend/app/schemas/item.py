@@ -5,10 +5,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.item import ItemType
 
 
+# Preturile NEGATIVE sunt permise intentionat: se folosesc ca linii de reducere
+# sau restituire pe bon (ex. "Reducere fidelitate" = -100 lei). Nu punem ge=0.
 class ItemCreate(BaseModel):
     name: str = Field(..., max_length=200)
     description: str | None = None
-    price: Decimal = Field(..., ge=0, decimal_places=2)
+    price: Decimal = Field(..., decimal_places=2)
     currency: str = Field(default="RON", max_length=3)
     unit: str = Field(..., max_length=50)
     image_path: str | None = Field(None, max_length=500)
@@ -19,7 +21,7 @@ class ItemCreate(BaseModel):
 class ItemUpdate(BaseModel):
     name: str | None = Field(None, max_length=200)
     description: str | None = None
-    price: Decimal | None = Field(None, ge=0, decimal_places=2)
+    price: Decimal | None = Field(None, decimal_places=2)
     currency: str | None = Field(None, max_length=3)
     unit: str | None = Field(None, max_length=50)
     image_path: str | None = Field(None, max_length=500)

@@ -22,7 +22,7 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant, users, admin_users, receipt_payments
 from app.services.reports import start_scheduler, stop_scheduler
 from app.efactura import router_admin as efactura_admin
 from app.efactura import router as efactura_user
@@ -127,10 +127,13 @@ async def _operational_handler(_req: Request, exc: OperationalError):
 
 app.include_router(auth.router,       prefix="/api/auth",       tags=["auth"])
 app.include_router(accounts.router,   prefix="/api/accounts",   tags=["accounts"])
+app.include_router(users.router,      prefix="/api/users",      tags=["users"])
+app.include_router(admin_users.router, prefix="/api/admin/accounts", tags=["admin-users"])
 app.include_router(departments.router, prefix="/api/departments", tags=["departments"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 app.include_router(items.router,      prefix="/api/items",      tags=["items"])
 app.include_router(receipts.router,   prefix="/api/receipts",   tags=["receipts"])
+app.include_router(receipt_payments.router, prefix="/api/receipts", tags=["receipt-payments"])
 app.include_router(employees.router,  prefix="/api/employees",  tags=["employees"])
 app.include_router(devices.router,    prefix="/api/devices",    tags=["devices"])
 app.include_router(locations.router,  prefix="/api/locations",  tags=["locations"])

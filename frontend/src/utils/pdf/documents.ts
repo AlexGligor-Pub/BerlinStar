@@ -33,6 +33,8 @@ export interface ReceiptItemForTable {
   employeeName?: string | null;
   // TVA per linie (Factura Rapida). Cand e setat, suprascrie tvaPct global din PDF.
   vatPercent?: number | null;
+  /** Pretul de lista, cand linia are o reducere aplicata (vezi DiscountModal). */
+  originalPrice?: number | null;
 }
 
 export interface ReceiptTotals {
@@ -80,10 +82,15 @@ export function drawItemsTable(
       const teh = item.employeeName ? t(item.employeeName).slice(0, 15) : "";
       row.push(teh);
     }
+    // Cand linia are reducere, aratam si pretul de lista sub cel practicat:
+    // altfel clientul nu vede de ce plateste 336 in loc de 420.
+    const priceCell = item.originalPrice != null && item.originalPrice > item.price
+      ? `${item.price.toFixed(2)}\n(${item.originalPrice.toFixed(2)})`
+      : item.price.toFixed(2);
     row.push(
       String(item.qty),
       t(item.unit),
-      item.price.toFixed(2),
+      priceCell,
       net.toFixed(2),
       tva.toFixed(2),
       total.toFixed(2),
@@ -192,6 +199,15 @@ export function drawTotals(
     tvaAmt = totalFinal - net;
   }
 
+  // Reducerea e deja scazuta din preturile liniilor; o aratam explicit, altfel
+  // pe document nu s-ar vedea niciunde ca s-a acordat una.
+  const discount = (items ?? []).reduce(
+    (sum, it) => sum + (it.originalPrice != null && it.originalPrice > it.price
+      ? (it.originalPrice - it.price) * it.qty
+      : 0),
+    0,
+  );
+
   if (!opts?.skipTopLine) {
     hline(doc, y, COLORS.lightGray, 0.2);
     y += 4;
@@ -200,6 +216,17 @@ export function drawTotals(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(...COLORS.black);
+
+  if (discount > 0.004) {
+    const before = totalFinal + discount;
+    const pctOff = before > 0 ? (discount / before) * 100 : 0;
+    doc.text("Valoare inainte de reducere:", labelX, y);
+    doc.text(lei(before), rightX, y, { align: "right" });
+    y += 4.5;
+    doc.text(`Reducere (${pctOff.toFixed(pctOff % 1 === 0 ? 0 : 2)}%):`, labelX, y);
+    doc.text(`-${lei(discount)}`, rightX, y, { align: "right" });
+    y += 4.5;
+  }
 
   // Pentru linii cu cote diferite afisam un total agregat; defalcatul pe rate ramane in tabel.
   const distinctVats = allLinesHaveVat
@@ -257,6 +284,110 @@ export function drawTotals(
 
   return y + 1;
 }
+
+/** Situatie plati: istoricul miscarilor de bani (avans / plata / restituire).
+ *
+ *  Se deseneaza doar cand exista miscari. Scopul e ca devizul sa arate tot
+ *  traseul banilor (ex. avans 100 incasat, apoi restituit, apoi plata 500),
+ *  fara sa atinga valoarea prestatiei — un avans nu e reducere.
+ */
+export interface PaymentRowForPdf {
+  kind: "avans" | "plata" | "restituire";
+  amount: string | number;
+  method: string;
+  paid_at: string;
+  note?: string | null;
+}
+
+export function drawPaymentsHistory(
+  doc: jsPDF,
+  payments: PaymentRowForPdf[],
+  totalBon: number,
+  y: number,
+): number {
+  if (!payments || payments.length === 0) return y;
+
+  const KIND_LABEL: Record<string, string> = {
+    avans: "Avans incasat",
+    plata: "Plata",
+    restituire: "Restituire client",
+  };
+
+  // Salt de pagina daca nu mai incape (titlu + rânduri + sumar).
+  const needed = 12 + payments.length * 4.5 + 10;
+  // Marginea de jos nu e exportata in constants; folosim aceeasi valoare ca sus.
+  if (y + needed > PAGE_H - PAGE.marginTop) {
+    doc.addPage();
+    y = PAGE.marginTop;
+  }
+
+  y += 3;
+  doc.setDrawColor(...COLORS.lightGray);
+  doc.setLineWidth(0.2);
+  doc.line(ML, y, PAGE_W - MR, y);
+  y += 4.5;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(...COLORS.black);
+  doc.text("SITUATIE PLATI", ML, y);
+  y += 4.5;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+
+  const amountX = ML + 105;
+  let incasat = 0;
+  let restituit = 0;
+
+  for (const p of payments) {
+    const val = parseFloat(String(p.amount)) || 0;
+    const isOut = p.kind === "restituire";
+    if (isOut) restituit += val;
+    else incasat += val;
+
+    const d = new Date(p.paid_at);
+    // Data SI ora: pe un deviz cu mai multe incasari in aceeasi zi, ziua
+    // singura nu spune in ce ordine au intrat banii.
+    const dateStr = isNaN(d.getTime())
+      ? ""
+      : `${d.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" })}`;
+
+    doc.setTextColor(...COLORS.gray);
+    doc.text(dateStr, ML, y);
+    doc.setTextColor(...COLORS.black);
+    const label = KIND_LABEL[p.kind] ?? p.kind;
+    const suffix = p.method ? ` (${p.method})` : "";
+    doc.text(`${label}${suffix}`, ML + 34, y);
+    if (p.note) {
+      doc.setTextColor(...COLORS.gray);
+      doc.text(String(p.note).slice(0, 36), ML + 78, y);
+    }
+    doc.setTextColor(...COLORS.black);
+    doc.text(`${isOut ? "-" : "+"}${lei(val)}`, amountX + 40, y, { align: "right" });
+    y += 4.2;
+  }
+
+  const net = incasat - restituit;
+  const rest = totalBon - net;
+
+  y += 1;
+  doc.setDrawColor(...COLORS.lightGray);
+  doc.line(ML + 24, y, amountX + 40, y);
+  y += 4;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.5);
+  doc.text("Total incasat:", ML + 24, y);
+  doc.text(lei(net), amountX + 40, y, { align: "right" });
+  y += 4.2;
+  doc.text("Rest de plata:", ML + 24, y);
+  doc.text(lei(rest), amountX + 40, y, { align: "right" });
+  y += 2;
+
+  return y + 1;
+}
+
 
 /** Disclaimer — 6pt, gri deschis, salt de pagina daca nu mai e loc.
  *  `compact: true` reduce padding-urile interne pentru un layout mai stramt. */

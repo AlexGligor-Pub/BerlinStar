@@ -1,7 +1,7 @@
 import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { apiFetch } from "../utils/api";
-import { adminVisible } from "../store/adminStore";
+import { canManage } from "../store/permissions";
 import { createPagination } from "../hooks/createPagination";
 import { notify } from "../store/notificationsStore";
 import Pagination from "../components/data/Pagination";
@@ -489,7 +489,7 @@ export default function Clienti() {
                 <ClientForm f={form()} setF={setForm} />
                 <div class="cfg-location-actions" style="margin-top:8px">
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
-                  <Show when={adminVisible()}>
+                  <Show when={canManage()}>
                     <button class="btn btn-sm btn-danger" onClick={() => setDeleteTarget(c)}>Șterge</button>
                   </Show>
                   <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveEdit}>
@@ -557,7 +557,7 @@ export default function Clienti() {
                             <VehicolForm f={vForm()} setF={setVForm} />
                             <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
                               <button class="btn btn-sm btn-ghost" onClick={() => { setVEditId(null); setVError(null); }}>Anulează</button>
-                              <Show when={adminVisible()}>
+                              <Show when={canManage()}>
                                 <button class="btn btn-sm btn-danger" onClick={() => setVDeleteTarget({ v, clientId: c.id })}>Șterge</button>
                               </Show>
                               <button class="btn btn-sm btn-primary" disabled={vSaving()} onClick={() => saveVEdit(c.id, v.id)}>

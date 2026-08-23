@@ -23,8 +23,6 @@ import {
   type YoYBucket, type MultiLineSeries,
 } from "./rapoarte/charts";
 import StocuriSection from "./rapoarte/StocuriSection";
-import ReportsGate from "./rapoarte/ReportsGate";
-import { reportsFetch, setReportsToken } from "./rapoarte/reports-auth";
 import {
   createSolidTable as tanstackCreate,
   flexRender as tanstackFlexRender,
@@ -37,17 +35,12 @@ import {
 import { exportCSV as sharedExportCSV, exportPDF as sharedExportPDF } from "./configurari/shared";
 import { ExportMenu } from "./configurari/components";
 
-/** Wrapper peste apiFetch care injecteaza tokenul de Rapoarte si, la 401,
- * curata tokenul si emite un eveniment ca gate-ul sa reia ecranul de parola.
+/** Accesul la Rapoarte e decis de ROLUL utilizatorului (doar admin), verificat
+ * pe server. Nu mai exista token separat cu parola; pastram wrapperul ca punct
+ * unic in care putem trata raspunsurile de autorizare ale rapoartelor.
  */
 function reportsApiFetch(url: string, options?: RequestInit): Promise<Response> {
-  return reportsFetch(url, options).then((res) => {
-    if (res.status === 401) {
-      setReportsToken(null);
-      try { window.dispatchEvent(new CustomEvent("bs:reports-locked")); } catch {}
-    }
-    return res;
-  });
+  return apiFetch(url, options);
 }
 
 interface EmployeeReport {
@@ -3811,7 +3804,6 @@ export default function Rapoarte() {
   });
 
   return (
-    <ReportsGate>
       <div class="cfg-layout">
         <aside class="cfg-sidebar">
           <div class="cfg-sidebar-title">Rapoarte</div>
@@ -3847,6 +3839,5 @@ export default function Rapoarte() {
           </Switch>
         </main>
       </div>
-    </ReportsGate>
   );
 }

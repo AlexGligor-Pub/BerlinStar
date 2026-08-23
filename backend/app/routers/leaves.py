@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id, get_reports_account_id
+from app.dependencies import get_account_id, get_reports_account_id, get_settings_account_id
 from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
@@ -507,7 +507,9 @@ async def approve_leave(
     leave_id: int,
     body: LeaveApprove,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Aprobarea, respingerea si resetarea sunt decizii de management: butonul
+    # apare doar pentru admin/manager in UI, iar aici o impunem si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ) -> LeaveRead:
     # Acordul digital al aprobatorului este obligatoriu — altfel "acord aprobator"
     # ar fi inregistrat ca bifat fara consimtamant real (record legal eronat).
@@ -535,7 +537,9 @@ async def approve_leave(
 async def reset_leave(
     leave_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Aprobarea, respingerea si resetarea sunt decizii de management: butonul
+    # apare doar pentru admin/manager in UI, iar aici o impunem si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ) -> LeaveRead:
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:
@@ -574,7 +578,9 @@ async def get_leave_snapshot(
 async def reject_leave(
     leave_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Aprobarea, respingerea si resetarea sunt decizii de management: butonul
+    # apare doar pentru admin/manager in UI, iar aici o impunem si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ) -> LeaveRead:
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:

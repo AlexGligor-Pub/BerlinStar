@@ -6,7 +6,7 @@ from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id, get_reports_account_id
+from app.dependencies import get_account_id, get_actor_username, get_advanced_account_id
 from app.models.category import Category
 from app.models.department import Department
 from app.models.employee import Employee
@@ -115,6 +115,8 @@ async def intrare_stoc(
     body: IntrareStocCreate,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face miscarea — se salveaza in jurnalul de stoc.
+    actor: str = Depends(get_actor_username),
 ):
     item = await db.get(Item, body.item_id)
     if item is None or item.account_id != account_id or item.is_deleted:
@@ -128,6 +130,7 @@ async def intrare_stoc(
     await apply_purchase(
         db, account_id=account_id, item=item, location_id=body.location_id,
         qty=body.qty, unit_cost=body.unit_cost, note=body.note,
+        created_by_user=actor,
     )
     await db.commit()
 
@@ -139,6 +142,8 @@ async def ajustare_stoc(
     body: AjustareStocCreate,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face miscarea — se salveaza in jurnalul de stoc.
+    actor: str = Depends(get_actor_username),
 ):
     item = await db.get(Item, body.item_id)
     if item is None or item.account_id != account_id or item.is_deleted:
@@ -152,6 +157,7 @@ async def ajustare_stoc(
     await apply_adjustment(
         db, account_id=account_id, item=item, location_id=body.location_id,
         new_qty=body.new_qty, note=body.note,
+        created_by_user=actor,
     )
     await db.commit()
 
@@ -267,7 +273,7 @@ async def report_top_produse(
     location_ids: list[int] = Query(default=[]),
     limit: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_reports_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     stmt = (
         select(
@@ -312,7 +318,7 @@ async def report_per_angajat(
     date_to: datetime | None = None,
     location_ids: list[int] = Query(default=[]),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_reports_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     stmt = (
         select(

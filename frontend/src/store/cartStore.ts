@@ -15,6 +15,10 @@ export interface CartItem {
   itemId: number | null;        // FK către items.id în backend (null pentru itemi manuali)
   itemType: string | null;      // "Produs" | "Service" — snapshot din POS pentru rapoarte
   vatPercent?: number | null;   // TVA per linie (folosit de Factura Rapida pentru ANAF)
+  /** Pretul dinainte de reducere. null/undefined = linia nu are reducere.
+   *  Reducerea se scade din `price` (vezi DiscountModal), ca atribuirea pe
+   *  angajat/produs si TVA-ul pe linie sa ramana corecte. */
+  originalPrice?: number | null;
 }
 
 interface CartState {

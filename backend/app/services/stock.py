@@ -94,7 +94,8 @@ async def _collect_produs_lines(
 
 
 async def apply_sale_for_receipt(
-    db: AsyncSession, account_id: int, receipt: Receipt
+    db: AsyncSession, account_id: int, receipt: Receipt,
+    created_by_user: str | None = None,
 ) -> None:
     """Tranzitie NEPLATIT → platit. Scade stocul si logheaza SALE pentru fiecare linie PRODUS."""
     if receipt.location_id is None:
@@ -126,11 +127,13 @@ async def apply_sale_for_receipt(
             unit_cost=cost_map.get(ln.item_id),
             unit_price=ln.unit_price,
             note=None,
+            created_by_user=created_by_user,
         )
 
 
 async def reverse_sale_for_receipt(
-    db: AsyncSession, account_id: int, receipt: Receipt
+    db: AsyncSession, account_id: int, receipt: Receipt,
+    created_by_user: str | None = None,
 ) -> None:
     """Tranzitie platit → NEPLATIT sau stergere bon platit. Readuce stocul si logheaza SALE_REVERSE."""
     if receipt.location_id is None:
@@ -162,6 +165,7 @@ async def reverse_sale_for_receipt(
             unit_cost=cost_map.get(ln.item_id),
             unit_price=ln.unit_price,
             note=None,
+            created_by_user=created_by_user,
         )
 
 

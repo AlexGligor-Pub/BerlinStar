@@ -1,7 +1,7 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
 import { useSearchParams, useNavigate } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
-import { adminVisible } from "../store/adminStore";
+import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
 import { posHotelCtx, clearPosHotelCtx, setPendingPosReturn } from "../store/posHotelStore";
@@ -1091,7 +1091,7 @@ export default function HotelAnvelope() {
   createEffect(on(view, () => { fetchCazari(); }, { defer: true }));
 
   createEffect(() => {
-    if (adminVisible()) {
+    if (canManage()) {
       loadMarci();
       loadDimensiuni();
       loadProfil();
@@ -2141,7 +2141,7 @@ export default function HotelAnvelope() {
               </div>
 
               <div class="sl-modal-footer" style="justify-content:space-between">
-                <Show when={adminVisible()}>
+                <Show when={canManage()}>
                   <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
                 </Show>
                 <div style="display:flex;gap:8px">
@@ -2184,7 +2184,7 @@ export default function HotelAnvelope() {
                 </Show>
               </div>
               <div class="sl-modal-footer" style="justify-content:space-between">
-                <Show when={adminVisible()}>
+                <Show when={canManage()}>
                   <button
                     class="btn btn-danger btn-sm"
                     onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}

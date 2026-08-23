@@ -16,7 +16,9 @@ export {
 } from "./primitives";
 export {
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures,
+  drawPaymentsHistory,
   SIGNATURES_PIN_Y,
   type TextTransform,
   type ReceiptItemForTable, type ReceiptTotals, type DisclaimerInfo,
+  type PaymentRowForPdf,
 } from "./documents";

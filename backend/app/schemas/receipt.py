@@ -22,6 +22,8 @@ class CazareBasicRead(BaseModel):
 class ReceiptItemCreate(BaseModel):
     name: str = Field(..., max_length=200)
     price: Decimal = Field(..., decimal_places=2)
+    # Pretul de lista, cand linia are o reducere aplicata (vezi models/receipt.py).
+    original_price: Decimal | None = Field(None, decimal_places=2)
     qty: int = Field(..., ge=1)
     unit: str = Field(..., max_length=50)
     employee_id: int | None = None
@@ -71,6 +73,7 @@ class ReceiptItemRead(BaseModel):
     item_id: int | None = None
     item_type: ItemType | None = None
     vat_percent: Decimal | None = None
+    original_price: Decimal | None = None
 
     @classmethod
     def from_orm_item(cls, item: object) -> "ReceiptItemRead":
@@ -91,6 +94,7 @@ class ReceiptItemRead(BaseModel):
             "item_id": getattr(item, "item_id", None),
             "item_type": getattr(item, "item_type", None),
             "vat_percent": getattr(item, "vat_percent", None),
+            "original_price": getattr(item, "original_price", None),
         })
 
 

@@ -69,6 +69,8 @@ export interface RawReceiptItem {
   item_id?: number | null;
   item_type?: string | null;
   vat_percent?: string | number | null;
+  /** Pretul de lista, cand linia are o reducere aplicata. */
+  original_price?: string | number | null;
 }
 
 interface RawReceiptVehicol {
@@ -155,6 +157,7 @@ function mapFromApi(r: RawReceipt): Receipt {
       itemId: i.item_id ?? null,
       itemType: i.item_type ?? null,
       vatPercent: i.vat_percent != null ? (typeof i.vat_percent === "number" ? i.vat_percent : parseFloat(i.vat_percent)) : null,
+      originalPrice: i.original_price != null ? (typeof i.original_price === "number" ? i.original_price : parseFloat(i.original_price)) : null,
     })),
     total: typeof r.total === "number" ? r.total : parseFloat(r.total),
     devizSerie: r.deviz_serie ?? "",
@@ -313,6 +316,7 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
       item_id: i.itemId ?? null,
       item_type: i.itemType ?? null,
       vat_percent: i.vatPercent != null ? String(i.vatPercent) : null,
+      original_price: i.originalPrice != null ? i.originalPrice.toFixed(2) : null,
     })),
     total: receipt.total.toFixed(2),
   };
@@ -353,6 +357,7 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
       item_id: i.itemId ?? null,
       item_type: i.itemType ?? null,
       vat_percent: i.vatPercent != null ? String(i.vatPercent) : null,
+      original_price: i.originalPrice != null ? i.originalPrice.toFixed(2) : null,
     })),
     total: receipt.total.toFixed(2),
   };
@@ -383,13 +388,12 @@ export async function updateMetodaPlata(id: string, metodaPlata: string | null, 
     }),
   });
   if (!res.ok) return;
-  const updated = receipts().map((r) =>
-    r.id === id ? {
-      ...r,
-      metodaPlata: pay_method !== "Neplatit" ? pay_method : undefined,
-      partialPay: pay_method === "Platit Partial" ? (partialPay ?? 100) : undefined,
-    } : r
-  );
+  // Folosim raspunsul serverului, nu o presupunere locala: la schimbarea
+  // statusului backendul poate ajusta `partial_pay` si inregistra automat o
+  // miscare in registrul de plati, iar `updated_at` se schimba — de ele depinde
+  // reimprospatarea sectiunii "Situatie plati".
+  const fresh = mapFromApi(await res.json());
+  const updated = receipts().map((r) => (r.id === id ? fresh : r));
   setReceipts(updated);
   localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
 }

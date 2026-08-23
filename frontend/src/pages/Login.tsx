@@ -1,6 +1,7 @@
 import { createSignal, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { loginAndRedirect } from "../store/authStore";
+import { lastCompanyCode, loginAndRedirect } from "../store/authStore";
+import { device, pendingName } from "../store/deviceStore";
 import { apiFetch, readApiError } from "../utils/api";
 import ThemeToggle from "../components/ThemeToggle";
 import Modal from "../components/ui/Modal";
@@ -18,7 +19,9 @@ export default function Login() {
     return "/";
   }
 
-  // login
+  // login — codul firmei + utilizator + parola. Username-ul e unic doar in
+  // interiorul unui cont, deci codul firmei spune serverului in ce cont sa caute.
+  const [code, setCode] = createSignal(lastCompanyCode());
   const [username, setUsername] = createSignal("");
   const [password, setPassword] = createSignal("");
   const [error, setError] = createSignal("");
@@ -61,24 +64,42 @@ export default function Login() {
     setLoading(true);
 
     try {
+      const d = device();
       const res = await apiFetch("/api/auth/login", {
         method: "POST",
         handleUnauthorized: false,
-        body: JSON.stringify({ username: username().trim(), password: password() }),
+        body: JSON.stringify({
+          code: code().trim().toLowerCase() || null,
+          username: username().trim(),
+          password: password(),
+          // Dispozitivul local, ca adminul sa vada in pagina Utilizatori
+          // de pe ce statii e logat fiecare om.
+          device_id: d?.id ?? null,
+          device_name: d?.name ?? pendingName,
+        }),
       });
 
       if (res.ok) {
-        const data = await res.json() as { access_token: string; is_locked?: boolean; locked_at?: string | null };
+        const data = await res.json() as {
+          access_token: string;
+          is_locked?: boolean;
+          locked_at?: string | null;
+          role?: string;
+          resources?: string[];
+        };
         loginAndRedirect(
           username().trim(),
           data.access_token,
           data.is_locked ?? false,
           data.locked_at ?? null,
           resolveLoginTarget(),
+          { role: data.role ?? null, resources: data.resources ?? [], code: code().trim().toLowerCase() || null },
         );
         return;
-      } else if (res.status === 401 || res.status === 403) {
-        setError("Utilizator sau parola incorecta.");
+      } else if (res.status === 401) {
+        setError("Cod firma, utilizator sau parola incorecte.");
+      } else if (res.status === 403) {
+        setError(await readApiError(res, "Utilizatorul este dezactivat. Contacteaza administratorul."));
       } else if (res.status === 429) {
         setError("Prea multe incercari. Reincearca in cateva minute.");
       } else if (res.status >= 500) {
@@ -172,6 +193,22 @@ export default function Login() {
         <Show when={mode() === "login"}>
           <form onSubmit={handleSubmit} autocomplete="off">
             <div class="form-group">
+              <label class="form-label" for="code">Cod firmă</label>
+              <input
+                id="code"
+                class="input"
+                type="text"
+                autocapitalize="none"
+                spellcheck={false}
+                placeholder="ex: berlinstar"
+                value={code()}
+                onInput={(e) => setCode(e.currentTarget.value)}
+              />
+              <div style="margin-top:4px;font-size:0.78rem;color:var(--text-muted)">
+                Îl găsești în Configurări → Contul Meu. Lasă gol dacă te autentifici cu contul principal.
+              </div>
+            </div>
+            <div class="form-group">
               <label class="form-label" for="username">Utilizator</label>
               <input
                 id="username"
@@ -181,7 +218,7 @@ export default function Login() {
                 value={username()}
                 onInput={(e) => setUsername(e.currentTarget.value)}
                 required
-                autofocus
+                autofocus={!!code()}
               />
             </div>
             <div class="form-group">

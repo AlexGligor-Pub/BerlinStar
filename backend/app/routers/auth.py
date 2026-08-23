@@ -1,26 +1,30 @@
 from __future__ import annotations
 import logging
-from datetime import datetime, timedelta, timezone
-import jwt
+from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
+from app.auth_context import AuthContext
+from app.config import TOKEN_EXPIRE_DAYS
 from app.database import get_db
-from app.dependencies import get_current_account
+from app.dependencies import get_admin_account, get_auth_context
 from app.models.account import Account
 from app.models.company import Company
+from app.permissions import Resource, allowed_resources
 from app.rate_limit import limiter
+from app.services.account_provisioning import provision_account_admin
 from app.services.account_seeder import seed_new_account
+from app.services.auth_service import (
+    authenticate_user,
+    create_session,
+    revoke_all_sessions,
+    revoke_session,
+)
 from app.utils.security import hash_password, is_legacy_hash, verify_password
 from app.utils.storage import delete_image_by_url, upload_image, validate_image
-
-# Token de acces la pagina Rapoarte: scurt (1h), scope distinct fata de
-# token-ul normal de login, ca sa nu ne incurcam intre ele in dependinte.
-REPORTS_TOKEN_TTL_SECONDS = 3600
 
 log = logging.getLogger("berlinstar")
 
@@ -28,8 +32,15 @@ router = APIRouter()
 
 
 class LoginRequest(BaseModel):
+    # Codul firmei — necesar fiindca username-ul e unic doar in interiorul
+    # contului. Opuional pentru tranzitie: fara el cadem pe username-ul contului.
+    code: str | None = Field(None, max_length=50)
     username: str
     password: str
+    # Dispozitivul POS inregistrat local (bs_device), ca sa putem arata in pagina
+    # Utilizatori pe ce dispozitive e logat fiecare user.
+    device_id: int | None = None
+    device_name: str | None = Field(None, max_length=200)
 
 
 class TokenResponse(BaseModel):
@@ -38,52 +49,58 @@ class TokenResponse(BaseModel):
     expires_in: int  # secunde
     is_locked: bool = False
     locked_at: datetime | None = None
+    # Rolul si resursele permise — clientul le foloseste ca sa ascunda UI.
+    # Enforcement-ul real rămâne pe server (vezi app/permissions.py).
+    role: str = "admin"
+    resources: list[str] = []
+
+
+async def _apply_subscription_lock(account: Account, db: AsyncSession) -> None:
+    """Auto-lock daca abonamentul a expirat (in caz ca jobul de scheduler nu a
+    rulat inca). Contul de platforma (username=='admin') este exceptat.
+    """
+    if account.username == "admin":
+        return
+    from datetime import date as _date
+    from app.models.subscription import AccountSubscription
+    sub = (await db.execute(
+        select(AccountSubscription).where(AccountSubscription.account_id == account.id)
+    )).scalar_one_or_none()
+    if sub is not None and sub.next_payment_date < _date.today() and not account.is_locked:
+        account.is_locked = True
+        account.locked_at = datetime.now(timezone.utc)
+        await db.commit()
 
 
 async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple[str, Account]:
-    account = (await db.execute(
-        select(Account).where(
-            Account.username == username,
-            Account.is_deleted == False,
-        )
-    )).scalar_one_or_none()
-
-    if account is None or not verify_password(password, account.password):
-        raise HTTPException(401, "Username sau parola incorecta.")
-
-    if is_legacy_hash(account.password):
-        account.password = hash_password(password)
-        await db.commit()
-
-    # Auto-lock daca abonamentul a expirat (in caz ca jobul de scheduler nu
-    # a rulat inca). Contul admin (username=='admin') este exceptat.
-    if account.username != "admin":
-        from datetime import date as _date
-        from app.models.subscription import AccountSubscription
-        sub = (await db.execute(
-            select(AccountSubscription).where(AccountSubscription.account_id == account.id)
-        )).scalar_one_or_none()
-        if sub is not None and sub.next_payment_date < _date.today() and not account.is_locked:
-            account.is_locked = True
-            account.locked_at = datetime.now(timezone.utc)
-            await db.commit()
-
-    expire = datetime.now(timezone.utc) + timedelta(days=TOKEN_EXPIRE_DAYS)
-    payload = {"sub": str(account.id), "name": account.name, "exp": expire}
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    """Varianta fara context de request — folosita de fluxul OAuth2 (Swagger)."""
+    user, account = await authenticate_user(db, None, username, password)
+    await _apply_subscription_lock(account, db)
+    token, _ = await create_session(db, user, account)
     return token, account
 
 
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    token, account = await _authenticate(body.username, body.password, db)
+    user, account = await authenticate_user(db, body.code, body.username, body.password)
+    await _apply_subscription_lock(account, db)
+    token, _session = await create_session(
+        db, user, account,
+        request=request,
+        device_id=body.device_id,
+        device_name=body.device_name,
+    )
     return TokenResponse(
         access_token=token,
         expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600,
         is_locked=account.is_locked,
         locked_at=account.locked_at,
+        role=user.role.value,
+        resources=allowed_resources(user.role),
     )
+
+
 
 
 class RegisterRequest(BaseModel):
@@ -151,16 +168,21 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         return GENERIC_OK
 
     now = datetime.now(timezone.utc)
+    password_hash = hash_password(body.password)
     account = Account(
         name=body.name,
         username=body.username,
-        password=hash_password(body.password),
+        password=password_hash,
         email=body.email,
         is_locked=True,
         locked_at=now,
     )
     db.add(account)
     await db.flush()
+
+    # Codul firmei + utilizatorul `admin`: fara ele contul nou nu s-ar putea
+    # autentifica, fiindca login-ul cauta in `users`, nu in `accounts`.
+    await provision_account_admin(db, account, password_hash, commit=False)
 
     company = Company(
         account_id=account.id,
@@ -194,13 +216,47 @@ class MessageResponse(BaseModel):
 
 
 class MeResponse(BaseModel):
-    """Detaliile contului curent (fara campuri sensibile: parolele, flag-uri admin)."""
+    """Detaliile contului + userul curent (fara campuri sensibile: parole)."""
     id: int
     name: str
     username: str
     description: str | None
     email: str | None
     image_url: str | None
+    # Codul firmei — afisat userului ca sa-l poata da colegilor pentru login.
+    code: str | None = None
+    # Identitatea si drepturile userului logat.
+    user_id: int | None = None
+    user_name: str | None = None
+    user_username: str | None = None
+    role: str | None = None
+    resources: list[str] = []
+
+
+def _me_response(ctx: AuthContext) -> MeResponse:
+    account, user = ctx.account, ctx.user
+    return MeResponse(
+        id=account.id,
+        name=account.name,
+        username=account.username,
+        description=account.description,
+        email=account.email,
+        image_url=account.image_url,
+        code=account.code,
+        user_id=user.id,
+        user_name=user.name,
+        user_username=user.username,
+        role=user.role.value,
+        resources=ctx.resources,
+    )
+
+
+@router.post("/logout", response_model=MessageResponse)
+async def logout(ctx: AuthContext = Depends(get_auth_context), db: AsyncSession = Depends(get_db)):
+    """Revoca sesiunea curenta, ca token-ul sa nu mai fie folosibil dupa logout."""
+    if ctx.session is not None:
+        await revoke_session(db, ctx.session)
+    return MessageResponse(message="Sesiune inchisa.")
 
 
 class MeUpdateRequest(BaseModel):
@@ -222,15 +278,8 @@ class MeUpdateRequest(BaseModel):
 
 
 @router.get("/me", response_model=MeResponse)
-async def get_me(account: Account = Depends(get_current_account)):
-    return MeResponse(
-        id=account.id,
-        name=account.name,
-        username=account.username,
-        description=account.description,
-        email=account.email,
-        image_url=account.image_url,
-    )
+async def get_me(ctx: AuthContext = Depends(get_auth_context)):
+    return _me_response(ctx)
 
 
 @router.patch("/me", response_model=MeResponse)
@@ -238,9 +287,14 @@ async def get_me(account: Account = Depends(get_current_account)):
 async def update_me(
     request: Request,
     body: MeUpdateRequest,
-    account: Account = Depends(get_current_account),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    # Datele contului (numele firmei, emailul, imaginea) sunt identitatea
+    # organizatiei, nu preferinte personale — le poate schimba doar adminul.
+    if not ctx.can(Resource.USERS):
+        raise HTTPException(403, "Doar administratorul contului poate modifica datele contului.")
+    account = ctx.account
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch:
         new_name = (patch["name"] or "").strip()
@@ -256,14 +310,7 @@ async def update_me(
         account.image_url = (url.strip() or None) if isinstance(url, str) else url
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    return MeResponse(
-        id=account.id,
-        name=account.name,
-        username=account.username,
-        description=account.description,
-        email=account.email,
-        image_url=account.image_url,
-    )
+    return _me_response(ctx)
 
 
 @router.post("/me/image", response_model=MeResponse)
@@ -271,13 +318,18 @@ async def update_me(
 async def upload_me_image(
     request: Request,
     file: UploadFile = File(...),
-    account: Account = Depends(get_current_account),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload imagine de profil. Inlocuieste imaginea curenta (daca exista) si
     o sterge din S3 doar dupa commit reusit, ca sa nu pierdem fisierul vechi
     inainte de a-l confirma pe cel nou in DB.
     """
+    # Datele contului (numele firmei, emailul, imaginea) sunt identitatea
+    # organizatiei, nu preferinte personale — le poate schimba doar adminul.
+    if not ctx.can(Resource.USERS):
+        raise HTTPException(403, "Doar administratorul contului poate modifica datele contului.")
+    account = ctx.account
     data = await validate_image(file)
     old_url = account.image_url
     url = await upload_image(account.id, "accounts/avatars", data, file.content_type)
@@ -286,35 +338,26 @@ async def upload_me_image(
     await db.commit()
     if old_url:
         await delete_image_by_url(old_url)
-    return MeResponse(
-        id=account.id,
-        name=account.name,
-        username=account.username,
-        description=account.description,
-        email=account.email,
-        image_url=account.image_url,
-    )
+    return _me_response(ctx)
 
 
 @router.delete("/me/image", response_model=MeResponse)
 async def delete_me_image(
-    account: Account = Depends(get_current_account),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    # Datele contului (numele firmei, emailul, imaginea) sunt identitatea
+    # organizatiei, nu preferinte personale — le poate schimba doar adminul.
+    if not ctx.can(Resource.USERS):
+        raise HTTPException(403, "Doar administratorul contului poate modifica datele contului.")
+    account = ctx.account
     old_url = account.image_url
     account.image_url = None
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
         await delete_image_by_url(old_url)
-    return MeResponse(
-        id=account.id,
-        name=account.name,
-        username=account.username,
-        description=account.description,
-        email=account.email,
-        image_url=account.image_url,
-    )
+    return _me_response(ctx)
 
 
 @router.post("/change-password", response_model=MessageResponse)
@@ -322,82 +365,24 @@ async def delete_me_image(
 async def change_password(
     request: Request,
     body: ChangePasswordRequest,
-    account: Account = Depends(get_current_account),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
-    if not verify_password(body.old_password, account.password):
+    """Schimba parola UTILIZATORULUI logat (nu a contului)."""
+    user = ctx.user
+    if not verify_password(body.old_password, user.password):
         raise HTTPException(401, "Parola curenta este incorecta.")
-    account.password = hash_password(body.new_password)
-    account.updated_at = datetime.now(timezone.utc)
+    user.password = hash_password(body.new_password)
+    user.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    return MessageResponse(message="Parola a fost schimbata.")
-
-
-class ReportsPasswordStatus(BaseModel):
-    has_password: bool
-
-
-@router.get("/reports/status", response_model=ReportsPasswordStatus)
-async def reports_password_status(account: Account = Depends(get_current_account)):
-    return ReportsPasswordStatus(has_password=bool(account.reports_password))
-
-
-class ReportsVerifyRequest(BaseModel):
-    password: str = Field(..., min_length=1, max_length=255)
-
-
-class ReportsTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-
-
-@router.post("/reports/verify", response_model=ReportsTokenResponse)
-@limiter.limit("5/minute")
-async def reports_verify(
-    request: Request,
-    body: ReportsVerifyRequest,
-    account: Account = Depends(get_current_account),
-):
-    if not account.reports_password:
-        raise HTTPException(409, "Parola pentru Rapoarte nu este setata. Seteaza-o din Configurari -> Contul Meu.")
-    if not verify_password(body.password, account.reports_password):
-        raise HTTPException(401, "Parola incorecta.")
-    expire = datetime.now(timezone.utc) + timedelta(seconds=REPORTS_TOKEN_TTL_SECONDS)
-    payload = {
-        "sub": str(account.id),
-        "name": account.name,
-        "scope": "reports",
-        "exp": expire,
-    }
-    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
-    return ReportsTokenResponse(access_token=token, expires_in=REPORTS_TOKEN_TTL_SECONDS)
-
-
-class ReportsSetPasswordRequest(BaseModel):
-    # `old_password` este obligatorie doar daca exista deja o parola setata.
-    old_password: str | None = Field(None, max_length=255)
-    # min_length=10 ca la login — Rapoartele expun date sensibile (cifra de
-    # afaceri, target angajati), deci nu pot avea parola mai slaba decat
-    # contul principal.
-    new_password: str = Field(..., min_length=10, max_length=255)
-
-
-@router.post("/reports/set-password", response_model=MessageResponse)
-@limiter.limit("5/minute")
-async def reports_set_password(
-    request: Request,
-    body: ReportsSetPasswordRequest,
-    account: Account = Depends(get_current_account),
-    db: AsyncSession = Depends(get_db),
-):
-    if account.reports_password:
-        if not body.old_password or not verify_password(body.old_password, account.reports_password):
-            raise HTTPException(401, "Parola curenta pentru Rapoarte este incorecta.")
-    account.reports_password = hash_password(body.new_password)
-    account.updated_at = datetime.now(timezone.utc)
-    await db.commit()
-    return MessageResponse(message="Parola pentru Rapoarte a fost salvata.")
+    # Celelalte sesiuni ale userului devin invalide; pastram sesiunea curenta ca
+    # sa nu-l dam afara din aplicatie imediat dupa ce si-a schimbat parola.
+    current_jti = ctx.session.jti if ctx.session else None
+    revoked = await revoke_all_sessions(db, user.id, except_jti=current_jti)
+    msg = "Parola a fost schimbata."
+    if revoked:
+        msg += f" {revoked} sesiune/sesiuni de pe alte dispozitive au fost inchise."
+    return MessageResponse(message=msg)
 
 
 @router.post("/token", response_model=TokenResponse, include_in_schema=False)

@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broadcaster import broadcaster
 from app.database import get_db
-from app.dependencies import get_account_id, get_account_id_from_query
+from app.auth_context import AuthContext
+from app.dependencies import get_account_id, get_account_id_from_query, get_actor_username, get_auth_context, get_settings_account_id
+from app.permissions import Resource
 from app.models.employee import Employee
 from app.models.receipt import Receipt, ReceiptItem, PayMethod
 from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptContentPatch, ReceiptRead, ReceiptItemRead, ReceiptClientPatch, AssignNumberRequest, AssignNumberResponse
@@ -30,6 +32,7 @@ from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
+from app.services.payments_service import resync_after_total_change, sync_from_status
 from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
 
 router = APIRouter()
@@ -80,6 +83,49 @@ async def _resolve_item_link(
         return item_id, item_type
     return (item_id if item_id is not None else row.id,
             item_type if item_type is not None else row.type)
+
+
+def _discount_fingerprint(name: str, price: Decimal | None, original: Decimal | None) -> tuple:
+    """Identitatea unei reduceri de pe o linie: denumire + cele doua preturi."""
+    return (name.strip().lower(), _q2(price), _q2(original))
+
+
+def _q2(v) -> Decimal | None:
+    return None if v is None else Decimal(v).quantize(Decimal("0.01"))
+
+
+async def _assert_may_change_discount(
+    db: AsyncSession, receipt_id: int, new_items: list, ctx: AuthContext
+) -> None:
+    """Doar admin/manager pot acorda sau modifica reduceri.
+
+    Un `worker` poate edita in continuare bonul (adauga articole, schimba
+    cantitati, sterge linii), dar nu poate introduce o reducere, nu poate
+    schimba una existenta si nu o poate elimina de pe o linie pastrata.
+    Butonul e ascuns in UI, insa reducerea se scrie prin acelasi endpoint de
+    editare a continutului, deci fara verificarea asta ar fi doar cosmetic.
+    """
+    if ctx.can(Resource.SETTINGS):
+        return
+
+    existing = (await db.execute(
+        select(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id)
+    )).scalars().all()
+    old_discounted = {
+        _discount_fingerprint(it.name, it.price, it.original_price)
+        for it in existing if it.original_price is not None
+    }
+    old_names = {it.name.strip().lower() for it in existing if it.original_price is not None}
+
+    DENIED = "Doar administratorul sau managerul poate acorda sau modifica reduceri."
+    for it in new_items:
+        if it.original_price is None:
+            # O linie care avea reducere si acum vine fara ea = reducere stearsa.
+            if it.name.strip().lower() in old_names:
+                raise HTTPException(403, DENIED)
+            continue
+        if _discount_fingerprint(it.name, it.price, it.original_price) not in old_discounted:
+            raise HTTPException(403, DENIED)
 
 
 async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids: set[int]) -> None:
@@ -335,7 +381,12 @@ async def create_receipt(
     body: ReceiptCreate,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ):
+    # Un bon nou nu poate porni cu reducere daca rolul nu are voie sa acorde una
+    # (altfel restrictia de la editare s-ar ocoli creand bonul direct redus).
+    if not ctx.can(Resource.SETTINGS) and any(it.original_price is not None for it in body.items):
+        raise HTTPException(403, "Doar administratorul sau managerul poate acorda reduceri.")
     _verify_total_against_items(body.items, body.total)
     receipt = Receipt(
         account_id=account_id,
@@ -372,6 +423,7 @@ async def create_receipt(
             item_id=item_id,
             item_type=item_type,
             vat_percent=it.vat_percent,
+            original_price=it.original_price,
         ))
 
     await db.commit()
@@ -474,6 +526,8 @@ async def patch_receipt(
     body: ReceiptPatch,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
+    actor: str = Depends(get_actor_username),
 ):
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
@@ -500,14 +554,21 @@ async def patch_receipt(
 
     old_pay = receipt.pay_method
     new_pay = body.pay_method
+    # Valoarea de dinainte de modificare — necesara pentru bonurile vechi care au
+    # `partial_pay` dar nu au inca inregistrari in registrul de plati.
+    old_partial = receipt.partial_pay
     if old_pay == PayMethod.NEPLATIT and new_pay != PayMethod.NEPLATIT:
-        await apply_sale_for_receipt(db, account_id, receipt)
+        await apply_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
     elif old_pay != PayMethod.NEPLATIT and new_pay == PayMethod.NEPLATIT:
-        await reverse_sale_for_receipt(db, account_id, receipt)
+        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
 
     receipt.pay_method = body.pay_method
     receipt.partial_pay = body.partial_pay
     receipt.updated_at = datetime.now(timezone.utc)
+    # Oglindim schimbarea de status in "Situatie plati": inregistram automat
+    # diferenta de bani, ca registrul sa arate complet cat s-a incasat si cat a
+    # mai rămas de plata.
+    await sync_from_status(db, account_id, receipt, legacy_partial=old_partial)
     await db.commit()
 
     await _refresh_accumulations(db, account_id, emp_ids)
@@ -534,11 +595,15 @@ async def patch_receipt_content(
     body: ReceiptContentPatch,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
+    actor: str = Depends(get_actor_username),
+    ctx: AuthContext = Depends(get_auth_context),
 ):
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
+    await _assert_may_change_discount(db, receipt_id, body.items, ctx)
 
     _verify_total_against_items(body.items, body.total)
 
@@ -552,7 +617,7 @@ async def patch_receipt_content(
     # apoi vom reaplica scaderea pentru liniile noi mai jos.
     was_paid = receipt.pay_method != PayMethod.NEPLATIT
     if was_paid:
-        await reverse_sale_for_receipt(db, account_id, receipt)
+        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
 
     receipt.titlu = body.titlu
     receipt.descriere = body.descriere
@@ -616,6 +681,7 @@ async def patch_receipt_content(
             item_id=item_id,
             item_type=item_type,
             vat_percent=item.vat_percent,
+            original_price=item.original_price,
         ))
         if item.employee_id:
             new_emp_ids.add(item.employee_id)
@@ -623,7 +689,11 @@ async def patch_receipt_content(
     await db.flush()
     # Reaplica scaderea pentru liniile noi daca bonul era platit
     if was_paid:
-        await apply_sale_for_receipt(db, account_id, receipt)
+        await apply_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+
+    # Totalul s-a schimbat (ex. s-a aplicat o reducere): restul de plata si
+    # statusul trebuie recitite din registru, nu lasate pe valorile vechi.
+    await resync_after_total_change(db, account_id, receipt)
 
     await db.commit()
     await _refresh_accumulations(db, account_id, old_emp_ids | new_emp_ids)
@@ -913,7 +983,11 @@ async def upsert_vehicol(
 async def delete_receipt(
     receipt_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
+    # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
+    actor: str = Depends(get_actor_username),
 ):
     receipt = await db.get(Receipt, receipt_id)
     if receipt is None or receipt.account_id != account_id:
@@ -927,7 +1001,7 @@ async def delete_receipt(
 
     # Storno stoc daca bonul era platit (marfa revine in stoc).
     if receipt.pay_method != PayMethod.NEPLATIT:
-        await reverse_sale_for_receipt(db, account_id, receipt)
+        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
 
     await soft_delete(db, Receipt, receipt_id)
     await _refresh_accumulations(db, account_id, emp_ids)

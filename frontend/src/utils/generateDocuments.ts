@@ -13,6 +13,7 @@ import {
   drawFooterWithBranding,
   fetchImageAsDataUrl, loadImageAsDataUrl,
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures, SIGNATURES_PIN_Y,
+  drawPaymentsHistory, type PaymentRowForPdf,
 } from "./pdf";
 // Importat ca asset Vite → primeste hash in nume la build, deci nu mai sufera de
 // cache stale la nivel de nginx/CDN cand schimbam continutul fontului.
@@ -154,7 +155,7 @@ async function loadPdf() {
 
 // ─── DEVIZ ────────────────────────────────────────────────────────────────────
 
-export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician = false, append?: AppendOptions, montajRoti?: MontajRotaRow[]): Promise<void> {
+export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician = false, append?: AppendOptions, montajRoti?: MontajRotaRow[], payments?: PaymentRowForPdf[]): Promise<void> {
   const { jsPDF, autoTable } = await loadPdf();
   const doc = append ? append.doc : new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   if (append && !append.isFirst) doc.addPage();
@@ -193,7 +194,11 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   ) + 3;
 
   y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro, showTehnician);
-  y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true, inlineSubtotals: true });
+  y = drawTotals(doc, r, y, tvaPct, r.items, { skipTopLine: true, inlineSubtotals: true });
+  // Istoricul miscarilor de bani (avans / restituire / plata), cand exista.
+  if (payments && payments.length > 0) {
+    y = drawPaymentsHistory(doc, payments, r.total, y);
+  }
 
   if (r.descriere?.trim()) {
     hline(doc, y, C.veryLight, 0.1);
@@ -392,7 +397,7 @@ export async function generateFisaDeLucru(
   if (r.items.length > 0) {
     y = drawFdlSectionHeader("PRODUSE ȘI SERVICII", [34, 197, 94]);
     y = drawItemsTable(doc, autoTable, r.items, y, tvaPct, ro);
-    y = drawTotals(doc, r, y, tvaPct, undefined, { skipTopLine: true, inlineSubtotals: true });
+    y = drawTotals(doc, r, y, tvaPct, r.items, { skipTopLine: true, inlineSubtotals: true });
   }
 
   // 4) Timp estimat manoperă

@@ -38,6 +38,7 @@ from app.models.register import Register
 from app.models.stock import Stock
 from app.models.stock_movement import StockMovement, StockMovementType
 from app.models.vehicol import Vehicol
+from app.services.account_provisioning import provision_account_admin
 from app.utils.security import hash_password
 
 from app.services.demo_seeder.config import (
@@ -229,16 +230,21 @@ class _Ctx:
 
 
 async def _create_account_and_company(ctx: _Ctx) -> None:
+    password_hash = hash_password(DEMO_PASSWORD)
     acc = Account(
         name=DEMO_ACCOUNT_NAME,
         username=DEMO_USERNAME,
-        password=hash_password(DEMO_PASSWORD),
+        password=password_hash,
         email=DEMO_EMAIL,
         is_locked=False,
     )
     ctx.db.add(acc)
     await ctx.db.flush()
     ctx.account_id = acc.id
+
+    # Cod de firma + utilizator admin: login-ul cauta in `users`, deci fara ele
+    # contul demo nu s-ar putea autentifica.
+    await provision_account_admin(ctx.db, acc, password_hash, commit=False)
 
     comp = Company(
         account_id=acc.id,

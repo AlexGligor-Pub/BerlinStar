@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from app.models.anvelopa import Anvelopa
 from app.schemas.cazare_anvelope import CazareCreate, CazareRead, CazareCheckoutBody, CazareUpdateBody
@@ -359,7 +359,9 @@ async def checkout_cazare(
 async def delete_cazare(
     cazare_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Stergerea e actiune privilegiata (admin + manager): butonul e ascuns
+    # pentru `worker` in UI, iar aici o refuzam si pe server.
+    account_id: int = Depends(get_settings_account_id),
 ):
     cazare = await db.get(CazareAnvelope, cazare_id)
     if cazare is None or cazare.account_id != account_id:

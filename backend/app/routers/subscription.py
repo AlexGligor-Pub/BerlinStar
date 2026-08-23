@@ -1,7 +1,8 @@
 """User-facing endpoints pentru abonamentul BerlinStar.
 
 Mount: /api/subscription/*
-Auth: account normal (get_current_account).
+Auth: adminul contului (get_admin_account) — abonamentul si facturile
+catre noi sunt treaba proprietarului, nu a managerilor.
 """
 from __future__ import annotations
 
@@ -14,7 +15,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_account
+from app.dependencies import get_admin_account
 from app.models.account import Account
 from app.models.subscription import SubscriptionPayment
 from app.subscriptions import invoice_service, notifications, stripe_service
@@ -107,7 +108,7 @@ async def subscription_config(db: AsyncSession = Depends(get_db)):
 
 @router.get("/me", response_model=SubscriptionStatusOut)
 async def my_subscription_status(
-    account: Account = Depends(get_current_account),
+    account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
     status = await notifications.get_status(db, account.id)
@@ -127,7 +128,7 @@ async def my_subscription_status(
 
 @router.get("/payments", response_model=list[InvoiceHistoryItem])
 async def my_payments(
-    account: Account = Depends(get_current_account),
+    account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
     rows = (
@@ -163,7 +164,7 @@ async def my_payments(
 @router.post("/checkout", response_model=CheckoutResponse)
 async def checkout(
     body: CheckoutRequest,
-    account: Account = Depends(get_current_account),
+    account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
     try:
@@ -184,7 +185,7 @@ async def checkout(
 @router.get("/invoices/{payment_id}/pdf")
 async def download_pdf(
     payment_id: int,
-    account: Account = Depends(get_current_account),
+    account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
     payment = (
@@ -218,7 +219,7 @@ async def download_pdf(
 @router.get("/invoices/{payment_id}/anaf-zip")
 async def download_anaf_zip(
     payment_id: int,
-    account: Account = Depends(get_current_account),
+    account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
     payment = (

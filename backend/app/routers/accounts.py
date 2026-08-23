@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.account import Account
 from app.schemas.account import AccountCreate, AccountUpdate, AccountRead
 from app.schemas.common import Page
+from app.services.account_provisioning import provision_account_admin
 from app.utils.filter import apply_filters
 from app.utils.paginate import paginate
 from app.utils.security import hash_password
@@ -71,6 +72,10 @@ async def create_account(body: AccountCreate, background_tasks: BackgroundTasks,
     data["password"] = hash_password(data["password"])
     account = Account(**data)
     db.add(account)
+    await db.flush()
+    # Fara user admin + cod de firma, contul nou nu s-ar putea autentifica:
+    # login-ul cauta in `users`, nu in `accounts`.
+    await provision_account_admin(db, account, data["password"], commit=False)
     await db.commit()
     await db.refresh(account)
     if account.email:
@@ -107,12 +112,14 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
     if account is None or account.is_deleted:
         raise HTTPException(404, "Contul nu a fost gasit.")
     patch_data = body.model_dump(exclude_unset=True)
-    for pwd_field in ("password", "reports_password"):
-        if pwd_field in patch_data:
-            if patch_data[pwd_field]:
-                patch_data[pwd_field] = hash_password(patch_data[pwd_field])
-            else:
-                patch_data.pop(pwd_field)
+    # Parolele utilizatorilor se schimba prin /api/admin/accounts/{id}/users/...;
+    # `accounts.password` a rămas doar pentru compatibilitate si nu mai e folosit
+    # la autentificare, deci nu il expunem in PATCH.
+    if "password" in patch_data:
+        if patch_data["password"]:
+            patch_data["password"] = hash_password(patch_data["password"])
+        else:
+            patch_data.pop("password")
     for k, v in patch_data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)
