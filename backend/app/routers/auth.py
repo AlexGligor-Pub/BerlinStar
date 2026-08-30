@@ -13,6 +13,7 @@ from app.database import get_db
 from app.dependencies import get_admin_account, get_auth_context
 from app.models.account import Account
 from app.models.company import Company
+from app.models.user import User
 from app.permissions import Resource, allowed_resources
 from app.rate_limit import limiter
 from app.services.account_provisioning import provision_account_admin
@@ -51,8 +52,13 @@ class TokenResponse(BaseModel):
     locked_at: datetime | None = None
     # Rolul si resursele permise — clientul le foloseste ca sa ascunda UI.
     # Enforcement-ul real rămâne pe server (vezi app/permissions.py).
-    role: str = "admin"
+    role: str
     resources: list[str] = []
+    # Codul firmei, asa cum il stie serverul. Clientul NU trebuie sa-l deduca din
+    # ce a tastat operatorul: la login fara cod (fluxul „contul principal") ar
+    # ramane null si statia s-ar considera „alta firma" la fiecare autentificare,
+    # pierzandu-si dispozitivul inregistrat.
+    code: str | None = None
 
 
 async def _apply_subscription_lock(account: Account, db: AsyncSession) -> None:
@@ -72,16 +78,20 @@ async def _apply_subscription_lock(account: Account, db: AsyncSession) -> None:
         await db.commit()
 
 
-async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple[str, Account]:
+async def _authenticate(username: str, password: str, db: AsyncSession) -> tuple[str, User, Account]:
     """Varianta fara context de request — folosita de fluxul OAuth2 (Swagger)."""
     user, account = await authenticate_user(db, None, username, password)
     await _apply_subscription_lock(account, db)
     token, _ = await create_session(db, user, account)
-    return token, account
+    return token, user, account
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+# Limita pe IP e larga intentionat: intr-un service toata echipa iese prin
+# acelasi NAT, iar 5/minut inseamna ca la schimbul de tura oamenii se blocheaza
+# reciproc. Brute-force-ul e oprit unde conteaza — pe combinatia (firma, user),
+# in app/utils/login_throttle.py.
+@limiter.limit("30/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     user, account = await authenticate_user(db, body.code, body.username, body.password)
     await _apply_subscription_lock(account, db)
@@ -98,6 +108,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         locked_at=account.locked_at,
         role=user.role.value,
         resources=allowed_resources(user.role),
+        code=account.code,
     )
 
 
@@ -254,8 +265,7 @@ def _me_response(ctx: AuthContext) -> MeResponse:
 @router.post("/logout", response_model=MessageResponse)
 async def logout(ctx: AuthContext = Depends(get_auth_context), db: AsyncSession = Depends(get_db)):
     """Revoca sesiunea curenta, ca token-ul sa nu mai fie folosibil dupa logout."""
-    if ctx.session is not None:
-        await revoke_session(db, ctx.session)
+    await revoke_session(db, ctx.session)
     return MessageResponse(message="Sesiune inchisa.")
 
 
@@ -377,8 +387,7 @@ async def change_password(
     await db.commit()
     # Celelalte sesiuni ale userului devin invalide; pastram sesiunea curenta ca
     # sa nu-l dam afara din aplicatie imediat dupa ce si-a schimbat parola.
-    current_jti = ctx.session.jti if ctx.session else None
-    revoked = await revoke_all_sessions(db, user.id, except_jti=current_jti)
+    revoked = await revoke_all_sessions(db, user.id, except_jti=ctx.session.jti)
     msg = "Parola a fost schimbata."
     if revoked:
         msg += f" {revoked} sesiune/sesiuni de pe alte dispozitive au fost inchise."
@@ -393,10 +402,15 @@ async def token_oauth2(
     db: AsyncSession = Depends(get_db),
 ):
     """Endpoint OAuth2 folosit de Swagger UI pentru butonul Authorize."""
-    token, account = await _authenticate(form.username, form.password, db)
+    token, user, account = await _authenticate(form.username, form.password, db)
+    # Rolul real, nu unul presupus: un raspuns care spune mereu "admin" ar face
+    # orice client care il foloseste sa deschida UI-ul complet.
     return TokenResponse(
         access_token=token,
         expires_in=TOKEN_EXPIRE_DAYS * 24 * 3600,
         is_locked=account.is_locked,
         locked_at=account.locked_at,
+        role=user.role.value,
+        resources=allowed_resources(user.role),
+        code=account.code,
     )

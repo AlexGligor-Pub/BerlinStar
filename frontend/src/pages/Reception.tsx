@@ -6,7 +6,7 @@ import PaymentsSection from "../components/PaymentsSection";
 import DiscountModal from "../components/DiscountModal";
 import { cachedPayments, loadPayments } from "../store/paymentsStore";
 import type { PaymentRowForPdf } from "../utils/pdf";
-import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, finalizeFdl, type Receipt } from "../store/receiptsStore";
+import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, finalizeFdl, refreshReceipt, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateFisaDeLucru, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
 import type { DocContext, CompanyData, MontajRotaRow } from "../utils/generateDocuments";
 import { hotelImages, loadHotelImages, getCazareById } from "../store/hotelAnvelopeStore";
@@ -856,8 +856,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <span class="rcard-fdl-badge" title="Fișă de Lucru — estimare, nu intră în totaluri">FDL</span>
             </Show>
             <span class="rcard-titlu">{r.titlu}</span>
-            <Show when={r.clientNume}>
-              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{r.clientNume}</span>
+            <Show when={live().clientNume}>
+              <span style="font-size:12px;color:var(--text-muted);font-weight:400">{live().clientNume}</span>
             </Show>
             <Show when={live().devizNr > 0}>
               <span class="rcard-doc-tag rcard-doc-tag--deviz">D {live().devizSerie}{live().devizNr}</span>
@@ -909,10 +909,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   descriere: r.descriere ?? "",
                   dateTehn: r.dateTehn ?? "",
                   items: r.items,
-                  clientId: r.clientId,
-                  clientNume: r.clientNume,
-                  clientCui: r.clientCui,
-                  clientTip: r.clientTip,
+                  clientId: live().clientId,
+                  clientNume: live().clientNume,
+                  clientCui: live().clientCui,
+                  clientTip: live().clientTip,
                   vehicol: r.vehicol ?? null,
                   source: live().source,
                   constatari: live().constatari ?? null,
@@ -1176,7 +1176,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
           {/* Coloana dreapta */}
           <div class="rcard-extra-col">
-            <ClientSection receipt={r} readOnly={live().efacturaLocked || !!live().metodaPlata} />
+            <ClientSection receipt={live()} readOnly={live().efacturaLocked || !!live().metodaPlata} />
             {/* Status plata — ascuns pentru FDL (estimare, nu se incaseaza) */}
             <Show when={!isFdl()}>
               <div class="rcard-extra-card">
@@ -1220,16 +1220,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   Separat de liniile bonului — un avans nu scade valoarea prestatiei. */}
               <PaymentsSection
                 receiptId={r.id}
-                // Registrul se inchide odata ce bonul nu mai e „Neplatit":
-                // incasarea e consemnata, iar corectiile se fac schimband
-                // statusul (serverul inregistreaza automat diferenta), nu
-                // stergand miscari deja raportate.
-                readOnly={live().efacturaLocked || live().metodaPlata != null}
-                readOnlyReason={
-                  live().efacturaLocked
-                    ? "Bon trimis la ANAF — registrul nu mai poate fi modificat."
-                    : "Bonul are status de plată. Pentru corecții, schimbă statusul de mai sus."
-                }
+                // Registrul rămâne deschis cât timp bonul nu a plecat la ANAF.
+                // Statusul de plată se recalculează din el după fiecare mișcare,
+                // deci un avans nu-l mai închide — altfel s-ar putea înregistra
+                // o singură mișcare per bon, iar o sumă tastată greșit ar rămâne
+                // acolo definitiv.
+                readOnly={live().efacturaLocked}
+                readOnlyReason="Bon trimis la ANAF — registrul nu mai poate fi modificat."
+                // Serverul recalculeaza statusul bonului din registru, deci
+                // recitim bonul ca selectorul „Status plată" sa nu ramana in urma.
+                onChanged={() => { void refreshReceipt(r.id); }}
                 // Amprenta starii bonului: orice schimbare de status, total sau
                 // actualizare venita prin SSE reincarca situatia platilor.
                 refreshKey={`${payRefresh()}|${live().metodaPlata ?? ""}|${live().partialPay ?? ""}|${live().total}|${live().updatedAt ?? ""}`}

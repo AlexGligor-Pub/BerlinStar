@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
+from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,6 +31,7 @@ from app.efactura.models import EFacturaRecord
 from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.plate import normalize_plate, normalized_plate_column
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 from app.services.payments_service import resync_after_total_change, sync_from_status
@@ -85,47 +87,133 @@ async def _resolve_item_link(
             item_type if item_type is not None else row.type)
 
 
-def _discount_fingerprint(name: str, price: Decimal | None, original: Decimal | None) -> tuple:
-    """Identitatea unei reduceri de pe o linie: denumire + cele doua preturi."""
-    return (name.strip().lower(), _q2(price), _q2(original))
-
-
 def _q2(v) -> Decimal | None:
     return None if v is None else Decimal(v).quantize(Decimal("0.01"))
 
 
-async def _assert_may_change_discount(
-    db: AsyncSession, receipt_id: int, new_items: list, ctx: AuthContext
-) -> None:
-    """Doar admin/manager pot acorda sau modifica reduceri.
+def _line_key(name: str | None, item_id: int | None) -> tuple:
+    """Identitatea unui articol pe bon: denumirea normalizata + articolul din
+    catalog. Doua linii cu aceeasi cheie sunt acelasi produs vandut de doua ori
+    (ex. pe angajati diferiti), deci le numaram, nu le confundam."""
+    return ((name or "").strip().lower(), item_id)
 
-    Un `worker` poate edita in continuare bonul (adauga articole, schimba
-    cantitati, sterge linii), dar nu poate introduce o reducere, nu poate
-    schimba una existenta si nu o poate elimina de pe o linie pastrata.
-    Butonul e ascuns in UI, insa reducerea se scrie prin acelasi endpoint de
-    editare a continutului, deci fara verificarea asta ar fi doar cosmetic.
+
+def _list_price(it) -> Decimal:
+    """Pretul „de lista" al unei linii: cel dinainte de reducere daca exista,
+    altfel pretul practicat."""
+    return _q2(it.original_price if it.original_price is not None else it.price)
+
+
+DENIED_DISCOUNT = "Doar administratorul sau managerul poate acorda sau modifica reduceri."
+
+
+async def _assert_may_change_prices(
+    db: AsyncSession,
+    account_id: int,
+    receipt_id: int | None,
+    new_items: list,
+    ctx: AuthContext,
+) -> None:
+    """Un `worker` poate edita bonul, dar nu poate ieftini nimic.
+
+    Sunt doua cai spre acelasi rezultat si le inchidem pe amandoua:
+
+      1. reducerea explicita (`original_price`) — o poate acorda doar admin/manager;
+      2. scaderea directa a lui `price`, care nu lasa nicio urma de reducere.
+         Fara (2), regula ar fi pur cosmetica: modalul de reducere e ascuns, dar
+         POS-ul permite oricum editarea pretului pe linie.
+
+    Referinta fata de care masuram „mai ieftin":
+      - pentru o linie care exista deja pe bon (aceeasi cheie), pretul ei curent
+        de lista — asa nu invalidam o reducere pe care un manager a acordat-o
+        deja si pe care worker-ul doar o retrimite;
+      - pentru o linie noua legata de catalog, pretul din `items`;
+      - pentru o linie manuala noua, nimic — operatorul tasteaza o valoare care
+        nu are corespondent, iar asta e un flux POS legitim.
     """
     if ctx.can(Resource.SETTINGS):
         return
 
-    existing = (await db.execute(
-        select(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id)
-    )).scalars().all()
-    old_discounted = {
-        _discount_fingerprint(it.name, it.price, it.original_price)
-        for it in existing if it.original_price is not None
-    }
-    old_names = {it.name.strip().lower() for it in existing if it.original_price is not None}
+    existing: list[ReceiptItem] = []
+    if receipt_id is not None:
+        existing = list((await db.execute(
+            select(ReceiptItem).where(ReceiptItem.receipt_id == receipt_id)
+        )).scalars().all())
 
-    DENIED = "Doar administratorul sau managerul poate acorda sau modifica reduceri."
+    # ── 1. Reducerile explicite ───────────────────────────────────────────────
+    # Multiset, nu multime: doua linii identice reduse trebuie sa rămână doua,
+    # iar o a treia adaugata de worker sa fie respinsa.
+    def _disc_counter(items) -> Counter:
+        return Counter(
+            (_line_key(it.name, it.item_id), _q2(it.price), _q2(it.original_price))
+            for it in items if it.original_price is not None
+        )
+
+    old_disc, new_disc = _disc_counter(existing), _disc_counter(new_items)
+    if new_disc - old_disc:
+        # Exista o reducere trimisa care nu se regaseste in cele existente:
+        # ori e noua, ori i s-a schimbat suma.
+        raise HTTPException(403, DENIED_DISCOUNT)
+
+    # Reducerea nu poate fi nici *stearsa* de pe o linie care rămâne pe bon.
+    # Numaram pe cheie, ca doua articole cu acelasi nume (unul redus, unul nu)
+    # sa nu se blocheze reciproc.
+    old_total, old_disc_n = Counter(), Counter()
+    for it in existing:
+        old_total[_line_key(it.name, it.item_id)] += 1
+        if it.original_price is not None:
+            old_disc_n[_line_key(it.name, it.item_id)] += 1
+    new_total, new_disc_n = Counter(), Counter()
     for it in new_items:
-        if it.original_price is None:
-            # O linie care avea reducere si acum vine fara ea = reducere stearsa.
-            if it.name.strip().lower() in old_names:
-                raise HTTPException(403, DENIED)
+        new_total[_line_key(it.name, it.item_id)] += 1
+        if it.original_price is not None:
+            new_disc_n[_line_key(it.name, it.item_id)] += 1
+    for key, n_old in old_disc_n.items():
+        # Cate linii reduse trebuie sa supravietuiasca: cele existente, dar nu
+        # mai multe decat liniile pastrate (stergerea unei linii reduse e ok).
+        must_keep = min(n_old, new_total.get(key, 0))
+        if new_disc_n.get(key, 0) < must_keep:
+            raise HTTPException(403, DENIED_DISCOUNT)
+
+    # ── 2. Scaderea directa de pret ───────────────────────────────────────────
+    floors: dict[tuple, Decimal] = {}
+    for it in existing:
+        key = _line_key(it.name, it.item_id)
+        price = _list_price(it)
+        # Cand acelasi articol apare de mai multe ori la preturi diferite,
+        # referinta e cea mai mica: altfel o editare legitima ar fi respinsa.
+        floors[key] = min(floors[key], price) if key in floors else price
+
+    # Articolele noi (fara corespondent pe bon) se masoara fata de catalog.
+    catalog_ids = {
+        it.item_id for it in new_items
+        if it.item_id is not None and _line_key(it.name, it.item_id) not in floors
+    }
+    if catalog_ids:
+        rows = (await db.execute(
+            select(Item.id, Item.price).where(
+                Item.id.in_(catalog_ids),
+                Item.account_id == account_id,
+                Item.is_deleted == False,
+            )
+        )).all()
+        catalog = {r.id: _q2(r.price) for r in rows}
+        for it in new_items:
+            key = _line_key(it.name, it.item_id)
+            if key not in floors and it.item_id in catalog:
+                floors[key] = catalog[it.item_id]
+
+    for it in new_items:
+        floor = floors.get(_line_key(it.name, it.item_id))
+        if floor is None:
             continue
-        if _discount_fingerprint(it.name, it.price, it.original_price) not in old_discounted:
-            raise HTTPException(403, DENIED)
+        if _list_price(it) < floor:
+            raise HTTPException(
+                403,
+                f"Linia '{it.name}' este trimisa la {_list_price(it)} lei, sub pretul "
+                f"de referinta de {floor} lei. Doar administratorul sau managerul "
+                "poate reduce preturile.",
+            )
 
 
 async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids: set[int]) -> None:
@@ -158,28 +246,70 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
         )
 
 
-async def _ensure_client_vehicol(db: AsyncSession, account_id: int, client_id: int, vehicol: Vehicol) -> None:
-    """Creează legătura ClientVehicol dacă nu există deja."""
-    if not vehicol.numar_masina:
+# Campurile pe care snapshotul de pe bon le propaga in garajul clientului.
+_VEHICOL_SYNC_FIELDS = ("marca", "model", "numar_kilometrii", "an_fabricatie", "vin", "observatii")
+
+
+async def _sync_client_vehicol(
+    db: AsyncSession, account_id: int, client_id: int, vehicol: Vehicol
+) -> None:
+    """Tine masina din garajul clientului in pas cu ce s-a editat pe bon.
+
+    Inainte, potrivirea se facea doar pe numarul de inmatriculare, comparat ca
+    sir exact, si functia doar INSERA. Doua consecinte, amandoua raportate din
+    POS: o corectura a numarului pe un deviz salvat crea o masina noua in loc sa
+    o redenumeasca pe cea existenta, iar completarea marcii/VIN-ului nu ajungea
+    niciodata in garaj, fiindca randul „exista deja".
+
+    Ordinea de rezolvare a tintei conteaza:
+      1. o masina a ACESTUI client cu numarul nou — atunci bonul a fost mutat pe
+         alta masina a lui, nu e o redenumire; ne legam de ea si nu stricam nimic;
+      2. masina la care bonul era deja legat — asta e cazul obisnuit de editare,
+         inclusiv schimbarea numarului, deci o actualizam pe loc;
+      3. nimic — masina chiar e noua pentru client.
+    """
+    plate = (vehicol.numar_masina or "").strip()
+    if not plate:
         return
-    existing = (await db.execute(
+
+    target = (await db.execute(
         select(ClientVehicol).where(
             ClientVehicol.account_id == account_id,
             ClientVehicol.client_id == client_id,
-            ClientVehicol.numar_masina == vehicol.numar_masina,
             ClientVehicol.is_deleted == False,
-        )
-    )).scalar_one_or_none()
-    if existing is None:
-        db.add(ClientVehicol(
-            account_id=account_id,
-            client_id=client_id,
-            numar_masina=vehicol.numar_masina,
-            marca=vehicol.marca,
-            model=vehicol.model,
-            an_fabricatie=vehicol.an_fabricatie,
-            vin=vehicol.vin,
-        ))
+            normalized_plate_column(ClientVehicol.numar_masina) == normalize_plate(plate),
+        ).order_by(ClientVehicol.id)
+    )).scalars().first()
+
+    if target is None and vehicol.client_vehicol_id is not None:
+        linked = await db.get(ClientVehicol, vehicol.client_vehicol_id)
+        # Legatura nu se refoloseste daca masina a fost stearsa intre timp sau
+        # daca bonul a fost mutat pe alt client — altfel am edita masina altcuiva.
+        if (
+            linked is not None
+            and not linked.is_deleted
+            and linked.account_id == account_id
+            and linked.client_id == client_id
+        ):
+            target = linked
+
+    if target is None:
+        target = ClientVehicol(account_id=account_id, client_id=client_id, numar_masina=plate)
+        db.add(target)
+
+    target.numar_masina = plate
+    # Doar valorile completate se propaga. Un bon rapid, pe care s-a trecut doar
+    # numarul, nu are voie sa stearga marca si VIN-ul stranse anterior in fisa
+    # masinii; corectiile explicite se fac din Clienti.
+    for field in _VEHICOL_SYNC_FIELDS:
+        value = getattr(vehicol, field, None)
+        if value is not None and value != "":
+            setattr(target, field, value)
+    target.updated_at = datetime.now(timezone.utc)
+
+    # `flush` ca sa avem id-ul cand masina tocmai a fost creata.
+    await db.flush()
+    vehicol.client_vehicol_id = target.id
 
 
 # Campuri care raman editabile pe un bon blocat (in flux ANAF). Daca `ReceiptPatch`
@@ -383,10 +513,11 @@ async def create_receipt(
     account_id: int = Depends(get_account_id),
     ctx: AuthContext = Depends(get_auth_context),
 ):
-    # Un bon nou nu poate porni cu reducere daca rolul nu are voie sa acorde una
-    # (altfel restrictia de la editare s-ar ocoli creand bonul direct redus).
-    if not ctx.can(Resource.SETTINGS) and any(it.original_price is not None for it in body.items):
-        raise HTTPException(403, "Doar administratorul sau managerul poate acorda reduceri.")
+    # Un bon nou nu poate porni nici cu reducere, nici cu preturi sub catalog,
+    # daca rolul nu are dreptul — altfel restrictia de la editare s-ar ocoli
+    # creand bonul direct ieftinit. `receipt_id=None`: nu exista linii anterioare,
+    # deci referinta e strict catalogul.
+    await _assert_may_change_prices(db, account_id, None, body.items, ctx)
     _verify_total_against_items(body.items, body.total)
     receipt = Receipt(
         account_id=account_id,
@@ -603,7 +734,7 @@ async def patch_receipt_content(
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
-    await _assert_may_change_discount(db, receipt_id, body.items, ctx)
+    await _assert_may_change_prices(db, account_id, receipt_id, body.items, ctx)
 
     _verify_total_against_items(body.items, body.total)
 
@@ -731,8 +862,12 @@ async def patch_receipt_client(
             select(Vehicol).where(Vehicol.receipt_id == receipt_id, Vehicol.is_deleted == False)
         )).scalar_one_or_none()
         if vehicol:
-            await _ensure_client_vehicol(db, account_id, body.client_id, vehicol)
+            await _sync_client_vehicol(db, account_id, body.client_id, vehicol)
     await db.commit()
+    # Receipt.client e lazy="selectin", deci era deja incarcat cu clientul VECHI;
+    # cu expire_on_commit=False reincarcarea de mai jos ar returna acelasi obiect
+    # din identity map, cu relatia nereimprospatata.
+    db.expire_all()
     result = await db.execute(
         select(Receipt)
         .options(
@@ -809,7 +944,7 @@ async def assign_number(
                 select(Vehicol).where(Vehicol.receipt_id == receipt_id, Vehicol.is_deleted == False)
             )).scalar_one_or_none()
             if vehicol:
-                await _ensure_client_vehicol(db, account_id, receipt.client_id, vehicol)
+                await _sync_client_vehicol(db, account_id, receipt.client_id, vehicol)
 
         await db.commit()
         serie = reg_serie
@@ -950,33 +1085,35 @@ async def upsert_vehicol(
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
 
-    existing = (await db.execute(
+    # `receipt_id` e unic in `vehicole`, deci un rand sters logic tot ocupa locul:
+    # il refolosim in loc sa inseram unul nou, care ar pica pe constrangere.
+    vehicol = (await db.execute(
         select(Vehicol).where(Vehicol.receipt_id == receipt_id)
     )).scalar_one_or_none()
 
-    if existing and not existing.is_deleted:
-        for k, v in body.model_dump().items():
-            setattr(existing, k, v)
-        existing.updated_at = datetime.now(timezone.utc)
-        if receipt.client_id:
-            await _ensure_client_vehicol(db, account_id, receipt.client_id, existing)
-        await db.commit()
-        await db.refresh(existing)
-        broadcaster.notify(account_id)
-        return existing
-    else:
-        vehicol = Vehicol(
-            account_id=account_id,
-            receipt_id=receipt_id,
-            **body.model_dump(),
-        )
+    if vehicol is None:
+        vehicol = Vehicol(account_id=account_id, receipt_id=receipt_id, numar_masina="")
         db.add(vehicol)
-        if receipt.client_id:
-            await _ensure_client_vehicol(db, account_id, receipt.client_id, vehicol)
-        await db.commit()
-        await db.refresh(vehicol)
-        broadcaster.notify(account_id)
-        return vehicol
+    elif vehicol.is_deleted:
+        vehicol.is_deleted = False
+        vehicol.deleted_at = None
+        # Legatura veche nu se mai aplica: masina a fost scoasa de pe bon, iar
+        # acum se trece alta. O redescoperim mai jos, din numarul curent.
+        vehicol.client_vehicol_id = None
+
+    for k, v in body.model_dump().items():
+        setattr(vehicol, k, v)
+    vehicol.updated_at = datetime.now(timezone.utc)
+
+    # Sincronizarea ruleaza DUPA ce s-au aplicat valorile noi: ea trebuie sa vada
+    # numarul editat, ca sa redenumeasca masina clientului in loc sa creeze una.
+    if receipt.client_id:
+        await _sync_client_vehicol(db, account_id, receipt.client_id, vehicol)
+
+    await db.commit()
+    await db.refresh(vehicol)
+    broadcaster.notify(account_id)
+    return vehicol
 
 
 @router.delete("/{receipt_id}", status_code=204)

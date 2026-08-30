@@ -6,7 +6,10 @@ from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id, get_actor_username, get_advanced_account_id
+# Intreaga zona Stocuri (inclusiv citirile) e admin + manager: singurele
+# pagini care o consuma — Stocuri, Activitate stoc, Rapoarte — sunt gate-uite
+# la fel in UI.
+from app.dependencies import get_actor_username, get_advanced_account_id
 from app.models.category import Category
 from app.models.department import Department
 from app.models.employee import Employee
@@ -28,7 +31,7 @@ async def list_stocuri(
     location_id: int = Query(...),
     q: str | None = None,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     loc = await db.get(Location, location_id)
     if loc is None or loc.account_id != account_id or loc.is_deleted:
@@ -75,7 +78,7 @@ async def patch_item_stoc_meta(
     body: ItemStocPatch,
     location_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     item = await db.get(Item, item_id)
     if item is None or item.account_id != account_id or item.is_deleted:
@@ -114,7 +117,9 @@ async def patch_item_stoc_meta(
 async def intrare_stoc(
     body: IntrareStocCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Intrarile si inventarul modifica valoarea stocului si costul mediu —
+    # zona Stocuri e admin + manager, la fel ca in UI.
+    account_id: int = Depends(get_advanced_account_id),
     # Cine face miscarea — se salveaza in jurnalul de stoc.
     actor: str = Depends(get_actor_username),
 ):
@@ -141,7 +146,9 @@ async def intrare_stoc(
 async def ajustare_stoc(
     body: AjustareStocCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    # Intrarile si inventarul modifica valoarea stocului si costul mediu —
+    # zona Stocuri e admin + manager, la fel ca in UI.
+    account_id: int = Depends(get_advanced_account_id),
     # Cine face miscarea — se salveaza in jurnalul de stoc.
     actor: str = Depends(get_actor_username),
 ):
@@ -192,7 +199,7 @@ async def list_miscari(
     movement_type: StockMovementType | None = None,
     limit: int = Query(200, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     stmt = (
         select(StockMovement, Employee.name)
@@ -227,7 +234,7 @@ async def list_miscari(
 async def stoc_snapshot(
     location_id: int = Query(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     loc = await db.get(Location, location_id)
     if loc is None or loc.account_id != account_id:

@@ -5,7 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.location import Location
 from app.models.department import Department
 from app.models.employee import Employee
@@ -78,7 +81,7 @@ async def list_locations(
 async def create_location(
     body: LocationCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     location = Location(
         name=body.name,
@@ -109,7 +112,7 @@ async def update_location(
     location_id: int,
     body: LocationCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     location = await db.get(Location, location_id)
     if location is None or location.account_id != account_id or location.is_deleted:
@@ -129,7 +132,7 @@ async def upload_location_image(
     location_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     location = await db.get(Location, location_id)
     if location is None or location.account_id != account_id or location.is_deleted:
@@ -150,7 +153,7 @@ async def set_location_departments(
     location_id: int,
     body: IdsBody,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     loc = await _get_with_relations(db, location_id, account_id)
     departments = (await db.execute(
@@ -167,7 +170,7 @@ async def set_location_employees(
     location_id: int,
     body: IdsBody,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     loc = await _get_with_relations(db, location_id, account_id)
     employees = (await db.execute(
@@ -183,7 +186,7 @@ async def set_location_employees(
 async def delete_location(
     location_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     location = await db.get(Location, location_id)
     if location is None or location.account_id != account_id:

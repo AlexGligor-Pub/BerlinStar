@@ -161,8 +161,14 @@ export default function DiscountModal(props: {
   const ratio = createMemo(() => (base() > 0 ? amountValue() / base() : 0));
 
   /** Liniile rezultate: prețul redus + prețul de listă păstrat.
-   *  Ultima linie preia diferența de rotunjire, ca suma reducerilor pe linii să
-   *  fie exact suma cerută (altfel „15% din 300" putea da 44.99). */
+   *
+   *  Alocarea ține evidența a ceea ce s-a scăzut EFECTIV, nu a ceea ce s-a
+   *  intenționat. Prețul unitar are doar două zecimale, deci pe o linie cu
+   *  qty > 1 o reducere de 10 lei nu se poate împărți exact (10/3 = 3.3333 →
+   *  3.33 × 3 = 9.99). Dacă am aduna intenția, ultima linie ar „corecta" o
+   *  diferență care de fapt nu s-a produs, iar totalul afișat ar fi cu câțiva
+   *  bani lângă cel salvat. Așa, restul se propagă corect spre ultima linie.
+   */
   function buildItems(): CartItem[] {
     const target = amountValue();
     const selected = new Set(baseLines().map((i) => i.lineId));
@@ -172,16 +178,30 @@ export default function DiscountModal(props: {
     return pristine().map((i) => {
       if (!selected.has(i.lineId)) return i;
       const lineBase = round2(i.price * i.qty);
-      const cut = i.lineId === lastId ? round2(target - allocated) : round2(lineBase * ratio());
-      allocated = round2(allocated + cut);
-      if (cut <= 0) return i;
+      const wanted = i.lineId === lastId ? round2(target - allocated) : round2(lineBase * ratio());
+      if (wanted <= 0) return i;
       // Reducerea se distribuie pe cantitate: prețul unitar scade cu cut/qty.
-      const newPrice = round2(i.price - cut / i.qty);
+      const newPrice = round2(i.price - wanted / i.qty);
+      const applied = round2((i.price - newPrice) * i.qty);
+      if (applied <= 0) return i;
+      allocated = round2(allocated + applied);
       return { ...i, price: newPrice, originalPrice: i.price };
     });
   }
 
-  const newTotal = createMemo(() => computeTotal(buildItems()));
+  const preview = createMemo(() => buildItems());
+  const newTotal = createMemo(() => computeTotal(preview()));
+
+  /** Cât se scade în realitate, după rotunjirea prețurilor unitare. Poate
+   *  diferi de suma cerută cu câțiva bani pe bonuri cu cantități mari; afișăm
+   *  valoarea reală, ca „Total actual − Reducere" să dea exact „Total nou". */
+  const appliedDiscount = createMemo(() =>
+    round2(
+      preview()
+        .filter((i) => i.originalPrice != null)
+        .reduce((sum, i) => sum + (i.originalPrice! - i.price) * i.qty, 0),
+    ),
+  );
 
   const problem = createMemo(() => {
     if (base() <= 0) return "Bonul nu are linii în categoria aleasă.";
@@ -207,8 +227,9 @@ export default function DiscountModal(props: {
     if (!canApply()) return;
     setSaving(true);
     try {
-      await saveItems(buildItems());
-      notify(`Reducere de ${lei(amountValue())} aplicată pe ${baseLines().length} linii.`, "success");
+      const applied = appliedDiscount();
+      await saveItems(preview());
+      notify(`Reducere de ${lei(applied)} aplicată pe ${baseLines().length} linii.`, "success");
       props.onApplied?.();
       props.onClose();
     } catch (e) {
@@ -325,7 +346,7 @@ export default function DiscountModal(props: {
             Preț pe linie după reducere
           </div>
           <div style="max-height:150px;overflow:auto">
-            <For each={buildItems().filter((i) => i.originalPrice != null)}>
+            <For each={preview().filter((i) => i.originalPrice != null)}>
               {(i) => (
                 <div style="display:flex;justify-content:space-between;gap:10px;padding:5px 10px;font-size:12px;border-top:1px solid var(--border)">
                   <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
@@ -351,7 +372,7 @@ export default function DiscountModal(props: {
         </div>
         <div style="display:flex;justify-content:space-between">
           <span style="color:var(--text-muted)">Reducere</span>
-          <span style="color:var(--danger)">− {lei(amountValue())}</span>
+          <span style="color:var(--danger)">− {lei(appliedDiscount())}</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-weight:700">
           <span>Total nou</span>

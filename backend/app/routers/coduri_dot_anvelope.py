@@ -5,6 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.cod_dot_anvelopa import CodDotAnvelopa
 from app.schemas.cod_dot_anvelopa import CodDotCreate, CodDotRead
@@ -36,6 +39,10 @@ async def list_coduri_dot(
 async def create_cod_dot(
     body: CodDotCreate,
     db: AsyncSession = Depends(get_db),
+    # Adaugarea unei valori noi e OPERATIONALA: cand o dimensiune/profil/cod
+    # DOT lipseste din lista, omul de la receptie trebuie sa o poata introduce
+    # pe loc, din modalul de cazare sau de montaj. Modificarea si stergerea
+    # raman administrative (vezi PATCH/DELETE mai jos).
     account_id: int = Depends(get_account_id),
 ):
     cod = CodDotAnvelopa(**body.model_dump(), account_id=account_id)
@@ -50,7 +57,7 @@ async def update_cod_dot(
     cod_id: int,
     body: CodDotCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     cod = await db.get(CodDotAnvelopa, cod_id)
     if cod is None or cod.account_id != account_id or cod.is_deleted:

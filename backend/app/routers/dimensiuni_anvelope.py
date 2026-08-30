@@ -5,6 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.schemas.dimensiune_anvelopa import DimensiuneCreate, DimensiuneRead
@@ -36,6 +39,10 @@ async def list_dimensiuni(
 async def create_dimensiune(
     body: DimensiuneCreate,
     db: AsyncSession = Depends(get_db),
+    # Adaugarea unei valori noi e OPERATIONALA: cand o dimensiune/profil/cod
+    # DOT lipseste din lista, omul de la receptie trebuie sa o poata introduce
+    # pe loc, din modalul de cazare sau de montaj. Modificarea si stergerea
+    # raman administrative (vezi PATCH/DELETE mai jos).
     account_id: int = Depends(get_account_id),
 ):
     dim = DimensiuneAnvelopa(**body.model_dump(), account_id=account_id)
@@ -50,7 +57,7 @@ async def update_dimensiune(
     dim_id: int,
     body: DimensiuneCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     dim = await db.get(DimensiuneAnvelopa, dim_id)
     if dim is None or dim.account_id != account_id or dim.is_deleted:

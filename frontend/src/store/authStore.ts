@@ -94,22 +94,37 @@ const KEEP_THEME  = "bs_theme";   // preferinta vizuala a statiei
 const KEEP_DEVICE = "bs_device";  // POS-ul inregistrat (id + locatie)
 
 /**
- * Goleste stocarea locala, pastrand DOAR cheile primite.
+ * Prefixele/cheile care ne apartin. Orice cheie noua trebuie sa inceapa cu
+ * `bs_` — atunci dispare automat la schimbarea utilizatorului, fara ca cineva
+ * sa-si aminteasca sa o adauge undeva. Restul sunt exceptii istorice, dinainte
+ * de conventie.
  *
- * Abordarea e „sterge tot, apoi pune la loc exceptiile", nu „sterge cheile
- * cunoscute": orice cache adaugat in viitor (produse, bonuri, nomenclatoare…)
- * dispare automat la schimbarea utilizatorului, fara sa fie nevoie ca cineva
- * sa-si aminteasca sa-l adauge intr-o lista.
+ * De ce nu `localStorage.clear()`: in productie aplicatia sta la
+ * `professorprime.ro/berlinstar`, acelasi origin cu site-ul de prezentare.
+ * Un clear() total ar sterge si ce tine acela, la fiecare login/logout.
+ */
+const OWNED_PREFIXES = ["bs_", "adminv2_", "rapoarte_", "efactura_"];
+const OWNED_KEYS = ["general_settings"];
+
+function isOwnedKey(key: string): boolean {
+  return OWNED_PREFIXES.some((p) => key.startsWith(p)) || OWNED_KEYS.includes(key);
+}
+
+/**
+ * Goleste stocarea aplicatiei, pastrand DOAR cheile primite.
+ *
+ * Abordarea rămâne „sterge tot ce e al nostru, apoi pune la loc exceptiile",
+ * nu „sterge cheile cunoscute": orice cache adaugat in viitor (produse, bonuri,
+ * nomenclatoare…) dispare automat, atat timp cat respecta prefixul `bs_`.
  */
 function purgeStorage(keep: string[]): void {
   try {
-    const saved = new Map<string, string>();
-    for (const k of keep) {
-      const v = localStorage.getItem(k);
-      if (v !== null) saved.set(k, v);
+    const doomed: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && isOwnedKey(k) && !keep.includes(k)) doomed.push(k);
     }
-    localStorage.clear();
-    for (const [k, v] of saved) localStorage.setItem(k, v);
+    for (const k of doomed) localStorage.removeItem(k);
   } catch {
     // storage indisponibil (private mode / quota) — nu blocam autentificarea
   }

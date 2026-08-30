@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import TOKEN_EXPIRE_DAYS
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_platform_admin_account
 from app.models.account import Account
 from app.models.report_receipts_daily import ReportReceiptsDaily
 from app.models.user import User, UserRole
@@ -107,18 +107,14 @@ class ImpersonateResponse(BaseModel):
 
 
 async def _require_super_admin(
-    account_id: int = Depends(get_account_id),
-    db: AsyncSession = Depends(get_db),
+    account: Account = Depends(get_platform_admin_account),
 ) -> Account:
-    account = (await db.execute(
-        select(Account).where(
-            Account.id == account_id,
-            Account.is_deleted == False,
-            Account.username == "admin",
-        )
-    )).scalar_one_or_none()
-    if account is None:
-        raise HTTPException(403, "Acces interzis: este necesar contul administrator.")
+    """Super-adminul de platforma.
+
+    Logica traieste in app/dependencies.py, ca sa fie acelasi gate si pentru
+    /api/accounts/*, nu doar pentru /api/admin/*. Numele se pastreaza: e folosit
+    ca dependinta in tot routerul si in admin_users.py.
+    """
     return account
 
 

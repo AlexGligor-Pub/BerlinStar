@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.device import Device
+from app.models.employee import Employee
 from app.models.user import User, UserRole, UserSession
 from app.services.auth_service import revoke_all_sessions
 from app.utils.security import hash_password
@@ -37,6 +38,27 @@ async def _get_user(db: AsyncSession, account_id: int, user_id: int) -> User:
     if user is None:
         raise HTTPException(404, "Utilizatorul nu a fost gasit.")
     return user
+
+
+async def _assert_employee_owned(db: AsyncSession, account_id: int, employee_id: int | None) -> None:
+    """Angajatul legat de user trebuie sa fie din acelasi cont.
+
+    FK-ul `users.employee_id -> employees.id` e global, deci fara verificarea
+    asta un admin ar putea lega un utilizator de angajatul altei firme — o
+    referinta peste granita de tenant, care ar strica si atribuirea „cine a
+    facut miscarea" din jurnalul de stoc.
+    """
+    if employee_id is None:
+        return
+    owned = (await db.execute(
+        select(Employee.id).where(
+            Employee.id == employee_id,
+            Employee.account_id == account_id,
+            Employee.is_deleted == False,
+        )
+    )).scalar_one_or_none()
+    if owned is None:
+        raise HTTPException(400, "Angajatul selectat nu exista in acest cont.")
 
 
 async def _count_active_admins(db: AsyncSession, account_id: int, exclude_user_id: int | None = None) -> int:
@@ -68,28 +90,22 @@ async def _assert_not_last_admin(db: AsyncSession, account_id: int, user: User, 
 async def _assert_username_free(
     db: AsyncSession, account_id: int, username: str, exclude_user_id: int | None = None
 ) -> None:
-    """Username-ul e unic pe cont, inclusiv fata de utilizatorii stersi.
+    """Username-ul e unic pe cont, printre utilizatorii ACTIVI.
 
-    Stergerea e logica (soft delete), iar constrangerea de unicitate din DB e pe
-    (account_id, username) fara filtru pe `is_deleted` — deci un nume „eliberat"
-    prin stergere nu poate fi reutilizat. Spunem asta explicit, altfel mesajul
-    „exista deja" e derutant cand userul nu se vede in lista.
+    Indexul unic din DB e partial (`WHERE is_deleted = false`, vezi migrarea
+    usr02), tocmai ca un nume sa poata fi refolosit dupa ce omul a plecat din
+    firma — „ion" nu trebuie sa devina rezervat pe veci de o stergere.
     """
-    conditions = [User.account_id == account_id, User.username == username]
+    conditions = [
+        User.account_id == account_id,
+        User.username == username,
+        User.is_deleted == False,
+    ]
     if exclude_user_id is not None:
         conditions.append(User.id != exclude_user_id)
-    existing = (await db.execute(
-        select(User.id, User.is_deleted).where(*conditions)
-    )).first()
-    if existing is None:
-        return
-    if existing.is_deleted:
-        raise HTTPException(
-            400,
-            f"Numele '{username}' a apartinut unui utilizator sters si nu poate fi "
-            "reutilizat. Alege alt nume de utilizator.",
-        )
-    raise HTTPException(400, f"Utilizatorul '{username}' exista deja in acest cont.")
+    existing = (await db.execute(select(User.id).where(*conditions))).first()
+    if existing is not None:
+        raise HTTPException(400, f"Utilizatorul '{username}' exista deja in acest cont.")
 
 
 async def list_users(db: AsyncSession, account_id: int) -> list[User]:
@@ -121,6 +137,7 @@ async def create_user(
     if not username:
         raise HTTPException(400, "Utilizatorul este obligatoriu.")
     await _assert_username_free(db, account_id, username)
+    await _assert_employee_owned(db, account_id, employee_id)
     user = User(
         account_id=account_id,
         username=username,
@@ -167,6 +184,7 @@ async def update_user(
     if "role" in patch and patch["role"] is not None:
         user.role = patch["role"]
     if "employee_id" in patch:
+        await _assert_employee_owned(db, account_id, patch["employee_id"])
         user.employee_id = patch["employee_id"]
     if "is_active" in patch and patch["is_active"] is not None:
         user.is_active = patch["is_active"]

@@ -18,6 +18,7 @@ from app.config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_DAYS
 from app.models.account import Account
 from app.models.device import Device
 from app.models.user import User, UserSession
+from app.utils import login_throttle
 from app.utils.security import hash_password, is_legacy_hash, verify_password
 
 # Mesaj unic pentru orice combinatie greasita — nu divulgam daca a fost codul,
@@ -48,8 +49,12 @@ async def authenticate_user(
     username: str,
     password: str,
 ) -> tuple[User, Account]:
+    # Blocarea se face pe combinatia incercata, nu pe IP — vezi login_throttle.
+    login_throttle.assert_not_locked(code, username)
+
     account = await _find_account(db, code, username)
     if account is None:
+        login_throttle.record_failure(code, username)
         raise HTTPException(401, INVALID_CREDENTIALS)
 
     user = (await db.execute(
@@ -60,7 +65,12 @@ async def authenticate_user(
         )
     )).scalar_one_or_none()
     if user is None or not verify_password(password, user.password):
+        login_throttle.record_failure(code, username)
         raise HTTPException(401, INVALID_CREDENTIALS)
+
+    # Parola a fost corecta: contorul se reseteaza chiar daca userul e
+    # dezactivat, ca un cont suspendat sa nu ajunga blocat si dupa reactivare.
+    login_throttle.record_success(code, username)
     if not user.is_active:
         raise HTTPException(403, "Utilizatorul este dezactivat. Contacteaza administratorul.")
 

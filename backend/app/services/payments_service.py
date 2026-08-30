@@ -55,7 +55,7 @@ def signed_amount(p: ReceiptPayment) -> Decimal:
     return -amt if p.kind == PaymentKind.RESTITUIRE else amt
 
 
-async def _get_receipt(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
+async def get_receipt(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
     receipt = (await db.execute(
         select(Receipt).where(
             Receipt.id == receipt_id,
@@ -157,7 +157,7 @@ async def add_payment(
     employee_id: int | None = None,
     note: str | None = None,
 ) -> tuple[ReceiptPayment, dict]:
-    receipt = await _get_receipt(db, account_id, receipt_id)
+    receipt = await get_receipt(db, account_id, receipt_id)
     amount = _q2(amount)
     if amount <= 0:
         raise HTTPException(400, "Suma trebuie sa fie mai mare decat zero.")
@@ -196,10 +196,19 @@ async def add_payment(
     return payment, summarize(payments, receipt.total)
 
 
-async def delete_payment(db: AsyncSession, account_id: int, payment_id: int) -> dict:
+async def delete_payment(
+    db: AsyncSession, account_id: int, receipt_id: int, payment_id: int
+) -> dict:
+    """Sterge logic o miscare de pe un bon anume.
+
+    `receipt_id` face parte din cheia de cautare, nu doar din URL: altfel un
+    payment_id de pe alt bon ar fi acceptat, iar verificarile facute de router pe
+    bonul din path (proprietate, lock ANAF) ar fi ocolite.
+    """
     payment = (await db.execute(
         select(ReceiptPayment).where(
             ReceiptPayment.id == payment_id,
+            ReceiptPayment.receipt_id == receipt_id,
             ReceiptPayment.account_id == account_id,
             ReceiptPayment.is_deleted == False,
         )
@@ -207,7 +216,7 @@ async def delete_payment(db: AsyncSession, account_id: int, payment_id: int) -> 
     if payment is None:
         raise HTTPException(404, "Inregistrarea de plata nu a fost gasita.")
 
-    receipt = await _get_receipt(db, account_id, payment.receipt_id)
+    receipt = await get_receipt(db, account_id, receipt_id)
     payment.is_deleted = True
     payment.deleted_at = datetime.now(timezone.utc)
     await db.flush()

@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.company import Company
 from app.schemas.company import CompanyCreate, CompanyUpdate, CompanyRead
 from app.schemas.common import Page
@@ -46,7 +49,7 @@ async def list_companies(
 async def create_company(
     body: CompanyCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     company = Company(**body.model_dump(), account_id=account_id)
     db.add(company)
@@ -90,7 +93,7 @@ async def update_company(
     company_id: int,
     body: CompanyUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
@@ -108,7 +111,7 @@ async def upload_logo(
     company_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
@@ -130,7 +133,7 @@ async def upload_background(
     company_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
@@ -151,7 +154,7 @@ async def upload_background(
 async def delete_company(
     company_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id:

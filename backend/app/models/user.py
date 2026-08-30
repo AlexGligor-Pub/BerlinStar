@@ -1,7 +1,7 @@
 from __future__ import annotations
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 
@@ -32,7 +32,17 @@ class User(Base):
     """
     __tablename__ = "users"
     __table_args__ = (
-        UniqueConstraint("account_id", "username", name="uq_users_account_id_username"),
+        # Index unic PARTIAL, nu constrangere totala: stergerea e logica, iar o
+        # unicitate care numara si randurile sterse ar rezerva numele pe veci
+        # (vezi migrarea usr02).
+        Index(
+            "uq_users_account_id_username",
+            "account_id",
+            "username",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+            sqlite_where=text("is_deleted = 0"),
+        ),
         Index("ix_users_account_id_id", "account_id", "id"),
         Index("ix_users_employee_id", "employee_id"),
     )

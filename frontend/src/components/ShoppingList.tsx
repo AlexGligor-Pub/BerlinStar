@@ -8,6 +8,7 @@ import { apiFetch } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
 import { notify } from "../store/notificationsStore";
+import { canManage } from "../store/permissions";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
@@ -1632,17 +1633,36 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                   <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setEditQty(String(v))}>{v}</button>
                 ))}
               </div>
+              {/* Pretul e editabil doar pentru admin/manager: altfel „reducerea"
+                  s-ar putea acorda pur si simplu tastand un pret mai mic, ocolind
+                  modalul de reducere. Serverul refuza oricum coborarea sub pretul
+                  de referinta (vezi _assert_may_change_prices), asa ca aici doar
+                  facem UI-ul sa spuna acelasi lucru. */}
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Pret (lei)</label>
-                <input
-                  class="input sl-edit-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editPrice()}
-                  onInput={(e) => setEditPrice(e.currentTarget.value)}
-                />
+                <Show
+                  when={canManage()}
+                  fallback={
+                    <div class="sl-edit-input" style="display:flex;align-items:center;opacity:0.7">
+                      {(parseFloat(editPrice()) || 0).toFixed(2)}
+                    </div>
+                  }
+                >
+                  <input
+                    class="input sl-edit-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editPrice()}
+                    onInput={(e) => setEditPrice(e.currentTarget.value)}
+                  />
+                </Show>
               </div>
+              <Show when={!canManage()}>
+                <div style="font-size:0.75rem;color:var(--text-muted);margin:-4px 0 6px">
+                  Prețul se modifică de către administrator sau manager.
+                </div>
+              </Show>
               <div class="sl-edit-item-total">
                 Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
               </div>

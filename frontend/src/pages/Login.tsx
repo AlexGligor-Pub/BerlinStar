@@ -61,6 +61,12 @@ export default function Login() {
   async function handleSubmit(e: Event) {
     e.preventDefault();
     setError("");
+
+    const companyCode = code().trim().toLowerCase();
+    if (!companyCode) {
+      setError("Completeaza codul firmei.");
+      return;
+    }
     setLoading(true);
 
     try {
@@ -69,7 +75,7 @@ export default function Login() {
         method: "POST",
         handleUnauthorized: false,
         body: JSON.stringify({
-          code: code().trim().toLowerCase() || null,
+          code: companyCode,
           username: username().trim(),
           password: password(),
           // Dispozitivul local, ca adminul sa vada in pagina Utilizatori
@@ -86,6 +92,7 @@ export default function Login() {
           locked_at?: string | null;
           role?: string;
           resources?: string[];
+          code?: string | null;
         };
         loginAndRedirect(
           username().trim(),
@@ -93,7 +100,14 @@ export default function Login() {
           data.is_locked ?? false,
           data.locked_at ?? null,
           resolveLoginTarget(),
-          { role: data.role ?? null, resources: data.resources ?? [], code: code().trim().toLowerCase() || null },
+          {
+            role: data.role ?? null,
+            resources: data.resources ?? [],
+            // Codul canonic vine de la server; ce a tastat operatorul e doar
+            // fallback. Un cod null ar face statia sa para „alta firma" si
+            // si-ar pierde dispozitivul inregistrat la fiecare autentificare.
+            code: data.code ?? companyCode,
+          },
         );
         return;
       } else if (res.status === 401) {
@@ -203,9 +217,11 @@ export default function Login() {
                 placeholder="ex: berlinstar"
                 value={code()}
                 onInput={(e) => setCode(e.currentTarget.value)}
+                required
+                autofocus={!code()}
               />
               <div style="margin-top:4px;font-size:0.78rem;color:var(--text-muted)">
-                Îl găsești în Configurări → Contul Meu. Lasă gol dacă te autentifici cu contul principal.
+                Îl găsești în Configurări → Contul Meu. Rămâne salvat în browser după primul login.
               </div>
             </div>
             <div class="form-group">

@@ -12,6 +12,7 @@ from app.models.receipt import Receipt
 from app.models.vehicol import Vehicol
 from app.schemas.client import ClientCreate, ClientRead
 from app.schemas.client_vehicol import ClientVehicolCreate, ClientVehicolRead, ClientVehicolWithClientRead, ClientShort
+from app.utils.plate import normalize_plate, normalized_plate_column
 from app.schemas.common import Page
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
@@ -82,7 +83,9 @@ async def search_vehicole_by_plate(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    normalized = q_masina.replace(" ", "").upper()
+    # Acelasi normalizator ca la legarea masinii de client (app/utils/plate.py).
+    # Cand cele doua difereau, cautarea considera „TM-01-ABC" si „TM01ABC" masini
+    # diferite, iar salvarea le unifica — sau invers, dupa caz.
     stmt = (
         select(ClientVehicol, Client)
         .join(Client, Client.id == ClientVehicol.client_id)
@@ -90,7 +93,7 @@ async def search_vehicole_by_plate(
             ClientVehicol.account_id == account_id,
             ClientVehicol.is_deleted == False,
             Client.is_deleted == False,
-            func.upper(func.replace(ClientVehicol.numar_masina, " ", "")) == normalized,
+            normalized_plate_column(ClientVehicol.numar_masina) == normalize_plate(q_masina),
         )
         .order_by(ClientVehicol.id)
     )

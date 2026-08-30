@@ -28,9 +28,14 @@ LAST_SEEN_THROTTLE = timedelta(minutes=5)
 
 @dataclass
 class AuthContext:
-    """Userul autentificat + sesiunea si contul lui."""
+    """Userul autentificat + sesiunea si contul lui.
+
+    `session` nu e optional: fiecare token poarta un `jti`, iar unul fara el e
+    respins in `resolve_auth_context`. Altfel am avea o cale prin care token-ul
+    e valid dar nerevocabil.
+    """
     user: User
-    session: UserSession | None
+    session: UserSession
     account: Account
 
     @property
@@ -74,9 +79,13 @@ async def resolve_auth_context(
     facem un singur SELECT cu join-uri; drumul cu interogari suplimentare e
     doar cel de eroare, unde latenta nu conteaza.
     """
-    # Token emis inainte de migrarea la utilizatori (fara `uid`): il tratam ca
-    # sesiune expirata, ca sa forteze un login nou pe noul flux.
-    if user_id is None:
+    # Token emis inainte de migrarea la utilizatori (fara `uid`/`jti`): il tratam
+    # ca sesiune expirata, ca sa forteze un login nou pe noul flux.
+    #
+    # `jti` e obligatoriu, nu doar verificat cand exista: un token fara el ar
+    # trece de toate controalele de sesiune (revocare, expirare, deconectare
+    # dispozitiv) fiindca n-ar avea ce sa caute in `user_sessions`.
+    if user_id is None or not jti:
         raise HTTPException(401, "Sesiune invalida. Autentifica-te din nou.")
 
     row = (await db.execute(
@@ -101,18 +110,21 @@ async def resolve_auth_context(
         raise HTTPException(401, "Utilizator inexistent.")
 
     user, account, session = row
+    # 401, nu 403: clientul trateaza 401 ca „sesiune moarta" si deconecteaza
+    # curat. Cu 403 utilizatorul dezactivat ar rămâne blocat in aplicatie, cu
+    # fiecare cerere esuand. Mesajul explica de ce, ca ecranul de login sa nu
+    # para o deconectare aleatorie.
     if not user.is_active:
-        raise HTTPException(403, "Utilizatorul este dezactivat.")
+        raise HTTPException(401, "Utilizatorul a fost dezactivat. Contacteaza administratorul.")
 
-    if jti is not None:
-        if session is None:
-            raise HTTPException(401, "Sesiune inexistenta. Autentifica-te din nou.")
-        if session.revoked_at is not None:
-            raise HTTPException(401, "Sesiune incheiata. Autentifica-te din nou.")
-        if session.user_id != user.id:
-            raise HTTPException(401, "Sesiune invalida.")
-        if session.expires_at <= datetime.now(timezone.utc):
-            raise HTTPException(401, "Sesiune expirata. Autentifica-te din nou.")
-        await _touch_last_seen(db, session)
+    if session is None:
+        raise HTTPException(401, "Sesiune inexistenta. Autentifica-te din nou.")
+    if session.revoked_at is not None:
+        raise HTTPException(401, "Sesiune incheiata. Autentifica-te din nou.")
+    if session.user_id != user.id:
+        raise HTTPException(401, "Sesiune invalida.")
+    if session.expires_at <= datetime.now(timezone.utc):
+        raise HTTPException(401, "Sesiune expirata. Autentifica-te din nou.")
+    await _touch_last_seen(db, session)
 
     return AuthContext(user=user, session=session, account=account)

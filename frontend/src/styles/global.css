@@ -2959,6 +2959,113 @@ img.pos-theme-preview {
   font-weight: 700;
 }
 
+.navbar-username {
+  display: inline-flex;
+  align-items: center;
+  max-width: 140px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ===== LOGO MONEDA ===== */
+.logo-coin-scene {
+  perspective: 320px;
+  /* Fata monedei ramane metalica deschisa in toate temele: logo-ul are alfa
+     si desen inchis, deci pe un disc intunecat ar dispărea. */
+  --coin-face: linear-gradient(150deg, #ffffff, #eef1f6 55%, #dadfe8);
+  --coin-edge: linear-gradient(90deg, #5c5c5c, #dcdcdc 32%, #9b9b9b 58%, #454545);
+  --coin-ring: rgba(0, 0, 0, 0.35);
+  --coin-hi: rgba(255, 255, 255, 0.6);
+  --coin-lo: rgba(0, 0, 0, 0.28);
+  --coin-shadow: rgba(0, 0, 0, 0.38);
+  --coin-shadow-stuck: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .logo-coin-scene,
+[data-theme="gray"] .logo-coin-scene,
+[data-theme="apple"] .logo-coin-scene {
+  --coin-face: linear-gradient(150deg, #f6f8fc, #dde3ec 55%, #b6bece);
+  --coin-edge: linear-gradient(90deg, #23262f, #c3cad8 32%, #6d7484 58%, #1b1e25);
+  --coin-ring: rgba(255, 255, 255, 0.32);
+  --coin-hi: rgba(255, 255, 255, 0.9);
+  --coin-lo: rgba(0, 0, 0, 0.35);
+  --coin-shadow: rgba(0, 0, 0, 0.7);
+  --coin-shadow-stuck: rgba(0, 0, 0, 0.55);
+}
+
+.logo-coin {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  transform-style: preserve-3d;
+  animation: logo-coin-tilt 4s ease-in-out infinite;
+  filter: drop-shadow(0 4px 5px var(--coin-shadow));
+}
+
+/* Muchia: un al doilea disc in spate, decalat pe Z, ca sa se vada grosimea la inclinare. */
+.logo-coin::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--coin-edge);
+  transform: translateZ(-4px);
+}
+
+.logo-coin img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--coin-face);
+  transform: translateZ(4px);
+  box-shadow:
+    inset 0 0 0 1.5px var(--coin-hi),
+    inset 0 3px 7px rgba(255, 255, 255, 0.4),
+    inset 0 -3px 7px var(--coin-lo),
+    0 0 0 1px var(--coin-ring);
+}
+
+@keyframes logo-coin-tilt {
+  0%, 100% { transform: rotateY(-30deg); }
+  50%      { transform: rotateY(30deg); }
+}
+
+/* Apasata / meniu deschis: se opreste dreapta, lipita de bara. */
+.logo-coin--stuck,
+.logo-coin-scene:active .logo-coin {
+  animation: none;
+  transform: rotateY(0deg) scale(0.96);
+  filter: drop-shadow(0 1px 1px var(--coin-shadow-stuck));
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.logo-coin--stuck::before,
+.logo-coin-scene:active .logo-coin::before {
+  transform: translateZ(-1px);
+}
+
+.logo-coin--stuck img,
+.logo-coin-scene:active .logo-coin img {
+  transform: translateZ(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-coin { animation: none; transform: rotateY(0deg); }
+}
+
 /* ===== LOGO DROPDOWN ===== */
 .logo-dropdown {
   position: absolute;

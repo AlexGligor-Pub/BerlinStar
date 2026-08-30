@@ -51,6 +51,10 @@ export default function PaymentsSection(props: {
    *  depind de ea. Acopera si schimbarile venite prin SSE de pe alt dispozitiv,
    *  nu doar actiunile facute din acest card. */
   refreshKey?: number | string;
+  /** Apelat dupa orice miscare salvata. Statusul bonului (`pay_method`,
+   *  `partial_pay`) se recalculeaza pe server din registru, deci cardul trebuie
+   *  sa reciteasca bonul — altfel ar afisa in continuare starea veche. */
+  onChanged?: () => void;
 }) {
   const [data, setData] = createSignal<PaymentsResponse | undefined>(cachedPayments(props.receiptId));
   const [loading, setLoading] = createSignal(false);
@@ -98,6 +102,7 @@ export default function PaymentsSection(props: {
       setAmount("");
       setNote("");
       setShowForm(false);
+      props.onChanged?.();
       notify(`${KIND_LABEL[kind()]} înregistrată.`, "success");
     } catch (e: any) {
       notify(e?.message ?? "Eroare la înregistrarea plății.", "error");
@@ -110,6 +115,7 @@ export default function PaymentsSection(props: {
     setBusy(true);
     try {
       setData(await deletePayment(props.receiptId, id));
+      props.onChanged?.();
       notify("Înregistrare ștearsă.", "success");
     } catch (e: any) {
       notify(e?.message ?? "Eroare la ștergere.", "error");

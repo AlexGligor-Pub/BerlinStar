@@ -16,7 +16,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Impartirea accesului: rutele pe un BON anume (validare, XML, upload, retry,
+# status, download) raman operationale — casierul trimite factura de la
+# tejghea. Configurarea companiei si listele din paginile e-Factura sunt
+# admin + manager, la fel ca ruta /efactura din UI.
+from app.dependencies import get_account_id, get_advanced_account_id
 from app.efactura import oauth_service, runtime_config, service as efactura_service
 from app.efactura.anaf_client import AnafEFacturaClient
 from app.efactura.exceptions import (
@@ -134,7 +138,7 @@ def _token_status_for(token: AnafToken | None, company_id: int) -> AnafTokenStat
 
 @router.get("/my-companies", response_model=list[CompanyEFacturaSummary])
 async def list_my_companies(
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Listeaza companiile contului curent cu setarile ANAF si statusul OAuth (USB)."""
@@ -177,7 +181,7 @@ async def list_my_companies(
 @router.get("/companies/{company_id}/settings", response_model=AnafSettingsOut)
 async def get_my_company_settings(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza setarile ANAF ale unei companii detinute de cont (auto-creeaza daca lipsesc)."""
@@ -197,7 +201,7 @@ async def get_my_company_settings(
 async def update_my_company_settings(
     body: AnafSettingsUpdate,
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """User-level update pentru AnafSettings. Acces doar pentru proprietarul contului."""
@@ -224,7 +228,7 @@ async def update_my_company_settings(
 @router.post("/companies/{company_id}/test-connection")
 async def test_my_company_connection(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Smoke-test al conexiunii ANAF pentru o companie a contului (refresh-uieste tokenul daca expira curand)."""
@@ -247,7 +251,7 @@ async def test_my_company_connection(
 @router.post("/companies/{company_id}/connect")
 async def connect_company(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Genereaza URL-ul de redirect catre ANAF pentru autentificare cu USB."""
@@ -296,7 +300,7 @@ async def oauth_callback(
 @router.post("/companies/{company_id}/disconnect")
 async def disconnect_company(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     await _require_company_access(db, company_id, account_id)
@@ -309,7 +313,7 @@ async def disconnect_company(
 @router.get("/companies/{company_id}/status", response_model=AnafTokenStatus)
 async def get_company_status(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     await _require_company_access(db, company_id, account_id)
@@ -414,7 +418,7 @@ async def preview_receipt_xml(
 @router.get("/companies/{company_id}/audit", response_model=list[MappingAuditEntry])
 async def audit_mapping(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     limit: int = Query(default=50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
@@ -674,7 +678,7 @@ async def download_response_zip(
 @router.get("/companies/{company_id}/records", response_model=PaginatedRecordsOut)
 async def list_company_records(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     status_filter: str | None = Query(default=None, alias="status"),
@@ -748,7 +752,7 @@ _RECEIVED_SORT_COLUMNS = {
 @router.get("/companies/{company_id}/received", response_model=PaginatedReceivedOut)
 async def list_received_invoices(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     search: str | None = Query(default=None),
@@ -858,7 +862,7 @@ async def list_received_invoices(
 async def get_received_details(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza detaliile parsate ale unei facturi primite.
@@ -910,7 +914,7 @@ async def get_received_details(
 async def mark_received_read(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Marcheaza factura primita ca citita (idempotent, atomic)."""
@@ -951,7 +955,7 @@ async def mark_received_paid(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
     body: MarkPaidIn | None = None,
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Marcheaza/demarcheaza factura primita ca platita.
@@ -980,7 +984,7 @@ async def mark_received_paid(
 async def download_received_xml(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Descarca XML-ul raw al facturii primite (extras din ZIP-ul ANAF)."""
@@ -1022,7 +1026,7 @@ async def download_received_xml(
 @router.post("/companies/{company_id}/received/sync")
 async def sync_received_for_company(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Sincronizeaza facturile primite din SPV ANAF pentru aceasta companie (manual trigger).
@@ -1092,7 +1096,7 @@ async def sync_received_for_company(
 @router.post("/companies/{company_id}/sent/sync")
 async def sync_sent_for_company(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Importa facturile TRIMISE din SPV ANAF in efactura_records, ca sa apara TOATE in
@@ -1201,7 +1205,7 @@ async def sync_sent_for_company(
 @router.get("/companies/{company_id}/pending-deadlines", response_model=list[EFacturaRecordOut])
 async def list_pending_deadlines(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     days_ahead: int = Query(default=5, ge=0, le=30),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1228,7 +1232,7 @@ async def list_pending_deadlines(
 @router.post("/companies/{company_id}/refresh")
 async def refresh_company_token(
     company_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
     db: AsyncSession = Depends(get_db),
 ):
     """Force-refresh token-ul (util pentru debugging / verificare)."""

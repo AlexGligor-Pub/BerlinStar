@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.department import Department
 from app.models.category import Category
 from app.schemas.department import DepartmentCreate, DepartmentUpdate, DepartmentRead
@@ -53,7 +56,7 @@ async def list_departments(
 async def create_department(
     body: DepartmentCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     department = Department(**body.model_dump(), account_id=account_id)
     db.add(department)
@@ -79,7 +82,7 @@ async def update_department(
     department_id: int,
     body: DepartmentCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     department = await db.get(Department, department_id)
     if department is None or department.is_deleted or department.account_id != account_id:
@@ -97,7 +100,7 @@ async def patch_department(
     department_id: int,
     body: DepartmentUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     department = await db.get(Department, department_id)
     if department is None or department.is_deleted or department.account_id != account_id:
@@ -115,7 +118,7 @@ async def upload_department_image(
     department_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     department = await db.get(Department, department_id)
     if department is None or department.account_id != account_id or department.is_deleted:
@@ -135,7 +138,7 @@ async def upload_department_image(
 async def delete_department(
     department_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     department = await db.get(Department, department_id)
     if department is None or department.account_id != account_id:

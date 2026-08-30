@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import get_platform_admin_account
 from app.models.account import Account
 from app.schemas.account import AccountCreate, AccountUpdate, AccountRead
 from app.schemas.common import Page
@@ -18,7 +19,11 @@ from app.utils.sort import apply_sort
 
 log = logging.getLogger("berlinstar")
 
-router = APIRouter()
+# ATENTIE: acest router administreaza TENANTII (crearea unei firme noi, datele
+# ei, stergerea ei), nu resursele din interiorul unui cont. Apartine exclusiv
+# contului de platforma, deci gate-ul e pus pe router, nu endpoint cu endpoint —
+# o ruta adaugata pe viitor e protejata din start.
+router = APIRouter(dependencies=[Depends(get_platform_admin_account)])
 
 
 @router.get("", response_model=Page[AccountRead])

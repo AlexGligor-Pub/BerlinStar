@@ -34,7 +34,7 @@ _admin_only = Depends(require_resource(Resource.USERS))
 @router.get("", response_model=list[UserRead])
 async def list_users(ctx: AuthContext = _admin_only, db: AsyncSession = Depends(get_db)):
     users = await svc.list_users(db, ctx.account_id)
-    current_jti = ctx.session.jti if ctx.session else None
+    current_jti = ctx.session.jti
     return [svc.serialize_user(u, current_jti) for u in users]
 
 
@@ -69,7 +69,7 @@ async def update_user(
 ):
     user = await svc.update_user(db, ctx.account_id, user_id, body.model_dump(exclude_unset=True))
     sessions = await svc.list_sessions(db, ctx.account_id, user_id=user.id)
-    current_jti = ctx.session.jti if ctx.session else None
+    current_jti = ctx.session.jti
     return svc.serialize_user(user, current_jti, sessions=sessions)
 
 
@@ -101,7 +101,7 @@ async def delete_user(
 async def list_all_sessions(ctx: AuthContext = _admin_only, db: AsyncSession = Depends(get_db)):
     """Toate dispozitivele logate din cont, indiferent de user."""
     sessions = await svc.list_sessions(db, ctx.account_id)
-    current_jti = ctx.session.jti if ctx.session else None
+    current_jti = ctx.session.jti
     return [svc.serialize_session(s, current_jti) for s in sessions]
 
 
@@ -112,7 +112,7 @@ async def list_user_sessions(
     db: AsyncSession = Depends(get_db),
 ):
     sessions = await svc.list_sessions(db, ctx.account_id, user_id=user_id)
-    current_jti = ctx.session.jti if ctx.session else None
+    current_jti = ctx.session.jti
     return [svc.serialize_session(s, current_jti) for s in sessions]
 
 

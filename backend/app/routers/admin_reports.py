@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.routers.admin import _require_super_admin
 from app.rate_limit import limiter
 from app.services.reports import (
     run_report,
@@ -18,7 +18,11 @@ from app.services.reports import (
 from app.services.reports.manager import SUPPORTED_REPORTS, mark_triggered, run_all
 
 log = logging.getLogger("berlinstar.reports")
-router = APIRouter()
+
+# Rapoartele agregate se recalculeaza global, pentru toate conturile, deci
+# declansarea lor e treaba platformei — nu a unui utilizator oarecare. Gate-ul
+# sta pe router, ca o ruta noua sa fie protejata din start.
+router = APIRouter(dependencies=[Depends(_require_super_admin)])
 
 
 class ReportStatusOut(BaseModel):
@@ -42,7 +46,6 @@ class TriggerResponse(BaseModel):
 @router.get("", response_model=list[ReportStatusOut])
 async def list_all_reports(
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
 ):
     rows = await list_reports(db)
     return [ReportStatusOut(**row.__dict__) for row in rows]
@@ -55,7 +58,6 @@ async def trigger_report(
     report_type: str,
     mode: str = "incremental",
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
 ):
     if report_type not in SUPPORTED_REPORTS:
         raise HTTPException(404, "Raport necunoscut.")
@@ -107,7 +109,6 @@ async def trigger_run_all(
     period_end: date | None = None,
     stagger_seconds: int = 0,
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
 ):
     """Rulează toate rapoartele secvențial.
 

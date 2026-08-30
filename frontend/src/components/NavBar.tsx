@@ -114,6 +114,10 @@ export default function NavBar() {
   onCleanup(() => document.removeEventListener("pointerdown", onOutsidePointerDown));
 
   const displayLabel = createMemo(() => auth.displayName?.trim() || auth.user || "");
+  const usernameLabel = createMemo(() => {
+    const u = auth.user?.trim() ?? "";
+    return u && u !== displayLabel() ? u : "";
+  });
 
   return (
     <>
@@ -121,12 +125,14 @@ export default function NavBar() {
         <div class="offline-banner" classList={{ "offline-banner--online": isConnected() }} />
         <div class="logo-menu" style="position:relative;display:flex;align-items:center;gap:10px">
           <button
-            class="btn-icon"
+            class="btn-icon logo-coin-scene"
             style="border:none;padding:4px;background:transparent"
             onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
             aria-label="Meniu"
           >
-            <img src={logo} alt="Logo" style="height:40px;display:block" />
+            <span class="logo-coin" classList={{ "logo-coin--stuck": open() }}>
+              <img src={logo} alt="Logo" />
+            </span>
           </button>
 
           <Show when={displayLabel()}>
@@ -136,6 +142,12 @@ export default function NavBar() {
               style="font-family:'Segoe UI',system-ui,sans-serif;font-weight:600;font-size:1.05rem;letter-spacing:0.2px;background:linear-gradient(90deg,var(--accent,#5b7cfa),#9b6bff);-webkit-background-clip:text;background-clip:text;color:transparent;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
             >
               {displayLabel()}
+            </span>
+          </Show>
+
+          <Show when={usernameLabel()}>
+            <span class="navbar-username" title={`Utilizator: ${usernameLabel()}`}>
+              {usernameLabel()}
             </span>
           </Show>
 

@@ -169,3 +169,22 @@ async def get_actor_username(ctx: AuthContext = Depends(get_auth_context)) -> st
     stim exact cine a facut miscarea.
     """
     return ctx.user.username
+
+
+# Contul de platforma (noi, Professor Prime) este identificat prin username-ul
+# rezervat "admin". Rutele /api/admin/* si /api/accounts/* ii apartin exclusiv.
+PLATFORM_ACCOUNT_USERNAME = "admin"
+
+
+async def get_platform_admin_account(ctx: AuthContext = Depends(get_auth_context)) -> Account:
+    """Super-adminul de platforma — gestioneaza CONTURILE clientilor, nu un cont.
+
+    Doua conditii, nu una: token-ul trebuie sa apartina contului de platforma
+    *si* utilizatorul din el trebuie sa aiba rol `admin`. Altfel un `worker`
+    creat in contul de platforma ar administra toti clientii.
+    """
+    if ctx.account.username != PLATFORM_ACCOUNT_USERNAME:
+        raise HTTPException(403, "Acces interzis: este necesar contul administrator.")
+    if not ctx.can(Resource.USERS):
+        raise HTTPException(403, "Acces interzis: este necesar rolul de administrator.")
+    return ctx.account

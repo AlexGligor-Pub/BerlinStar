@@ -5,7 +5,8 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Factura Rapida e o zona `advanced` (admin + manager), ca si ruta din UI.
+from app.dependencies import get_advanced_account_id
 from app.models.company import Company
 from app.models.location import Location
 
@@ -15,7 +16,7 @@ router = APIRouter()
 @router.get("/companies-meta")
 async def list_companies_meta(
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_advanced_account_id),
 ):
     """Returneaza firmele active pentru contul curent, fiecare cu locatiile asociate.
 

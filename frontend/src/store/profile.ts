@@ -35,7 +35,6 @@ let fetchedThisLoad = false;
 export async function refreshProfile(opts: { force?: boolean } = {}): Promise<void> {
   if (!auth.token) return;
   if (fetchedThisLoad && !opts.force) return;
-  fetchedThisLoad = true;
   try {
     const res = await apiFetch("/api/auth/me");
     if (!res.ok) return;
@@ -47,6 +46,10 @@ export async function refreshProfile(opts: { force?: boolean } = {}): Promise<vo
       resources: d.resources ?? [],
       userName: d.user_name ?? null,
     });
+    // Marcam abia dupa un raspuns bun: daca statia a pornit offline, urmatoarea
+    // navigare mai incearca o data. Cu flagul setat inainte de `await`, un
+    // singur esec de retea ar fi lasat rolul invechit pana la reload.
+    fetchedThisLoad = true;
   } catch {
     // offline — pastram ce avem in localStorage
   }

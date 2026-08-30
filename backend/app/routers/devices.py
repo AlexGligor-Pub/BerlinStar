@@ -4,7 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Inregistrarea unei statii noi (POST) ramane deschisa: o face operatorul la
+# prima pornire. Redenumirea si stergerea sunt insa administrative.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.device import Device
 from app.schemas.device import DeviceCreate, DeviceRead
 from app.schemas.common import Page
@@ -69,7 +71,7 @@ async def update_device(
     device_id: int,
     body: DeviceCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     device = await db.get(Device, device_id)
     if device is None or device.account_id != account_id:
@@ -85,7 +87,7 @@ async def update_device(
 async def delete_device(
     device_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     device = await db.get(Device, device_id)
     if device is None or device.account_id != account_id:

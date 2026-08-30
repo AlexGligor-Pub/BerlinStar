@@ -461,6 +461,27 @@ export async function convertFdlToDeviz(id: string): Promise<Receipt> {
   return updated;
 }
 
+/** Reciteste un singur bon de la server si il pune in lista.
+ *
+ *  Necesar dupa o miscare in registrul de plati: statusul (`pay_method`,
+ *  `partial_pay`) se recalculeaza pe server din registru, deci lista locala ar
+ *  arata o stare invechita. Esecul e ignorat intentionat — registrul si-a facut
+ *  treaba, iar cardul se aliniaza la urmatorul refresh sau eveniment SSE.
+ */
+export async function refreshReceipt(id: string): Promise<Receipt | null> {
+  try {
+    const res = await apiFetch(`/api/receipts/${id}`);
+    if (!res.ok) return null;
+    const updated = mapFromApi(await res.json());
+    const next = receipts().map((r) => (r.id === id ? updated : r));
+    setReceipts(next);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+    return updated;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteReceipt(id: string) {
   await apiFetch(`/api/receipts/${id}`, { method: "DELETE" });
   const updated = receipts().filter((r) => r.id !== id);

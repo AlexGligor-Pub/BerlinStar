@@ -6,7 +6,10 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.item import Item, ItemType
 from app.models.category import Category
 from app.models.department import Department
@@ -78,7 +81,7 @@ async def list_items(
 async def create_item(
     body: ItemCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     item = Item(**body.model_dump(), account_id=account_id)
     db.add(item)
@@ -104,7 +107,7 @@ async def update_item(
     item_id: int,
     body: ItemCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     item = await db.get(Item, item_id)
     if item is None or item.is_deleted or item.account_id != account_id:
@@ -122,7 +125,7 @@ async def patch_item(
     item_id: int,
     body: ItemUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     item = await db.get(Item, item_id)
     if item is None or item.is_deleted or item.account_id != account_id:
@@ -140,7 +143,7 @@ async def upload_item_image(
     item_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     item = await db.get(Item, item_id)
     if item is None or item.account_id != account_id or item.is_deleted:
@@ -162,7 +165,7 @@ async def upload_item_image(
 async def delete_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     item = await db.get(Item, item_id)
     if item is None or item.account_id != account_id:

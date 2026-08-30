@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.disclaimer import Disclaimer
 from app.schemas.disclaimer import DisclaimerCreate, DisclaimerUpdate, DisclaimerRead
 from app.schemas.common import Page
@@ -39,7 +42,7 @@ async def list_disclaimers(
 async def create_disclaimer(
     body: DisclaimerCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     d = Disclaimer(title=body.title, text=body.text, account_id=account_id)
     db.add(d)
@@ -65,7 +68,7 @@ async def patch_disclaimer(
     disclaimer_id: int,
     body: DisclaimerUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     d = await db.get(Disclaimer, disclaimer_id)
     if d is None or d.account_id != account_id or d.is_deleted:
@@ -82,7 +85,7 @@ async def patch_disclaimer(
 async def delete_disclaimer(
     disclaimer_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     d = await db.get(Disclaimer, disclaimer_id)
     if d is None or d.account_id != account_id:

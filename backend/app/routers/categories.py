@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.category import Category
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryRead
 from app.schemas.common import Page
@@ -49,7 +52,7 @@ async def list_categories(
 async def create_category(
     body: CategoryCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     category = Category(**body.model_dump(), account_id=account_id)
     db.add(category)
@@ -75,7 +78,7 @@ async def update_category(
     category_id: int,
     body: CategoryCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     cat = await db.get(Category, category_id)
     if cat is None or cat.is_deleted or cat.account_id != account_id:
@@ -93,7 +96,7 @@ async def patch_category(
     category_id: int,
     body: CategoryUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     cat = await db.get(Category, category_id)
     if cat is None or cat.is_deleted or cat.account_id != account_id:
@@ -110,7 +113,7 @@ async def patch_category(
 async def delete_category(
     category_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     cat = await db.get(Category, category_id)
     if cat is None or cat.account_id != account_id:

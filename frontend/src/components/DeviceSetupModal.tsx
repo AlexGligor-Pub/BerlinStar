@@ -1,6 +1,7 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { apiFetch } from "../utils/api";
 import { pendingName, registerDevice } from "../store/deviceStore";
+import { canManage } from "../store/permissions";
 
 interface Location {
   id: number;
@@ -113,10 +114,15 @@ export default function DeviceSetupModal() {
         <div class="device-modal-section">
           <div class="device-section-title-row">
             <span class="device-modal-label">Selecteaza locatia</span>
-            <button
-              class="btn btn-sm btn-ghost"
-              onClick={() => { setAddingLocation(true); setError(null); }}
-            >+ Adauga locatie</button>
+            {/* Crearea unei locatii e o operatiune de configurare (admin +
+                manager), la fel ca pe server. Un `worker` inregistreaza statia
+                pe o locatie existenta. */}
+            <Show when={canManage()}>
+              <button
+                class="btn btn-sm btn-ghost"
+                onClick={() => { setAddingLocation(true); setError(null); }}
+              >+ Adauga locatie</button>
+            </Show>
           </div>
 
           <Show when={addingLocation()}>
@@ -144,7 +150,11 @@ export default function DeviceSetupModal() {
             <p class="device-modal-hint">Se incarca locatiile...</p>
           </Show>
           <Show when={!loading() && locations().length === 0 && !addingLocation()}>
-            <p class="device-modal-hint">Nu exista locatii. Adauga una pentru a continua.</p>
+            <p class="device-modal-hint">
+              {canManage()
+                ? "Nu exista locatii. Adauga una pentru a continua."
+                : "Nu exista locatii. Cere-i unui administrator sa creeze una."}
+            </p>
           </Show>
           <Show when={!loading() && locations().length > 0}>
             <div class="device-location-grid">

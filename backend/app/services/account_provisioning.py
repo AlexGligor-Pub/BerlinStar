@@ -63,8 +63,14 @@ async def provision_account_admin(
     if not account.code:
         account.code = await generate_account_code(db, account)
 
+    # `is_deleted == False`: de cand unicitatea username-ului e partiala (usr02),
+    # un user sters poate purta acelasi nume — nu vrem sa il „reinviem" aici.
     existing = (await db.execute(
-        select(User).where(User.account_id == account.id, User.username == account.username)
+        select(User).where(
+            User.account_id == account.id,
+            User.username == account.username,
+            User.is_deleted == False,
+        )
     )).scalar_one_or_none()
     if existing is not None:
         return existing

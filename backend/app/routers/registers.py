@@ -5,7 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+# Nomenclator/configurare: CITIREA ramane deschisa tuturor rolurilor (UI-ul
+# operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
+# app/permissions.py pentru matricea completa.
+from app.dependencies import get_account_id, get_settings_account_id
 from app.models.register import Register
 from app.schemas.register import RegisterCreate, RegisterUpdate, RegisterRead
 from app.schemas.common import Page
@@ -42,7 +45,7 @@ async def list_registers(
 async def create_register(
     body: RegisterCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     r = Register(**body.model_dump(), account_id=account_id)
     db.add(r)
@@ -68,7 +71,7 @@ async def patch_register(
     register_id: int,
     body: RegisterUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     r = await db.get(Register, register_id)
     if r is None or r.account_id != account_id or r.is_deleted:
@@ -85,7 +88,7 @@ async def patch_register(
 async def delete_register(
     register_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     r = await db.get(Register, register_id)
     if r is None or r.account_id != account_id:
