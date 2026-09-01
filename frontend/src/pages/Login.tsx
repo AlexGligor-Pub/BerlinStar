@@ -7,6 +7,8 @@ import ThemeToggle from "../components/ThemeToggle";
 import Modal from "../components/ui/Modal";
 import logo from "../assets/logo.png";
 
+const guideHref = import.meta.env.BASE_URL.replace(/\/$/, "") + "/ghid";
+
 export default function Login() {
   const [searchParams] = useSearchParams();
 
@@ -195,6 +197,8 @@ export default function Login() {
       <a class="login-news-link" href="https://professorprime.ro/" target="_blank" rel="noopener noreferrer">
         Afla cele mai recente noutati pe professorprime.ro
       </a>
+
+      <a class="login-guide-link" href={guideHref}>Ghid de utilizare / User guide</a>
 
       <div class="login-card">
         <img src={logo} alt="Berlin Star" class="login-logo" />

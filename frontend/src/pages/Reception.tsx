@@ -1142,6 +1142,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <div class="receipt-actions-row">
                     <button
                       class="btn btn-ghost btn-sm btn-warning-text"
+                      disabled={!!live().metodaPlata}
+                      title={live().metodaPlata
+                        ? "Reducerea se poate aplica doar cat timp bonul e Neplatit."
+                        : undefined}
                       onClick={() => setShowDiscount(true)}
                     >
                       {discountTotal() > 0

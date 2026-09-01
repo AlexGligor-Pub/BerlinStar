@@ -682,7 +682,12 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     if (!name) return;
     const qty = parseInt(manualQty()) || 1;
     const price = parseFloat(manualPrice()) || 0;
-    addManualItem(name, qty, price, manualUnit().trim() || "buc");
+    // Tipul ales de operator trebuie sa ajunga pe linie: altfel reducerea
+    // pe categorii nu vede linia manuala. Enum-ul serverului e Produs/Service.
+    addManualItem(
+      name, qty, price, manualUnit().trim() || "buc",
+      manualTip() === "Serviciu" ? "Service" : "Produs",
+    );
     setShowManual(false);
   }
 

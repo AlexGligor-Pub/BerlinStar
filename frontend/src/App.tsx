@@ -30,6 +30,7 @@ const NoAccess = lazy(() => import("./pages/NoAccess"));
 const AdminV2 = lazy(() => import("./pages/AdminV2"));
 const Utilizatori = lazy(() => import("./pages/Utilizatori"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
+const Ghid = lazy(() => import("./pages/Ghid"));
 const EFacturaLayout = lazy(() => import("./pages/efactura/EFacturaLayout"));
 const EFacturaReceived = lazy(() => import("./pages/efactura/EFacturaReceived"));
 const EFacturaSent = lazy(() => import("./pages/efactura/EFacturaSent"));
@@ -91,6 +92,7 @@ export default function App() {
       <Notifications />
       <Router base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
         <Route path="/health" component={HealthCheck} />
+        <Route path="/ghid" component={Ghid} />
         <Route path="/login" component={Login} />
         <Route path="/no-access" component={NoAccess} />
         <Route path="/" component={() => <Protected component={POS} />} />

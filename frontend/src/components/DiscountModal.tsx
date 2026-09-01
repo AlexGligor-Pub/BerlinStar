@@ -121,6 +121,9 @@ export default function DiscountModal(props: {
     () => pristine().filter((i) => i.price > 0 && i.itemType == null).length,
   );
 
+  /** Reducerea schimba totalul, deci nu se atinge un bon deja incasat. */
+  const isPaid = createMemo(() => !!props.receipt.metodaPlata);
+
   const hasDiscount = createMemo(() => props.receipt.items.some((i) => i.originalPrice != null));
   const currentDiscount = createMemo(() =>
     round2(
@@ -204,6 +207,7 @@ export default function DiscountModal(props: {
   );
 
   const problem = createMemo(() => {
+    if (isPaid()) return "Bonul are deja o plata inregistrata. Reducerea se poate aplica doar cat timp statusul platii e Neplatit.";
     if (base() <= 0) return "Bonul nu are linii în categoria aleasă.";
     if (amountValue() <= 0) return null;
     if (amountValue() > base()) return `Reducerea depășește baza de calcul (${lei(base())}).`;
@@ -241,6 +245,7 @@ export default function DiscountModal(props: {
 
   async function removeDiscount() {
     setErr("");
+    if (isPaid()) return;
     setSaving(true);
     try {
       await saveItems(pristine());
@@ -393,7 +398,7 @@ export default function DiscountModal(props: {
             type="button"
             class="btn btn-ghost btn-sm"
             style="margin-right:auto;color:var(--danger)"
-            disabled={saving()}
+            disabled={saving() || isPaid()}
             onClick={() => void removeDiscount()}
           >
             Elimină reducerea

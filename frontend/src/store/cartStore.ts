@@ -123,14 +123,20 @@ export function updateItemEmployee(
 
 let _manualCounter = 0;
 
-export function addManualItem(name: string, qty: number, price: number, unit: string) {
+export function addManualItem(
+  name: string,
+  qty: number,
+  price: number,
+  unit: string,
+  itemType: string | null = null,
+) {
   const empId = selectedEmployeeId();
   const empName = selectedEmployeeName();
   const uniqueId = -(++_manualCounter);
   const lineId = `manual_${uniqueId}_${empId ?? ""}`;
   setCart("items", (items) => [
     ...items,
-    { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null, itemId: null, itemType: null },
+    { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null, itemId: null, itemType },
   ]);
 }
 
