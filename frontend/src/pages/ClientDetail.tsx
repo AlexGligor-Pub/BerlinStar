@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "@solidjs/router";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 import type { Client } from "../types";
+import { CNP_PLACEHOLDER } from "../types/client";
 
 interface ClientReceiptsSummary {
   count: number;
@@ -108,6 +109,12 @@ export default function ClientDetail() {
   const [loading, setLoading] = createSignal(true);
   const [filter, setFilter] = createSignal<PlateFilter>({ kind: "all" });
 
+  /** Placeholder-ul de e-Factura nu e o identificare reala — nu se afiseaza. */
+  const fiscalCod = createMemo(() => {
+    const c = client();
+    return c?.cui && c.cui !== CNP_PLACEHOLDER ? c.cui : null;
+  });
+
   async function loadClient(): Promise<void> {
     try {
       const res = await apiFetch(`/api/clienti/${clientId()}`);
@@ -199,12 +206,12 @@ export default function ClientDetail() {
                 {client()!.tip === "juridic" ? "Juridică" : "Fizică"}
               </span>
             </h1>
-            <Show when={client()!.cui || client()!.telefon}>
+            <Show when={fiscalCod() || client()!.telefon}>
               <p class="client-detail-meta">
-                <Show when={client()!.cui}>
-                  <span>CUI: {client()!.cui}</span>
+                <Show when={fiscalCod()}>
+                  <span>{client()!.tip === "juridic" ? "CUI" : "CNP"}: {fiscalCod()}</span>
                 </Show>
-                <Show when={client()!.cui && client()!.telefon}>
+                <Show when={fiscalCod() && client()!.telefon}>
                   <span class="client-detail-meta-sep">·</span>
                 </Show>
                 <Show when={client()!.telefon}>

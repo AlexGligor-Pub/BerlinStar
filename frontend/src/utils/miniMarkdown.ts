@@ -93,6 +93,9 @@ export function renderMarkdown(src: string): string {
     while (i < lines.length && !/^\s*$/.test(lines[i]) && !/^(#{1,4}\s|```|\s*>|\s*[-*]\s|\s*\d+\.\s|\s*\|)/.test(lines[i])) {
       para.push(lines[i]); i++;
     }
+    // Linia deschide un bloc pe care nicio ramura nu l-a consumat (ex. tabel
+    // fara rand separator): fara asta `i` nu ar mai avansa niciodata.
+    if (!para.length) { para.push(line); i++; }
     out.push(`<p>${inline(para.join(" "))}</p>`);
   }
 

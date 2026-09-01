@@ -170,6 +170,7 @@ export async function generateDeviz(r: Receipt, ctx: DocContext, showTehnician =
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
     clientCui: r.clientCui,
+    clientTip: r.clientTip,
     clientReprezentant: r.clientReprezentant,
     clientAdresa: r.clientAdresa,
     clientTelefon: r.clientTelefon,
@@ -307,6 +308,7 @@ export async function generateFisaDeLucru(
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
     clientCui: r.clientCui,
+    clientTip: r.clientTip,
     clientReprezentant: r.clientReprezentant,
     clientAdresa: r.clientAdresa,
     clientTelefon: r.clientTelefon,
@@ -462,6 +464,7 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
   const client: ClientInfoForPdf = {
     clientNume: r.clientNume,
     clientCui: r.clientCui,
+    clientTip: r.clientTip,
     clientReprezentant: r.clientReprezentant,
     clientAdresa: r.clientAdresa,
     clientTelefon: r.clientTelefon,
@@ -594,10 +597,11 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   doc.setFontSize(11);
   doc.text(ro(r.clientNume ?? "-"), innerX + 4, y);
   y += 4.5;
-  if (r.clientTip === "juridic" && r.clientCui) {
+  const chitFiscal = clientFiscalLine(r.clientCui, r.clientTip);
+  if (chitFiscal) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.text(`CUI: ${r.clientCui}`, innerX + 4, y);
+    doc.text(chitFiscal, innerX + 4, y);
     y += 4.5;
   }
 
@@ -909,9 +913,20 @@ function _measureCompanyContent(doc: any, company: any, bw: number, font: string
   return h;
 }
 
+/** Placeholder-ul de 13 zerouri exista doar pentru e-Factura B2C — pe hartie nu
+ *  are ce cauta. Eticheta vine din `tip`, nu din forma codului: un cod strain de
+ *  13 cifre pe o firma nu e CNP. */
+function clientFiscalLine(cui: string | null | undefined, tip?: string | null): string | null {
+  const v = (cui ?? "").trim();
+  if (!v || v === "0000000000000") return null;
+  const fizic = tip ? tip !== "juridic" : /^\d{13}$/.test(v);
+  return `${fizic ? "CNP" : "CUI"}: ${v}`;
+}
+
 export interface ClientInfoForPdf {
   clientNume: string | null;
   clientCui: string | null;
+  clientTip?: string | null;
   clientReprezentant: string | null;
   clientAdresa: string | null;
   clientTelefon: string | null;
@@ -928,7 +943,7 @@ function _measureClientContent(doc: any, ci: ClientInfoForPdf, bw: number, t: (s
 
   doc.setFont(font, "normal");
   doc.setFontSize(7.5);
-  if (ci.clientCui)          h += 3.5;
+  if (clientFiscalLine(ci.clientCui, ci.clientTip)) h += 3.5;
   if (ci.clientReprezentant) h += 3.5;
   if (ci.clientAdresa) {
     const al: string[] = doc.splitTextToSize(t(ci.clientAdresa), bw);
@@ -1046,7 +1061,8 @@ function drawCazareClientBlock(doc: any, ci: ClientInfoForPdf, x: number, y: num
 
   doc.setFont(font, "normal");
   doc.setFontSize(7.5);
-  if (ci.clientCui)          { doc.text(`CUI: ${ci.clientCui}`, x, y); y += 3.5; }
+  const fiscalLine = clientFiscalLine(ci.clientCui, ci.clientTip);
+  if (fiscalLine)            { doc.text(fiscalLine, x, y); y += 3.5; }
   if (ci.clientReprezentant) { doc.text(`Repr.: ${t(ci.clientReprezentant)}`, x, y); y += 3.5; }
   if (ci.clientAdresa) {
     const al: string[] = doc.splitTextToSize(t(ci.clientAdresa), bw);
@@ -1078,7 +1094,7 @@ function drawCazareTopCards(
   const innerW = bw - CARD_PAD * 2;
   const hasClient = !!(
     client.clientNume?.trim() ||
-    client.clientCui?.trim() ||
+    clientFiscalLine(client.clientCui, client.clientTip) ||
     client.clientReprezentant?.trim() ||
     client.clientAdresa?.trim() ||
     client.clientTelefon?.trim()
@@ -2236,6 +2252,7 @@ export async function generateMontajRoti(
   const client: ClientInfoForPdf = {
     clientNume: receipt.clientNume ?? null,
     clientCui: (receipt as any).clientCui ?? null,
+    clientTip: (receipt as any).clientTip ?? null,
     clientReprezentant: (receipt as any).clientReprezentant ?? null,
     clientAdresa: (receipt as any).clientAdresa ?? null,
     clientTelefon: (receipt as any).clientTelefon ?? null,

@@ -1,11 +1,12 @@
 import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { apiFetch } from "../utils/api";
+import { apiFetch, readApiError } from "../utils/api";
 import { canManage } from "../store/permissions";
 import { createPagination } from "../hooks/createPagination";
 import { notify } from "../store/notificationsStore";
 import Pagination from "../components/data/Pagination";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
+import { CNP_PLACEHOLDER, cnpError, normalizeCnp } from "../types/client";
 
 interface Client {
   id: number;
@@ -179,6 +180,7 @@ export default function Clienti() {
   async function saveEdit() {
     const f = form();
     if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
     setSaving(true); setError(null);
     try {
       const res = await apiFetch(`/api/clienti/${editId()}`, {
@@ -186,18 +188,19 @@ export default function Clienti() {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
           comments: f.comments.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await readApiError(res, "Eroare la salvare."));
       const updated: Client = await res.json();
       setClienti(clienti().map((c) => c.id === updated.id ? updated : c));
       setEditId(null);
-    } catch {
-      setError("Eroare la salvare.");
+    } catch (e: any) {
+      setError(e?.message || "Eroare la salvare.");
     } finally {
       setSaving(false);
     }
@@ -218,6 +221,7 @@ export default function Clienti() {
   async function saveAdd() {
     const f = newForm();
     if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
     setSaving(true); setError(null);
     try {
       const res = await apiFetch("/api/clienti", {
@@ -225,18 +229,19 @@ export default function Clienti() {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
           comments: f.comments.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await readApiError(res, "Eroare la salvare."));
       const created: Client = await res.json();
       setClienti([created, ...clienti()]);
       setAddMode(false);
-    } catch {
-      setError("Eroare la salvare.");
+    } catch (e: any) {
+      setError(e?.message || "Eroare la salvare.");
     } finally {
       setSaving(false);
     }
@@ -390,6 +395,7 @@ export default function Clienti() {
           >Persoană juridică</button>
         </div>
         <Show when={props.f.tip === "fizic"}>
+          <input class="input" placeholder="CNP *" aria-label="CNP" inputmode="numeric" maxlength="13" value={props.f.cui} onInput={(e) => props.setF({ ...props.f, cui: e.currentTarget.value })} />
           <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
         </Show>
         <Show when={props.f.tip === "juridic"}>
@@ -511,8 +517,8 @@ export default function Clienti() {
                     <Show when={c.description}>
                       <span class="cfg-location-desc"><strong>Descriere:</strong> {c.description}</span>
                     </Show>
-                    <Show when={c.tip === "juridic" && c.cui}>
-                      <span class="cfg-location-desc"><strong>CUI:</strong> {c.cui}</span>
+                    <Show when={c.cui && (c.tip === "juridic" || c.cui !== CNP_PLACEHOLDER)}>
+                      <span class="cfg-location-desc"><strong>{c.tip === "juridic" ? "CUI" : "CNP"}:</strong> {c.cui}</span>
                     </Show>
                     <Show when={c.tip === "juridic" && c.reprezentant}>
                       <span class="cfg-location-desc"><strong>Reprezentant:</strong> {c.reprezentant}</span>

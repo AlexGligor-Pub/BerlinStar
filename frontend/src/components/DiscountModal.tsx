@@ -121,8 +121,12 @@ export default function DiscountModal(props: {
     () => pristine().filter((i) => i.price > 0 && i.itemType == null).length,
   );
 
-  /** Reducerea schimba totalul, deci nu se atinge un bon deja incasat. */
-  const isPaid = createMemo(() => !!props.receipt.metodaPlata);
+  /** Reducerea schimba totalul. Pe parțial e permisa — serverul recalculeaza
+   *  statusul din registru (resync_after_total_change) — pe incasat integral nu. */
+  const isPaid = createMemo(() => {
+    const m = props.receipt.metodaPlata;
+    return !!m && m !== "Platit Partial";
+  });
 
   const hasDiscount = createMemo(() => props.receipt.items.some((i) => i.originalPrice != null));
   const currentDiscount = createMemo(() =>
@@ -207,7 +211,7 @@ export default function DiscountModal(props: {
   );
 
   const problem = createMemo(() => {
-    if (isPaid()) return "Bonul are deja o plata inregistrata. Reducerea se poate aplica doar cat timp statusul platii e Neplatit.";
+    if (isPaid()) return "Bonul e încasat integral. Reducerea se poate aplica doar cât timp statusul e Neplătit sau Plătit parțial.";
     if (base() <= 0) return "Bonul nu are linii în categoria aleasă.";
     if (amountValue() <= 0) return null;
     if (amountValue() > base()) return `Reducerea depășește baza de calcul (${lei(base())}).`;
@@ -323,6 +327,20 @@ export default function DiscountModal(props: {
             />
             <span style="font-size:0.9rem">%</span>
           </div>
+          <div class="disc-presets">
+            <For each={[5, 10, 15, 20]}>
+              {(p) => (
+                <button
+                  type="button"
+                  class="disc-preset"
+                  classList={{ "disc-preset--on": percent() === String(p) }}
+                  onClick={() => { setMode("procent"); syncFromPercent(String(p)); }}
+                >
+                  {p}%
+                </button>
+              )}
+            </For>
+          </div>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Sumă</label>
@@ -338,6 +356,20 @@ export default function DiscountModal(props: {
               onInput={(e) => syncFromAmount(e.currentTarget.value)}
             />
             <span style="font-size:0.9rem">lei</span>
+          </div>
+          <div class="disc-presets">
+            <For each={[50, 100, 200]}>
+              {(v) => (
+                <button
+                  type="button"
+                  class="disc-preset"
+                  classList={{ "disc-preset--on": amountValue() === v }}
+                  onClick={() => { setMode("suma"); syncFromAmount(String(v)); }}
+                >
+                  {v}
+                </button>
+              )}
+            </For>
           </div>
         </div>
       </div>

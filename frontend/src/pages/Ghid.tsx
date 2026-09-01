@@ -17,10 +17,12 @@ function normalize(s: string): string {
 function highlight(html: string, q: string): string {
   if (!q) return html;
   const nq = normalize(q);
+  // Se aplica peste HTML deja sanitizat: taiem si entitatile, altfel un `<mark>`
+  // inserat in mijlocul lui `&amp;` ar rupe randarea.
   return html
-    .split(/(<[^>]+>)/)
+    .split(/(<[^>]+>|&[a-zA-Z][a-zA-Z0-9]*;|&#\d+;)/)
     .map((part) => {
-      if (part.startsWith("<")) return part;
+      if (part.startsWith("<") || part.startsWith("&")) return part;
       const np = normalize(part);
       let out = "";
       let idx = 0;

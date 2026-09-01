@@ -28,3 +28,16 @@ export interface ClientVehicol {
   vin?: string | null;
   observatii?: string | null;
 }
+
+/** Persoanele fizice nu au CUI: campul `cui` tine CNP-ul, iar e-Factura B2C cere
+ *  13 cifre. Placeholder-ul apare doar pe randuri vechi normalizate de migratia
+ *  cnp01 — nu se prepopuleaza in formulare, unde CNP-ul e obligatoriu. */
+export const CNP_PLACEHOLDER = "0000000000000";
+
+export function normalizeCnp(v: string): string {
+  return v.replace(/[\s.-]/g, "");
+}
+
+export function cnpError(v: string): string | null {
+  return /^\d{13}$/.test(normalizeCnp(v)) ? null : "CNP invalid: trebuie să aibă exact 13 cifre.";
+}

@@ -4,11 +4,12 @@ import { cart, updateQty, clearCart, cartTotal, replaceCart, updateItemPrice, se
 import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehicol, receipts, type VehicolData } from "../store/receiptsStore";
 import { consumeResume, pendingLoad, clearPendingLoad, newDevizTick } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee, employees } from "../store/employeesStore";
-import { apiFetch } from "../utils/api";
+import { apiFetch, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
 import { notify } from "../store/notificationsStore";
 import { canManage } from "../store/permissions";
+import { cnpError, normalizeCnp } from "../types/client";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
@@ -229,6 +230,7 @@ function AddClientModal(props: {
   async function handleSave() {
     const f = form();
     if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
     setSaving(true); setError(null);
     try {
       const res = await apiFetch("/api/clienti", {
@@ -236,13 +238,14 @@ function AddClientModal(props: {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
           comments: f.comments.trim() || null,
         }),
       });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
+      if (!res.ok) { setError(await readApiError(res, "Eroare la salvare.")); return; }
       const created: ClientItem = await res.json();
       props.onSaved(created);
     } catch {
@@ -266,8 +269,8 @@ function AddClientModal(props: {
           />
           <div style="border-top:1px solid var(--border);margin:2px 0" />
           <div style="display:flex;gap:8px">
-            <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
-            <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
+            <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
+            <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
           </div>
           <Show when={form().tip === "juridic"}>
             <div style="display:flex;gap:6px">
@@ -286,6 +289,9 @@ function AddClientModal(props: {
             <Show when={anafError()}>
               <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
+          </Show>
+          <Show when={form().tip === "fizic"}>
+            <input class="input" placeholder="CNP *" inputmode="numeric" maxlength="13" value={form().cui} onInput={(e) => pf("cui", e.currentTarget.value)} />
           </Show>
           <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
           <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -372,6 +378,7 @@ function EditClientModal(props: {
   async function handleSave() {
     const f = form();
     if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
     setSaving(true); setError(null);
     try {
       const res = await apiFetch(`/api/clienti/${props.clientId}`, {
@@ -379,13 +386,14 @@ function EditClientModal(props: {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
           comments: f.comments.trim() || null,
         }),
       });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); setError(j.detail ?? "Eroare la salvare."); return; }
+      if (!res.ok) { setError(await readApiError(res, "Eroare la salvare.")); return; }
       const updated = await res.json();
       props.onSaved({ id: updated.id, nume: updated.nume, cui: updated.cui ?? null, tip: updated.tip, numar_masina: updated.numar_masina ?? null });
     } catch {
@@ -413,8 +421,8 @@ function EditClientModal(props: {
             />
             <div style="border-top:1px solid var(--border);margin:2px 0" />
             <div style="display:flex;gap:8px">
-              <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "fizic")}>Persoană fizică</button>
-              <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => pf("tip", "juridic")}>Persoană juridică</button>
+              <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
+              <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
             </div>
             <Show when={form().tip === "juridic"}>
               <div style="display:flex;gap:6px">
@@ -433,6 +441,9 @@ function EditClientModal(props: {
               <Show when={anafError()}>
                 <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
               </Show>
+            </Show>
+            <Show when={form().tip === "fizic"}>
+              <input class="input" placeholder="CNP *" inputmode="numeric" maxlength="13" value={form().cui} onInput={(e) => pf("cui", e.currentTarget.value)} />
             </Show>
             <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
             <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />

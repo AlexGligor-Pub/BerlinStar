@@ -4,12 +4,11 @@ Acces: toate rolurile (Resource.OPERATIONS) — cine ia banii la tejghea trebuie
 poata inregistra incasarea. Stergerea unei inregistrari e permisa tot operational,
 dar e logica (audit): randul rămâne in baza cu is_deleted=true.
 
-Registrul rămâne DESCHIS cat timp bonul nu e trimis la ANAF. Statusul de plata
-al bonului (`pay_method` / `partial_pay`) se recalculeaza din registru dupa
-fiecare miscare, deci un avans nu inchide registrul — altfel s-ar putea
-inregistra o singura miscare per bon si o suma tastata gresit ar rămâne acolo
-pentru totdeauna. Singurul lucru care il inchide definitiv e factura trimisa la
-ANAF, unde incasarea a fost deja raportata.
+Registrul e DESCHIS cat timp statusul bonului e Neplatit sau Platit partial —
+atunci se mai pot adauga avansuri si se mai poate sterge o suma tastata gresit.
+Dupa incasarea integrala (cash/card/OP) si dupa trimiterea la ANAF se inchide.
+Statusul se recalculeaza din registru dupa fiecare miscare, iar readucerea lui
+pe Neplatit din ecranul bonului redeschide registrul.
 """
 from __future__ import annotations
 
@@ -19,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.rate_limit import limiter
-from app.models.receipt import Receipt
+from app.models.receipt import PayMethod, Receipt
 from app.routers.receipts import _assert_not_locked
 from app.schemas.receipt_payment import (
     PaymentCreate,
@@ -32,10 +31,19 @@ from app.services import payments_service as svc
 router = APIRouter()
 
 
+_LEDGER_OPEN_STATUSES = (PayMethod.NEPLATIT, PayMethod.PARTIAL)
+
+
 async def _assert_open(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
-    """Bonul exista, e al contului si nu a fost raportat la ANAF."""
+    """Bonul exista, e al contului, nu e la ANAF si nu e incasat integral."""
     receipt = await svc.get_receipt(db, account_id, receipt_id)
     await _assert_not_locked(db, receipt_id)
+    if receipt.pay_method not in _LEDGER_OPEN_STATUSES:
+        raise HTTPException(
+            409,
+            "Bonul este incasat. Registrul de plati se poate modifica doar cat timp "
+            "statusul este Neplatit sau Platit partial.",
+        )
     return receipt
 
 

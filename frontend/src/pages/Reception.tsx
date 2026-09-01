@@ -1,5 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { canManage } from "../store/permissions";
+import { cnpError, normalizeCnp } from "../types/client";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
 import PaymentsSection from "../components/PaymentsSection";
@@ -181,7 +182,7 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
         <input class="input" placeholder="Reprezentant" value={f().reprezentant} onInput={e => s({ reprezentant: e.currentTarget.value })} />
       </Show>
       <Show when={f().tip === "fizic"}>
-        <input class="input" placeholder="CNP (opțional — gol = 13 zerouri pe e-Factură)" value={f().cui} onInput={e => s({ cui: e.currentTarget.value })} />
+        <input class="input" placeholder="CNP *" aria-label="CNP" inputmode="numeric" maxlength="13" value={f().cui} onInput={e => s({ cui: e.currentTarget.value })} />
       </Show>
       <input class="input" placeholder="Telefon" value={f().telefon} onInput={e => s({ telefon: e.currentTarget.value })} />
       <input class="input" placeholder="Email" value={f().email} onInput={e => s({ email: e.currentTarget.value })} />
@@ -297,6 +298,7 @@ function ClientSection(props: { receipt: Receipt; readOnly?: boolean }) {
   async function saveNewClient() {
     const f = modalForm();
     if (!f.nume.trim()) { setModalError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setModalError(e); return; } }
     setSaving(true); setModalError(null);
     try {
       const res = await apiFetch("/api/clienti", {
@@ -304,16 +306,17 @@ function ClientSection(props: { receipt: Receipt; readOnly?: boolean }) {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.cui.trim() || null, reprezentant: f.reprezentant.trim() || null,
+          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) throw new Error(await readApiError(res, "Eroare la salvare."));
       const created: ClientItem = await res.json();
       await assign(created);
       setShowModal(false);
-    } catch { setModalError("Eroare la salvare."); } finally { setSaving(false); }
+    } catch (e: any) { setModalError(e?.message || "Eroare la salvare."); } finally { setSaving(false); }
   }
 
   return (
@@ -800,6 +803,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
   // registrul: backendul a inregistrat deja diferenta de bani corespunzatoare.
   const [payRefresh, setPayRefresh] = createSignal(0);
   const [showDiscount, setShowDiscount] = createSignal(false);
+  /** Reducerea si registrul de plati se inchid in acelasi moment: dupa incasarea
+   *  integrala sau dupa ANAF. Pe Neplatit/Platit partial raman deschise. */
+  const ledgerLocked = createMemo(() => {
+    const m = live().metodaPlata;
+    return live().efacturaLocked || (!!m && m !== "Platit Partial");
+  });
+  const discountLocked = ledgerLocked;
+
   // Reducerea e scazuta din pretul fiecarei linii; `originalPrice` pastreaza
   // pretul de lista, deci diferenta insumata e reducerea totala de pe bon.
   const discountTotal = createMemo(() =>
@@ -1142,9 +1153,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <div class="receipt-actions-row">
                     <button
                       class="btn btn-ghost btn-sm btn-warning-text"
-                      disabled={!!live().metodaPlata}
-                      title={live().metodaPlata
-                        ? "Reducerea se poate aplica doar cat timp bonul e Neplatit."
+                      disabled={discountLocked()}
+                      title={discountLocked()
+                        ? "Reducerea se poate aplica doar cât timp bonul e Neplătit sau Plătit parțial."
                         : undefined}
                       onClick={() => setShowDiscount(true)}
                     >
@@ -1224,13 +1235,15 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   Separat de liniile bonului — un avans nu scade valoarea prestatiei. */}
               <PaymentsSection
                 receiptId={r.id}
-                // Registrul rămâne deschis cât timp bonul nu a plecat la ANAF.
-                // Statusul de plată se recalculează din el după fiecare mișcare,
-                // deci un avans nu-l mai închide — altfel s-ar putea înregistra
-                // o singură mișcare per bon, iar o sumă tastată greșit ar rămâne
-                // acolo definitiv.
-                readOnly={live().efacturaLocked}
-                readOnlyReason="Bon trimis la ANAF — registrul nu mai poate fi modificat."
+                // Registrul se inchide odata cu incasarea integrala: miscarile de
+                // bani se mai pot adauga sau sterge doar cat timp statusul e
+                // Neplatit sau Platit partial (si bonul n-a plecat la ANAF).
+                readOnly={ledgerLocked()}
+                readOnlyReason={
+                  live().efacturaLocked
+                    ? "Bon trimis la ANAF — registrul nu mai poate fi modificat."
+                    : `Bon ${displayMetoda(live().metodaPlata).toLowerCase()} — registrul se poate modifica doar cât timp statusul e Neplătit sau Plătit parțial.`
+                }
                 // Serverul recalculeaza statusul bonului din registru, deci
                 // recitim bonul ca selectorul „Status plată" sa nu ramana in urma.
                 onChanged={() => { void refreshReceipt(r.id); }}

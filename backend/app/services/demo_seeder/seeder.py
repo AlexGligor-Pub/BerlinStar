@@ -495,6 +495,7 @@ async def _create_clients(ctx: _Ctx) -> None:
             account_id=ctx.account_id,
             tip="fizic",
             nume=nume,
+            cui=str(rng.randint(1000000000000, 9999999999999)),
             telefon="07" + str(rng.randint(10000000, 99999999)),
             email=fake.email() if rng.random() < 0.6 else None,
             adresa=fake.address().replace("\n", ", ")[:250],

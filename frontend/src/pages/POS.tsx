@@ -158,10 +158,10 @@ export default function POS() {
 
   const EMP_VIEW_KEY = "bs_emp_view_mode";
   const savedView = localStorage.getItem(EMP_VIEW_KEY);
-  const [empViewMode, setEmpViewMode] = createSignal<"tabs" | "simplu" | "linie">(
-    (savedView === "tabs" || savedView === "simplu" || savedView === "linie") ? savedView : "tabs"
+  const [empViewMode, setEmpViewMode] = createSignal<"simplu" | "tabs">(
+    savedView === "tabs" ? "tabs" : "simplu"
   );
-  function setAndSaveEmpViewMode(mode: "tabs" | "simplu" | "linie") {
+  function setAndSaveEmpViewMode(mode: "simplu" | "tabs") {
     setEmpViewMode(mode);
     localStorage.setItem(EMP_VIEW_KEY, mode);
   }
@@ -318,21 +318,34 @@ export default function POS() {
                   <div class="pos-emp-view-toggle">
                     <button
                       class="pos-emp-view-btn"
-                      classList={{ "pos-emp-view-btn--active": empViewMode() === "tabs" }}
-                      onClick={() => setAndSaveEmpViewMode("tabs")}
-                    >Tabs</button>
-                    <button
-                      class="pos-emp-view-btn"
                       classList={{ "pos-emp-view-btn--active": empViewMode() === "simplu" }}
                       onClick={() => setAndSaveEmpViewMode("simplu")}
                     >Simplu</button>
                     <button
                       class="pos-emp-view-btn"
-                      classList={{ "pos-emp-view-btn--active": empViewMode() === "linie" }}
-                      onClick={() => setAndSaveEmpViewMode("linie")}
-                    >Linie</button>
+                      classList={{ "pos-emp-view-btn--active": empViewMode() === "tabs" }}
+                      onClick={() => setAndSaveEmpViewMode("tabs")}
+                    >Tabs</button>
                   </div>
                 </div>
+
+                {/* Simplu view */}
+                <Show when={empViewMode() === "simplu"}>
+                  <div class="pos-employee-grid">
+                    <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
+                      {(e) => (
+                        <button
+                          class="pos-employee-card"
+                          classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
+                          onClick={() => { selectEmployee(e.id); setPanel(0); }}
+                        >
+                          {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
+                          <SplitName name={e.name} class="pos-employee-card-name" />
+                        </button>
+                      )}
+                    </For>
+                  </div>
+                </Show>
 
                 {/* Tabs view */}
                 <Show when={empViewMode() === "tabs"}>
@@ -365,50 +378,7 @@ export default function POS() {
                   </div>
                 </Show>
 
-                {/* Simplu view */}
-                <Show when={empViewMode() === "simplu"}>
-                  <div class="pos-employee-grid">
-                    <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
-                      {(e) => (
-                        <button
-                          class="pos-employee-card"
-                          classList={{ "pos-employee-card--active": selectedEmployeeId() === e.id }}
-                          onClick={() => { selectEmployee(e.id); setPanel(0); }}
-                        >
-                          {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                          <SplitName name={e.name} class="pos-employee-card-name" />
-                        </button>
-                      )}
-                    </For>
-                  </div>
-                </Show>
 
-                {/* Linie view */}
-                <Show when={empViewMode() === "linie"}>
-                  <div class="pos-emp-linie">
-                    <For each={employeeGroups()}>
-                      {(group) => (
-                        <>
-                          <div class="pos-emp-linie-header">
-                            {group.label || "Fără categorie"}
-                          </div>
-                          <For each={group.list}>
-                            {(e) => (
-                              <button
-                                class="pos-emp-linie-item"
-                                classList={{ "pos-emp-linie-item--active": selectedEmployeeId() === e.id }}
-                                onClick={() => { selectEmployee(e.id); setPanel(0); }}
-                              >
-                                {e.imagePath && <img src={e.imagePath} class="pos-employee-avatar" alt={e.name} />}
-                                <span class="pos-emp-linie-name">{e.name}</span>
-                              </button>
-                            )}
-                          </For>
-                        </>
-                      )}
-                    </For>
-                  </div>
-                </Show>
               </Show>
 
             </div>

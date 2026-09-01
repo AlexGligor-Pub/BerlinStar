@@ -3,6 +3,7 @@ import { apiFetch } from "../../utils/api";
 import Input from "../../components/ui/Input";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
 import { VAT_OPTIONS, lineTotalGross, newLine } from "./types";
+import { cnpError, normalizeCnp } from "../../types/client";
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   accepted: { bg: "rgba(34,197,94,.15)", fg: "var(--success)" },
@@ -193,11 +194,9 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
   async function save() {
     setError(null);
     if (!nume().trim()) { setError("Numele e obligatoriu."); return; }
-    const cnpVal = cnp().trim();
-    if (cnpVal && !/^\d{13}$/.test(cnpVal)) {
-      setError("CNP invalid (trebuie 13 cifre) sau lasa gol pentru 13 zerouri.");
-      return;
-    }
+    const cnpVal = normalizeCnp(cnp());
+    const cnpErr = cnpError(cnpVal);
+    if (cnpErr) { setError(cnpErr); return; }
     setLoading(true);
     try {
       const res = await apiFetch("/api/clienti", {
@@ -205,7 +204,7 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
         body: JSON.stringify({
           tip: "fizic",
           nume: nume().trim(),
-          cui: cnpVal || null,
+          cui: cnpVal,
           adresa: adresa().trim() || null,
           telefon: telefon().trim() || null,
         }),
@@ -224,7 +223,7 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
   return (
     <div style="display:flex;flex-direction:column;gap:8px">
       <Input label="Nume *" value={nume()} placeholder="Nume si prenume" onInput={(v) => setNume(v)} />
-      <Input label="CNP (optional — gol = 13 zerouri pe e-Factura)" value={cnp()} placeholder="13 cifre sau gol" onInput={(v) => setCnp(v)} />
+      <Input label="CNP *" value={cnp()} placeholder="13 cifre" maxlength={13} onInput={(v) => setCnp(v)} />
       <Input label="Adresa" value={adresa()} placeholder="Adresa" onInput={(v) => setAdresa(v)} />
       <Input label="Telefon" value={telefon()} placeholder="Telefon" onInput={(v) => setTelefon(v)} />
       <Show when={error()}><span class="field-error" role="alert">{error()}</span></Show>
