@@ -19,7 +19,7 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         r"""
-        UPDATE clients
+        UPDATE clienti
            SET cui = CASE
                        WHEN regexp_replace(COALESCE(cui, ''), '[\s.-]', '', 'g') ~ '^\d{13}$'
                        THEN regexp_replace(cui, '[\s.-]', '', 'g')
@@ -31,4 +31,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("UPDATE clients SET cui = NULL WHERE tip = 'fizic' AND cui = '0000000000000'")
+    op.execute("UPDATE clienti SET cui = NULL WHERE tip = 'fizic' AND cui = '0000000000000'")
