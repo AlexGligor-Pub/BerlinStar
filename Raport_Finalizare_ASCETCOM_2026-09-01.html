@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<title>Raport de finalizare lucrări — Berlin Star — ASCET COM SRL</title>
+<style>
+  @page { size: A4; margin: 14mm 13mm 15mm 13mm; }
+
+  :root{
+    --ink:#12233b; --ink-soft:#41556e; --muted:#6b7c92;
+    --accent:#1d4ed8; --accent-soft:#eaf0ff;
+    --line:#d7dee8; --line-soft:#e9eef4;
+    --ok:#0f7b52; --ok-soft:#e6f5ee;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    color:var(--ink); font-size:10.5pt; line-height:1.5;
+    background:#f3f5f8;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+
+  .page{
+    width:210mm; min-height:297mm; margin:10mm auto; padding:16mm 14mm 18mm 14mm;
+    background:#fff; box-shadow:0 2px 14px rgba(18,35,59,.14); position:relative;
+  }
+
+  /* --- Antet --- */
+  .brandbar{ display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:2.5pt solid var(--accent); padding-bottom:6mm; margin-bottom:7mm; }
+  .brand h1{ margin:0; font-size:16pt; letter-spacing:.3px; }
+  .brand .sub{ color:var(--muted); font-size:9pt; margin-top:1mm; }
+  .brand .sys{ margin-top:3mm; font-size:9.5pt; color:var(--ink-soft); }
+  .docmeta{ text-align:right; font-size:9pt; color:var(--ink-soft); min-width:58mm; }
+  .docmeta .title{ font-size:11.5pt; font-weight:700; color:var(--ink);
+    text-transform:uppercase; letter-spacing:.6px; line-height:1.3; }
+  .docmeta table{ margin-left:auto; margin-top:3mm; border-collapse:collapse; }
+  .docmeta td{ padding:.6mm 0 .6mm 4mm; white-space:nowrap; }
+  .docmeta td:first-child{ color:var(--muted); padding-left:0; text-align:left; }
+
+  .badge{ display:inline-block; padding:1mm 3mm; border-radius:2mm; font-size:8.5pt;
+    font-weight:700; letter-spacing:.4px; text-transform:uppercase; }
+  .badge--ok{ background:var(--ok-soft); color:var(--ok); border:.5pt solid #b7e0cd; }
+
+  /* --- Secțiuni --- */
+  h2{ font-size:11pt; text-transform:uppercase; letter-spacing:.8px; margin:8mm 0 3mm;
+    padding-bottom:1.5mm; border-bottom:.75pt solid var(--line); }
+  h2:first-of-type{ margin-top:0; }
+  h3{ font-size:10.5pt; margin:5mm 0 2mm; }
+  p{ margin:0 0 2.5mm; text-align:justify; }
+  ul{ margin:0 0 2.5mm; padding-left:6mm; }
+  li{ margin-bottom:1.2mm; }
+  small{ font-size:8.5pt; color:var(--muted); }
+
+  .grid2{ display:flex; gap:6mm; }
+  .grid2 > *{ flex:1; }
+
+  .card{ border:.75pt solid var(--line); border-radius:2mm; padding:4mm 5mm; background:#fff; }
+  .card--accent{ background:var(--accent-soft); border-color:#c3d2f7; }
+  .card h4{ margin:0 0 2mm; font-size:9pt; text-transform:uppercase;
+    letter-spacing:.6px; color:var(--accent); }
+  .kv{ width:100%; border-collapse:collapse; font-size:9.5pt; }
+  .kv td{ padding:1mm 0; vertical-align:top; }
+  .kv td:first-child{ color:var(--muted); width:38%; padding-right:3mm; }
+
+  table.data{ width:100%; border-collapse:collapse; font-size:9.5pt; margin:2mm 0 3mm; }
+  table.data th{ background:#f0f3f8; text-align:left; font-size:8.5pt; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--ink-soft); padding:2mm 3mm; border:.5pt solid var(--line); }
+  table.data td{ padding:2mm 3mm; border:.5pt solid var(--line-soft); vertical-align:top; }
+  table.data tr:nth-child(even) td{ background:#fafbfd; }
+  .num{ text-align:center; width:10mm; color:var(--muted); }
+
+  .feature{ border-left:2.5pt solid var(--accent); padding-left:5mm; margin-bottom:6mm; }
+  .feature .ftitle{ font-size:11.5pt; font-weight:700; margin-bottom:1mm; }
+  .feature .fpath{ font-size:8.5pt; color:var(--muted); margin-bottom:2.5mm; }
+
+  code{ font-family:"Consolas","Courier New",monospace; font-size:8.5pt;
+    background:#f2f4f8; padding:.3mm 1.2mm; border-radius:1mm; }
+
+  .note{ border:.75pt solid var(--line); border-left:2.5pt solid var(--ok);
+    background:#fbfdfc; padding:3.5mm 5mm; border-radius:0 2mm 2mm 0; margin:3mm 0; }
+
+  .signrow{ display:flex; gap:12mm; margin-top:12mm; }
+  .signrow > div{ flex:1; }
+  .signline{ border-top:.75pt solid var(--ink-soft); margin-top:18mm; padding-top:1.5mm;
+    font-size:9pt; color:var(--ink-soft); }
+
+  .footer{ position:absolute; left:14mm; right:14mm; bottom:9mm;
+    border-top:.5pt solid var(--line); padding-top:2mm;
+    font-size:8pt; color:var(--muted); display:flex; justify-content:space-between; }
+
+  .printfoot{ display:none; }
+
+  @media print{
+    html,body{ background:#fff !important; margin:0; padding:0; }
+    body{ font-size:9.3pt; line-height:1.36; }
+    /* Continut continuu: fara salt forțat intre secțiuni, altfel ies pagini
+       pe jumatate goale — paginarea o face browserul, cu regulile de mai jos. */
+    .page{
+      width:auto !important; min-height:0 !important; margin:0 !important; padding:0 !important;
+      box-shadow:none !important; background:#fff !important;
+    }
+    h2{ margin:6mm 0 2.5mm; font-size:10.5pt; }
+    h2:first-of-type{ margin-top:0; }
+    h3{ margin:4mm 0 1.5mm; }
+    p{ margin-bottom:2mm; }
+    li{ margin-bottom:.8mm; }
+    table.data{ margin:1.5mm 0 2.5mm; font-size:8.6pt; }
+    table.data th, table.data td{ padding:1.2mm 2.2mm; }
+    .brandbar{ padding-bottom:4.5mm; margin-bottom:5mm; }
+    .feature{ margin-bottom:4mm; }
+    .grid2{ gap:5mm; }
+    .card{ padding:3mm 4mm; }
+    h2,h3{ break-after:avoid; page-break-after:avoid; }
+    .feature,.card,.note{ break-inside:avoid; page-break-inside:avoid; }
+    /* Tabelele lungi se pot rupe, dar randul nu si capul se repeta. */
+    thead{ display:table-header-group; }
+    tr,li{ break-inside:avoid; page-break-inside:avoid; }
+    .printfoot{
+      display:block; position:fixed; left:0; right:0; bottom:0;
+      border-top:.5pt solid var(--line); padding-top:1.5mm;
+      font-size:7.5pt; color:var(--muted); text-align:center;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ PAGINA 1 ============ -->
+<section class="page">
+  <div class="brandbar">
+    <div class="brand">
+      <h1>PROFESSOR PRIME S.R.L.</h1>
+      <div class="sub">CUI 47829189 &nbsp;·&nbsp; Telefon: 0040 744 138 843 &nbsp;·&nbsp; Județul Timiș, România</div>
+      <div class="sys">Furnizor și dezvoltator al sistemului <strong>Berlin Star</strong><br>
+        Producție: <strong>https://professorprime.ro/berlinstar/</strong></div>
+    </div>
+    <div class="docmeta">
+      <div class="title">Raport de finalizare<br>a lucrărilor</div>
+      <table>
+        <tr><td>Nr. document</td><td><strong>RF-2026-08-AC-01</strong></td></tr>
+        <tr><td>Data raportului</td><td><strong>01.09.2026</strong></td></tr>
+        <tr><td>Beneficiar</td><td><strong>ASCET COM SRL</strong><br>CUI 5154310</td></tr>
+        <tr><td>Status</td><td><span class="badge badge--ok">Finalizat &amp; publicat</span></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>1. Obiectul raportului</h2>
+  <p>Prezentul document confirmă <strong>finalizarea, testarea și publicarea în producție</strong> a
+  funcționalității de <strong>autentificare cu utilizatori multipli, cu roluri diferite și acces
+  diferențiat la date</strong>, în sistemul <strong>Berlin Star</strong>, solicitată de beneficiarul
+  <strong>ASCET COM SRL</strong> (CUI 5154310) prin <strong>convorbire telefonică</strong>, în data de
+  <strong>5 august 2026</strong>.</p>
+  <p>Până la această lucrare, accesul în aplicație se făcea pe un singur set de credențiale per firmă.
+  Începând cu prezenta livrare, fiecare firmă poate avea <strong>oricâți utilizatori de login</strong>,
+  fiecare cu <strong>nume, parolă proprie și rol</strong>, iar rolul determină <strong>ce secțiuni și ce
+  date</strong> poate vedea și modifica utilizatorul respectiv. Funcționalitatea este disponibilă în
+  mediul de producție la adresa <strong>https://professorprime.ro/berlinstar/</strong>.</p>
+
+  <div class="grid2" style="margin-top:5mm">
+    <div class="card">
+      <h4>Părțile</h4>
+      <table class="kv">
+        <tr><td>Prestator</td><td><strong>Professor Prime S.R.L.</strong><br>CUI 47829189<br>Tel. 0040 744 138 843</td></tr>
+        <tr><td>Beneficiar</td><td><strong>ASCET COM SRL</strong><br>CUI 5154310<br>Utilizator al sistemului Berlin Star</td></tr>
+      </table>
+    </div>
+    <div class="card card--accent">
+      <h4>Cronologie</h4>
+      <table class="kv">
+        <tr><td>Solicitare client</td><td><strong>05.08.2026</strong> — convorbire telefonică</td></tr>
+        <tr><td>Analiză &amp; dezvoltare</td><td>05.08.2026 – 31.08.2026</td></tr>
+        <tr><td>Testare internă</td><td>înainte de publicare</td></tr>
+        <tr><td>Publicare în producție</td><td><strong>realizată</strong> — professorprime.ro/berlinstar/</td></tr>
+        <tr><td>Raport de finalizare</td><td><strong>01.09.2026</strong></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h2>2. Sinteza lucrărilor executate</h2>
+  <table class="data">
+    <thead>
+      <tr><th class="num">#</th><th>Funcționalitate livrată</th><th>Locul în aplicație</th><th style="width:26mm">Stare</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="num">1</td>
+        <td><strong>Utilizatori multipli per firmă</strong> — conturi de login individuale (utilizator, nume, e-mail, parolă proprie), create și administrate de administratorul firmei</td>
+        <td>Configurări → <em>Utilizatori</em></td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">2</td>
+        <td><strong>Trei roluri predefinite</strong> — Administrator, Manager, Lucrător — fiecare cu un set clar de drepturi</td>
+        <td>La crearea / editarea utilizatorului</td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">3</td>
+        <td><strong>Acces diferențiat la date</strong> — secțiunile Rapoarte, Utilizatori, Configurări, Stocuri, e-Factura sunt restricționate pe rol, atât în interfață, cât și la nivel de server</td>
+        <td>Întreaga aplicație (meniu, rute, API)</td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">4</td>
+        <td><strong>Autentificare pe firmă + utilizator</strong> — login cu <em>cod firmă</em>, utilizator și parolă; numele de utilizator este unic în interiorul firmei</td>
+        <td>Ecranul de Login</td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">5</td>
+        <td><strong>Sesiuni și dispozitive</strong> — administratorul vede pe ce dispozitive este logat fiecare utilizator și poate deconecta la distanță un dispozitiv sau toate</td>
+        <td>Configurări → Utilizatori → detalii utilizator</td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">6</td>
+        <td><strong>Securizarea parolelor și a login-ului</strong> — parole stocate ca hash bcrypt, resetare de parolă de către administrator, schimbare de parolă de către utilizator, protecție împotriva încercărilor repetate de autentificare</td>
+        <td>Backend / ecran de Login / profil utilizator</td>
+        <td>Livrat, publicat</td>
+      </tr>
+      <tr>
+        <td class="num">7</td>
+        <td><strong>Migrarea firmelor existente</strong> — fiecare firmă a primit automat un cod de firmă și un utilizator administrator, fără întreruperea activității</td>
+        <td>Automat, la actualizare</td>
+        <td>Livrat, publicat</td>
+      </tr>
+    </tbody>
+  </table>
+
+</section>
+
+<!-- ============ PAGINA 2 ============ -->
+<section class="page">
+  <h2>3. Rolurile și matricea de acces</h2>
+  <p>Au fost implementate trei roluri, cu drepturi definite explicit. Rolul se atribuie fiecărui
+  utilizator la creare și poate fi schimbat oricând de administratorul firmei.</p>
+  <table class="data">
+    <thead>
+      <tr><th style="width:32mm">Rol</th><th>Ce poate face</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Administrator</strong></td><td>Acces complet la toate secțiunile firmei, inclusiv <strong>Rapoarte</strong> (cifră de afaceri, targeturi) și <strong>gestionarea utilizatorilor</strong>.</td></tr>
+      <tr><td><strong>Manager</strong></td><td>Acces la zona operațională, la <strong>Configurări</strong> și la zonele avansate (Stocuri, e-Factura, Factură Rapidă, fișa angajatului). <strong>Fără</strong> acces la Rapoarte și fără acces la gestionarea utilizatorilor.</td></tr>
+      <tr><td><strong>Lucrător</strong></td><td>Doar zona operațională: POS, Recepție, Clienți, Programări, Hotel Anvelope, Concedii. <strong>Fără</strong> Rapoarte, fără Configurări și fără zonele avansate.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Matricea de acces livrată</h3>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Zonă / date</th>
+        <th style="width:26mm;text-align:center">Administrator</th>
+        <th style="width:26mm;text-align:center">Manager</th>
+        <th style="width:26mm;text-align:center">Lucrător</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Operațional — POS, Recepție, Clienți, Programări, Hotel Anvelope, Concedii</td><td style="text-align:center">Da</td><td style="text-align:center">Da</td><td style="text-align:center">Da</td></tr>
+      <tr><td>Configurări / setări generale</td><td style="text-align:center">Da</td><td style="text-align:center">Da</td><td style="text-align:center">—</td></tr>
+      <tr><td>Zone avansate — Stocuri, e-Factura, Factură Rapidă, fișa angajatului</td><td style="text-align:center">Da</td><td style="text-align:center">Da</td><td style="text-align:center">—</td></tr>
+      <tr><td>Rapoarte — cifră de afaceri, targeturi</td><td style="text-align:center">Da</td><td style="text-align:center">—</td><td style="text-align:center">—</td></tr>
+      <tr><td>Utilizatori — creare, editare, roluri, parole, sesiuni</td><td style="text-align:center">Da</td><td style="text-align:center">—</td><td style="text-align:center">—</td></tr>
+    </tbody>
+  </table>
+  <p><small>Matricea este definită într-un singur loc în cod, atât pe server cât și în interfață, astfel
+  încât drepturile să fie verificabile dintr-un singur ecran și să poată fi extinse ulterior fără
+  modificări dispersate.</small></p>
+
+  <h2>4. Descrierea funcționalității livrate</h2>
+
+  <div class="feature">
+    <div class="ftitle">4.1 Autentificare pe firmă și utilizator</div>
+    <div class="fpath">Ecranul de Login</div>
+    <ul>
+      <li>Autentificarea se face cu <strong>cod firmă + utilizator + parolă</strong>. Numele de utilizator este unic <em>în interiorul firmei</em>, deci fiecare firmă își poate numi utilizatorii cum dorește (ex. „ion”, „recepție”), fără conflicte cu alte firme.</li>
+      <li>Codul firmei este memorat pe stația respectivă, pentru ca operatorii să nu îl retasteze la fiecare schimb de tură.</li>
+      <li>Fiecare autentificare reușită înregistrează momentul ultimei logări a utilizatorului.</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="ftitle">4.2 Administrarea utilizatorilor</div>
+    <div class="fpath">Configurări → Utilizatori (doar rolul Administrator)</div>
+    <ul>
+      <li><strong>Creare, editare și dezactivare</strong> de utilizatori: utilizator, nume complet, e-mail, rol, stare activ/inactiv.</li>
+      <li><strong>Legarea opțională cu fișa de angajat</strong> existentă, pentru atribuirea corectă pe bonuri și în rapoartele de producție.</li>
+      <li><strong>Resetare de parolă</strong> de către administrator, fără a cunoaște parola veche, cu generarea unei parole ușor de citit și de tastat; utilizatorul își poate schimba ulterior parola din propriul profil.</li>
+      <li><strong>Protecții de integritate</strong>: o firmă nu poate rămâne fără administrator activ, iar un utilizator nu poate fi legat de un angajat din altă firmă.</li>
+      <li><strong>Ștergere logică</strong>: utilizatorul șters rămâne în baza de date (istoricul acțiunilor se păstrează), iar numele de utilizator poate fi reutilizat.</li>
+    </ul>
+  </div>
+
+  <div class="feature">
+    <div class="ftitle">4.3 Sesiuni active și control la distanță</div>
+    <div class="fpath">Configurări → Utilizatori → detalii utilizator</div>
+    <ul>
+      <li>Fiecare autentificare creează o <strong>sesiune</strong> separată, cu dispozitivul, adresa IP, browserul, data creării și ultima activitate.</li>
+      <li>Administratorul poate <strong>deconecta la distanță</strong> un dispozitiv anume sau toate dispozitivele unui utilizator.</li>
+      <li><strong>Dezactivarea unui utilizator are efect imediat</strong>, iar schimbarea parolei închide sesiunile existente — accesul nu rămâne deschis până la expirarea automată.</li>
+    </ul>
+  </div>
+
+</section>
+
+<!-- ============ PAGINA 3 ============ -->
+<section class="page">
+  <div class="feature">
+    <div class="ftitle">4.4 Securitatea accesului la date</div>
+    <div class="fpath">Server (API) + interfață</div>
+    <ul>
+      <li><strong>Autorizarea reală se face pe server</strong>, la fiecare cerere, pe baza rolului citit din baza de date. Ascunderea butoanelor și a meniurilor în interfață este doar o comoditate; un utilizator care ar încerca accesul direct la o secțiune interzisă primește refuz de la server.</li>
+      <li><strong>Separarea între firme</strong>: fiecare cerere este limitată la datele firmei utilizatorului autentificat.</li>
+      <li><strong>Parolele sunt stocate ca hash bcrypt</strong> (nu pot fi citite nici de administrator, nici din baza de date), cu re-securizarea automată a parolelor rămase în formatul vechi la prima autentificare reușită.</li>
+      <li><strong>Protecție împotriva încercărilor repetate de autentificare</strong>: eșecurile se numără pe combinația firmă + utilizator, cu blocare temporară după mai multe încercări greșite. Astfel un coleg care greșește parola nu blochează întreaga echipă, deși toate stațiile ies în internet prin aceeași adresă IP.</li>
+      <li><strong>Sesiuni revocabile</strong>: token-ul de autentificare este legat de o sesiune din baza de date, deci poate fi anulat oricând.</li>
+    </ul>
+  </div>
+
+  <h2>5. Componente tehnice implementate</h2>
+  <table class="data">
+    <thead><tr><th style="width:38mm">Zonă</th><th>Livrabil</th></tr></thead>
+    <tbody>
+      <tr><td>Bază de date</td><td>Tabele noi pentru utilizatori și sesiuni de login, cu unicitate a numelui de utilizator pe firmă (compatibilă cu ștergerea logică) și indexare pe firmă / utilizator / sesiune</td></tr>
+      <tr><td>Autorizare</td><td>Matrice unică de permisiuni pe roluri și resurse, aplicată prin dependențe pe rutele API — fără verificări de rol împrăștiate prin cod</td></tr>
+      <tr><td>Autentificare</td><td>Login pe cod firmă + utilizator, token legat de sesiune (revocabil), evidența dispozitivelor, protecție anti-brute-force pe credențial și limitare de rată pe rutele sensibile</td></tr>
+      <tr><td>API de administrare</td><td>Rute pentru listarea, crearea, editarea, ștergerea utilizatorilor, setarea parolei și gestionarea / revocarea sesiunilor — accesibile exclusiv rolului Administrator</td></tr>
+      <tr><td>Interfață</td><td>Ecranul <em>Utilizatori</em> (listă, formulare, roluri cu descrieri, sesiuni și deconectare), meniu și rute filtrate pe rol, modal de schimbare a propriei parole, ecran de login cu cod firmă</td></tr>
+      <tr><td>Migrare</td><td>Provisionarea automată a codului de firmă și a utilizatorului administrator pentru firmele existente, astfel încât nicio firmă să nu rămână fără acces după actualizare</td></tr>
+    </tbody>
+  </table>
+
+  <h2>6. Verificări efectuate înainte de publicare</h2>
+  <ul>
+    <li>Autentificare corectă și respinsă (cod firmă / utilizator / parolă greșite), cu mesaje clare pentru operator.</li>
+    <li>Testarea fiecărui rol: verificarea secțiunilor vizibile și a refuzului la nivel de server pentru zonele interzise (Rapoarte, Utilizatori, Configurări, zone avansate).</li>
+    <li>Creare, editare, dezactivare și ștergere de utilizatori; reutilizarea unui nume de utilizator șters.</li>
+    <li>Imposibilitatea eliminării ultimului administrator activ al firmei.</li>
+    <li>Resetarea parolei de către administrator și schimbarea parolei de către utilizator, cu închiderea sesiunilor active.</li>
+    <li>Deconectarea la distanță a unui dispozitiv și a tuturor dispozitivelor unui utilizator.</li>
+    <li>Comportamentul protecției anti-brute-force: blocarea temporară a combinației greșite, fără afectarea celorlalți utilizatori.</li>
+    <li>Verificarea migrării firmelor existente (cod firmă și utilizator administrator) și funcționarea în producție: <strong>https://professorprime.ro/berlinstar/</strong>.</li>
+  </ul>
+
+  <h2>7. Condiții comerciale</h2>
+  <p>Lucrarea descrisă în prezentul raport a fost solicitată de beneficiarul <strong>ASCET COM SRL</strong> (CUI 5154310)
+  <strong>contra cost</strong>, prin convorbire telefonică în data de <strong>5 august 2026</strong>, și a
+  fost executată, testată și publicată integral de <strong>Professor Prime S.R.L.</strong></p>
+  <div class="card card--accent">
+    <table class="kv">
+      <tr><td>Natura lucrării</td><td><strong>Dezvoltare de funcționalitate nouă, la cerere, contra cost</strong></td></tr>
+      <tr><td>Modalitatea solicitării</td><td>Convorbire telefonică cu beneficiarul ASCET COM SRL, în data de <strong>05.08.2026</strong></td></tr>
+      <tr><td>Stadiul lucrării</td><td><strong>Finalizată, publicată și funcțională în producție</strong></td></tr>
+      <tr><td>Facturare</td><td>Factura pentru această lucrare va fi <strong>emisă și transmisă în următoarele 7 zile</strong> de la data prezentului raport (până la data de <strong>08.09.2026</strong>)</td></tr>
+      <tr><td>Emitent factură</td><td>Professor Prime S.R.L., CUI 47829189</td></tr>
+    </table>
+  </div>
+
+  <h2>8. Garanție și mentenanță</h2>
+  <p>Lucrarea se află <strong>sub garanția subscripției curente</strong> a beneficiarului pentru sistemul
+  Berlin Star.</p>
+  <div class="note">
+    <p style="margin-bottom:2mm"><strong>Mentenanța acestei funcționalități este asigurată de Professor Prime S.R.L.
+    (CUI 47829189, telefon 0040 744 138 843)</strong>, ca parte integrantă a funcționalităților sistemului
+    <strong>Berlin Star</strong>.</p>
+    <p style="margin-bottom:0"><strong>Orice raportare de nefuncționalitate sau defecțiune privind această
+    funcționalitate va fi remediată în baza garanției</strong>, fără costuri suplimentare pentru beneficiar.</p>
+  </div>
+  <ul>
+    <li>Autentificarea cu utilizatori multipli, rolurile și accesul diferențiat la date devin parte permanentă a sistemului Berlin Star și beneficiază de întreținere în același regim ca restul funcționalităților.</li>
+    <li>Raportările de defecțiune se transmit către Professor Prime S.R.L. la numărul de telefon <strong>0040 744 138 843</strong> sau prin canalul de comunicare uzual.</li>
+    <li>Garanția acoperă remedierea erorilor de funcționare. Solicitările de <em>modificare a drepturilor</em> peste matricea livrată sau de <strong>roluri noi</strong> se tratează ca lucrări separate, cu acord prealabil.</li>
+  </ul>
+
+  <h2>9. Concluzie</h2>
+  <p>Funcționalitatea solicitată de <strong>ASCET COM SRL</strong> în data de <strong>5 august 2026</strong> —
+  <strong>autentificarea cu utilizatori multipli, cu roluri diferite și acces diferențiat la date</strong> —
+  a fost <strong>implementată, verificată și publicată</strong> în mediul de producție
+  <strong>https://professorprime.ro/berlinstar/</strong> și este disponibilă pentru utilizare.
+  Lucrarea se consideră <strong>finalizată</strong> la data prezentului raport.</p>
+
+</section>
+
+<div class="printfoot">Professor Prime S.R.L. · CUI 47829189 · Tel. 0040 744 138 843 · Berlin Star — Raport de finalizare a lucrărilor · Beneficiar: ASCET COM SRL (CUI 5154310) · 01.09.2026</div>
+</body>
+</html>
