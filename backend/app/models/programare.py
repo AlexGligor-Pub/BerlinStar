@@ -18,6 +18,7 @@ class Programare(Base):
     __table_args__ = (
         Index("ix_programari_account_id_start_time", "account_id", "start_time"),
         Index("ix_programari_location_id", "location_id"),
+        Index("ix_programari_client_id", "client_id"),
     )
 
     id:           Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

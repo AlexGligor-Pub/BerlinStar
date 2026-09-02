@@ -2,7 +2,7 @@ from __future__ import annotations
 import enum
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from sqlalchemy import Date, Integer, String, Text, Boolean, DateTime, Numeric, ForeignKey, Index, Enum as SAEnum
+from sqlalchemy import Date, Integer, String, Text, Boolean, DateTime, Numeric, ForeignKey, Index, Enum as SAEnum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
 from .item import ItemType
@@ -20,6 +20,17 @@ class Receipt(Base):
     __tablename__ = "receipts"
     __table_args__ = (
         Index("ix_receipts_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
+        Index("ix_receipts_account_id_created_at", "account_id", "created_at"),
+        Index("ix_receipts_client_id", "client_id"),
+        Index("ix_receipts_location_id", "location_id"),
+        Index(
+            "ix_receipts_parent_receipt_id", "parent_receipt_id",
+            postgresql_where=text("parent_receipt_id IS NOT NULL"),
+        ),
+        Index(
+            "ix_receipts_programare_id", "programare_id",
+            postgresql_where=text("programare_id IS NOT NULL"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -87,6 +98,9 @@ class ReceiptItem(Base):
     __tablename__ = "receipt_items"
     __table_args__ = (
         Index("ix_receipt_items_account_id", "account_id"),
+        Index("ix_receipt_items_receipt_id", "receipt_id"),
+        Index("ix_receipt_items_employee_id", "employee_id"),
+        Index("ix_receipt_items_item_id", "item_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

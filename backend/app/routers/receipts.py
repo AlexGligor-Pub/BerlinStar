@@ -501,8 +501,6 @@ async def create_receipt(
             original_price=it.original_price,
         ))
 
-    await db.commit()
-
     emp_ids = {it.employee_id for it in body.items if it.employee_id}
     await _refresh_accumulations(db, account_id, emp_ids)
     await db.commit()
@@ -644,8 +642,6 @@ async def patch_receipt(
     # diferenta de bani, ca registrul sa arate complet cat s-a incasat si cat a
     # mai rămas de plata.
     await sync_from_status(db, account_id, receipt, legacy_partial=old_partial)
-    await db.commit()
-
     await _refresh_accumulations(db, account_id, emp_ids)
     await db.commit()
 
@@ -770,7 +766,6 @@ async def patch_receipt_content(
     # statusul trebuie recitite din registru, nu lasate pe valorile vechi.
     await resync_after_total_change(db, account_id, receipt)
 
-    await db.commit()
     await _refresh_accumulations(db, account_id, old_emp_ids | new_emp_ids)
     await db.commit()
 

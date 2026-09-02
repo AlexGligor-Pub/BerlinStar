@@ -33,6 +33,24 @@ async def _get_or_create_stock(
     return row
 
 
+async def _get_or_create_stocks(
+    db: AsyncSession, account_id: int, item_ids: list[int], location_id: int
+) -> dict[int, Stock]:
+    """Varianta batched a lui `_get_or_create_stock` — un singur SELECT pentru toate liniile."""
+    rows = (await db.execute(
+        select(Stock).where(Stock.item_id.in_(item_ids), Stock.location_id == location_id)
+    )).scalars().all()
+    by_item = {s.item_id: s for s in rows}
+    missing = [iid for iid in set(item_ids) if iid not in by_item]
+    if missing:
+        for iid in missing:
+            s = Stock(account_id=account_id, item_id=iid, location_id=location_id, qty=0)
+            db.add(s)
+            by_item[iid] = s
+        await db.flush()
+    return by_item
+
+
 async def _movement(
     db: AsyncSession,
     *,
@@ -110,8 +128,9 @@ async def apply_sale_for_receipt(
     )).all())
 
     now = datetime.now(timezone.utc)
+    stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
     for ln in lines:
-        stock = await _get_or_create_stock(db, account_id, ln.item_id, receipt.location_id)
+        stock = stocks[ln.item_id]
         stock.qty = stock.qty - ln.qty
         stock.updated_at = now
         await _movement(
@@ -148,8 +167,9 @@ async def reverse_sale_for_receipt(
     )).all())
 
     now = datetime.now(timezone.utc)
+    stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
     for ln in lines:
-        stock = await _get_or_create_stock(db, account_id, ln.item_id, receipt.location_id)
+        stock = stocks[ln.item_id]
         stock.qty = stock.qty + ln.qty
         stock.updated_at = now
         await _movement(

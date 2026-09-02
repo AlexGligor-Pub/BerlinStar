@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -115,7 +116,13 @@ async def create_marca_admin(
         approved_at=datetime.now(timezone.utc),
     )
     db.add(marca)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Race pe uq_marci_anvelope_nume_lower: alta cerere a inserat acelasi nume
+        # intre check-ul de mai sus si commit.
+        await db.rollback()
+        raise HTTPException(409, f"Marca „{nume}” există deja.")
     await db.refresh(marca)
     return MarcaAdminRead.model_validate(marca)
 
@@ -143,7 +150,11 @@ async def update_marca_admin(
         raise HTTPException(409, f"Există deja o marcă „{conflict.nume}”.")
     marca.nume = nume
     marca.updated_at = datetime.now(timezone.utc)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, f"Există deja o marcă „{nume}”.")
     await db.refresh(marca)
     return MarcaAdminRead.model_validate(marca)
 

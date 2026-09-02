@@ -10,6 +10,9 @@ class CazareAnvelope(Base):
     __table_args__ = (
         Index("ix_cazari_anvelope_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
         Index("ix_cazari_anvelope_account_id_data_checkin", "account_id", "data_checkin"),
+        Index("ix_cazari_anvelope_client_id", "client_id"),
+        Index("ix_cazari_anvelope_employee_id", "employee_id"),
+        Index("ix_cazari_anvelope_loc_cazare_id", "loc_cazare_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
