@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "test": "vitest",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "api:types": "openapi-typescript http://localhost:4000/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@solidjs/router": "^0.16.1",
@@ -21,10 +27,17 @@
     "solid-js": "^1.9.11"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^24.12.0",
     "@types/qrcode": "^1.5.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-solid": "^0.14.5",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.9.6",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.69.0",
     "vite": "^5.4.21",
-    "vite-plugin-solid": "^2.11.11"
+    "vite-plugin-solid": "^2.11.11",
+    "vitest": "^4.1.11"
   }
 }

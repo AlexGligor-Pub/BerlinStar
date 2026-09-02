@@ -6,3 +6,6 @@ export type { ActionApi, UseActionOptions } from "./useAction";
 
 export { createForm } from "./createForm";
 export type { FormApi, FormErrors, CreateFormOptions } from "./createForm";
+
+export { createListResource, cursorFetcher } from "./createListResource";
+export type { ListResource, ListFetchCtx, CreateListResourceOptions } from "./createListResource";

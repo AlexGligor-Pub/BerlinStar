@@ -1,14 +1,17 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
-import { apiFetch, apiUpload } from "../../utils/api";
-import { notify } from "../../store/notificationsStore";
-import type { Location, Department, Employee } from "./types";
+import { locationsApi, type LocationDetail } from "../../api/locations";
+import { departmentsApi, type Department } from "../../api/departments";
+import { employeesApi, type Employee } from "../../api/employees";
+import { disclaimersApi, type Disclaimer } from "../../api/disclaimers";
+import { registersApi, type Register } from "../../api/registers";
+import { companiesApi, type Company } from "../../api/companies";
+import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { compressToPng, exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
 export default function LocatiiPanel() {
-  const [locations, setLocations] = createSignal<Location[]>([]);
-  const [loading, setLoading]     = createSignal(true);
-  const [search, setSearch]       = createSignal("");
+  const list = createListResource<LocationDetail>({ fetcher: cursorFetcher(locationsApi.list), limit: 100 });
+  const [search, setSearch] = createSignal("");
 
   const [editId, setEditId]               = createSignal<number | null>(null);
   const [editName, setEditName]           = createSignal("");
@@ -20,226 +23,121 @@ export default function LocatiiPanel() {
   const [editCompanyId, setEditCompanyId] = createSignal<number | null>(null);
   const [allDepartments, setAllDepartments] = createSignal<Department[]>([]);
   const [allEmployees, setAllEmployees]   = createSignal<Employee[]>([]);
-  const [allDisclaimers, setAllDisclaimers] = createSignal<{ id: number; title: string; text: string }[]>([]);
-  const [allRegisters, setAllRegisters]   = createSignal<{ id: number; name: string; company_id: number | null }[]>([]);
-  const [allCompanies, setAllCompanies]   = createSignal<{ id: number; name: string; cui: number }[]>([]);
-  const [editLoading, setEditLoading]     = createSignal(false);
+  const [allDisclaimers, setAllDisclaimers] = createSignal<Disclaimer[]>([]);
+  const [allRegisters, setAllRegisters]   = createSignal<Register[]>([]);
+  const [allCompanies, setAllCompanies]   = createSignal<Company[]>([]);
   const [deptOpen, setDeptOpen]           = createSignal(false);
   const [empOpen, setEmpOpen]             = createSignal(false);
-  let cachedDepartments: Department[] | null = null;
-  let cachedEmployees: Employee[] | null = null;
-  let cachedDisclaimers: { id: number; title: string; text: string }[] | null = null;
-  let cachedRegisters: { id: number; name: string; company_id: number | null }[] | null = null;
-  let cachedCompanies: { id: number; name: string; cui: number }[] | null = null;
 
   const [addMode, setAddMode] = createSignal(false);
   const [newName, setNewName] = createSignal("");
   const [newDesc, setNewDesc] = createSignal("");
 
-  const [deleteTarget, setDeleteTarget] = createSignal<Location | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError]   = createSignal<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = createSignal<LocationDetail | null>(null);
   const [editImagePath, setEditImagePath] = createSignal<string | null>(null);
-  const [imageUploading, setImageUploading] = createSignal(false);
   let locFileInputRef: HTMLInputElement | undefined;
 
-  async function handleLocImageFile(file: File) {
-    const id = editId();
-    if (!id) return;
-    setImageUploading(true);
-    setError(null);
-    try {
-      const compressed = await compressToPng(file);
+  const assocLoad = useAction({
+    fn: () => Promise.all([
+      departmentsApi.listAll(),
+      employeesApi.listAll(),
+      disclaimersApi.listAll(),
+      registersApi.listAll(),
+      companiesApi.listAll(),
+    ]),
+    onSuccess: ([depts, emps, discs, regs, comps]) => {
+      setAllDepartments(depts);
+      setAllEmployees(emps);
+      setAllDisclaimers(discs);
+      setAllRegisters(regs);
+      setAllCompanies(comps);
+    },
+    silentError: true,
+  });
+
+  onMount(() => void assocLoad.run());
+
+  const upload = useAction({
+    fn: async (id: number, file: File) => {
       const fd = new FormData();
-      fd.append("file", compressed);
-      const res = await apiUpload(`/api/locations/${id}/image`, fd);
-      if (!res.ok) throw new Error("Eroare la upload imagine.");
-      const updated = await res.json() as { image_path: string | null };
+      fd.append("file", await compressToPng(file));
+      return locationsApi.uploadImage(id, fd);
+    },
+    onSuccess: (updated, id) => {
       setEditImagePath(updated.image_path ?? null);
-      setLocations(locations().map(l => l.id === id ? { ...l, image_path: updated.image_path ?? null } : l));
-    } catch (ex: any) {
-      setError(ex?.message ?? "Eroare la upload.");
-    } finally {
-      setImageUploading(false);
-    }
-  }
+      list.mutate((items) => items.map((l) => (l.id === id ? { ...l, image_path: updated.image_path ?? null } : l)));
+    },
+    silentError: true,
+  });
+
+  const save = useAction({
+    fn: (id: number) => Promise.all([
+      locationsApi.update(id, {
+        name: editName().trim(),
+        description: editDesc().trim() || null,
+        disclaimer_id: editDisclaimerId(),
+        register_id: editRegisterId(),
+        company_id: editCompanyId(),
+      }),
+      locationsApi.setDepartments(id, Array.from(editDepartmentIds())),
+      locationsApi.setEmployees(id, Array.from(editEmpIds())),
+    ]),
+    onSuccess: () => { setEditId(null); void list.reload(); },
+    silentError: true,
+  });
+
+  const remove = useAction({
+    fn: (id: number) => locationsApi.remove(id),
+    onSuccess: () => void list.reload(),
+    silentError: true,
+  });
+
+  const add = useAction({
+    fn: () => locationsApi.create({ name: newName().trim(), description: newDesc().trim() || null }),
+    onSuccess: () => { setNewName(""); setNewDesc(""); setAddMode(false); void list.reload(); },
+    silentError: true,
+  });
+
+  const saving = () => save.loading() || remove.loading() || add.loading();
+  const error = () => list.error() ?? assocLoad.error() ?? upload.error() ?? save.error() ?? remove.error() ?? add.error();
+  function clearErrors() { assocLoad.reset(); upload.reset(); save.reset(); remove.reset(); add.reset(); }
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    return q ? locations().filter(l => l.name.toLowerCase().includes(q) || (l.description ?? "").toLowerCase().includes(q)) : locations();
+    return q
+      ? list.items().filter((l) => l.name.toLowerCase().includes(q) || (l.description ?? "").toLowerCase().includes(q))
+      : list.items();
   });
 
-  async function loadLocations() {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/locations?limit=200");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setLocations(data.items ?? []);
-    } catch {
-      setError("Eroare la incarcare.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadDisclaimersCache() {
-    if (cachedDisclaimers) { setAllDisclaimers(cachedDisclaimers); return; }
-    try {
-      const res = await apiFetch("/api/disclaimers?limit=200");
-      if (!res.ok) return;
-      const data = (await res.json()) as { items?: Array<{ id: number; title: string; text: string }> };
-      cachedDisclaimers = (data.items ?? []).map((d) => ({ id: d.id, title: d.title, text: d.text }));
-      setAllDisclaimers(cachedDisclaimers!);
-    } catch (e: unknown) {
-      notify(e instanceof Error ? e.message : "Eroare la încărcare disclaimere.", "error");
-    }
-  }
-
-  async function loadRegistersCache() {
-    if (cachedRegisters) { setAllRegisters(cachedRegisters); return; }
-    try {
-      const res = await apiFetch("/api/registers?limit=200");
-      if (!res.ok) return;
-      const data = (await res.json()) as { items?: Array<{ id: number; name: string; company_id?: number | null }> };
-      cachedRegisters = (data.items ?? []).map((r) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null }));
-      setAllRegisters(cachedRegisters!);
-    } catch (e: unknown) {
-      notify(e instanceof Error ? e.message : "Eroare la încărcare registre.", "error");
-    }
-  }
-
-  onMount(() => { loadLocations(); loadDisclaimersCache(); loadRegistersCache(); });
-
-  async function startEdit(loc: Location) {
+  function startEdit(loc: LocationDetail) {
     setEditId(loc.id);
     setEditName(loc.name);
     setEditDesc(loc.description ?? "");
     setEditDisclaimerId(loc.disclaimer_id);
     setEditRegisterId(loc.register_id);
     setAddMode(false);
-    setError(null);
     setEditImagePath(loc.image_path ?? null);
     setEditDepartmentIds(new Set(loc.department_ids));
     setEditEmpIds(new Set(loc.employee_ids));
     setEditCompanyId(loc.company_id);
     setDeptOpen(false);
     setEmpOpen(false);
-
-    if (cachedDepartments && cachedEmployees && cachedDisclaimers && cachedRegisters && cachedCompanies) {
-      setAllDepartments(cachedDepartments);
-      setAllEmployees(cachedEmployees);
-      setAllDisclaimers(cachedDisclaimers);
-      setAllRegisters(cachedRegisters);
-      setAllCompanies(cachedCompanies);
-      return;
-    }
-
-    setAllDepartments([]);
-    setAllEmployees([]);
-    setAllDisclaimers([]);
-    setAllCompanies([]);
-    setEditLoading(true);
-    try {
-      const fetches: Promise<Response>[] = [];
-      if (!cachedDepartments) fetches.push(apiFetch("/api/departments?limit=200"));
-      if (!cachedEmployees)   fetches.push(apiFetch("/api/employees?limit=200"));
-      if (!cachedDisclaimers) fetches.push(apiFetch("/api/disclaimers?limit=200"));
-      if (!cachedRegisters)   fetches.push(apiFetch("/api/registers?limit=200"));
-      if (!cachedCompanies)   fetches.push(apiFetch("/api/companies?limit=200"));
-
-      const results = await Promise.all(fetches);
-      if (results.some(r => !r.ok)) throw new Error();
-      const jsons = await Promise.all(results.map(r => r.json()));
-
-      let idx = 0;
-      if (!cachedDepartments) { cachedDepartments = jsons[idx++].items ?? []; }
-      if (!cachedEmployees)   { cachedEmployees   = jsons[idx++].items ?? []; }
-      if (!cachedDisclaimers) { cachedDisclaimers = (jsons[idx++].items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })); }
-      if (!cachedRegisters)   { cachedRegisters   = (jsons[idx++].items ?? []).map((r: any) => ({ id: r.id, name: r.name, company_id: r.company_id ?? null })); }
-      if (!cachedCompanies)   { cachedCompanies   = (jsons[idx++].items ?? []).map((c: any) => ({ id: c.id, name: c.name, cui: c.cui })); }
-
-      setAllDepartments(cachedDepartments!);
-      setAllEmployees(cachedEmployees!);
-      setAllDisclaimers(cachedDisclaimers!);
-      setAllRegisters(cachedRegisters!);
-      setAllCompanies(cachedCompanies!);
-    } catch {
-      setError("Eroare la încărcarea datelor.");
-    } finally {
-      setEditLoading(false);
-    }
+    clearErrors();
   }
 
   function cancelEdit() { setEditId(null); }
 
   function toggleNum(set: Set<number>, val: number): Set<number> {
     const s = new Set(set);
-    s.has(val) ? s.delete(val) : s.add(val);
+    if (s.has(val)) s.delete(val); else s.add(val);
     return s;
   }
 
-  async function saveEdit() {
-    if (!editName().trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const id = editId()!;
-      await Promise.all([
-        apiFetch(`/api/locations/${id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ name: editName().trim(), description: editDesc().trim() || null, disclaimer_id: editDisclaimerId(), register_id: editRegisterId(), company_id: editCompanyId() }),
-        }),
-        apiFetch(`/api/locations/${id}/departments`, {
-          method: "PUT",
-          body: JSON.stringify({ ids: Array.from(editDepartmentIds()) }),
-        }),
-        apiFetch(`/api/locations/${id}/employees`, {
-          method: "PUT",
-          body: JSON.stringify({ ids: Array.from(editEmpIds()) }),
-        }),
-      ]);
-      setEditId(null);
-      await loadLocations();
-    } catch {
-      setError("Eroare la salvare.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
+  function confirmDelete() {
     const loc = deleteTarget();
     if (!loc) return;
-    setSaving(true);
-    setError(null);
     setDeleteTarget(null);
-    try {
-      await apiFetch(`/api/locations/${loc.id}`, { method: "DELETE" });
-      await loadLocations();
-    } catch {
-      setError("Eroare la stergere.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function addLocation() {
-    if (!newName().trim()) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await apiFetch("/api/locations", {
-        method: "POST",
-        body: JSON.stringify({ name: newName().trim(), description: newDesc().trim() || null }),
-      });
-      setNewName(""); setNewDesc(""); setAddMode(false);
-      await loadLocations();
-    } catch {
-      setError("Eroare la adaugare.");
-    } finally {
-      setSaving(false);
-    }
+    void remove.run(loc.id);
   }
 
   function doExportCSV() {
@@ -282,16 +180,16 @@ export default function LocatiiPanel() {
             <input class="input" placeholder="Descriere (optional)" value={newDesc()} onInput={(e) => setNewDesc(e.currentTarget.value)} />
           </div>
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !newName().trim()} onClick={addLocation}>Salvează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !newName().trim()} onClick={() => void add.run()}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => setAddMode(false)}>Anulează</button>
           </div>
         </div>
       </Show>
 
-      <Show when={loading()}>
+      <Show when={list.loading()}>
         <p class="cfg-hint">Se încarcă...</p>
       </Show>
-      <Show when={!loading() && filtered().length === 0}>
+      <Show when={!list.loading() && filtered().length === 0}>
         <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există locații. Apasă \"+ Adaugă\" pentru a crea una."}</p>
       </Show>
 
@@ -340,11 +238,11 @@ export default function LocatiiPanel() {
                   <input class="input" placeholder="Descriere" value={editDesc()} onInput={(e) => setEditDesc(e.currentTarget.value)} />
                 </div>
 
-                <Show when={editLoading()}>
+                <Show when={assocLoad.loading()}>
                   <p class="cfg-hint">Se încarcă departamente și angajați...</p>
                 </Show>
 
-                <Show when={!editLoading()}>
+                <Show when={!assocLoad.loading()}>
                   <div class="cfg-assoc-section">
                     <div class="cfg-assoc-header">
                       <span class="cfg-assoc-label">Companie</span>
@@ -406,7 +304,7 @@ export default function LocatiiPanel() {
                   </div>
                 </Show>
 
-                <Show when={!editLoading() && allDepartments().length > 0}>
+                <Show when={!assocLoad.loading() && allDepartments().length > 0}>
                   <div class="cfg-assoc-section">
                     <div class="cfg-assoc-header cfg-assoc-header--toggle" onClick={() => setDeptOpen(o => !o)}>
                       <span class="cfg-assoc-label">Departamente ({editDepartmentIds().size}/{allDepartments().length})</span>
@@ -432,7 +330,7 @@ export default function LocatiiPanel() {
                   </div>
                 </Show>
 
-                <Show when={!editLoading() && allEmployees().length > 0}>
+                <Show when={!assocLoad.loading() && allEmployees().length > 0}>
                   <div class="cfg-assoc-section">
                     <div class="cfg-assoc-header cfg-assoc-header--toggle" onClick={() => setEmpOpen(o => !o)}>
                       <span class="cfg-assoc-label">Angajați ({editEmpIds().size}/{allEmployees().length})</span>
@@ -464,13 +362,13 @@ export default function LocatiiPanel() {
                     type="file"
                     accept="image/*"
                     style="display:none"
-                    onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) handleLocImageFile(f); ev.currentTarget.value = ""; }}
+                    onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) void upload.run(loc.id, f); ev.currentTarget.value = ""; }}
                   />
                   <Show when={editImagePath()}>
                     <img src={editImagePath()!} class="cfg-employee-avatar" alt="avatar" />
                   </Show>
-                  <button class="btn btn-sm btn-ghost" disabled={imageUploading()} onClick={() => locFileInputRef?.click()}>
-                    {imageUploading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                  <button class="btn btn-sm btn-ghost" disabled={upload.loading()} onClick={() => locFileInputRef?.click()}>
+                    {upload.loading() ? "..." : editImagePath() ? "Schimbă poza" : "Adaugă poză"}
                   </button>
                 </div>
 
@@ -478,12 +376,17 @@ export default function LocatiiPanel() {
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(loc)}>Șterge</button>
                   <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
-                  <button class="btn btn-sm btn-primary" disabled={saving() || editLoading() || !editName().trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || assocLoad.loading() || !editName().trim()} onClick={() => void save.run(loc.id)}>Salvează</button>
                 </div>
               </div>
             </Show>
           )}
         </For>
+        <Show when={list.hasMore()}>
+          <button class="btn btn-sm btn-ghost" disabled={list.loadingMore()} onClick={() => void list.loadMore()}>
+            {list.loadingMore() ? "Se încarcă..." : "Încarcă mai multe"}
+          </button>
+        </Show>
       </div>
     </div>
   );

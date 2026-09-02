@@ -1,41 +1,32 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../../utils/api";
+import { locationsApi, type LocationDetail } from "../../api/locations";
+import { createListResource, useAction } from "../../hooks";
 import { device, updateDevice } from "../../store/deviceStore";
-import type { Location } from "./types";
 
 export default function DispozitivulMeuPanel() {
-  const [locations, setLocations] = createSignal<Location[]>([]);
+  const locations = createListResource<LocationDetail>({ fetcher: () => locationsApi.listAll() });
   const [selectedLoc, setSelectedLoc] = createSignal<number | "">(device()?.locationId ?? "");
-  const [saving, setSaving] = createSignal(false);
   const [msg, setMsg] = createSignal<{ ok: boolean; text: string } | null>(null);
 
-  onMount(async () => {
-    const res = await apiFetch("/api/locations?limit=200");
-    if (res.ok) {
-      const data = await res.json();
-      setLocations(data.items ?? data);
-    }
-    setSelectedLoc(device()?.locationId ?? "");
-  });
+  onMount(() => setSelectedLoc(device()?.locationId ?? ""));
 
   const currentLocationName = () => {
     const d = device();
-    const loc = locations().find(l => l.id === d?.locationId);
+    const loc = locations.items().find(l => l.id === d?.locationId);
     return loc ? loc.name : d?.locationId != null ? `ID ${d.locationId}` : "—";
   };
 
-  async function handleSave() {
-    setSaving(true);
+  const save = useAction({
+    fn: (locId: number | null) => updateDevice(locId),
+    onSuccess: () => setMsg({ ok: true, text: "Locație actualizată cu succes." }),
+    onError: (err) => setMsg({ ok: false, text: err }),
+    silentError: true,
+  });
+
+  function handleSave() {
     setMsg(null);
-    try {
-      const locId = selectedLoc() === "" ? null : Number(selectedLoc());
-      await updateDevice(locId);
-      setMsg({ ok: true, text: "Locație actualizată cu succes." });
-    } catch (e: any) {
-      setMsg({ ok: false, text: e.message ?? "Eroare la salvare." });
-    } finally {
-      setSaving(false);
-    }
+    const locId = selectedLoc() === "" ? null : Number(selectedLoc());
+    void save.run(locId);
   }
 
   return (
@@ -62,7 +53,7 @@ export default function DispozitivulMeuPanel() {
               onInput={(e) => setSelectedLoc(e.currentTarget.value === "" ? "" : Number(e.currentTarget.value))}
             >
               <option value="">— fără locație —</option>
-              <For each={locations()}>
+              <For each={locations.items()}>
                 {(loc) => <option value={loc.id}>{loc.name}</option>}
               </For>
             </select>
@@ -73,8 +64,8 @@ export default function DispozitivulMeuPanel() {
             </div>
           </Show>
           <div>
-            <button class="btn btn-sm btn-primary" onClick={handleSave} disabled={saving()}>
-              {saving() ? "Se salvează..." : "Salvează locația"}
+            <button class="btn btn-sm btn-primary" onClick={handleSave} disabled={save.loading()}>
+              {save.loading() ? "Se salvează..." : "Salvează locația"}
             </button>
           </div>
         </div>

@@ -1,12 +1,11 @@
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
-import { apiFetch, apiUpload } from "../../utils/api";
-import type { CompanyItem } from "./types";
+import { For, Show, createMemo, createSignal } from "solid-js";
+import { companiesApi, type Company, type CompanyCreate, type CompanyUpdate } from "../../api/companies";
+import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { compressToPng, exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
 export default function CompaniiPanel() {
-  const [items, setItems]     = createSignal<CompanyItem[]>([]);
-  const [loading, setLoading] = createSignal(true);
+  const list = createListResource<Company>({ fetcher: cursorFetcher(companiesApi.list), limit: 100 });
   const [search, setSearch]   = createSignal("");
 
   // Add form state
@@ -14,85 +13,67 @@ export default function CompaniiPanel() {
   const [cuiInput, setCuiInput]   = createSignal("");
   const [anafLoading, setAnafLoading] = createSignal(false);
   const [anafError, setAnafError]     = createSignal<string | null>(null);
-  const [form, setForm] = createSignal<Partial<CompanyItem>>({});
+  const [form, setForm] = createSignal<Partial<Company>>({});
 
   // Edit state
   const [editId, setEditId] = createSignal<number | null>(null);
-  const [editForm, setEditForm] = createSignal<Partial<CompanyItem>>({});
+  const [editForm, setEditForm] = createSignal<Partial<Company>>({});
 
-  const [deleteTarget, setDeleteTarget] = createSignal<CompanyItem | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError]   = createSignal<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = createSignal<Company | null>(null);
 
-  const [logoUploading, setLogoUploading] = createSignal(false);
-  const [bgUploading, setBgUploading] = createSignal(false);
   let logoInputRef!: HTMLInputElement;
   let bgInputRef!: HTMLInputElement;
 
-  async function handleLogoFile(file: File) {
-    const id = editId();
-    if (!id) return;
-    setLogoUploading(true);
-    try {
+  const logoUpload = useAction({
+    fn: async (id: number, file: File) => {
       const compressed = await compressToPng(file);
       const fd = new FormData();
       fd.append("file", compressed);
-      const res = await apiUpload(`/api/companies/${id}/logo`, fd);
-      if (!res.ok) throw new Error();
-      const data = await res.json() as { logo_path: string | null };
+      return companiesApi.uploadLogo(id, fd);
+    },
+    onSuccess: (data, id) => {
       setEditForm(f => ({ ...f, logo_path: data.logo_path }));
-      setItems(items => items.map(c => c.id === id ? { ...c, logo_path: data.logo_path } : c));
-    } catch {
-      setError("Eroare la încărcarea logo-ului.");
-    } finally {
-      setLogoUploading(false);
-    }
-  }
+      list.mutate(items => items.map(c => c.id === id ? { ...c, logo_path: data.logo_path } : c));
+    },
+    errorMessage: "Eroare la încărcarea logo-ului.",
+    silentError: true,
+  });
 
-  async function handleBgFile(file: File) {
-    const id = editId();
-    if (!id) return;
-    setBgUploading(true);
-    try {
+  const bgUpload = useAction({
+    fn: async (id: number, file: File) => {
       const compressed = await compressToPng(file, 1_000_000);
       const fd = new FormData();
       fd.append("file", compressed);
-      const res = await apiUpload(`/api/companies/${id}/background`, fd);
-      if (!res.ok) throw new Error();
-      const data = await res.json() as { background_path: string | null };
+      return companiesApi.uploadBackground(id, fd);
+    },
+    onSuccess: (data, id) => {
       setEditForm(f => ({ ...f, background_path: data.background_path }));
-      setItems(items => items.map(c => c.id === id ? { ...c, background_path: data.background_path } : c));
-    } catch {
-      setError("Eroare la încărcarea imaginii de fundal.");
-    } finally {
-      setBgUploading(false);
-    }
+      list.mutate(items => items.map(c => c.id === id ? { ...c, background_path: data.background_path } : c));
+    },
+    errorMessage: "Eroare la încărcarea imaginii de fundal.",
+    silentError: true,
+  });
+
+  function handleLogoFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    void logoUpload.run(id, file);
+  }
+
+  function handleBgFile(file: File) {
+    const id = editId();
+    if (!id) return;
+    void bgUpload.run(id, file);
   }
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    return q ? items().filter(c =>
+    return q ? list.items().filter(c =>
       c.name.toLowerCase().includes(q) ||
       String(c.cui).includes(q) ||
       (c.nr_reg_com ?? "").toLowerCase().includes(q)
-    ) : items();
+    ) : list.items();
   });
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/companies?limit=200");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setItems(data.items ?? []);
-    } catch {
-      setError("Eroare la încărcare.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  onMount(load);
 
   async function searchAnaf() {
     const cui = parseInt(cuiInput().replace(/\D/g, ""));
@@ -100,10 +81,10 @@ export default function CompaniiPanel() {
     setAnafLoading(true);
     setAnafError(null);
     try {
-      const res = await apiFetch(`/api/companies/anaf/${cui}`);
+      const res = await companiesApi.anafRaw(cui);
       if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
       if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = await res.json() as Partial<Company>;
       setForm(data);
       if (data.is_vat_payer && !data.tva_percentage) patchForm("tva_percentage", 21);
     } catch {
@@ -113,69 +94,55 @@ export default function CompaniiPanel() {
     }
   }
 
-  function patchForm(key: keyof CompanyItem, val: string | boolean | number | null) {
+  function patchForm(key: keyof Company, val: string | boolean | number | null) {
     setForm(f => ({ ...f, [key]: val }));
   }
-  function patchEditForm(key: keyof CompanyItem, val: string | boolean | number | null) {
+  function patchEditForm(key: keyof Company, val: string | boolean | number | null) {
     setEditForm(f => ({ ...f, [key]: val }));
   }
 
-  async function addItem() {
-    const f = form();
-    if (!f.name?.trim() || !f.cui) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch("/api/companies", {
-        method: "POST",
-        body: JSON.stringify({ ...f, name: f.name!.trim() }),
-      });
-      if (!res.ok) throw new Error();
+  const add = useAction({
+    fn: () => {
+      const f = form();
+      return companiesApi.create({ ...f, name: f.name!.trim() } as CompanyCreate);
+    },
+    onSuccess: () => {
       setAddMode(false); setForm({}); setCuiInput(""); setAnafError(null);
-      await load();
-    } catch {
-      setError("Eroare la adăugare.");
-    } finally {
-      setSaving(false);
-    }
-  }
+      void list.reload();
+    },
+    silentError: true,
+  });
 
-  function startEdit(c: CompanyItem) {
+  const save = useAction({
+    fn: () => {
+      const f = editForm();
+      return companiesApi.update(editId()!, { ...f, name: f.name!.trim() } as CompanyUpdate);
+    },
+    onSuccess: () => { setEditId(null); void list.reload(); },
+    silentError: true,
+  });
+
+  const remove = useAction({
+    fn: (id: number) => companiesApi.remove(id),
+    onSuccess: () => void list.reload(),
+    silentError: true,
+  });
+
+  const saving = () => save.loading() || add.loading() || remove.loading() || logoUpload.loading() || bgUpload.loading();
+  const error = () => list.error() ?? logoUpload.error() ?? bgUpload.error() ?? add.error() ?? save.error() ?? remove.error();
+  function clearErrors() { logoUpload.reset(); bgUpload.reset(); add.reset(); save.reset(); remove.reset(); }
+
+  function startEdit(c: Company) {
     setEditId(c.id);
     setEditForm({ ...c });
-    setAddMode(false); setError(null);
+    setAddMode(false); clearErrors();
   }
 
-  async function saveEdit() {
-    const f = editForm();
-    if (!f.name?.trim()) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch(`/api/companies/${editId()}`, {
-        method: "PATCH",
-        body: JSON.stringify({ ...f, name: f.name!.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      setEditId(null);
-      await load();
-    } catch {
-      setError("Eroare la salvare.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
+  function confirmDelete() {
     const c = deleteTarget();
     if (!c) return;
-    setSaving(true); setError(null); setDeleteTarget(null);
-    try {
-      await apiFetch(`/api/companies/${c.id}`, { method: "DELETE" });
-      await load();
-    } catch {
-      setError("Eroare la ștergere.");
-    } finally {
-      setSaving(false);
-    }
+    setDeleteTarget(null);
+    void remove.run(c.id);
   }
 
   function doExportCSV() {
@@ -216,7 +183,7 @@ export default function CompaniiPanel() {
         <h2 class="cfg-panel-title">Companii</h2>
         <input class="input cfg-search" placeholder="Caută CUI / denumire..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
         <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
-        <button class="btn btn-sm btn-primary" onClick={() => { setAddMode(true); setEditId(null); setForm({ tva_percentage: 21 }); setCuiInput(""); setAnafError(null); }}>
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddMode(true); setEditId(null); setForm({ tva_percentage: 21 }); setCuiInput(""); setAnafError(null); clearErrors(); }}>
           + Adaugă
         </button>
       </div>
@@ -271,14 +238,14 @@ export default function CompaniiPanel() {
             <input class="input" placeholder="Site web (https://...)" value={f().website ?? ""} onInput={e => patchForm("website", e.currentTarget.value)} />
           </div>
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !f().name?.trim() || !f().cui} onClick={addItem}>Salvează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !f().name?.trim() || !f().cui} onClick={() => void add.run()}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => setAddMode(false)}>Anulează</button>
           </div>
         </div>
       </Show>
 
-      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
-      <Show when={!loading() && filtered().length === 0}>
+      <Show when={list.loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!list.loading() && filtered().length === 0}>
         <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există companii. Apasă \"+ Adaugă\" pentru a crea una."}</p>
       </Show>
 
@@ -349,8 +316,8 @@ export default function CompaniiPanel() {
                     }>
                       <img src={ef().logo_path!} class="cfg-company-img-preview" alt="Logo" onClick={() => logoInputRef.click()} />
                     </Show>
-                    <button class="btn btn-ghost btn-sm" disabled={logoUploading()} onClick={() => logoInputRef.click()}>
-                      {logoUploading() ? "Se încarcă..." : ef().logo_path ? "Schimbă logo" : "Adaugă logo"}
+                    <button class="btn btn-ghost btn-sm" disabled={logoUpload.loading()} onClick={() => logoInputRef.click()}>
+                      {logoUpload.loading() ? "Se încarcă..." : ef().logo_path ? "Schimbă logo" : "Adaugă logo"}
                     </button>
                   </div>
                   <div class="cfg-image-upload-item">
@@ -359,8 +326,8 @@ export default function CompaniiPanel() {
                     }>
                       <img src={ef().background_path!} class="cfg-company-img-preview cfg-company-img-preview--bg" alt="Fundal" onClick={() => bgInputRef.click()} />
                     </Show>
-                    <button class="btn btn-ghost btn-sm" disabled={bgUploading()} onClick={() => bgInputRef.click()}>
-                      {bgUploading() ? "Se încarcă..." : ef().background_path ? "Schimbă fundal" : "Adaugă fundal"}
+                    <button class="btn btn-ghost btn-sm" disabled={bgUpload.loading()} onClick={() => bgInputRef.click()}>
+                      {bgUpload.loading() ? "Se încarcă..." : ef().background_path ? "Schimbă fundal" : "Adaugă fundal"}
                     </button>
                   </div>
                 </div>
@@ -368,12 +335,17 @@ export default function CompaniiPanel() {
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(c)}>Șterge</button>
                   <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={() => setEditId(null)}>Anulează</button>
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !ef().name?.trim()} onClick={saveEdit}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !ef().name?.trim()} onClick={() => void save.run()}>Salvează</button>
                 </div>
               </div>
             </Show>
           )}
         </For>
+        <Show when={list.hasMore()}>
+          <button class="btn btn-sm btn-ghost" disabled={list.loadingMore()} onClick={() => void list.loadMore()}>
+            {list.loadingMore() ? "Se încarcă..." : "Încarcă mai multe"}
+          </button>
+        </Show>
       </div>
     </div>
   );

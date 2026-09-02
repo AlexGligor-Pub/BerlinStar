@@ -1,19 +1,8 @@
-import { For, Switch, Match, createMemo, createSignal } from "solid-js";
+import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from "solid-js";
 import { can, type Resource } from "../store/permissions";
-import WelcomePanel from "./configurari/WelcomePanel";
-import LocatiiPanel from "./configurari/LocatiiPanel";
-import DepartamentePanel from "./configurari/DepartamentePanel";
-import AngajatiPanel from "./configurari/AngajatiPanel";
-import DisclaimersPanel from "./configurari/DisclaimersPanel";
-import ProduseSiServiciiPanel from "./configurari/ProduseSiServiciiPanel";
-import CompaniiPanel from "./configurari/CompaniiPanel";
-import RegisterPanel from "./configurari/RegisterPanel";
-import DispozitivulMeuPanel from "./configurari/DispozitivulMeuPanel";
-import SetariGeneralePanel from "./configurari/SetariGeneralePanel";
-import EFacturaPanel from "./configurari/EFacturaPanel";
-import ContulMeuPanel from "./configurari/ContulMeuPanel";
-import AbonamentPanel from "./configurari/AbonamentPanel";
-import UtilizatoriPanel from "./configurari/UtilizatoriPanel";
+import { Dynamic } from "solid-js/web";
+
+const WelcomePanel = lazy(() => import("./configurari/WelcomePanel"));
 
 const TOPIC_GROUPS = [
   {
@@ -55,6 +44,22 @@ const TOPIC_GROUPS = [
 
 type TopicId = typeof TOPIC_GROUPS[number]["items"][number]["id"];
 
+const PANELS: Record<TopicId, Component> = {
+  companii: lazy(() => import("./configurari/CompaniiPanel")),
+  locatii: lazy(() => import("./configurari/LocatiiPanel")),
+  departamente: lazy(() => import("./configurari/DepartamentePanel")),
+  angajati: lazy(() => import("./configurari/AngajatiPanel")),
+  produse: lazy(() => import("./configurari/ProduseSiServiciiPanel")),
+  disclaimers: lazy(() => import("./configurari/DisclaimersPanel")),
+  registre: lazy(() => import("./configurari/RegisterPanel")),
+  "setari-generale": lazy(() => import("./configurari/SetariGeneralePanel")),
+  dispozitiv: lazy(() => import("./configurari/DispozitivulMeuPanel")),
+  efactura: lazy(() => import("./configurari/EFacturaPanel")),
+  utilizatori: lazy(() => import("./configurari/UtilizatoriPanel")),
+  "contul-meu": lazy(() => import("./configurari/ContulMeuPanel")),
+  abonament: lazy(() => import("./configurari/AbonamentPanel")),
+};
+
 export default function Configurari() {
   const [active, setActive] = createSignal<TopicId | null>(null);
 
@@ -91,21 +96,11 @@ export default function Configurari() {
         </For>
       </aside>
       <main class="cfg-content">
-        <Switch fallback={<WelcomePanel />}>
-          <Match when={active() === "locatii"}><LocatiiPanel /></Match>
-          <Match when={active() === "departamente"}><DepartamentePanel /></Match>
-          <Match when={active() === "angajati"}><AngajatiPanel /></Match>
-          <Match when={active() === "produse"}><ProduseSiServiciiPanel /></Match>
-          <Match when={active() === "companii"}><CompaniiPanel /></Match>
-          <Match when={active() === "disclaimers"}><DisclaimersPanel /></Match>
-          <Match when={active() === "registre"}><RegisterPanel /></Match>
-          <Match when={active() === "dispozitiv"}><DispozitivulMeuPanel /></Match>
-          <Match when={active() === "setari-generale"}><SetariGeneralePanel /></Match>
-          <Match when={active() === "efactura"}><EFacturaPanel /></Match>
-          <Match when={active() === "utilizatori"}><UtilizatoriPanel /></Match>
-          <Match when={active() === "contul-meu"}><ContulMeuPanel /></Match>
-          <Match when={active() === "abonament"}><AbonamentPanel /></Match>
-        </Switch>
+        <Suspense fallback={<p class="cfg-hint">Se încarcă...</p>}>
+          <Show when={active()} fallback={<WelcomePanel />} keyed>
+            {(id) => <Dynamic component={PANELS[id]} />}
+          </Show>
+        </Suspense>
       </main>
     </div>
   );

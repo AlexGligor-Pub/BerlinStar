@@ -1,18 +1,12 @@
-import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../../utils/api";
+import { For, Show, createSignal } from "solid-js";
+import { registersApi, type Register, type RegisterCreate } from "../../api/registers";
+import { companiesApi, type Company } from "../../api/companies";
+import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { generalSettings } from "../../store/generalSettingsStore";
 import { exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
-interface RegisterItem {
-  id: number; name: string; company_id: number | null;
-  deviz_serie: string; deviz_numar: number;
-  factura_serie: string; factura_numar: number;
-  chitanta_serie: string; chitanta_numar: number;
-  aviz_serie: string; aviz_numar: number;
-}
-
-type RegForm = Omit<RegisterItem, "id">;
+type RegForm = RegisterCreate;
 
 const emptyRegForm = (): RegForm => ({
   name: "", company_id: null,
@@ -23,94 +17,69 @@ const emptyRegForm = (): RegForm => ({
 });
 
 export default function RegisterPanel() {
-  const [items, setItems]     = createSignal<RegisterItem[]>([]);
-  const [loading, setLoading] = createSignal(true);
+  const list = createListResource<Register>({ fetcher: cursorFetcher(registersApi.list), limit: 100 });
+  const companies = createListResource<Company>({ fetcher: () => companiesApi.listAll() });
+
   const [editId, setEditId]   = createSignal<number | null>(null);
   const [editForm, setEditForm] = createSignal<RegForm>(emptyRegForm());
   const [addOpen, setAddOpen] = createSignal(false);
   const [addForm, setAddForm] = createSignal<RegForm>(emptyRegForm());
-  const [deleteTarget, setDeleteTarget] = createSignal<RegisterItem | null>(null);
-  const [saving, setSaving]   = createSignal(false);
-  const [error, setError]     = createSignal<string | null>(null);
-  const [companies, setCompanies] = createSignal<{ id: number; name: string }[]>([]);
+  const [deleteTarget, setDeleteTarget] = createSignal<Register | null>(null);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const [regRes, compRes] = await Promise.all([
-        apiFetch("/api/registers?limit=200"),
-        apiFetch("/api/companies?limit=200"),
-      ]);
-      if (!regRes.ok) throw new Error();
-      const data = await regRes.json();
-      setItems(data.items ?? []);
-      if (compRes.ok) {
-        const cd = await compRes.json();
-        setCompanies((cd.items ?? []).map((c: any) => ({ id: c.id, name: c.name })));
-      }
-    } catch {
-      setError("Eroare la încărcare.");
-    } finally { setLoading(false); }
-  }
+  const save = useAction({
+    fn: (id: number) => registersApi.update(id, editForm()),
+    onSuccess: () => { setEditId(null); void list.reload(); },
+    silentError: true,
+  });
 
-  onMount(load);
+  const add = useAction({
+    fn: () => registersApi.create(addForm()),
+    onSuccess: () => { setAddForm(emptyRegForm()); setAddOpen(false); void list.reload(); },
+    silentError: true,
+  });
 
-  function startEdit(r: RegisterItem) {
-    const { id, ...rest } = r;
-    setEditId(id); setEditForm(rest); setAddOpen(false); setError(null);
+  const remove = useAction({
+    fn: (id: number) => registersApi.remove(id),
+    onSuccess: () => void list.reload(),
+    silentError: true,
+  });
+
+  const saving = () => save.loading() || add.loading() || remove.loading();
+  const error = () => list.error() ?? companies.error() ?? save.error() ?? add.error() ?? remove.error();
+  function clearErrors() { save.reset(); add.reset(); remove.reset(); }
+
+  function startEdit(r: Register) {
+    setEditId(r.id);
+    setEditForm({
+      name: r.name, company_id: r.company_id,
+      deviz_serie: r.deviz_serie, deviz_numar: r.deviz_numar,
+      factura_serie: r.factura_serie, factura_numar: r.factura_numar,
+      chitanta_serie: r.chitanta_serie, chitanta_numar: r.chitanta_numar,
+      aviz_serie: r.aviz_serie, aviz_numar: r.aviz_numar,
+    });
+    setAddOpen(false); clearErrors();
   }
   function cancelEdit() { setEditId(null); }
 
-  async function saveEdit(id: number) {
-    if (!editForm().name.trim()) return;
-    setSaving(true); setError(null);
-    try {
-      await apiFetch(`/api/registers/${id}`, { method: "PATCH", body: JSON.stringify(editForm()) });
-      setItems(items().map(r => r.id === id ? { id, ...editForm() } : r));
-      cancelEdit();
-    } catch {
-      setError("Eroare la salvare.");
-    } finally { setSaving(false); }
-  }
-
-  async function saveAdd() {
-    if (!addForm().name.trim()) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch("/api/registers", { method: "POST", body: JSON.stringify(addForm()) });
-      if (!res.ok) throw new Error();
-      const created = await res.json();
-      setItems([...items(), created]);
-      setAddForm(emptyRegForm()); setAddOpen(false);
-    } catch {
-      setError("Eroare la adăugare.");
-    } finally { setSaving(false); }
-  }
-
-  async function confirmDelete() {
+  function confirmDelete() {
     const r = deleteTarget(); if (!r) return;
-    setSaving(true); setError(null); setDeleteTarget(null);
-    try {
-      await apiFetch(`/api/registers/${r.id}`, { method: "DELETE" });
-      setItems(items().filter(x => x.id !== r.id));
-    } catch {
-      setError("Eroare la ștergere.");
-    } finally { setSaving(false); }
+    setDeleteTarget(null);
+    void remove.run(r.id);
   }
 
   function companyName(id: number | null) {
-    return id ? (companies().find(c => c.id === id)?.name ?? `#${id}`) : "—";
+    return id ? (companies.items().find(c => c.id === id)?.name ?? `#${id}`) : "—";
   }
 
   function doExportCSV() {
     exportCSV("Registre",
       ["Companie", "Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
-      items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
+      list.items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
   function doExportPDF() {
     exportPDF("Registre",
       ["Companie", "Nume", "Deviz Serie", "Deviz Nr", "Factură Serie", "Factură Nr", "Chitanță Serie", "Chitanță Nr", "Aviz însoțire Serie", "Aviz însoțire Nr"],
-      items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
+      list.items().map(r => [companyName(r.company_id), r.name, r.deviz_serie, String(r.deviz_numar), r.factura_serie, String(r.factura_numar), r.chitanta_serie, String(r.chitanta_numar), r.aviz_serie, String(r.aviz_numar)]));
   }
 
   function RegFormFields(props: { f: RegForm; setF: (v: RegForm) => void }) {
@@ -124,7 +93,7 @@ export default function RegisterPanel() {
           onChange={e => { const v = parseInt(e.currentTarget.value); s({ company_id: v === 0 ? null : v }); }}
         >
           <option value={0}>— Fără companie —</option>
-          <For each={companies()}>
+          <For each={companies.items()}>
             {(c) => <option value={c.id}>{c.name}</option>}
           </For>
         </select>
@@ -168,7 +137,7 @@ export default function RegisterPanel() {
       <div class="cfg-panel-header">
         <h2 class="cfg-panel-title">Registre</h2>
         <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
-        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); setError(null); }}>
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); clearErrors(); }}>
           + Adaugă
         </button>
       </div>
@@ -179,19 +148,19 @@ export default function RegisterPanel() {
         <div class="cfg-location-row cfg-location-row--edit">
           <RegFormFields f={addForm()} setF={setAddForm} />
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !addForm().name.trim() || !addForm().company_id} onClick={saveAdd}>Salvează</button>
-            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setError(null); }}>Anulează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addForm().name.trim() || !addForm().company_id} onClick={() => void add.run()}>Salvează</button>
+            <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); clearErrors(); }}>Anulează</button>
           </div>
         </div>
       </Show>
 
-      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
-      <Show when={!loading() && items().length === 0}>
+      <Show when={list.loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!list.loading() && list.items().length === 0}>
         <p class="cfg-hint">Nu există registre. Apasă "+ Adaugă" pentru a crea unul.</p>
       </Show>
 
       <div class="cfg-location-list">
-        <For each={items()}>
+        <For each={list.items()}>
           {(r) => (
             <Show when={editId() === r.id}
               fallback={
@@ -224,12 +193,17 @@ export default function RegisterPanel() {
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(r)}>Șterge</button>
                   <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim() || !editForm().company_id} onClick={() => saveEdit(r.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editForm().name.trim() || !editForm().company_id} onClick={() => void save.run(r.id)}>Salvează</button>
                 </div>
               </div>
             </Show>
           )}
         </For>
+        <Show when={list.hasMore()}>
+          <button class="btn btn-sm btn-ghost" disabled={list.loadingMore()} onClick={() => void list.loadMore()}>
+            {list.loadingMore() ? "Se încarcă..." : "Încarcă mai multe"}
+          </button>
+        </Show>
       </div>
     </div>
   );

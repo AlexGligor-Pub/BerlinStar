@@ -136,7 +136,7 @@ export function exportPDF(
     <span>Exportat din Berlin Star &ndash; <a href="https://professorprime.ro">professorprime.ro</a></span>
     <span>${date}</span>
   </footer>
-  <script>setTimeout(()=>{ window.print(); },400);<\/script>
+  <script>setTimeout(()=>{ window.print(); },400);</script>
 </body>
 </html>`);
   w.document.close();

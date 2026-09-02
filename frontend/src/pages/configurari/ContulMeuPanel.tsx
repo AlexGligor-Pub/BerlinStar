@@ -1,23 +1,9 @@
 import { Show, createSignal, onMount } from "solid-js";
-import { apiFetch, apiUpload, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import { auth, setDisplayName } from "../../store/authStore";
 import { ROLE_LABEL, canUsers } from "../../store/permissions";
-import type { ApiMessageBody } from "../../types";
-
-interface MeResponse {
-  id: number;
-  name: string;
-  username: string;
-  description: string | null;
-  email: string | null;
-  image_url: string | null;
-  /** Codul firmei — se dă colegilor, e prima casetă de la login. */
-  code: string | null;
-  user_name: string | null;
-  user_username: string | null;
-  role: string | null;
-}
+import { authApi, type MeResponse } from "../../api/auth";
+import { useAction } from "../../hooks";
 
 /**
  * „Contul Meu" — panou in Configurari pentru datele si parola proprii.
@@ -32,17 +18,11 @@ export default function ContulMeuPanel() {
   const [editName, setEditName] = createSignal("");
   const [editDesc, setEditDesc] = createSignal("");
   const [editEmail, setEditEmail] = createSignal("");
-  const [meErr, setMeErr] = createSignal("");
-  const [meSaving, setMeSaving] = createSignal(false);
-  const [imgUploading, setImgUploading] = createSignal(false);
-  const [imgErr, setImgErr] = createSignal("");
   let imgFileInput: HTMLInputElement | undefined;
 
   async function loadMe() {
     try {
-      const res = await apiFetch("/api/auth/me");
-      if (!res.ok) return;
-      const d = (await res.json()) as MeResponse;
+      const d = await authApi.me();
       setMe(d);
       setDisplayName(d.name);
     } catch {
@@ -56,138 +36,109 @@ export default function ContulMeuPanel() {
     setEditName(m.name ?? "");
     setEditDesc(m.description ?? "");
     setEditEmail(m.email ?? "");
-    setMeErr("");
+    saveMeAction.reset();
     setEditMode(true);
   }
 
-  async function uploadImage(file: File | undefined) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setImgErr("Selecteaza un fisier imagine.");
-      return;
-    }
-    setImgErr("");
-    setImgUploading(true);
-    try {
+  const [imgTypeErrMsg, setImgTypeErrMsg] = createSignal("");
+
+  const uploadImageAction = useAction({
+    fn: (file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await apiUpload("/api/auth/me/image", fd);
-      if (!res.ok) {
-        const d = await readJsonSafe<ApiMessageBody>(res);
-        setImgErr(d.detail ?? "Eroare la upload.");
-        return;
-      }
-      const d = (await res.json()) as MeResponse;
+      return authApi.uploadMeImage(fd);
+    },
+    onSuccess: (d) => {
       setMe(d);
       setDisplayName(d.name);
       notify("Imaginea a fost incarcata.", "success");
-    } catch {
-      setImgErr("Eroare de conexiune.");
-    } finally {
-      setImgUploading(false);
-      if (imgFileInput) imgFileInput.value = "";
-    }
-  }
+    },
+    silentError: true,
+  });
 
-  async function deleteImage() {
-    setImgErr("");
-    setImgUploading(true);
-    try {
-      const res = await apiFetch("/api/auth/me/image", { method: "DELETE" });
-      if (!res.ok) {
-        const d = await readJsonSafe<ApiMessageBody>(res);
-        setImgErr(d.detail ?? "Eroare la stergere.");
-        return;
-      }
-      const d = (await res.json()) as MeResponse;
+  const deleteImageAction = useAction({
+    fn: () => authApi.deleteMeImage(),
+    onSuccess: (d) => {
       setMe(d);
       notify("Imaginea a fost stearsa.", "success");
-    } catch {
-      setImgErr("Eroare de conexiune.");
-    } finally {
-      setImgUploading(false);
+    },
+    silentError: true,
+  });
+
+  function uploadImage(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setImgTypeErrMsg("Selecteaza un fisier imagine.");
+      return;
     }
+    setImgTypeErrMsg("");
+    void uploadImageAction.run(file).finally(() => {
+      if (imgFileInput) imgFileInput.value = "";
+    });
   }
+
+  function deleteImage() {
+    setImgTypeErrMsg("");
+    void deleteImageAction.run();
+  }
+
+  const imgUploading = () => uploadImageAction.loading() || deleteImageAction.loading();
+  const imgErr = () => imgTypeErrMsg() || uploadImageAction.error() || deleteImageAction.error() || "";
 
   function cancelEdit() {
     setEditMode(false);
-    setMeErr("");
+    saveMeAction.reset();
   }
 
-  async function saveMe(e: Event) {
-    e.preventDefault();
-    setMeErr("");
-    if (!editName().trim()) {
-      setMeErr("Numele nu poate fi gol.");
-      return;
-    }
-    setMeSaving(true);
-    try {
-      const res = await apiFetch("/api/auth/me", {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: editName().trim(),
-          description: editDesc().trim() || null,
-          email: editEmail().trim() || null,
-        }),
+  const saveMeAction = useAction({
+    fn: async () => {
+      if (!editName().trim()) throw new Error("Numele nu poate fi gol.");
+      return authApi.updateMe({
+        name: editName().trim(),
+        description: editDesc().trim() || null,
+        email: editEmail().trim() || null,
       });
-      if (!res.ok) {
-        const d = await readJsonSafe<ApiMessageBody>(res);
-        setMeErr(d.detail ?? "Eroare la salvare.");
-        return;
-      }
-      const d = (await res.json()) as MeResponse;
+    },
+    onSuccess: (d) => {
       setMe(d);
       setDisplayName(d.name);
       setEditMode(false);
       notify("Detaliile contului au fost salvate.", "success");
-    } catch {
-      setMeErr("Eroare de conexiune.");
-    } finally {
-      setMeSaving(false);
-    }
+    },
+    silentError: true,
+  });
+  const meErr = () => saveMeAction.error() ?? "";
+  const meSaving = saveMeAction.loading;
+
+  function saveMe(e: Event) {
+    e.preventDefault();
+    void saveMeAction.run();
   }
 
   // ── Parola Cont (login) ──────────────────────────────────────────────────
   const [lOld, setLOld] = createSignal("");
   const [lNew, setLNew] = createSignal("");
   const [lNew2, setLNew2] = createSignal("");
-  const [lErr, setLErr] = createSignal("");
-  const [lSaving, setLSaving] = createSignal(false);
 
-  async function doSaveLoginPwd(e: Event) {
-    e.preventDefault();
-    setLErr("");
-    if (lNew().length < 10) {
-      setLErr("Parola nouă trebuie să aibă minim 10 caractere.");
-      return;
-    }
-    if (lNew() !== lNew2()) {
-      setLErr("Parolele noi nu coincid.");
-      return;
-    }
-    if (!lOld()) {
-      setLErr("Introdu parola curentă.");
-      return;
-    }
-    setLSaving(true);
-    try {
-      const res = await apiFetch("/api/auth/change-password", {
-        method: "POST",
-        body: JSON.stringify({ old_password: lOld(), new_password: lNew() }),
-      });
-      if (!res.ok) {
-        const d = await readJsonSafe<ApiMessageBody>(res);
-        setLErr(d.detail ?? "Eroare la salvare.");
-        return;
-      }
+  const changePwdAction = useAction({
+    fn: async () => {
+      if (lNew().length < 10) throw new Error("Parola nouă trebuie să aibă minim 10 caractere.");
+      if (lNew() !== lNew2()) throw new Error("Parolele noi nu coincid.");
+      if (!lOld()) throw new Error("Introdu parola curentă.");
+      return authApi.changePassword({ old_password: lOld(), new_password: lNew() });
+    },
+    onSuccess: () => {
       notify("Parola ta a fost schimbată.", "success");
       setLOld(""); setLNew(""); setLNew2("");
-    } catch {
-      setLErr("Eroare de conexiune.");
-    } finally {
-      setLSaving(false);
-    }
+    },
+    silentError: true,
+  });
+  const lErr = () => changePwdAction.error() ?? "";
+  const lSaving = changePwdAction.loading;
+
+  function doSaveLoginPwd(e: Event) {
+    e.preventDefault();
+    void changePwdAction.run();
   }
 
   onMount(() => {

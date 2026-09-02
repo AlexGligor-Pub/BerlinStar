@@ -1,24 +1,29 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, Suspense, createSignal, lazy, type Component } from "solid-js";
+import { Dynamic } from "solid-js/web";
 import { readJsonSafe } from "../utils/api";
 import type { ApiMessageBody } from "../types";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo-nav.webp";
 import { adminFetch, setAdminToken } from "./adminv2/admin-auth";
-import AccountsSection from "./adminv2/AccountsSection";
-import HotelAnvelopeSection from "./adminv2/HotelAnvelopeSection";
-import MontareRotiSection from "./adminv2/MontareRotiSection";
-import RotiMasinaAnvelopeSection from "./adminv2/RotiMasinaAnvelopeSection";
-import EmailSection from "./adminv2/EmailSection";
-import ReportsSection from "./adminv2/ReportsSection";
-import EFacturaSection from "./adminv2/EFacturaSection";
-import LegacyImportSection from "./adminv2/LegacyImportSection";
-import DemoSeedSection from "./adminv2/DemoSeedSection";
-import SubscriptionSettingsSection from "./adminv2/SubscriptionSettingsSection";
-import SubscriptionAccountsSection from "./adminv2/SubscriptionAccountsSection";
-import TasksSection from "./adminv2/TasksSection";
-import LogsSection from "./adminv2/LogsSection";
-import AssistantSection from "./adminv2/AssistantSection";
+
+const AssistantSection = lazy(() => import("./adminv2/AssistantSection"));
 
 type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
+
+const SECTIONS: Record<Section, Component> = {
+  conturi: lazy(() => import("./adminv2/AccountsSection")),
+  hotel: lazy(() => import("./adminv2/HotelAnvelopeSection")),
+  montare: lazy(() => import("./adminv2/MontareRotiSection")),
+  "roti-anvelope": lazy(() => import("./adminv2/RotiMasinaAnvelopeSection")),
+  email: lazy(() => import("./adminv2/EmailSection")),
+  rapoarte: lazy(() => import("./adminv2/ReportsSection")),
+  efactura: lazy(() => import("./adminv2/EFacturaSection")),
+  tasks: lazy(() => import("./adminv2/TasksSection")),
+  logs: lazy(() => import("./adminv2/LogsSection")),
+  "import-legacy": lazy(() => import("./adminv2/LegacyImportSection")),
+  "demo-seed": lazy(() => import("./adminv2/DemoSeedSection")),
+  "abonament-setari": lazy(() => import("./adminv2/SubscriptionSettingsSection")),
+  "abonament-conturi": lazy(() => import("./adminv2/SubscriptionAccountsSection")),
+};
 
 interface NavItem { id: Section; label: string; icon: string }
 interface NavCategory { label: string; items: NavItem[] }
@@ -231,50 +236,18 @@ export default function AdminV2() {
           </aside>
 
           <main class="adminv2-content">
-            <Show when={section() === "conturi"}>
-              <AccountsSection />
-            </Show>
-            <Show when={section() === "hotel"}>
-              <HotelAnvelopeSection />
-            </Show>
-            <Show when={section() === "montare"}>
-              <MontareRotiSection />
-            </Show>
-            <Show when={section() === "roti-anvelope"}>
-              <RotiMasinaAnvelopeSection />
-            </Show>
-            <Show when={section() === "email"}>
-              <EmailSection />
-            </Show>
-            <Show when={section() === "rapoarte"}>
-              <ReportsSection />
-            </Show>
-            <Show when={section() === "efactura"}>
-              <EFacturaSection />
-            </Show>
-            <Show when={section() === "tasks"}>
-              <TasksSection />
-            </Show>
-            <Show when={section() === "logs"}>
-              <LogsSection />
-            </Show>
-            <Show when={section() === "abonament-setari"}>
-              <SubscriptionSettingsSection />
-            </Show>
-            <Show when={section() === "abonament-conturi"}>
-              <SubscriptionAccountsSection />
-            </Show>
-            <Show when={section() === "import-legacy"}>
-              <LegacyImportSection />
-            </Show>
-            <Show when={section() === "demo-seed"}>
-              <DemoSeedSection />
-            </Show>
+            <Suspense fallback={<p class="cfg-hint">Se încarcă...</p>}>
+              <Show when={section()} keyed>
+                {(id) => <Dynamic component={SECTIONS[id]} />}
+              </Show>
+            </Suspense>
           </main>
         </div>
 
         {/* Asistent AI — buton flotant (FAB) dreapta-jos, disponibil pe orice sectiune */}
-        <AssistantSection />
+        <Suspense>
+          <AssistantSection />
+        </Suspense>
       </div>
     </Show>
   );

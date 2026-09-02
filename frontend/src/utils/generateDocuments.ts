@@ -370,7 +370,7 @@ export async function generateFisaDeLucru(
     doc.setTextColor(...C.black);
 
     for (const linie of linii) {
-      let clean = linie.replace(/^[•\-\*]\s*/, "");
+      let clean = linie.replace(/^[•\-*]\s*/, "");
       // Prima literă mare — convertim doar primul caracter alfabetic.
       clean = clean.charAt(0).toLocaleUpperCase("ro-RO") + clean.slice(1);
       const lines: string[] = doc.splitTextToSize(ro(clean), CW - padX * 2 - bulletIndent);

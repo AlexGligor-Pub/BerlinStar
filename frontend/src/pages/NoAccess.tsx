@@ -1,5 +1,5 @@
 import { logout } from "../store/authStore";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo-nav.webp";
 
 export default function NoAccess() {
   function handleLogout() {

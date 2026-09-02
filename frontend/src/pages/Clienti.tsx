@@ -1,38 +1,13 @@
-import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import { useNavigate } from "@solidjs/router";
-import { apiFetch, readApiError } from "../utils/api";
 import { canManage } from "../store/permissions";
 import { createPagination } from "../hooks/createPagination";
-import { notify } from "../store/notificationsStore";
+import { createListResource } from "../hooks";
 import Pagination from "../components/data/Pagination";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
-import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
-
-interface Client {
-  id: number;
-  tip: "fizic" | "juridic";
-  nume: string;
-  description: string | null;
-  cui: string | null;
-  reprezentant: string | null;
-  telefon: string | null;
-  email: string | null;
-  adresa: string | null;
-  numar_masina: string | null;
-  comments: string | null;
-}
-
-interface ClientVehicol {
-  id: number;
-  client_id: number;
-  numar_masina: string;
-  marca: string | null;
-  model: string | null;
-  numar_kilometrii: number | null;
-  an_fabricatie: number | null;
-  vin: string | null;
-  observatii: string | null;
-}
+import { CNP_PLACEHOLDER, cnpError, cnpForSave, type Client, type ClientVehicol } from "../types/client";
+import { clientiApi } from "../api/clienti";
+import { companiesApi, type AnafCompany } from "../api/companies";
 
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
@@ -59,12 +34,22 @@ function emptyVForm() {
 
 export default function Clienti() {
   const navigate = useNavigate();
-  const [clienti, setClienti] = createSignal<Client[]>([]);
-  const [total, setTotal] = createSignal<number | undefined>(undefined);
-  const [loading, setLoading] = createSignal(true);
   const [search, setSearch] = createSignal("");
   const [searchMasina, setSearchMasina] = createSignal("");
+  const [querySearch, setQuerySearch] = createSignal("");
+  const [queryMasina, setQueryMasina] = createSignal("");
   const pagination = createPagination({ initialPageSize: 25 });
+
+  const list = createListResource<Client>({
+    fetcher: ({ signal, limit, offset }) =>
+      clientiApi.list({ limit, offset, q: querySearch() || null, q_masina: queryMasina() || null }, { signal }),
+    deps: () => `${querySearch()}|${queryMasina()}`,
+    pagination,
+    errorMessage: "Eroare la încărcare clienți.",
+  });
+  const clienti = list.items;
+  const loading = list.loading;
+  const total = list.total;
 
   const [viewId, setViewId] = createSignal<number | null>(null);
   const [editId, setEditId] = createSignal<number | null>(null);
@@ -75,7 +60,8 @@ export default function Clienti() {
 
   const [deleteTarget, setDeleteTarget] = createSignal<Client | null>(null);
   const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
+  const [formError, setFormError] = createSignal<string | null>(null);
+  const error = () => list.error() ?? formError();
 
   const [anafLoading, setAnafLoading] = createSignal(false);
   const [anafError, setAnafError] = createSignal<string | null>(null);
@@ -96,10 +82,10 @@ export default function Clienti() {
     setAnafLoading(true);
     setAnafError(null);
     try {
-      const res = await apiFetch(`/api/companies/anaf/${cuiNum}`);
+      const res = await companiesApi.anafRaw(cuiNum);
       if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
       if (!res.ok) throw new Error();
-      const data = await res.json();
+      const data = (await res.json()) as AnafCompany;
       setF({
         ...f,
         nume: data.name ?? f.nume,
@@ -113,42 +99,14 @@ export default function Clienti() {
     }
   }
 
-  async function load(): Promise<void> {
-    setLoading(true);
-    try {
-      const p = pagination.params();
-      const q = search() ? `&q=${encodeURIComponent(search())}` : "";
-      const qm = searchMasina() ? `&q_masina=${encodeURIComponent(searchMasina())}` : "";
-      const res = await apiFetch(`/api/clienti?limit=${p.limit}&offset=${p.offset}${q}${qm}`);
-      if (!res.ok) throw new Error("Eroare la încărcare clienți");
-      const data = (await res.json()) as { items: Client[]; total?: number };
-      setClienti(data.items ?? []);
-      if (typeof data.total === "number") setTotal(data.total);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Eroare la încărcare.";
-      setError(msg);
-      notify(msg, "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  onMount(load);
-
-  // Reload pe schimbarea paginii (după mount)
-  let _mounted = false;
-  createEffect(on([pagination.page, pagination.pageSize], () => {
-    if (!_mounted) { _mounted = true; return; }
-    void load();
-  }));
-
   let _searchDebounce: ReturnType<typeof setTimeout> | null = null;
   function debouncedLoad(): void {
     if (_searchDebounce) clearTimeout(_searchDebounce);
     _searchDebounce = setTimeout(() => {
       _searchDebounce = null;
       pagination.reset();
-      void load();
+      setQuerySearch(search());
+      setQueryMasina(searchMasina());
     }, 250);
   }
 
@@ -156,9 +114,7 @@ export default function Clienti() {
     if (vehicoleMap()[clientId] !== undefined) return;
     setVLoadingId(clientId);
     try {
-      const res = await apiFetch(`/api/clienti/${clientId}/vehicole`);
-      if (!res.ok) throw new Error();
-      const data: ClientVehicol[] = await res.json();
+      const data = await clientiApi.listVehicole(clientId);
       setVehicoleMap((m) => ({ ...m, [clientId]: data }));
     } catch {
       setVehicoleMap((m) => ({ ...m, [clientId]: [] }));
@@ -172,35 +128,30 @@ export default function Clienti() {
     setViewId(null);
     setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? CNP_PLACEHOLDER, reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", numar_masina: c.numar_masina ?? "", comments: c.comments ?? "" });
     setAddMode(false);
-    setError(null);
+    setFormError(null);
   }
 
-  function cancelEdit() { setEditId(null); setError(null); }
+  function cancelEdit() { setEditId(null); setFormError(null); }
 
   async function saveEdit() {
     const f = form();
-    if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
-    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
-    setSaving(true); setError(null);
+    if (!f.nume.trim()) { setFormError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setFormError(e); return; } }
+    setSaving(true); setFormError(null);
     try {
-      const res = await apiFetch(`/api/clienti/${editId()}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          tip: f.tip, nume: f.nume.trim(),
-          description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
-          reprezentant: f.reprezentant.trim() || null,
-          telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
-          comments: f.comments.trim() || null,
-        }),
+      const updated = await clientiApi.update(editId()!, {
+        tip: f.tip, nume: f.nume.trim(),
+        description: f.description.trim() || null,
+        cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
+        reprezentant: f.reprezentant.trim() || null,
+        telefon: f.telefon.trim() || null, email: f.email.trim() || null,
+        adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+        comments: f.comments.trim() || null,
       });
-      if (!res.ok) throw new Error(await readApiError(res, "Eroare la salvare."));
-      const updated: Client = await res.json();
-      setClienti(clienti().map((c) => c.id === updated.id ? updated : c));
+      list.mutate((items) => items.map((c) => (c.id === updated.id ? updated : c)));
       setEditId(null);
-    } catch (e: any) {
-      setError(e?.message || "Eroare la salvare.");
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Eroare la salvare.");
     } finally {
       setSaving(false);
     }
@@ -210,38 +161,33 @@ export default function Clienti() {
     setViewId(c.id);
     setEditId(null);
     setAddMode(false);
-    setError(null);
+    setFormError(null);
     loadVehicole(c.id);
   }
   function closeView() { setViewId(null); setVAddMode(null); setVEditId(null); }
 
-  function startAdd() { setNewForm(emptyForm()); setAddMode(true); setEditId(null); setViewId(null); setError(null); }
-  function cancelAdd() { setAddMode(false); setError(null); }
+  function startAdd() { setNewForm(emptyForm()); setAddMode(true); setEditId(null); setViewId(null); setFormError(null); }
+  function cancelAdd() { setAddMode(false); setFormError(null); }
 
   async function saveAdd() {
     const f = newForm();
-    if (!f.nume.trim()) { setError("Numele este obligatoriu."); return; }
-    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setError(e); return; } }
-    setSaving(true); setError(null);
+    if (!f.nume.trim()) { setFormError("Numele este obligatoriu."); return; }
+    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setFormError(e); return; } }
+    setSaving(true); setFormError(null);
     try {
-      const res = await apiFetch("/api/clienti", {
-        method: "POST",
-        body: JSON.stringify({
-          tip: f.tip, nume: f.nume.trim(),
-          description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
-          reprezentant: f.reprezentant.trim() || null,
-          telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-          adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
-          comments: f.comments.trim() || null,
-        }),
-      });
-      if (!res.ok) throw new Error(await readApiError(res, "Eroare la salvare."));
-      const created: Client = await res.json();
-      setClienti([created, ...clienti()]);
+      const created = await clientiApi.create({
+        tip: f.tip, nume: f.nume.trim(),
+        description: f.description.trim() || null,
+        cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
+        reprezentant: f.reprezentant.trim() || null,
+        telefon: f.telefon.trim() || null, email: f.email.trim() || null,
+        adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
+        comments: f.comments.trim() || null,
+      }, { errorMessage: "Eroare la salvare." });
+      list.mutate((items) => [created, ...items]);
       setAddMode(false);
-    } catch (e: any) {
-      setError(e?.message || "Eroare la salvare.");
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Eroare la salvare.");
     } finally {
       setSaving(false);
     }
@@ -252,11 +198,11 @@ export default function Clienti() {
     if (!target) return;
     setSaving(true);
     try {
-      await apiFetch(`/api/clienti/${target.id}`, { method: "DELETE" });
-      setClienti(clienti().filter((c) => c.id !== target.id));
+      await clientiApi.remove(target.id);
+      list.mutate((items) => items.filter((c) => c.id !== target.id));
       setDeleteTarget(null);
     } catch {
-      setError("Eroare la ștergere.");
+      setFormError("Eroare la ștergere.");
     } finally {
       setSaving(false);
     }
@@ -290,20 +236,15 @@ export default function Clienti() {
     if (!f.numar_masina.trim()) { setVError("Numărul mașinii este obligatoriu."); return; }
     setVSaving(true); setVError(null);
     try {
-      const res = await apiFetch(`/api/clienti/${clientId}/vehicole`, {
-        method: "POST",
-        body: JSON.stringify({
-          numar_masina: f.numar_masina.trim(),
-          marca: f.marca.trim() || null,
-          model: f.model.trim() || null,
-          numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
-          an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
-          vin: f.vin.trim() || null,
-          observatii: f.observatii.trim() || null,
-        }),
+      const created = await clientiApi.createVehicol(clientId, {
+        numar_masina: f.numar_masina.trim(),
+        marca: f.marca.trim() || null,
+        model: f.model.trim() || null,
+        numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+        an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
+        vin: f.vin.trim() || null,
+        observatii: f.observatii.trim() || null,
       });
-      if (!res.ok) throw new Error();
-      const created: ClientVehicol = await res.json();
       setVehicoleMap((m) => ({ ...m, [clientId]: [...(m[clientId] ?? []), created] }));
       setVAddMode(null);
     } catch {
@@ -318,20 +259,15 @@ export default function Clienti() {
     if (!f.numar_masina.trim()) { setVError("Numărul mașinii este obligatoriu."); return; }
     setVSaving(true); setVError(null);
     try {
-      const res = await apiFetch(`/api/clienti/${clientId}/vehicole/${vId}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          numar_masina: f.numar_masina.trim(),
-          marca: f.marca.trim() || null,
-          model: f.model.trim() || null,
-          numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
-          an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
-          vin: f.vin.trim() || null,
-          observatii: f.observatii.trim() || null,
-        }),
+      const updated = await clientiApi.updateVehicol(clientId, vId, {
+        numar_masina: f.numar_masina.trim(),
+        marca: f.marca.trim() || null,
+        model: f.model.trim() || null,
+        numar_kilometrii: f.numar_kilometrii ? parseInt(f.numar_kilometrii) || null : null,
+        an_fabricatie: f.an_fabricatie ? parseInt(f.an_fabricatie) || null : null,
+        vin: f.vin.trim() || null,
+        observatii: f.observatii.trim() || null,
       });
-      if (!res.ok) throw new Error();
-      const updated: ClientVehicol = await res.json();
       setVehicoleMap((m) => ({ ...m, [clientId]: (m[clientId] ?? []).map((v) => v.id === vId ? updated : v) }));
       setVEditId(null);
     } catch {
@@ -346,7 +282,7 @@ export default function Clienti() {
     if (!target) return;
     setVSaving(true);
     try {
-      await apiFetch(`/api/clienti/${target.clientId}/vehicole/${target.v.id}`, { method: "DELETE" });
+      await clientiApi.removeVehicol(target.clientId, target.v.id);
       setVehicoleMap((m) => ({ ...m, [target.clientId]: (m[target.clientId] ?? []).filter((v) => v.id !== target.v.id) }));
       setVDeleteTarget(null);
       setVEditId(null);

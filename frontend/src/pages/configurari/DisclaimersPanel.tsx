@@ -1,14 +1,12 @@
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../../utils/api";
+import { For, Show, createMemo, createSignal } from "solid-js";
+import { disclaimersApi, type Disclaimer } from "../../api/disclaimers";
+import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
-interface DisclaimerItem { id: number; title: string; text: string; }
-
 export default function DisclaimersPanel() {
-  const [items, setItems]     = createSignal<DisclaimerItem[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [search, setSearch]   = createSignal("");
+  const list = createListResource<Disclaimer>({ fetcher: cursorFetcher(disclaimersApi.list), limit: 100 });
+  const [search, setSearch] = createSignal("");
 
   const [editId, setEditId]       = createSignal<number | null>(null);
   const [editTitle, setEditTitle] = createSignal("");
@@ -16,71 +14,52 @@ export default function DisclaimersPanel() {
   const [addOpen, setAddOpen]     = createSignal(false);
   const [addTitle, setAddTitle]   = createSignal("");
   const [addText, setAddText]     = createSignal("");
-  const [deleteTarget, setDeleteTarget] = createSignal<DisclaimerItem | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError]   = createSignal<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = createSignal<Disclaimer | null>(null);
 
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    return q ? items().filter(d => d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q)) : items();
+    return q ? list.items().filter(d => d.title.toLowerCase().includes(q) || d.text.toLowerCase().includes(q)) : list.items();
   });
 
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/disclaimers?limit=200");
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setItems((data.items ?? []).map((d: any) => ({ id: d.id, title: d.title, text: d.text })));
-    } catch {
-      setError("Eroare la încărcare.");
-    } finally { setLoading(false); }
-  }
+  const save = useAction({
+    fn: (id: number) => disclaimersApi.update(id, { title: editTitle().trim(), text: editText().trim() }),
+    onSuccess: (_updated, id) => {
+      list.mutate(items => items.map(d => d.id === id ? { ...d, title: editTitle().trim(), text: editText().trim() } : d));
+      cancelEdit();
+    },
+    silentError: true,
+  });
 
-  onMount(load);
+  const add = useAction({
+    fn: () => disclaimersApi.create({ title: addTitle().trim(), text: addText().trim() }),
+    onSuccess: (created) => {
+      list.mutate(items => [...items, created]);
+      setAddTitle(""); setAddText(""); setAddOpen(false);
+    },
+    silentError: true,
+  });
 
-  function startEdit(d: DisclaimerItem) {
+  const remove = useAction({
+    fn: (id: number) => disclaimersApi.remove(id),
+    onSuccess: (_result, id) => list.mutate(items => items.filter(x => x.id !== id)),
+    silentError: true,
+  });
+
+  const saving = () => save.loading() || add.loading() || remove.loading();
+  const error = () => list.error() ?? save.error() ?? add.error() ?? remove.error();
+  function clearErrors() { save.reset(); add.reset(); remove.reset(); }
+
+  function startEdit(d: Disclaimer) {
     setEditId(d.id); setEditTitle(d.title); setEditText(d.text);
-    setAddOpen(false); setError(null);
+    setAddOpen(false); clearErrors();
   }
   function cancelEdit() { setEditId(null); setEditTitle(""); setEditText(""); }
 
-  async function saveEdit(id: number) {
-    if (!editTitle().trim()) return;
-    setSaving(true); setError(null);
-    try {
-      await apiFetch(`/api/disclaimers/${id}`, { method: "PATCH", body: JSON.stringify({ title: editTitle().trim(), text: editText().trim() }) });
-      setItems(items().map(d => d.id === id ? { ...d, title: editTitle().trim(), text: editText().trim() } : d));
-      cancelEdit();
-    } catch {
-      setError("Eroare la salvare.");
-    } finally { setSaving(false); }
-  }
-
-  async function saveAdd() {
-    if (!addTitle().trim()) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch("/api/disclaimers", { method: "POST", body: JSON.stringify({ title: addTitle().trim(), text: addText().trim() }) });
-      if (!res.ok) throw new Error();
-      const created = await res.json();
-      setItems([...items(), { id: created.id, title: created.title, text: created.text }]);
-      setAddTitle(""); setAddText(""); setAddOpen(false);
-    } catch {
-      setError("Eroare la adăugare.");
-    } finally { setSaving(false); }
-  }
-
-  async function confirmDelete() {
+  function confirmDelete() {
     const d = deleteTarget();
     if (!d) return;
-    setSaving(true); setError(null); setDeleteTarget(null);
-    try {
-      await apiFetch(`/api/disclaimers/${d.id}`, { method: "DELETE" });
-      setItems(items().filter(x => x.id !== d.id));
-    } catch {
-      setError("Eroare la ștergere.");
-    } finally { setSaving(false); }
+    setDeleteTarget(null);
+    void remove.run(d.id);
   }
 
   function doExportCSV() {
@@ -105,7 +84,7 @@ export default function DisclaimersPanel() {
         <h2 class="cfg-panel-title">Disclaimers</h2>
         <input class="input cfg-search" placeholder="Caută..." value={search()} onInput={e => setSearch(e.currentTarget.value)} />
         <ExportMenu onCSV={doExportCSV} onPDF={doExportPDF} />
-        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); setError(null); }}>
+        <button class="btn btn-sm btn-primary" onClick={() => { setAddOpen(true); setEditId(null); clearErrors(); }}>
           + Adaugă
         </button>
       </div>
@@ -125,14 +104,14 @@ export default function DisclaimersPanel() {
             />
           </div>
           <div class="cfg-location-actions">
-            <button class="btn btn-sm btn-primary" disabled={saving() || !addTitle().trim()} onClick={saveAdd}>Salvează</button>
+            <button class="btn btn-sm btn-primary" disabled={saving() || !addTitle().trim()} onClick={() => void add.run()}>Salvează</button>
             <button class="btn btn-sm btn-ghost" onClick={() => { setAddOpen(false); setAddTitle(""); setAddText(""); }}>Anulează</button>
           </div>
         </div>
       </Show>
 
-      <Show when={loading()}><p class="cfg-hint">Se încarcă...</p></Show>
-      <Show when={!loading() && filtered().length === 0}>
+      <Show when={list.loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+      <Show when={!list.loading() && filtered().length === 0}>
         <p class="cfg-hint">{search() ? "Niciun rezultat." : "Nu există disclaimere. Apasă \"+ Adaugă\" pentru a crea unul."}</p>
       </Show>
 
@@ -169,12 +148,17 @@ export default function DisclaimersPanel() {
                   <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setDeleteTarget(d)}>Șterge</button>
                   <div style="flex:1" />
                   <button class="btn btn-sm btn-ghost" onClick={cancelEdit}>Anulează</button>
-                  <button class="btn btn-sm btn-primary" disabled={saving() || !editTitle().trim()} onClick={() => saveEdit(d.id)}>Salvează</button>
+                  <button class="btn btn-sm btn-primary" disabled={saving() || !editTitle().trim()} onClick={() => void save.run(d.id)}>Salvează</button>
                 </div>
               </div>
             </Show>
           )}
         </For>
+        <Show when={list.hasMore()}>
+          <button class="btn btn-sm btn-ghost" disabled={list.loadingMore()} onClick={() => void list.loadMore()}>
+            {list.loadingMore() ? "Se încarcă..." : "Încarcă mai multe"}
+          </button>
+        </Show>
       </div>
     </div>
   );

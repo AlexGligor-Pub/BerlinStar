@@ -1,23 +1,36 @@
-import { For, Show, createEffect, createSignal, onMount } from "solid-js";
-import { apiFetch, apiUpload } from "../../utils/api";
-import { notify } from "../../store/notificationsStore";
-import type { Department, Category, Item } from "./types";
+import { For, Show, createEffect, createSignal, on } from "solid-js";
+import { departmentsApi, type Department } from "../../api/departments";
+import { categoriesApi, itemsApi, type Category, type Item, type ItemType } from "../../api/catalog";
+import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { compressToPng, exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
 
+interface ItemFormState {
+  name: string;
+  description: string;
+  price: string;
+  unit: string;
+  type: ItemType;
+  category_id: number;
+}
+
+function emptyItemForm(categoryId = 0): ItemFormState {
+  return { name: "", description: "", price: "", unit: "", type: "Produs", category_id: categoryId };
+}
+
 export default function ProduseSiServiciiPanel() {
   // ── shared ──
-  const [departments, setDepartments] = createSignal<Department[]>([]);
+  const departments = createListResource<Department>({ fetcher: () => departmentsApi.listAll() });
   const [filterDeptId, setFilterDeptId] = createSignal<number | null>(null);
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal<string | null>(null);
 
   // ── tabs ──
   const [activeTab, setActiveTab] = createSignal<"categorii" | "produse">("categorii");
 
   // ── categories ──
-  const [categories, setCategories] = createSignal<Category[]>([]);
-  const [catsLoading, setCatsLoading] = createSignal(false);
+  const categories = createListResource<Category>({
+    fetcher: () => categoriesApi.listAll({ department_id: filterDeptId() }),
+    deps: filterDeptId,
+  });
   const [catEditId, setCatEditId] = createSignal<number | null>(null);
   const [catEditName, setCatEditName] = createSignal("");
   const [catEditDeptId, setCatEditDeptId] = createSignal<number | null>(null);
@@ -26,201 +39,131 @@ export default function ProduseSiServiciiPanel() {
   const [catNewDeptId, setCatNewDeptId] = createSignal<number | null>(null);
   const [catDeleteTarget, setCatDeleteTarget] = createSignal<Category | null>(null);
 
+  createEffect(() => {
+    const depts = departments.items();
+    if (catNewDeptId() === null && depts.length > 0) setCatNewDeptId(depts[0].id);
+  });
+
   // ── items ──
-  const [items, setItems] = createSignal<Item[]>([]);
-  const [itemsLoading, setItemsLoading] = createSignal(false);
   const [itemFilterCatId, setItemFilterCatId] = createSignal<number | null>(null);
   const [itemFilterType, setItemFilterType] = createSignal<"all" | "Produs" | "Service">("all");
+  const items = createListResource<Item>({
+    fetcher: cursorFetcher(itemsApi.list, () => {
+      const t = itemFilterType();
+      return {
+        department_id: filterDeptId(),
+        category_id: itemFilterCatId(),
+        type: t === "all" ? null : t,
+      };
+    }),
+    deps: () => `${filterDeptId()}|${itemFilterCatId()}|${itemFilterType()}`,
+    limit: 100,
+  });
   const [itemEditId, setItemEditId] = createSignal<number | null>(null);
-  const [itemEditForm, setItemEditForm] = createSignal({ name: "", description: "", price: "", unit: "", type: "Produs", category_id: 0 });
+  const [itemEditForm, setItemEditForm] = createSignal<ItemFormState>(emptyItemForm());
   const [itemAddMode, setItemAddMode] = createSignal(false);
-  const [itemNewForm, setItemNewForm] = createSignal({ name: "", description: "", price: "", unit: "", type: "Produs", category_id: 0 });
+  const [itemNewForm, setItemNewForm] = createSignal<ItemFormState>(emptyItemForm());
   const [itemDeleteTarget, setItemDeleteTarget] = createSignal<Item | null>(null);
   const [itemEditImagePath, setItemEditImagePath] = createSignal<string | null>(null);
-  const [itemImageUploading, setItemImageUploading] = createSignal(false);
   let itemFileInputRef: HTMLInputElement | undefined;
 
-  async function handleItemImageFile(file: File) {
-    const id = itemEditId();
-    if (!id) return;
-    setItemImageUploading(true);
-    setError(null);
-    try {
-      const compressed = await compressToPng(file);
-      const fd = new FormData();
-      fd.append("file", compressed);
-      const res = await apiUpload(`/api/items/${id}/image`, fd);
-      if (!res.ok) throw new Error("Eroare la upload imagine.");
-      const updated = await res.json() as { image_path: string | null };
-      setItemEditImagePath(updated.image_path ?? null);
-      setItems(items().map(it => it.id === id ? { ...it, image_path: updated.image_path ?? null } : it));
-    } catch (ex: any) {
-      setError(ex?.message ?? "Eroare la upload.");
-    } finally {
-      setItemImageUploading(false);
-    }
-  }
-
-  async function loadDepartments() {
-    try {
-      const res = await apiFetch("/api/departments?limit=200");
-      if (!res.ok) return;
-      const data = (await res.json()) as { items?: Department[] };
-      const depts: Department[] = data.items ?? [];
-      setDepartments(depts);
-      if (catNewDeptId() === null && depts.length > 0) setCatNewDeptId(depts[0].id);
-    } catch (e: unknown) {
-      notify(e instanceof Error ? e.message : "Eroare la încărcare departamente.", "error");
-    }
-  }
-
-  async function loadCategories() {
-    setCatsLoading(true);
-    try {
-      const dq = filterDeptId() != null ? `&department_id=${filterDeptId()}` : "";
-      const res = await apiFetch(`/api/categories?limit=200${dq}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setCategories(data.items ?? []);
-    } catch {
-      setError("Eroare la încărcarea categoriilor.");
-    } finally {
-      setCatsLoading(false);
-    }
-  }
-
-  async function loadItems() {
-    setItemsLoading(true);
-    try {
-      const cq = itemFilterCatId() != null ? `&category_id=${itemFilterCatId()}` : "";
-      const tq = itemFilterType() !== "all" ? `&type=${itemFilterType()}` : "";
-      const dq = filterDeptId() != null ? `&department_id=${filterDeptId()}` : "";
-      const res = await apiFetch(`/api/items?limit=300${cq}${tq}${dq}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setItems(data.items ?? []);
-    } catch {
-      setError("Eroare la încărcarea produselor.");
-    } finally {
-      setItemsLoading(false);
-    }
-  }
+  // Reseteaza filtrul de categorie cand se schimba departamentul (categoria selectata poate sa nu mai existe).
+  createEffect(on(filterDeptId, () => setItemFilterCatId(null), { defer: true }));
 
   function switchTab(tab: "categorii" | "produse") {
     setActiveTab(tab);
-    if (tab === "categorii") loadCategories();
   }
-
-  onMount(() => { loadDepartments(); loadCategories(); });
-
-  // When dept filter changes: refresh category list + reset cat filter
-  createEffect(() => {
-    filterDeptId();
-    setItemFilterCatId(null);
-    loadCategories();
-  });
-
-  // Auto-load items cand filtrele se schimba (doar pe tab produse)
-  createEffect(() => {
-    const tab = activeTab();
-    filterDeptId();
-    itemFilterType();
-    itemFilterCatId();
-    if (tab === "produse") loadItems();
-  });
 
   // ── categories CRUD ──
-  async function saveCatEdit() {
-    if (!catEditName().trim() || !catEditDeptId()) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch(`/api/categories/${catEditId()}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: catEditName().trim(), department_id: catEditDeptId() }),
-      });
-      if (!res.ok) throw new Error();
-      setCatEditId(null);
-      await loadCategories();
-    } catch { setError("Eroare la salvare."); } finally { setSaving(false); }
-  }
+  const catSave = useAction({
+    fn: (id: number) => categoriesApi.update(id, { name: catEditName().trim(), department_id: catEditDeptId()! }),
+    onSuccess: () => { setCatEditId(null); void categories.reload(); },
+    silentError: true,
+  });
 
-  async function saveCatAdd() {
-    if (!catNewName().trim() || !catNewDeptId()) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch("/api/categories", {
-        method: "POST",
-        body: JSON.stringify({ name: catNewName().trim(), department_id: catNewDeptId() }),
-      });
-      if (!res.ok) throw new Error();
-      setCatNewName(""); setCatAddMode(false);
-      await loadCategories();
-    } catch { setError("Eroare la adăugare."); } finally { setSaving(false); }
-  }
+  const catAdd = useAction({
+    fn: () => categoriesApi.create({ name: catNewName().trim(), department_id: catNewDeptId()! }),
+    onSuccess: () => { setCatNewName(""); setCatAddMode(false); void categories.reload(); },
+    silentError: true,
+  });
 
-  async function confirmCatDelete() {
-    const c = catDeleteTarget(); if (!c) return;
-    setSaving(true); setError(null); setCatDeleteTarget(null);
-    try {
-      await apiFetch(`/api/categories/${c.id}`, { method: "DELETE" });
-      await loadCategories();
-    } catch { setError("Eroare la ștergere."); } finally { setSaving(false); }
+  const catRemove = useAction({
+    fn: (id: number) => categoriesApi.remove(id),
+    onSuccess: () => void categories.reload(),
+    silentError: true,
+  });
+
+  function confirmCatDelete() {
+    const c = catDeleteTarget();
+    if (!c) return;
+    setCatDeleteTarget(null);
+    void catRemove.run(c.id);
   }
 
   // ── items CRUD ──
-  async function saveItemEdit() {
-    const f = itemEditForm();
-    if (!f.name.trim() || !f.price || !f.unit.trim() || !f.category_id) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch(`/api/items/${itemEditId()}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: f.name.trim(), description: f.description.trim() || null,
-          price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
-        }),
+  const itemSave = useAction({
+    fn: (id: number) => {
+      const f = itemEditForm();
+      return itemsApi.update(id, {
+        name: f.name.trim(), description: f.description.trim() || null,
+        price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
       });
-      if (!res.ok) throw new Error();
-      setItemEditId(null);
-      await loadItems();
-    } catch { setError("Eroare la salvare."); } finally { setSaving(false); }
+    },
+    onSuccess: () => { setItemEditId(null); void items.reload(); },
+    silentError: true,
+  });
+
+  const itemAdd = useAction({
+    fn: () => {
+      const f = itemNewForm();
+      return itemsApi.create({
+        name: f.name.trim(), description: f.description.trim() || null, currency: "RON",
+        price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
+      });
+    },
+    onSuccess: () => { setItemNewForm(emptyItemForm(itemNewForm().category_id)); setItemAddMode(false); void items.reload(); },
+    silentError: true,
+  });
+
+  const itemRemove = useAction({
+    fn: (id: number) => itemsApi.remove(id),
+    onSuccess: () => void items.reload(),
+    silentError: true,
+  });
+
+  const upload = useAction({
+    fn: async (id: number, file: File) => {
+      const fd = new FormData();
+      fd.append("file", await compressToPng(file));
+      return itemsApi.uploadImage(id, fd);
+    },
+    onSuccess: (updated, id) => {
+      setItemEditImagePath(updated.image_path ?? null);
+      items.mutate((prev) => prev.map((it) => (it.id === id ? { ...it, image_path: updated.image_path ?? null } : it)));
+    },
+    silentError: true,
+  });
+
+  function confirmItemDelete() {
+    const it = itemDeleteTarget();
+    if (!it) return;
+    setItemDeleteTarget(null);
+    void itemRemove.run(it.id);
   }
 
-  async function saveItemAdd() {
-    const f = itemNewForm();
-    if (!f.name.trim() || !f.price || !f.unit.trim() || !f.category_id) return;
-    setSaving(true); setError(null);
-    try {
-      const res = await apiFetch("/api/items", {
-        method: "POST",
-        body: JSON.stringify({
-          name: f.name.trim(), description: f.description.trim() || null,
-          price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      setItemNewForm({ name: "", description: "", price: "", unit: "", type: "Produs", category_id: itemNewForm().category_id });
-      setItemAddMode(false);
-      await loadItems();
-    } catch { setError("Eroare la adăugare."); } finally { setSaving(false); }
-  }
-
-  async function confirmItemDelete() {
-    const it = itemDeleteTarget(); if (!it) return;
-    setSaving(true); setError(null); setItemDeleteTarget(null);
-    try {
-      await apiFetch(`/api/items/${it.id}`, { method: "DELETE" });
-      await loadItems();
-    } catch { setError("Eroare la ștergere."); } finally { setSaving(false); }
-  }
+  const saving = () => catSave.loading() || catAdd.loading() || catRemove.loading()
+    || itemSave.loading() || itemAdd.loading() || itemRemove.loading();
+  const error = () => departments.error() ?? categories.error() ?? items.error()
+    ?? catSave.error() ?? catAdd.error() ?? catRemove.error()
+    ?? itemSave.error() ?? itemAdd.error() ?? itemRemove.error() ?? upload.error();
 
   // ── export helpers ──
   function filterLabel() {
     const parts: string[] = [];
     const dept = filterDeptId();
-    if (dept !== null) parts.push("Departament: " + (departments().find(d => d.id === dept)?.name ?? dept));
+    if (dept !== null) parts.push("Departament: " + (departments.items().find(d => d.id === dept)?.name ?? dept));
     const cat = itemFilterCatId();
-    if (cat !== null) parts.push("Categorie: " + (categories().find(c => c.id === cat)?.name ?? cat));
+    if (cat !== null) parts.push("Categorie: " + (categories.items().find(c => c.id === cat)?.name ?? cat));
     if (itemFilterType() !== "all") parts.push("Tip: " + (itemFilterType() === "Service" ? "Servicii" : "Produse"));
     return parts.length > 0 ? parts.join(" | ") : "Toate";
   }
@@ -229,28 +172,28 @@ export default function ProduseSiServiciiPanel() {
     const label = filterLabel();
     exportCSV("Categorii" + (label !== "Toate" ? "_" + label.replace(/[^a-zA-Z0-9]/g, "_") : ""),
       ["Categorie", "Departament"],
-      categories().map(c => [c.name, departments().find(d => d.id === c.department_id)?.name ?? ""]));
+      categories.items().map(c => [c.name, departments.items().find(d => d.id === c.department_id)?.name ?? ""]));
   }
   function doCatPDF() {
     const label = filterLabel();
     exportPDF("Categorii" + (label !== "Toate" ? " — " + label : ""),
       ["Categorie", "Departament"],
-      categories().map(c => [c.name, departments().find(d => d.id === c.department_id)?.name ?? ""]));
+      categories.items().map(c => [c.name, departments.items().find(d => d.id === c.department_id)?.name ?? ""]));
   }
   function doItemCSV() {
     const label = filterLabel();
     exportCSV("Produse_si_Servicii" + (label !== "Toate" ? "_" + label.replace(/[^a-zA-Z0-9]/g, "_") : ""),
       ["Nume", "Tip", "Categorie", "Preț (RON)", "Unitate", "Descriere"],
-      items().map(it => [it.name, it.type === "Service" ? "Serviciu" : "Produs", it.category_name ?? "", parseFloat(it.price).toFixed(2), it.unit, it.description ?? ""]));
+      items.items().map(it => [it.name, it.type === "Service" ? "Serviciu" : "Produs", it.category_name ?? "", parseFloat(it.price).toFixed(2), it.unit, it.description ?? ""]));
   }
   function doItemPDF() {
     const label = filterLabel();
     exportPDF("Produse și Servicii" + (label !== "Toate" ? " — " + label : ""),
       ["Nume", "Tip", "Categorie", "Preț (RON)", "Unitate", "Descriere"],
-      items().map(it => [it.name, it.type === "Service" ? "Serviciu" : "Produs", it.category_name ?? "", parseFloat(it.price).toFixed(2), it.unit, it.description ?? ""]));
+      items.items().map(it => [it.name, it.type === "Service" ? "Serviciu" : "Produs", it.category_name ?? "", parseFloat(it.price).toFixed(2), it.unit, it.description ?? ""]));
   }
 
-  function ItemForm(props: { f: typeof itemNewForm extends () => infer T ? T : never; setF: (v: any) => void; }) {
+  function ItemForm(props: { f: ItemFormState; setF: (v: ItemFormState) => void }) {
     return (
       <div class="cfg-location-fields">
         <input class="input" placeholder="Nume *" value={props.f.name} onInput={e => props.setF({ ...props.f, name: e.currentTarget.value })} />
@@ -267,7 +210,7 @@ export default function ProduseSiServiciiPanel() {
         </div>
         <select class="input" value={props.f.category_id} onChange={e => props.setF({ ...props.f, category_id: parseInt(e.currentTarget.value) })}>
           <option value={0} disabled>Selectează categorie *</option>
-          <For each={categories()}>
+          <For each={categories.items()}>
             {(c) => <option value={c.id}>{c.name}</option>}
           </For>
         </select>
@@ -289,20 +232,20 @@ export default function ProduseSiServiciiPanel() {
         <h2 class="cfg-panel-title">Produse și Servicii</h2>
         <Show when={activeTab() === "categorii"}>
           <ExportMenu onCSV={doCatCSV} onPDF={doCatPDF} />
-          <button class="btn btn-sm btn-primary" onClick={() => { setCatAddMode(true); setCatEditId(null); setError(null); }}>+ Adaugă</button>
+          <button class="btn btn-sm btn-primary" onClick={() => { setCatAddMode(true); setCatEditId(null); }}>+ Adaugă</button>
         </Show>
         <Show when={activeTab() === "produse"}>
           <ExportMenu onCSV={doItemCSV} onPDF={doItemPDF} />
-          <button class="btn btn-sm btn-primary" onClick={() => { setItemAddMode(true); setItemEditId(null); setError(null); }}>+ Adaugă</button>
+          <button class="btn btn-sm btn-primary" onClick={() => { setItemAddMode(true); setItemEditId(null); }}>+ Adaugă</button>
         </Show>
       </div>
 
       {/* ── Filters (all at top) ── */}
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">
-        <Show when={departments().length > 0}>
+        <Show when={departments.items().length > 0}>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class={`btn btn-sm ${filterDeptId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(null)}>Toate departamentele</button>
-            <For each={departments()}>
+            <For each={departments.items()}>
               {(d) => <button class={`btn btn-sm ${filterDeptId() === d.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setFilterDeptId(d.id)}>{d.name}</button>}
             </For>
           </div>
@@ -312,10 +255,10 @@ export default function ProduseSiServiciiPanel() {
           <button class={`btn btn-sm ${itemFilterType() === "Produs" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Produs")}>Produse</button>
           <button class={`btn btn-sm ${itemFilterType() === "Service" ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterType("Service")}>Servicii</button>
         </div>
-        <Show when={activeTab() === "produse" && categories().length > 0}>
+        <Show when={activeTab() === "produse" && categories.items().length > 0}>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class={`btn btn-sm ${itemFilterCatId() === null ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(null)}>Toate categoriile</button>
-            <For each={categories()}>
+            <For each={categories.items()}>
               {(c) => <button class={`btn btn-sm ${itemFilterCatId() === c.id ? "btn-primary" : "btn-ghost"}`} onClick={() => setItemFilterCatId(c.id)}>{c.name}</button>}
             </For>
           </div>
@@ -325,10 +268,10 @@ export default function ProduseSiServiciiPanel() {
       {/* ── Tabs ── */}
       <div class="cfg-tabs">
         <button class="cfg-tab" classList={{ "cfg-tab--active": activeTab() === "categorii" }} onClick={() => switchTab("categorii")}>
-          Categorii <span class="cfg-tab-count">{categories().length}</span>
+          Categorii <span class="cfg-tab-count">{categories.items().length}</span>
         </button>
         <button class="cfg-tab" classList={{ "cfg-tab--active": activeTab() === "produse" }} onClick={() => switchTab("produse")}>
-          Produse și Servicii <span class="cfg-tab-count">{items().length}</span>
+          Produse și Servicii <span class="cfg-tab-count">{items.items().length}</span>
         </button>
       </div>
 
@@ -342,32 +285,32 @@ export default function ProduseSiServiciiPanel() {
               <input class="input" placeholder="Nume categorie *" value={catNewName()} onInput={e => setCatNewName(e.currentTarget.value)} />
               <select class="input" value={catNewDeptId() ?? 0} onChange={e => setCatNewDeptId(parseInt(e.currentTarget.value))}>
                 <option value={0} disabled>Selectează departament *</option>
-                <For each={departments()}>
+                <For each={departments.items()}>
                   {(d) => <option value={d.id}>{d.name}</option>}
                 </For>
               </select>
             </div>
             <div class="cfg-location-actions" style="margin-top:8px">
-              <button class="btn btn-sm btn-ghost" onClick={() => { setCatAddMode(false); setError(null); }}>Anulează</button>
-              <button class="btn btn-sm btn-primary" disabled={saving() || !catNewName().trim() || !catNewDeptId()} onClick={saveCatAdd}>Salvează</button>
+              <button class="btn btn-sm btn-ghost" onClick={() => setCatAddMode(false)}>Anulează</button>
+              <button class="btn btn-sm btn-primary" disabled={saving() || !catNewName().trim() || !catNewDeptId()} onClick={() => void catAdd.run()}>Salvează</button>
             </div>
           </div>
         </Show>
-        <Show when={catsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
-        <Show when={!catsLoading() && categories().length === 0}>
+        <Show when={categories.loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+        <Show when={!categories.loading() && categories.items().length === 0}>
           <p class="cfg-hint">Nu există categorii{filterDeptId() ? " pentru acest departament" : ""}.</p>
         </Show>
         <div class="cfg-location-list">
-          <For each={categories()}>
+          <For each={categories.items()}>
             {(c) => (
               <Show when={catEditId() === c.id} fallback={
                 <div class="cfg-location-row">
                   <div class="cfg-location-info">
                     <span class="cfg-location-name">{c.name}</span>
-                    <span class="cfg-location-desc">{departments().find(d => d.id === c.department_id)?.name ?? ""}</span>
+                    <span class="cfg-location-desc">{departments.items().find(d => d.id === c.department_id)?.name ?? ""}</span>
                   </div>
                   <div class="cfg-location-actions">
-                    <button class="btn btn-sm btn-ghost" onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatEditDeptId(c.department_id); setError(null); }}>Editează</button>
+                    <button class="btn btn-sm btn-ghost" onClick={() => { setCatEditId(c.id); setCatEditName(c.name); setCatEditDeptId(c.department_id); }}>Editează</button>
                   </div>
                 </div>
               }>
@@ -375,14 +318,14 @@ export default function ProduseSiServiciiPanel() {
                   <div class="cfg-location-fields">
                     <input class="input" placeholder="Nume *" value={catEditName()} onInput={e => setCatEditName(e.currentTarget.value)} />
                     <select class="input" value={catEditDeptId() ?? 0} onChange={e => setCatEditDeptId(parseInt(e.currentTarget.value))}>
-                      <For each={departments()}>{(d) => <option value={d.id}>{d.name}</option>}</For>
+                      <For each={departments.items()}>{(d) => <option value={d.id}>{d.name}</option>}</For>
                     </select>
                   </div>
                   <div class="cfg-location-actions" style="margin-top:8px">
                     <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setCatDeleteTarget(c)}>Șterge</button>
                     <div style="flex:1" />
                     <button class="btn btn-sm btn-ghost" onClick={() => setCatEditId(null)}>Anulează</button>
-                    <button class="btn btn-sm btn-primary" disabled={saving() || !catEditName().trim()} onClick={saveCatEdit}>Salvează</button>
+                    <button class="btn btn-sm btn-primary" disabled={saving() || !catEditName().trim()} onClick={() => void catSave.run(c.id)}>Salvează</button>
                   </div>
                 </div>
               </Show>
@@ -397,17 +340,17 @@ export default function ProduseSiServiciiPanel() {
           <div class="cfg-location-row cfg-location-row--edit" style="margin-top:12px;margin-bottom:12px">
             <ItemForm f={itemNewForm()} setF={setItemNewForm} />
             <div class="cfg-location-actions" style="margin-top:8px">
-              <button class="btn btn-sm btn-ghost" onClick={() => { setItemAddMode(false); setError(null); }}>Anulează</button>
-              <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemAdd}>Salvează</button>
+              <button class="btn btn-sm btn-ghost" onClick={() => setItemAddMode(false)}>Anulează</button>
+              <button class="btn btn-sm btn-primary" disabled={saving()} onClick={() => void itemAdd.run()}>Salvează</button>
             </div>
           </div>
         </Show>
-        <Show when={itemsLoading()}><p class="cfg-hint">Se încarcă...</p></Show>
-        <Show when={!itemsLoading() && items().length === 0}>
+        <Show when={items.loading()}><p class="cfg-hint">Se încarcă...</p></Show>
+        <Show when={!items.loading() && items.items().length === 0}>
           <p class="cfg-hint">Niciun produs sau serviciu pentru filtrele selectate.</p>
         </Show>
         <div class="cfg-location-list">
-          <For each={items()}>
+          <For each={items.items()}>
             {(it) => (
               <Show when={itemEditId() === it.id} fallback={
                 <div class="cfg-location-row">
@@ -439,7 +382,6 @@ export default function ProduseSiServiciiPanel() {
                       setItemEditId(it.id);
                       setItemEditImagePath(it.image_path ?? null);
                       setItemEditForm({ name: it.name, description: it.description ?? "", price: it.price, unit: it.unit, type: it.type, category_id: it.category_id });
-                      setError(null);
                     }}>Editează</button>
                   </div>
                 </div>
@@ -453,10 +395,10 @@ export default function ProduseSiServiciiPanel() {
                       <img src={itemEditImagePath()!} class="cfg-employee-avatar" alt="avatar" />
                     </Show>
                     <input ref={itemFileInputRef} type="file" accept="image/*" style="display:none"
-                      onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) handleItemImageFile(f); ev.currentTarget.value = ""; }}
+                      onChange={(ev) => { const f = ev.currentTarget.files?.[0]; if (f) void upload.run(it.id, f); ev.currentTarget.value = ""; }}
                     />
-                    <button class="btn btn-sm btn-ghost" disabled={itemImageUploading()} onClick={() => itemFileInputRef?.click()}>
-                      {itemImageUploading() ? "..." : itemEditImagePath() ? "Schimbă poza" : "Adaugă poză"}
+                    <button class="btn btn-sm btn-ghost" disabled={upload.loading()} onClick={() => itemFileInputRef?.click()}>
+                      {upload.loading() ? "..." : itemEditImagePath() ? "Schimbă poza" : "Adaugă poză"}
                     </button>
                   </div>
                   <ItemForm f={itemEditForm()} setF={setItemEditForm} />
@@ -464,12 +406,17 @@ export default function ProduseSiServiciiPanel() {
                     <button class="btn btn-sm btn-ghost cfg-btn-danger" disabled={saving()} onClick={() => setItemDeleteTarget(it)}>Șterge</button>
                     <div style="flex:1" />
                     <button class="btn btn-sm btn-ghost" onClick={() => setItemEditId(null)}>Anulează</button>
-                    <button class="btn btn-sm btn-primary" disabled={saving()} onClick={saveItemEdit}>Salvează</button>
+                    <button class="btn btn-sm btn-primary" disabled={saving()} onClick={() => void itemSave.run(it.id)}>Salvează</button>
                   </div>
                 </div>
               </Show>
             )}
           </For>
+          <Show when={items.hasMore()}>
+            <button class="btn btn-sm btn-ghost" disabled={items.loadingMore()} onClick={() => void items.loadMore()}>
+              {items.loadingMore() ? "Se încarcă..." : "Încarcă mai multe"}
+            </button>
+          </Show>
         </div>
       </Show>
     </div>

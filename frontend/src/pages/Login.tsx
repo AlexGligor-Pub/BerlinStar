@@ -2,10 +2,11 @@ import { createSignal, Show } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { lastCompanyCode, loginAndRedirect } from "../store/authStore";
 import { device, pendingName } from "../store/deviceStore";
-import { apiFetch, readApiError } from "../utils/api";
+import { readApiError } from "../utils/api";
+import { authApi, type LoginResponse } from "../api/auth";
 import ThemeToggle from "../components/ThemeToggle";
 import Modal from "../components/ui/Modal";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo-nav.webp";
 
 const guideHref = import.meta.env.BASE_URL.replace(/\/$/, "") + "/ghid";
 
@@ -73,29 +74,18 @@ export default function Login() {
 
     try {
       const d = device();
-      const res = await apiFetch("/api/auth/login", {
-        method: "POST",
-        handleUnauthorized: false,
-        body: JSON.stringify({
-          code: companyCode,
-          username: username().trim(),
-          password: password(),
-          // Dispozitivul local, ca adminul sa vada in pagina Utilizatori
-          // de pe ce statii e logat fiecare om.
-          device_id: d?.id ?? null,
-          device_name: d?.name ?? pendingName,
-        }),
+      const res = await authApi.loginRaw({
+        code: companyCode,
+        username: username().trim(),
+        password: password(),
+        // Dispozitivul local, ca adminul sa vada in pagina Utilizatori
+        // de pe ce statii e logat fiecare om.
+        device_id: d?.id ?? null,
+        device_name: d?.name ?? pendingName,
       });
 
       if (res.ok) {
-        const data = await res.json() as {
-          access_token: string;
-          is_locked?: boolean;
-          locked_at?: string | null;
-          role?: string;
-          resources?: string[];
-          code?: string | null;
-        };
+        const data = await res.json() as LoginResponse;
         loginAndRedirect(
           username().trim(),
           data.access_token,
@@ -158,17 +148,13 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const res = await apiFetch("/api/auth/register", {
-        method: "POST",
-        handleUnauthorized: false,
-        body: JSON.stringify({
-          name: regName().trim(),
-          username: regUsername().trim(),
-          email: regEmail().trim(),
-          password: regPassword(),
-          cui_firma: parseInt(cuiDigits, 10),
-          phone: regPhone().trim(),
-        }),
+      const res = await authApi.registerRaw({
+        name: regName().trim(),
+        username: regUsername().trim(),
+        email: regEmail().trim(),
+        password: regPassword(),
+        cui_firma: parseInt(cuiDigits, 10),
+        phone: regPhone().trim(),
       });
       if (res.ok) {
         setSuccessUsername(regUsername().trim());

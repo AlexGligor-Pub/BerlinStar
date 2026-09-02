@@ -31,6 +31,6 @@ export function asciifyDiacritics(s: string | null | undefined): string {
   if (!s) return "";
   return s
     .replace(/ă/g, "a").replace(/Ă/g, "A")
-    .replace(/[șşȘŞ]/g, (c) => /[A-Z]/.test(c) ? "S" : "s")
-    .replace(/[țţȚŢ]/g, (c) => /[A-Z]/.test(c) ? "T" : "t");
+    .replace(/[șşȘŞ]/g, (c) => c === c.toUpperCase() ? "S" : "s")
+    .replace(/[țţȚŢ]/g, (c) => c === c.toUpperCase() ? "T" : "t");
 }

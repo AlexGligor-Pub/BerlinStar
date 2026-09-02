@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
-import { apiFetch, readJsonSafe } from "../../utils/api";
+import { readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
+import { subscriptionApi } from "../../api/subscription";
 import SubscriptionCheckoutModal from "../../components/subscription/SubscriptionCheckoutModal";
 
 interface SubscriptionStatus {
@@ -79,8 +80,8 @@ export default function AbonamentPanel() {
     setLoading(true);
     try {
       const [s, p] = await Promise.all([
-        apiFetch("/api/subscription/me"),
-        apiFetch("/api/subscription/payments"),
+        subscriptionApi.meRaw(),
+        subscriptionApi.paymentsRaw(),
       ]);
       if (s.ok) setStatus(await s.json() as SubscriptionStatus);
       if (p.ok) setPayments(await p.json() as PaymentItem[]);
@@ -96,7 +97,7 @@ export default function AbonamentPanel() {
   function downloadFile(url: string) {
     const link = document.createElement("a");
     // PDF/ZIP endpoint-urile cer Authorization header — fetch in JS si saveAs
-    void apiFetch(url).then(async (res) => {
+    void subscriptionApi.download(url).then(async (res) => {
       if (!res.ok) {
         const d = await readJsonSafe<{ detail?: string }>(res);
         notify(d.detail || "Eroare la descărcare.", "error");
@@ -231,7 +232,7 @@ export default function AbonamentPanel() {
                         <Show when={p.pdf_available}>
                           <button
                             class="btn btn-ghost btn-sm"
-                            onClick={() => downloadFile(`/api/subscription/invoices/${p.id}/pdf`)}
+                            onClick={() => downloadFile(subscriptionApi.invoicePdfUrl(p.id))}
                           >
                             PDF
                           </button>
@@ -240,7 +241,7 @@ export default function AbonamentPanel() {
                           <button
                             class="btn btn-ghost btn-sm"
                             style="margin-left:4px"
-                            onClick={() => downloadFile(`/api/subscription/invoices/${p.id}/anaf-zip`)}
+                            onClick={() => downloadFile(subscriptionApi.invoiceAnafZipUrl(p.id))}
                           >
                             ZIP ANAF
                           </button>

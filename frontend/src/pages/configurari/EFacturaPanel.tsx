@@ -1,6 +1,7 @@
-import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../../utils/api";
+import { For, Show, createSignal } from "solid-js";
 import { notify } from "../../store/notificationsStore";
+import { efacturaApi } from "../../api/efactura";
+import { createListResource, useAction } from "../../hooks";
 
 // ---------- Types ----------
 
@@ -37,6 +38,15 @@ interface CompanySummary {
   token_status: AnafTokenStatus;
 }
 
+interface ConnectResponse {
+  authorize_url?: string | null;
+}
+
+interface TestConnectionResponse {
+  ok?: boolean;
+  detail?: string | null;
+}
+
 // ---------- Helpers ----------
 
 function tokenBadge(s: TokenState): { color: string; icon: string; label: string } {
@@ -55,30 +65,17 @@ function tokenBadge(s: TokenState): { color: string; icon: string; label: string
 // ---------- Component ----------
 
 export default function EFacturaPanel() {
-  const [companies, setCompanies] = createSignal<CompanySummary[]>([]);
-  const [loading, setLoading] = createSignal(true);
   const [expandedId, setExpandedId] = createSignal<number | null>(null);
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await apiFetch("/api/efactura/my-companies");
-      if (res.ok) setCompanies(await res.json());
-      else notify("Nu am putut încărca companiile.", "error");
-    } catch {
-      notify("Eroare de rețea.", "error");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  onMount(load);
+  const list = createListResource<CompanySummary>({
+    fetcher: () => efacturaApi.myCompanies<CompanySummary[]>(),
+    errorMessage: "Nu am putut încărca companiile.",
+  });
 
   return (
     <div class="cfg-panel">
       <div class="cfg-panel-header">
         <h2 class="cfg-panel-title">eFactura ANAF</h2>
-        <button class="btn btn-ghost btn-sm" onClick={load}>🔄 Reîncarcă</button>
+        <button class="btn btn-ghost btn-sm" onClick={() => void list.reload()}>🔄 Reîncarcă</button>
       </div>
 
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.55">
@@ -94,24 +91,28 @@ export default function EFacturaPanel() {
         </p>
       </div>
 
-      <Show when={loading() && companies().length === 0}>
+      <Show when={list.error()}>
+        <p class="cfg-error">{list.error()}</p>
+      </Show>
+
+      <Show when={list.loading() && list.items().length === 0}>
         <div class="text-muted">Se încarcă companiile...</div>
       </Show>
 
-      <Show when={!loading() && companies().length === 0}>
+      <Show when={!list.loading() && list.items().length === 0}>
         <div style="text-align:center;padding:32px;color:var(--text-muted)">
           Nu ai nicio companie configurată. Mergi în <strong>Configurări → Companiile mele</strong> pentru a adăuga una.
         </div>
       </Show>
 
       <div style="display:flex;flex-direction:column;gap:10px">
-        <For each={companies()}>
+        <For each={list.items()}>
           {(c) => (
             <CompanyCard
               company={c}
               expanded={expandedId() === c.company_id}
               onToggle={() => setExpandedId(expandedId() === c.company_id ? null : c.company_id)}
-              onReload={load}
+              onReload={() => void list.reload()}
             />
           )}
         </For>
@@ -178,90 +179,57 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
   const [autoUpload, setAutoUpload] = createSignal<boolean>(s?.auto_upload ?? false);
   const [autoUploadDelay, setAutoUploadDelay] = createSignal<number>(s?.auto_upload_delay_minutes ?? 60);
   const [deadlineEmail, setDeadlineEmail] = createSignal<string>(s?.deadline_alert_email ?? "");
-  const [saving, setSaving] = createSignal(false);
-  const [testing, setTesting] = createSignal(false);
 
-  async function save() {
-    setSaving(true);
-    try {
-      const body: Record<string, unknown> = {
+  const saveAction = useAction({
+    fn: () =>
+      efacturaApi.updateSettings(props.company.company_id, {
         use_test_env: useTestEnv(),
         payment_terms_days: paymentTermsDays(),
         default_invoice_type: defaultInvoiceType(),
         auto_upload: autoUpload(),
         auto_upload_delay_minutes: autoUploadDelay(),
         deadline_alert_email: deadlineEmail() || null,
-      };
-      const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/settings`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        notify("Setări salvate.", "success");
-        props.onSaved();
-      } else {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Eroare la salvare.", "error");
-      }
-    } catch {
-      notify("Eroare de rețea.", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
+      }),
+    successMessage: "Setări salvate.",
+    onSuccess: () => props.onSaved(),
+    errorMessage: "Eroare la salvare.",
+  });
+  const saving = saveAction.loading;
+  function save() { void saveAction.run(); }
 
-  async function connect() {
-    try {
-      const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/connect`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Nu am putut iniția conectarea.", "error");
-        return;
-      }
-      const d = await res.json();
+  const connectAction = useAction({
+    fn: () => efacturaApi.connect<ConnectResponse>(props.company.company_id),
+    onSuccess: (d) => {
       if (d.authorize_url) {
         notify("Redirect către ANAF... Asigură-te că USB-ul este plugat și middleware-ul instalat.", "info");
         window.location.href = d.authorize_url;
       }
-    } catch {
-      notify("Eroare de rețea la connect.", "error");
-    }
-  }
+    },
+    errorMessage: "Nu am putut iniția conectarea.",
+  });
+  function connect() { void connectAction.run(); }
 
-  async function disconnect() {
+  const disconnectAction = useAction({
+    fn: () => efacturaApi.disconnect(props.company.company_id),
+    successMessage: "Companie deconectată.",
+    onSuccess: () => props.onSaved(),
+    errorMessage: "Eroare la deconectare.",
+  });
+  function disconnect() {
     if (!window.confirm("Sigur deconectezi compania de la ANAF? Token-ul actual va fi șters.")) return;
-    try {
-      const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/disconnect`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        notify("Companie deconectată.", "success");
-        props.onSaved();
-      } else {
-        notify("Eroare la deconectare.", "error");
-      }
-    } catch {
-      notify("Eroare de rețea.", "error");
-    }
+    void disconnectAction.run();
   }
 
-  async function testConn() {
-    setTesting(true);
-    try {
-      const res = await apiFetch(`/api/efactura/companies/${props.company.company_id}/test-connection`, {
-        method: "POST",
-      });
-      const d = await res.json().catch(() => ({}));
+  const testAction = useAction({
+    fn: () => efacturaApi.testConnection<TestConnectionResponse>(props.company.company_id),
+    onSuccess: (d) => {
       if (d.ok) notify(d.detail ?? "Conexiune OK.", "success");
       else notify(d.detail ?? "Test eșuat.", "error");
-    } catch {
-      notify("Eroare de rețea la test.", "error");
-    } finally {
-      setTesting(false);
-    }
-  }
+    },
+    errorMessage: "Test eșuat.",
+  });
+  const testing = testAction.loading;
+  function testConn() { void testAction.run(); }
 
   return (
     <div style="padding:14px 16px;border-top:1px solid var(--border);background:var(--surface2)">
