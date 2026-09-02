@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,6 +80,8 @@ async def list_programari(
     department_id: int | None = None,
     status: str | None = None,
     include_deleted: bool = False,
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> list[ProgramareRead]:
@@ -108,7 +110,7 @@ async def list_programari(
                 Programare.client.has(Client.nume.ilike(pattern)),
             )
         )
-    stmt = stmt.order_by(Programare.start_time)
+    stmt = stmt.order_by(Programare.start_time, Programare.id).limit(limit).offset(offset)
 
     rows = list((await db.execute(stmt)).scalars().all())
     return [_serialize(p) for p in rows]

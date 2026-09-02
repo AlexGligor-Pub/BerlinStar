@@ -179,7 +179,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
         return GENERIC_OK
 
     now = datetime.now(timezone.utc)
-    password_hash = hash_password(body.password)
+    password_hash = await hash_password(body.password)
     account = Account(
         name=body.name,
         username=body.username,
@@ -380,9 +380,9 @@ async def change_password(
 ):
     """Schimba parola UTILIZATORULUI logat (nu a contului)."""
     user = ctx.user
-    if not verify_password(body.old_password, user.password):
+    if not await verify_password(body.old_password, user.password):
         raise HTTPException(401, "Parola curenta este incorecta.")
-    user.password = hash_password(body.new_password)
+    user.password = await hash_password(body.new_password)
     user.updated_at = datetime.now(timezone.utc)
     await db.commit()
     # Celelalte sesiuni ale userului devin invalide; pastram sesiunea curenta ca

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -35,7 +35,9 @@ async def list_clienti(
     limit = min(limit, 200)
     stmt = select(Client).where(Client.account_id == account_id, Client.is_deleted == False)
     if last_id is not None:
-        stmt = stmt.where(Client.id > last_id)
+        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
+        last_nume = select(Client.nume).where(Client.id == last_id).scalar_subquery()
+        stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
     if q:
         from sqlalchemy import or_
         stmt = stmt.where(or_(

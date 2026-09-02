@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, extract, update, delete, or_, and_
 from sqlalchemy.orm import selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broadcaster import broadcaster
@@ -64,9 +65,29 @@ def _verify_total_against_items(items: list, claimed_total: Decimal) -> None:
         )
 
 
-async def _resolve_item_link(
-    db: AsyncSession,
-    account_id: int,
+async def _resolve_item_links(
+    db: AsyncSession, account_id: int, items: list
+) -> dict[str, tuple[int, ItemType]]:
+    """Catalogul (id, type) pe denumire, intr-un singur SELECT, pentru liniile
+    carora le lipseste item_id sau item_type din payload."""
+    names = {it.name for it in items if it.item_id is None or it.item_type is None}
+    if not names:
+        return {}
+    rows = (await db.execute(
+        select(Item.name, Item.id, Item.type).where(
+            Item.account_id == account_id,
+            Item.name.in_(names),
+            Item.is_deleted == False,
+        ).order_by(Item.id)
+    )).all()
+    found: dict[str, tuple[int, ItemType]] = {}
+    for r in rows:
+        found.setdefault(r.name, (r.id, r.type))
+    return found
+
+
+def _resolve_item_link(
+    catalog: dict[str, tuple[int, ItemType]],
     name: str,
     item_id: int | None,
     item_type: ItemType | None,
@@ -74,17 +95,11 @@ async def _resolve_item_link(
     """Completează item_id și item_type din catalog dacă lipsesc din payload."""
     if item_id is not None and item_type is not None:
         return item_id, item_type
-    row = (await db.execute(
-        select(Item.id, Item.type).where(
-            Item.account_id == account_id,
-            Item.name == name,
-            Item.is_deleted == False,
-        ).limit(1)
-    )).first()
+    row = catalog.get(name)
     if row is None:
         return item_id, item_type
-    return (item_id if item_id is not None else row.id,
-            item_type if item_type is not None else row.type)
+    return (item_id if item_id is not None else row[0],
+            item_type if item_type is not None else row[1])
 
 
 def _q2(v) -> Decimal | None:
@@ -483,10 +498,9 @@ async def create_receipt(
     db.add(receipt)
     await db.flush()
 
+    catalog = await _resolve_item_links(db, account_id, body.items)
     for it in body.items:
-        item_id, item_type = await _resolve_item_link(
-            db, account_id, it.name, it.item_id, it.item_type
-        )
+        item_id, item_type = _resolve_item_link(catalog, it.name, it.item_id, it.item_type)
         db.add(ReceiptItem(
             receipt_id=receipt.id,
             account_id=account_id,
@@ -602,7 +616,7 @@ async def patch_receipt(
     # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
     actor: str = Depends(get_actor_username),
 ):
-    receipt = await db.get(Receipt, receipt_id)
+    receipt = await db.get(Receipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
 
@@ -670,7 +684,7 @@ async def patch_receipt_content(
     actor: str = Depends(get_actor_username),
     ctx: AuthContext = Depends(get_auth_context),
 ):
-    receipt = await db.get(Receipt, receipt_id)
+    receipt = await db.get(Receipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
@@ -737,10 +751,9 @@ async def patch_receipt_content(
     await db.flush()
 
     new_emp_ids: set[int] = set()
+    catalog = await _resolve_item_links(db, account_id, body.items)
     for item in body.items:
-        item_id, item_type = await _resolve_item_link(
-            db, account_id, item.name, item.item_id, item.item_type
-        )
+        item_id, item_type = _resolve_item_link(catalog, item.name, item.item_id, item.item_type)
         db.add(ReceiptItem(
             account_id=account_id,
             receipt_id=receipt_id,
@@ -828,7 +841,7 @@ async def assign_number(
     account_id: int = Depends(get_account_id),
 ):
     from datetime import datetime, timezone
-    receipt = await db.get(Receipt, receipt_id)
+    receipt = await db.get(Receipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost găsit.")
 
@@ -870,9 +883,16 @@ async def assign_number(
             raise HTTPException(400, "Locația nu are un registru configurat.")
         reg_serie = getattr(register, f"{doc_type}_serie")
         reg_numar_field = f"{doc_type}_numar"
-        reg_numar = getattr(register, reg_numar_field)
-        new_nr = reg_numar + 1
-        setattr(register, reg_numar_field, new_nr)
+        reg_numar_col = getattr(Register, reg_numar_field)
+        # Incrementare atomica in DB: doua alocari concurente nu pot citi acelasi numar.
+        new_nr = (await db.execute(
+            update(Register)
+            .where(Register.id == register.id)
+            .values({reg_numar_field: reg_numar_col + 1})
+            .returning(reg_numar_col)
+            .execution_options(synchronize_session=False)
+        )).scalar_one()
+        set_committed_value(register, reg_numar_field, new_nr)
         setattr(receipt, serie_field, reg_serie)
         setattr(receipt, nr_field, new_nr)
         receipt.updated_at = datetime.now(timezone.utc)
@@ -973,7 +993,7 @@ async def convert_fdl_to_deviz(
     obișnuit). Nu asignează automat `deviz_nr` — utilizatorul îl alocă din
     Recepție prin butonul „Deviz" (assign-number) sau direct prin „Facturează".
     """
-    receipt = await db.get(Receipt, receipt_id)
+    receipt = await db.get(Receipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost găsit.")
     if receipt.source != "fdl":
@@ -1065,7 +1085,7 @@ async def delete_receipt(
     # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
     actor: str = Depends(get_actor_username),
 ):
-    receipt = await db.get(Receipt, receipt_id)
+    receipt = await db.get(Receipt, receipt_id, with_for_update=True)
     if receipt is None or receipt.account_id != account_id:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)

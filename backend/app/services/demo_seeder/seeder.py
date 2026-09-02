@@ -230,7 +230,7 @@ class _Ctx:
 
 
 async def _create_account_and_company(ctx: _Ctx) -> None:
-    password_hash = hash_password(DEMO_PASSWORD)
+    password_hash = await hash_password(DEMO_PASSWORD)
     acc = Account(
         name=DEMO_ACCOUNT_NAME,
         username=DEMO_USERNAME,

@@ -55,14 +55,17 @@ def signed_amount(p: ReceiptPayment) -> Decimal:
     return -amt if p.kind == PaymentKind.RESTITUIRE else amt
 
 
-async def get_receipt(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
-    receipt = (await db.execute(
-        select(Receipt).where(
-            Receipt.id == receipt_id,
-            Receipt.account_id == account_id,
-            Receipt.is_deleted == False,
-        )
-    )).scalar_one_or_none()
+async def get_receipt(
+    db: AsyncSession, account_id: int, receipt_id: int, *, for_update: bool = False
+) -> Receipt:
+    stmt = select(Receipt).where(
+        Receipt.id == receipt_id,
+        Receipt.account_id == account_id,
+        Receipt.is_deleted == False,
+    )
+    if for_update:
+        stmt = stmt.with_for_update()
+    receipt = (await db.execute(stmt)).scalar_one_or_none()
     if receipt is None:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     return receipt
@@ -157,7 +160,7 @@ async def add_payment(
     employee_id: int | None = None,
     note: str | None = None,
 ) -> tuple[ReceiptPayment, dict]:
-    receipt = await get_receipt(db, account_id, receipt_id)
+    receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
     amount = _q2(amount)
     if amount <= 0:
         raise HTTPException(400, "Suma trebuie sa fie mai mare decat zero.")
@@ -216,7 +219,7 @@ async def delete_payment(
     if payment is None:
         raise HTTPException(404, "Inregistrarea de plata nu a fost gasita.")
 
-    receipt = await get_receipt(db, account_id, receipt_id)
+    receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
     payment.is_deleted = True
     payment.deleted_at = datetime.now(timezone.utc)
     await db.flush()

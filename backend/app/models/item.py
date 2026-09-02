@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Integer, String, Text, Boolean, DateTime, Numeric,
-    ForeignKey, Enum as SAEnum, Index,
+    ForeignKey, Enum as SAEnum, Index, text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base
@@ -22,6 +22,7 @@ class Item(Base):
         Index("ix_items_category_id_is_deleted_id", "category_id", "is_deleted", "id"),
         Index("ix_items_is_deleted_id", "is_deleted", "id"),
         Index("ix_items_type_is_deleted_id", "type", "is_deleted", "id"),
+        Index("ix_items_account_id_name", "account_id", "name", postgresql_where=text("is_deleted = false")),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

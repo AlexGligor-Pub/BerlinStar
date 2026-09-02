@@ -8,7 +8,8 @@ clasificați în rapoarte cu:
 """
 from __future__ import annotations
 import logging
-from datetime import date
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,16 @@ log = logging.getLogger("berlinstar.reports")
 
 BUCHAREST_TZ = "Europe/Bucharest"
 MANUAL_LABEL = "Introducere Manuala"
+
+
+def _ts_bounds(period_start: date, period_end: date) -> dict:
+    """[start_ts, end_ts) in timestamptz = zilele locale [period_start, period_end]
+    inclusiv; filtrul pe `created_at` ramane sargabil (foloseste indexul)."""
+    tz = ZoneInfo(BUCHAREST_TZ)
+    return {
+        "start_ts": datetime.combine(period_start, time.min, tzinfo=tz),
+        "end_ts": datetime.combine(period_end + timedelta(days=1), time.min, tzinfo=tz),
+    }
 
 
 async def build_receipts_daily(
@@ -63,10 +74,10 @@ async def build_receipts_daily(
         FROM receipts r
         WHERE r.is_deleted = false
           AND r.source <> 'fdl'
-          AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+          AND r.created_at >= :start_ts AND r.created_at < :end_ts
         GROUP BY 1, 2, 3
     """)
-    pivot_result = await db.execute(pivot_sql, {"s": period_start, "e": period_end})
+    pivot_result = await db.execute(pivot_sql, _ts_bounds(period_start, period_end))
     pivot_inserted = pivot_result.rowcount or 0
 
     # 1B. breakdown long-format (item_type, category, department).
@@ -101,7 +112,7 @@ async def build_receipts_daily(
             JOIN receipt_items ri ON ri.receipt_id = r.id
             WHERE r.is_deleted = false
               AND r.source <> 'fdl'
-              AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+              AND r.created_at >= :start_ts AND r.created_at < :end_ts
             GROUP BY 1, 2, 3, 4, 5, 6
 
             UNION ALL
@@ -121,7 +132,7 @@ async def build_receipts_daily(
             LEFT JOIN categories c ON c.id = i.category_id
             WHERE r.is_deleted = false
               AND r.source <> 'fdl'
-              AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+              AND r.created_at >= :start_ts AND r.created_at < :end_ts
             GROUP BY 1, 2, 3, 4, 5, 6
 
             UNION ALL
@@ -142,11 +153,11 @@ async def build_receipts_daily(
             LEFT JOIN departments d ON d.id = c.department_id
             WHERE r.is_deleted = false
               AND r.source <> 'fdl'
-              AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+              AND r.created_at >= :start_ts AND r.created_at < :end_ts
             GROUP BY 1, 2, 3, 4, 5, 6
         ) breakdown
     """)
-    breakdown_result = await db.execute(breakdown_sql, {"s": period_start, "e": period_end})
+    breakdown_result = await db.execute(breakdown_sql, _ts_bounds(period_start, period_end))
     breakdown_inserted = breakdown_result.rowcount or 0
 
     total = pivot_inserted + breakdown_inserted
@@ -198,10 +209,10 @@ async def build_employee_daily(
         WHERE r.is_deleted = false
           AND r.source <> 'fdl'
           AND r.pay_method::text <> 'NEPLATIT'
-          AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+          AND r.created_at >= :start_ts AND r.created_at < :end_ts
         GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9
     """)
-    result = await db.execute(sql, {"s": period_start, "e": period_end})
+    result = await db.execute(sql, _ts_bounds(period_start, period_end))
     inserted = result.rowcount or 0
     log.info(
         "report_employee_daily build: %s..%s -> rows=%d",
@@ -341,7 +352,7 @@ async def build_clients_daily(
             FROM receipts r
             WHERE r.is_deleted = false
               AND r.source <> 'fdl'
-              AND (r.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+              AND r.created_at >= :start_ts AND r.created_at < :end_ts
             GROUP BY 1, 2, 3, 4
         ) agg
         LEFT JOIN (
@@ -352,7 +363,7 @@ async def build_clients_daily(
             GROUP BY r.client_id
         ) fv ON fv.client_id = agg.client_id
     """)
-    result = await db.execute(sql, {"s": period_start, "e": period_end})
+    result = await db.execute(sql, _ts_bounds(period_start, period_end))
     inserted = result.rowcount or 0
     log.info(
         "report_clients_daily build: %s..%s -> rows=%d",
@@ -409,10 +420,10 @@ async def build_programari_daily(
             WHERE programare_id IS NOT NULL AND is_deleted = false AND source <> 'fdl'
         ) rcv ON rcv.programare_id = p.id
         WHERE p.is_deleted = false
-          AND (p.start_time AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+          AND p.start_time >= :start_ts AND p.start_time < :end_ts
         GROUP BY 1, 2, 3, 4
     """)
-    result = await db.execute(sql, {"s": period_start, "e": period_end})
+    result = await db.execute(sql, _ts_bounds(period_start, period_end))
     inserted = result.rowcount or 0
     log.info(
         "report_programari_daily build: %s..%s -> rows=%d",
@@ -457,10 +468,10 @@ async def build_stock_movements_daily(
             COUNT(*) AS nr_movements,
             NOW(), NOW()
         FROM stock_movements sm
-        WHERE (sm.created_at AT TIME ZONE '{BUCHAREST_TZ}')::date BETWEEN :s AND :e
+        WHERE sm.created_at >= :start_ts AND sm.created_at < :end_ts
         GROUP BY 1, 2, 3, 4, 6, 7
     """)
-    result = await db.execute(insert_sql, {"s": period_start, "e": period_end})
+    result = await db.execute(insert_sql, _ts_bounds(period_start, period_end))
     inserted = result.rowcount or 0
     log.info(
         "report_stock_movements_daily build: %s..%s -> %d randuri",

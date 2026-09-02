@@ -74,7 +74,7 @@ async def _send_client_nou(account_name: str, account_email: str, account_id: in
 @router.post("", response_model=AccountRead, status_code=201)
 async def create_account(body: AccountCreate, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
     data = body.model_dump()
-    data["password"] = hash_password(data["password"])
+    data["password"] = await hash_password(data["password"])
     account = Account(**data)
     db.add(account)
     await db.flush()
@@ -102,7 +102,7 @@ async def update_account(account_id: int, body: AccountCreate, db: AsyncSession 
     if account is None or account.is_deleted:
         raise HTTPException(404, "Contul nu a fost gasit.")
     data = body.model_dump()
-    data["password"] = hash_password(data["password"])
+    data["password"] = await hash_password(data["password"])
     for k, v in data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)
@@ -122,7 +122,7 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
     # la autentificare, deci nu il expunem in PATCH.
     if "password" in patch_data:
         if patch_data["password"]:
-            patch_data["password"] = hash_password(patch_data["password"])
+            patch_data["password"] = await hash_password(patch_data["password"])
         else:
             patch_data.pop("password")
     for k, v in patch_data.items():

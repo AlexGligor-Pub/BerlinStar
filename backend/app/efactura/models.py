@@ -66,6 +66,7 @@ class EFacturaRecord(Base):
         Index("ix_efactura_status", "status"),
         Index("ix_efactura_deadline", "deadline_transmit"),
         Index("ix_efactura_company", "company_id"),
+        Index("ix_efactura_records_receipt_id_direction", "receipt_id", "direction"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

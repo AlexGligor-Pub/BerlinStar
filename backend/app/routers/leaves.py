@@ -315,6 +315,8 @@ async def list_leaves(
     date_to: date | None = None,
     q: str | None = None,
     include_deleted: bool = False,
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ) -> list[LeaveRead]:
@@ -346,7 +348,7 @@ async def list_leaves(
                 Leave.employee.has(Employee.name.ilike(pattern)),
             )
         )
-    stmt = stmt.order_by(Leave.start_date)
+    stmt = stmt.order_by(Leave.start_date, Leave.id).limit(limit).offset(offset)
 
     rows = list((await db.execute(stmt)).scalars().all())
     return [_serialize(l) for l in rows]

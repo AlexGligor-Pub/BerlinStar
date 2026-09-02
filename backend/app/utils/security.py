@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import base64
 import bcrypt
 
@@ -6,16 +7,21 @@ import bcrypt
 BCRYPT_ROUNDS = 12
 
 
-def hash_password(plain: str) -> str:
+def hash_password_sync(plain: str) -> str:
     """Return a bcrypt hash (utf-8 string) for the given plaintext password."""
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
+
+
+async def hash_password(plain: str) -> str:
+    """bcrypt costa ~250ms CPU; rulat in thread ca sa nu blocheze event loop-ul."""
+    return await asyncio.to_thread(hash_password_sync, plain)
 
 
 def _looks_like_bcrypt(stored: str) -> bool:
     return stored.startswith(("$2a$", "$2b$", "$2y$"))
 
 
-def verify_password(plain: str, stored: str) -> bool:
+def verify_password_sync(plain: str, stored: str) -> bool:
     """Verifica o parola plaintext fata de hash-ul stocat.
 
     Suporta tranzitia de la base64 (legacy) la bcrypt: daca `stored` arata ca
@@ -31,6 +37,10 @@ def verify_password(plain: str, stored: str) -> bool:
             return False
     expected = base64.b64encode(plain.encode("utf-8")).decode("utf-8")
     return stored == expected
+
+
+async def verify_password(plain: str, stored: str) -> bool:
+    return await asyncio.to_thread(verify_password_sync, plain, stored)
 
 
 def is_legacy_hash(stored: str) -> bool:

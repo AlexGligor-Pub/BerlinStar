@@ -141,7 +141,7 @@ async def create_user(
     user = User(
         account_id=account_id,
         username=username,
-        password=hash_password(password),
+        password=await hash_password(password),
         role=role,
         name=(name or "").strip() or username,
         email=(email or None),
@@ -207,7 +207,7 @@ async def set_password(db: AsyncSession, account_id: int, user_id: int, new_pass
     rămână logat pe dispozitivele vechi.
     """
     user = await _get_user(db, account_id, user_id)
-    user.password = hash_password(new_password)
+    user.password = await hash_password(new_password)
     user.updated_at = datetime.now(timezone.utc)
     await db.commit()
     await revoke_all_sessions(db, user.id)

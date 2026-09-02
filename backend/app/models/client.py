@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import Integer, String, Text, Boolean, DateTime, ForeignKey, Index, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .base import Base
 
@@ -9,6 +9,9 @@ class Client(Base):
     __tablename__ = "clienti"
     __table_args__ = (
         Index("ix_clienti_account_id_is_deleted_id", "account_id", "is_deleted", "id"),
+        Index("ix_clienti_account_id_nume_id", "account_id", "nume", "id", postgresql_where=text("is_deleted = false")),
+        Index("ix_clienti_nume_trgm", "nume", postgresql_using="gin", postgresql_ops={"nume": "gin_trgm_ops"}),
+        Index("ix_clienti_cui_trgm", "cui", postgresql_using="gin", postgresql_ops={"cui": "gin_trgm_ops"}),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

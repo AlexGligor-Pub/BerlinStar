@@ -2,8 +2,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.item import Item, ItemType
 from app.models.receipt import Receipt, ReceiptItem
@@ -20,35 +22,58 @@ class ReceiptLineForStock:
     employee_id: int | None
 
 
+async def _insert_missing(
+    db: AsyncSession, account_id: int, item_ids: list[int], location_id: int
+) -> None:
+    """INSERT ... ON CONFLICT DO NOTHING: doua tranzactii concurente pot crea
+    acelasi rand fara IntegrityError; cine pierde cursa citeste randul celuilalt."""
+    if not item_ids:
+        return
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        pg_insert(Stock)
+        .values([
+            {"account_id": account_id, "item_id": iid, "location_id": location_id, "qty": 0, "updated_at": now}
+            for iid in item_ids
+        ])
+        .on_conflict_do_nothing(index_elements=["item_id", "location_id"])
+    )
+
+
 async def _get_or_create_stock(
     db: AsyncSession, account_id: int, item_id: int, location_id: int
 ) -> Stock:
-    row = (await db.execute(
-        select(Stock).where(Stock.item_id == item_id, Stock.location_id == location_id)
-    )).scalar_one_or_none()
-    if row is None:
-        row = Stock(account_id=account_id, item_id=item_id, location_id=location_id, qty=0)
-        db.add(row)
-        await db.flush()
-    return row
+    """Randul de stoc, blocat (FOR UPDATE) pana la commit."""
+    await _insert_missing(db, account_id, [item_id], location_id)
+    return (await db.execute(
+        select(Stock)
+        .where(Stock.item_id == item_id, Stock.location_id == location_id)
+        .with_for_update(of=Stock)
+    )).scalar_one()
 
 
 async def _get_or_create_stocks(
     db: AsyncSession, account_id: int, item_ids: list[int], location_id: int
 ) -> dict[int, Stock]:
     """Varianta batched a lui `_get_or_create_stock` — un singur SELECT pentru toate liniile."""
+    await _insert_missing(db, account_id, sorted(set(item_ids)), location_id)
     rows = (await db.execute(
         select(Stock).where(Stock.item_id.in_(item_ids), Stock.location_id == location_id)
     )).scalars().all()
-    by_item = {s.item_id: s for s in rows}
-    missing = [iid for iid in set(item_ids) if iid not in by_item]
-    if missing:
-        for iid in missing:
-            s = Stock(account_id=account_id, item_id=iid, location_id=location_id, qty=0)
-            db.add(s)
-            by_item[iid] = s
-        await db.flush()
-    return by_item
+    return {s.item_id: s for s in rows}
+
+
+async def _shift_qty(db: AsyncSession, stock: Stock, delta: int, now: datetime) -> None:
+    """`qty = qty + delta` in DB (atomic), cu obiectul din sesiune adus la zi."""
+    new_qty = (await db.execute(
+        update(Stock)
+        .where(Stock.id == stock.id)
+        .values(qty=Stock.qty + delta, updated_at=now)
+        .returning(Stock.qty)
+        .execution_options(synchronize_session=False)
+    )).scalar_one()
+    set_committed_value(stock, "qty", new_qty)
+    set_committed_value(stock, "updated_at", now)
 
 
 async def _movement(
@@ -130,9 +155,7 @@ async def apply_sale_for_receipt(
     now = datetime.now(timezone.utc)
     stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
     for ln in lines:
-        stock = stocks[ln.item_id]
-        stock.qty = stock.qty - ln.qty
-        stock.updated_at = now
+        await _shift_qty(db, stocks[ln.item_id], -ln.qty, now)
         await _movement(
             db,
             account_id=account_id,
@@ -169,9 +192,7 @@ async def reverse_sale_for_receipt(
     now = datetime.now(timezone.utc)
     stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
     for ln in lines:
-        stock = stocks[ln.item_id]
-        stock.qty = stock.qty + ln.qty
-        stock.updated_at = now
+        await _shift_qty(db, stocks[ln.item_id], ln.qty, now)
         await _movement(
             db,
             account_id=account_id,
@@ -202,8 +223,7 @@ async def apply_purchase(
 ) -> Stock:
     """Intrare de marfa. qty > 0."""
     stock = await _get_or_create_stock(db, account_id, item.id, location_id)
-    stock.qty = stock.qty + qty
-    stock.updated_at = datetime.now(timezone.utc)
+    await _shift_qty(db, stock, qty, datetime.now(timezone.utc))
     await _movement(
         db,
         account_id=account_id,
@@ -235,8 +255,7 @@ async def apply_adjustment(
     """Ajustare manuala (ex. inventar): seteaza qty la new_qty si logheaza delta."""
     stock = await _get_or_create_stock(db, account_id, item.id, location_id)
     delta = new_qty - stock.qty
-    stock.qty = new_qty
-    stock.updated_at = datetime.now(timezone.utc)
+    await _shift_qty(db, stock, delta, datetime.now(timezone.utc))
     if delta != 0:
         await _movement(
             db,

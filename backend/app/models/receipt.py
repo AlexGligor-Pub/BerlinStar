@@ -31,6 +31,26 @@ class Receipt(Base):
             "ix_receipts_programare_id", "programare_id",
             postgresql_where=text("programare_id IS NOT NULL"),
         ),
+        # Plasa de siguranta pentru numerotarea documentelor: un numar alocat nu poate
+        # aparea pe doua bonuri din acelasi cont (0 = nealocat, exclus din index).
+        Index(
+            "uq_receipts_account_deviz_nr", "account_id", "deviz_serie", "deviz_nr", unique=True,
+            postgresql_where=text("deviz_nr > 0"), sqlite_where=text("deviz_nr > 0"),
+        ),
+        Index(
+            "uq_receipts_account_factura_nr", "account_id", "factura_serie", "factura_nr", unique=True,
+            postgresql_where=text("factura_nr > 0"), sqlite_where=text("factura_nr > 0"),
+        ),
+        Index(
+            "uq_receipts_account_chitanta_nr", "account_id", "chitanta_serie", "chitanta_nr", unique=True,
+            postgresql_where=text("chitanta_nr > 0"), sqlite_where=text("chitanta_nr > 0"),
+        ),
+        Index(
+            "ix_receipts_account_activity", "account_id",
+            text("COALESCE(updated_at, created_at) DESC"), text("id DESC"),
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_receipts_titlu_trgm", "titlu", postgresql_using="gin", postgresql_ops={"titlu": "gin_trgm_ops"}),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -101,6 +121,7 @@ class ReceiptItem(Base):
         Index("ix_receipt_items_receipt_id", "receipt_id"),
         Index("ix_receipt_items_employee_id", "employee_id"),
         Index("ix_receipt_items_item_id", "item_id"),
+        Index("ix_receipt_items_name_trgm", "name", postgresql_using="gin", postgresql_ops={"name": "gin_trgm_ops"}),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

@@ -64,7 +64,7 @@ async def authenticate_user(
             User.is_deleted == False,
         )
     )).scalar_one_or_none()
-    if user is None or not verify_password(password, user.password):
+    if user is None or not await verify_password(password, user.password):
         login_throttle.record_failure(code, username)
         raise HTTPException(401, INVALID_CREDENTIALS)
 
@@ -76,7 +76,7 @@ async def authenticate_user(
 
     # Re-hash transparent pentru parolele in formatul vechi (base64).
     if is_legacy_hash(user.password):
-        user.password = hash_password(password)
+        user.password = await hash_password(password)
         await db.commit()
 
     return user, account

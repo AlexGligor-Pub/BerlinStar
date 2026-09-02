@@ -217,7 +217,7 @@ async def seed() -> None:
             account = Account(
                 name="Administrator",
                 username="admin",
-                password=hash_password("admin"),
+                password=await hash_password("admin"),
             )
             db.add(account)
             await db.flush()
