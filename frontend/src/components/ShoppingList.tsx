@@ -5,6 +5,7 @@ import { saveReceipt, updateReceiptContent, updateReceiptClient, saveReceiptVehi
 import { consumeResume, pendingLoad, clearPendingLoad, newDevizTick } from "../store/resumeStore";
 import { selectedEmployee, selectEmployee, employees } from "../store/employeesStore";
 import { apiFetch, readApiError } from "../utils/api";
+import { createDebouncedSearch } from "../utils/debounce";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
 import { notify } from "../store/notificationsStore";
@@ -14,6 +15,7 @@ import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
 import { loadMontajRotiByReceipt, bulkUpsertMontajRoti, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import { loadActiveCazariByPlate, type TipAnvelopa } from "../store/hotelAnvelopeStore";
+import Modal from "./ui/Modal";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -106,17 +108,24 @@ function PosClientSearch(props: {
     }
   });
 
-  async function search(val: string) {
-    if (!val.trim()) { setResults([]); setOpen(false); setSearched(false); return; }
-    setSearching(true);
-    try {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`);
-      if (!res.ok) return;
+  const clientSearch = createDebouncedSearch<ClientItem[] | null>({
+    fetch: async (val, signal) => {
+      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`, { signal });
+      if (!res.ok) return null;
       const data = await res.json();
-      setResults(data.items ?? []);
+      return data.items ?? [];
+    },
+    onResult: (items) => {
+      if (!items) return;
+      setResults(items);
       setSearched(true);
       setOpen(true);
-    } finally { setSearching(false); }
+    },
+    onPending: setSearching,
+  });
+  function search(val: string) {
+    if (!val.trim()) { clientSearch.cancel(); setResults([]); setOpen(false); setSearched(false); return; }
+    clientSearch.search(val);
   }
 
   function pick(c: ClientItem) {
@@ -255,63 +264,64 @@ function AddClientModal(props: {
   }
 
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" style="max-width:560px;width:100%">
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">Adaugă client</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
+    <Modal
+      open
+      title="Adaugă client"
+      onClose={props.onClose}
+      style="max-width:560px;width:100%"
+      closeOnEscape={false}
+      bodyClass="sl-modal-body--stack"
+      footer={<>
+        <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+        <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
+          {saving() ? "Se salvează..." : "Salvează"}
+        </button>
+      </>}
+    >
+      <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+        <PosClientSearch
+          value={null}
+          onSelect={(c) => { if (c) props.onSaved(c); }}
+        />
+        <div style="border-top:1px solid var(--border);margin:2px 0" />
+        <div style="display:flex;gap:8px">
+          <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
+          <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
         </div>
-        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
-          <PosClientSearch
-            value={null}
-            onSelect={(c) => { if (c) props.onSaved(c); }}
-          />
-          <div style="border-top:1px solid var(--border);margin:2px 0" />
-          <div style="display:flex;gap:8px">
-            <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
-            <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
+        <Show when={form().tip === "juridic"}>
+          <div style="display:flex;gap:6px">
+            <input
+              class="input"
+              style="flex:1"
+              placeholder="CUI"
+              value={form().cui}
+              onInput={(e) => pf("cui", e.currentTarget.value)}
+              onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
+            />
+            <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
+              {anafLoading() ? "..." : "ANAF"}
+            </button>
           </div>
-          <Show when={form().tip === "juridic"}>
-            <div style="display:flex;gap:6px">
-              <input
-                class="input"
-                style="flex:1"
-                placeholder="CUI"
-                value={form().cui}
-                onInput={(e) => pf("cui", e.currentTarget.value)}
-                onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
-              />
-              <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
-                {anafLoading() ? "..." : "ANAF"}
-              </button>
-            </div>
-            <Show when={anafError()}>
-              <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
-            </Show>
+          <Show when={anafError()}>
+            <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
           </Show>
-          <Show when={form().tip === "fizic"}>
-            <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
-          </Show>
-          <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
-          <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
-          <Show when={form().tip === "juridic"}>
-            <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
-          </Show>
-          <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
-          <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
-          <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
-          <Show when={error()}>
-            <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
-          </Show>
-        </div>
-        <div class="sl-modal-footer">
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-          <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
-            {saving() ? "Se salvează..." : "Salvează"}
-          </button>
-        </div>
+        </Show>
+        <Show when={form().tip === "fizic"}>
+          <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
+        </Show>
+        <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
+        <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
+        <Show when={form().tip === "juridic"}>
+          <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
+        </Show>
+        <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
+        <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
+        <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
+        <Show when={error()}>
+          <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
+        </Show>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -403,68 +413,69 @@ function EditClientModal(props: {
   }
 
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" style="max-width:560px;width:100%">
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">Editează client</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
-        </div>
-        <Show when={loading()}>
-          <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.875rem">Se încarcă...</div>
-        </Show>
-        <Show when={!loading()}>
-          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
-            <PosClientSearch
-              value={null}
-              onSelect={(c) => { if (c) props.onSaved(c); }}
-            />
-            <div style="border-top:1px solid var(--border);margin:2px 0" />
-            <div style="display:flex;gap:8px">
-              <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
-              <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
+    <Modal
+      open
+      title="Editează client"
+      onClose={props.onClose}
+      style="max-width:560px;width:100%"
+      closeOnEscape={false}
+      bodyClass="sl-modal-body--stack"
+    >
+      <Show when={loading()}>
+        <div style="padding:24px;text-align:center;color:var(--text-muted);font-size:0.875rem">Se încarcă...</div>
+      </Show>
+      <Show when={!loading()}>
+        <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:70vh">
+          <PosClientSearch
+            value={null}
+            onSelect={(c) => { if (c) props.onSaved(c); }}
+          />
+          <div style="border-top:1px solid var(--border);margin:2px 0" />
+          <div style="display:flex;gap:8px">
+            <button class={`btn btn-sm ${form().tip === "fizic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "fizic" }))}>Persoană fizică</button>
+            <button class={`btn btn-sm ${form().tip === "juridic" ? "btn-primary" : "btn-ghost"}`} onClick={() => setForm((f) => ({ ...f, tip: "juridic" }))}>Persoană juridică</button>
+          </div>
+          <Show when={form().tip === "juridic"}>
+            <div style="display:flex;gap:6px">
+              <input
+                class="input"
+                style="flex:1"
+                placeholder="CUI"
+                value={form().cui}
+                onInput={(e) => pf("cui", e.currentTarget.value)}
+                onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
+              />
+              <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
+                {anafLoading() ? "..." : "ANAF"}
+              </button>
             </div>
-            <Show when={form().tip === "juridic"}>
-              <div style="display:flex;gap:6px">
-                <input
-                  class="input"
-                  style="flex:1"
-                  placeholder="CUI"
-                  value={form().cui}
-                  onInput={(e) => pf("cui", e.currentTarget.value)}
-                  onKeyDown={(e) => e.key === "Enter" && searchAnaf()}
-                />
-                <button class="btn btn-sm btn-ghost" onClick={searchAnaf} disabled={anafLoading()}>
-                  {anafLoading() ? "..." : "ANAF"}
-                </button>
-              </div>
-              <Show when={anafError()}>
-                <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
-              </Show>
+            <Show when={anafError()}>
+              <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
             </Show>
-            <Show when={form().tip === "fizic"}>
-              <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
-            </Show>
-            <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
-            <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
-            <Show when={form().tip === "juridic"}>
-              <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
-            </Show>
-            <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
-            <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
-            <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
-            <Show when={error()}>
-              <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
-            </Show>
-          </div>
-          <div class="sl-modal-footer">
-            <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-            <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
-              {saving() ? "Se salvează..." : "Salvează"}
-            </button>
-          </div>
-        </Show>
-      </div>
-    </div>
+          </Show>
+          <Show when={form().tip === "fizic"}>
+            <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
+          </Show>
+          <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
+          <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
+          <Show when={form().tip === "juridic"}>
+            <input class="input" placeholder="Reprezentant" value={form().reprezentant} onInput={(e) => pf("reprezentant", e.currentTarget.value)} />
+          </Show>
+          <input class="input" placeholder="Telefon" value={form().telefon} onInput={(e) => pf("telefon", e.currentTarget.value)} />
+          <input class="input" placeholder="Email" value={form().email} onInput={(e) => pf("email", e.currentTarget.value)} />
+          <input class="input" placeholder="Adresă" value={form().adresa} onInput={(e) => pf("adresa", e.currentTarget.value)} />
+          <Show when={error()}>
+            <span style="color:var(--danger,#ef4444);font-size:12px">{error()}</span>
+          </Show>
+        </div>
+        <div class="sl-modal-footer">
+          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+          <button class="btn btn-primary btn-sm" disabled={saving()} onClick={handleSave}>
+            {saving() ? "Se salvează..." : "Salvează"}
+          </button>
+        </div>
+      </Show>
+    </Modal>
   );
 }
 
@@ -1572,20 +1583,24 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
       {/* Resume modal */}
       <Show when={showResumeModal()}>
-        <div class="sl-modal-overlay" style="z-index:400">
-          <div class="sl-modal" style="max-width:360px;width:100%;text-align:center">
-            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
-              <span class="sl-modal-title">Listă în lucru</span>
-            </div>
-            <p style="padding:12px 16px 4px;color:var(--text-muted);font-size:13px">
-              Există o listă deja începută. Ce vrei să faci?
-            </p>
-            <div class="sl-modal-footer" style="justify-content:center;gap:12px;padding-top:8px">
-              <button class="btn btn-ghost btn-sm" onClick={handleListaNoua}>Listă nouă</button>
-              <button class="btn btn-primary btn-sm" onClick={handleContinuaLista}>Continuă lista</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          title="Listă în lucru"
+          hideClose
+          style="max-width:360px;width:100%;text-align:center"
+          overlayStyle="z-index:400"
+          headerStyle="justify-content:center;border-bottom:none;padding-bottom:0"
+          footerStyle="justify-content:center;gap:12px;padding-top:8px"
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={handleListaNoua}>Listă nouă</button>
+            <button class="btn btn-primary btn-sm" onClick={handleContinuaLista}>Continuă lista</button>
+          </>}
+        >
+          <p style="padding:12px 16px 4px;color:var(--text-muted);font-size:13px">
+            Există o listă deja începută. Ce vrei să faci?
+          </p>
+        </Modal>
       </Show>
 
       {/* Add client modal */}
@@ -1607,172 +1622,181 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
       {/* Clear confirm modal */}
       <Show when={showClearConfirm()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Șterge tot</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>✕</button>
-            </div>
-            <p style="padding:16px 0;text-align:center;color:var(--text-muted)">Ești sigur că vrei să ștergi toate produsele din coș?</p>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>Anulează</button>
-              <button class="btn btn-danger btn-sm" onClick={() => { clearCart(); setShowClearConfirm(false); }}>Șterge tot</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          title="Șterge tot"
+          onClose={() => setShowClearConfirm(false)}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowClearConfirm(false)}>Anulează</button>
+            <button class="btn btn-danger btn-sm" onClick={() => { clearCart(); setShowClearConfirm(false); }}>Șterge tot</button>
+          </>}
+        >
+          <p style="padding:16px 0;text-align:center;color:var(--text-muted)">Ești sigur că vrei să ștergi toate produsele din coș?</p>
+        </Modal>
       </Show>
 
       {/* Edit item modal */}
       <Show when={editItem() !== null}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">{editItem()!.name}</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>✕</button>
+        <Modal
+          open
+          title={editItem()!.name}
+          onClose={() => setEditItem(null)}
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-danger btn-sm" onClick={() => { removeFromCart(editItem()!.lineId); setEditItem(null); }}>Sterge</button>
+            <div style="flex:1" />
+            <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>Anuleaza</button>
+            <button class="btn btn-primary btn-sm" onClick={confirmEditItem}>Salveaza</button>
+          </>}
+        >
+          <div class="sl-edit-item-body">
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Cantitate</label>
+              <input
+                class="input sl-edit-input"
+                type="number"
+                min="1"
+                step="1"
+                value={editQty()}
+                onInput={(e) => setEditQty(e.currentTarget.value)}
+                autofocus
+              />
             </div>
-            <div class="sl-edit-item-body">
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Cantitate</label>
-                <input
-                  class="input sl-edit-input"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={editQty()}
-                  onInput={(e) => setEditQty(e.currentTarget.value)}
-                  autofocus
-                />
-              </div>
-              <div class="sl-qty-presets">
-                {[10, 50, 100, 200, 300, 500, 1000].map(v => (
-                  <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setEditQty(String(v))}>{v}</button>
-                ))}
-              </div>
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Pret (lei)</label>
-                <input
-                  class="input sl-edit-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={editPrice()}
-                  onInput={(e) => setEditPrice(e.currentTarget.value)}
-                />
-              </div>
-              <div class="sl-edit-item-total">
-                Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
-              </div>
+            <div class="sl-qty-presets">
+              {[10, 50, 100, 200, 300, 500, 1000].map(v => (
+                <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setEditQty(String(v))}>{v}</button>
+              ))}
+            </div>
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Pret (lei)</label>
+              <input
+                class="input sl-edit-input"
+                type="number"
+                min="0"
+                step="0.01"
+                value={editPrice()}
+                onInput={(e) => setEditPrice(e.currentTarget.value)}
+              />
+            </div>
+            <div class="sl-edit-item-total">
+              Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
+            </div>
 
-              {/* Angajat — picker interactiv: poza + nume, click pentru a schimba */}
-              <div class="sl-edit-item-row sl-edit-emp-row">
-                <label class="sl-edit-label">Angajat</label>
-                <div class="sl-edit-emp-current">
-                  <div
-                    class="sl-edit-emp-trigger"
-                    role="button"
-                    tabindex="0"
-                    onClick={() => setShowEmpPicker((v) => !v)}
-                    title="Schimbă angajatul"
-                  >
-                  {(() => {
-                    const empId = editEmpId();
-                    const emp = empId != null ? employees().find((e) => e.id === empId) : null;
-                    if (emp) {
-                      return (
-                        <>
-                          <Show
-                            when={emp.imagePath}
-                            fallback={
-                              <span class="sl-edit-emp-avatar sl-edit-emp-avatar--placeholder">
-                                {emp.name.slice(0, 1).toUpperCase()}
-                              </span>
-                            }
-                          >
-                            <img src={emp.imagePath!} class="sl-edit-emp-avatar" alt={emp.name} />
-                          </Show>
-                          <span class="sl-edit-emp-name">{emp.name}</span>
-                          <span class="sl-edit-emp-edit-tag">EDIT</span>
-                        </>
-                      );
-                    }
-                    return <span class="sl-edit-emp-none">Fără angajat asociat</span>;
-                  })()}
-                  </div>
+            {/* Angajat — picker interactiv: poza + nume, click pentru a schimba */}
+            <div class="sl-edit-item-row sl-edit-emp-row">
+              <label class="sl-edit-label">Angajat</label>
+              <div class="sl-edit-emp-current">
+                <div
+                  class="sl-edit-emp-trigger"
+                  role="button"
+                  tabindex="0"
+                  onClick={() => setShowEmpPicker((v) => !v)}
+                  title="Schimbă angajatul"
+                >
+                {(() => {
+                  const empId = editEmpId();
+                  const emp = empId != null ? employees().find((e) => e.id === empId) : null;
+                  if (emp) {
+                    return (
+                      <>
+                        <Show
+                          when={emp.imagePath}
+                          fallback={
+                            <span class="sl-edit-emp-avatar sl-edit-emp-avatar--placeholder">
+                              {emp.name.slice(0, 1).toUpperCase()}
+                            </span>
+                          }
+                        >
+                          <img src={emp.imagePath!} class="sl-edit-emp-avatar" alt={emp.name} />
+                        </Show>
+                        <span class="sl-edit-emp-name">{emp.name}</span>
+                        <span class="sl-edit-emp-edit-tag">EDIT</span>
+                      </>
+                    );
+                  }
+                  return <span class="sl-edit-emp-none">Fără angajat asociat</span>;
+                })()}
                 </div>
               </div>
-              <Show when={showEmpPicker()}>
-              <div class="sl-edit-emp-grid" ref={enableDragScroll}>
-                <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
-                  {(e) => (
-                    <button
-                      type="button"
-                      class="sl-edit-emp-card"
-                      classList={{ "sl-edit-emp-card--active": editEmpId() === e.id }}
-                      onClick={() => { setEditEmpId(e.id); setShowEmpPicker(false); }}
+            </div>
+            <Show when={showEmpPicker()}>
+            <div class="sl-edit-emp-grid" ref={enableDragScroll}>
+              <For each={[...employees()].sort((a, b) => a.name.localeCompare(b.name, "ro"))}>
+                {(e) => (
+                  <button
+                    type="button"
+                    class="sl-edit-emp-card"
+                    classList={{ "sl-edit-emp-card--active": editEmpId() === e.id }}
+                    onClick={() => { setEditEmpId(e.id); setShowEmpPicker(false); }}
+                  >
+                    <Show
+                      when={e.imagePath}
+                      fallback={
+                        <span class="sl-edit-emp-card-avatar sl-edit-emp-card-avatar--placeholder">
+                          {e.name.slice(0, 1).toUpperCase()}
+                        </span>
+                      }
                     >
-                      <Show
-                        when={e.imagePath}
-                        fallback={
-                          <span class="sl-edit-emp-card-avatar sl-edit-emp-card-avatar--placeholder">
-                            {e.name.slice(0, 1).toUpperCase()}
-                          </span>
-                        }
-                      >
-                        <img src={e.imagePath!} class="sl-edit-emp-card-avatar" alt={e.name} />
-                      </Show>
-                      <SplitName name={e.name} class="sl-edit-emp-card-name" />
-                    </button>
-                  )}
-                </For>
-              </div>
-              </Show>
+                      <img src={e.imagePath!} class="sl-edit-emp-card-avatar" alt={e.name} />
+                    </Show>
+                    <SplitName name={e.name} class="sl-edit-emp-card-name" />
+                  </button>
+                )}
+              </For>
             </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-danger btn-sm" onClick={() => { removeFromCart(editItem()!.lineId); setEditItem(null); }}>Sterge</button>
-              <div style="flex:1" />
-              <button class="btn btn-ghost btn-sm" onClick={() => setEditItem(null)}>Anuleaza</button>
-              <button class="btn btn-primary btn-sm" onClick={confirmEditItem}>Salveaza</button>
-            </div>
+            </Show>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Error modal */}
       <Show when={errorMsg() !== null}>
-        <div class="sl-modal-overlay">
-          <div class="sl-error-modal">
-            <div class="sl-error-modal-header">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-              <span>Eroare la salvare</span>
-            </div>
-            <p class="sl-error-modal-msg">{errorMsg()}</p>
-            <button class="btn btn-primary btn-sm" onClick={() => setErrorMsg(null)}>OK</button>
+        <Modal
+          open
+          bare
+          class="sl-error-modal"
+          closeOnEscape={false}
+        >
+          <div class="sl-error-modal-header">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+            <span>Eroare la salvare</span>
           </div>
-        </div>
+          <p class="sl-error-modal-msg">{errorMsg()}</p>
+          <button class="btn btn-primary btn-sm" onClick={() => setErrorMsg(null)}>OK</button>
+        </Modal>
       </Show>
 
       {/* Warning modal */}
       <Show when={warnMsg() !== null}>
-        <div class="sl-modal-overlay">
-          <div class="sl-error-modal">
-            <div class="sl-error-modal-header" style="color: #f97316;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span>Un pas înainte</span>
-            </div>
-            <p class="sl-error-modal-msg">{warnMsg()}</p>
-            <button class="btn btn-primary btn-sm" onClick={() => setWarnMsg(null)}>OK</button>
+        <Modal
+          open
+          bare
+          class="sl-error-modal"
+          closeOnEscape={false}
+        >
+          <div class="sl-error-modal-header" style="color: #f97316;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Un pas înainte</span>
           </div>
-        </div>
+          <p class="sl-error-modal-msg">{warnMsg()}</p>
+          <button class="btn btn-primary btn-sm" onClick={() => setWarnMsg(null)}>OK</button>
+        </Modal>
       </Show>
 
       {/* Success modal */}
       <Show when={showSuccess()}>
-        <div class="sl-modal-overlay sl-success-overlay">
-          <div class="sl-success-modal">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-            <span>Bon salvat cu succes!</span>
-          </div>
-        </div>
+        <Modal
+          open
+          bare
+          class="sl-success-modal"
+          overlayClass="sl-success-overlay"
+          closeOnEscape={false}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+          <span>Bon salvat cu succes!</span>
+        </Modal>
       </Show>
 
       {/* Titlu warning toast */}
@@ -1784,480 +1808,482 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
       {/* Manual item modal */}
       <Show when={showManual()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Adaugă produs/serviciu manual</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>✕</button>
+        <Modal
+          open
+          title="Adaugă produs/serviciu manual"
+          onClose={() => setShowManual(false)}
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>Anuleaza</button>
+            <button
+              class="btn btn-primary btn-sm"
+              disabled={manualName().trim() === ""}
+              onClick={confirmManual}
+            >
+              Adauga
+            </button>
+          </>}
+        >
+          <div class="sl-edit-item-body">
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Nume *</label>
+              <input
+                class="input sl-edit-input"
+                type="text"
+                placeholder="Ex: Transport, Consultanta..."
+                value={manualName()}
+                onInput={(e) => setManualName(e.currentTarget.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmManual(); }}
+                autofocus
+              />
             </div>
-            <div class="sl-edit-item-body">
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Nume *</label>
-                <input
-                  class="input sl-edit-input"
-                  type="text"
-                  placeholder="Ex: Transport, Consultanta..."
-                  value={manualName()}
-                  onInput={(e) => setManualName(e.currentTarget.value.toUpperCase())}
-                  onKeyDown={(e) => { if (e.key === "Enter") confirmManual(); }}
-                  autofocus
-                />
-              </div>
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Tip</label>
-                <div class="sl-tip-toggle">
-                  <button
-                    class={`btn btn-sm${manualTip() === "Produs" ? " btn-primary" : " btn-ghost"}`}
-                    onClick={() => { setManualTip("Produs"); setManualUnit("buc"); }}
-                    type="button"
-                  >Produs</button>
-                  <button
-                    class={`btn btn-sm${manualTip() === "Serviciu" ? " btn-primary" : " btn-ghost"}`}
-                    onClick={() => { setManualTip("Serviciu"); setManualUnit("ora"); }}
-                    type="button"
-                  >Serviciu</button>
-                </div>
-              </div>
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">U.M.</label>
-                <input
-                  class="input sl-edit-input"
-                  type="text"
-                  placeholder="buc, ora, kg, m..."
-                  value={manualUnit()}
-                  onInput={(e) => setManualUnit(e.currentTarget.value)}
-                />
-              </div>
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Cantitate</label>
-                <input
-                  class="input sl-edit-input"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={manualQty()}
-                  onInput={(e) => setManualQty(e.currentTarget.value)}
-                />
-              </div>
-              <div class="sl-qty-presets">
-                {[2,3,4,5,6,7,8,10, 50, 100].map(v => (
-                  <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setManualQty(String(v))}>{v}</button>
-                ))}
-              </div>
-              <div class="sl-edit-item-row">
-                <label class="sl-edit-label">Pret (lei)</label>
-                <input
-                  class="input sl-edit-input"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={manualPrice()}
-                  onInput={(e) => setManualPrice(e.currentTarget.value)}
-                />
-              </div>
-              <div class="sl-edit-item-total">
-                Total: {((parseFloat(manualPrice()) || 0) * (parseInt(manualQty()) || 0)).toFixed(2)} lei
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Tip</label>
+              <div class="sl-tip-toggle">
+                <button
+                  class={`btn btn-sm${manualTip() === "Produs" ? " btn-primary" : " btn-ghost"}`}
+                  onClick={() => { setManualTip("Produs"); setManualUnit("buc"); }}
+                  type="button"
+                >Produs</button>
+                <button
+                  class={`btn btn-sm${manualTip() === "Serviciu" ? " btn-primary" : " btn-ghost"}`}
+                  onClick={() => { setManualTip("Serviciu"); setManualUnit("ora"); }}
+                  type="button"
+                >Serviciu</button>
               </div>
             </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowManual(false)}>Anuleaza</button>
-              <button
-                class="btn btn-primary btn-sm"
-                disabled={manualName().trim() === ""}
-                onClick={confirmManual}
-              >
-                Adauga
-              </button>
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">U.M.</label>
+              <input
+                class="input sl-edit-input"
+                type="text"
+                placeholder="buc, ora, kg, m..."
+                value={manualUnit()}
+                onInput={(e) => setManualUnit(e.currentTarget.value)}
+              />
+            </div>
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Cantitate</label>
+              <input
+                class="input sl-edit-input"
+                type="number"
+                min="1"
+                step="1"
+                value={manualQty()}
+                onInput={(e) => setManualQty(e.currentTarget.value)}
+              />
+            </div>
+            <div class="sl-qty-presets">
+              {[2,3,4,5,6,7,8,10, 50, 100].map(v => (
+                <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setManualQty(String(v))}>{v}</button>
+              ))}
+            </div>
+            <div class="sl-edit-item-row">
+              <label class="sl-edit-label">Pret (lei)</label>
+              <input
+                class="input sl-edit-input"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value={manualPrice()}
+                onInput={(e) => setManualPrice(e.currentTarget.value)}
+              />
+            </div>
+            <div class="sl-edit-item-total">
+              Total: {((parseFloat(manualPrice()) || 0) * (parseInt(manualQty()) || 0)).toFixed(2)} lei
             </div>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Vehicol pick modal — multiple results for plate search */}
       <Show when={showVehicolPickModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:480px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Selectează vehiculul</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>✕</button>
-            </div>
-            <div style="padding:8px;display:grid;gap:6px;overflow-y:auto;max-height:60vh">
-              <For each={vehicolPickList()}>
-                {(item) => (
-                  <button
-                    style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;text-align:left;width:100%"
-                    onClick={() => { applyVehicolWithClient(item); setShowVehicolPickModal(false); }}
-                  >
-                    <div>
-                      <div style="font-weight:600;font-size:14px">{item.vehicol.numar_masina}</div>
-                      <div style="font-size:12px;color:var(--text-muted)">
-                        {[item.vehicol.marca, item.vehicol.model].filter(Boolean).join(" ") || "—"}
-                      </div>
+        <Modal
+          open
+          title="Selectează vehiculul"
+          onClose={() => setShowVehicolPickModal(false)}
+          style="max-width:480px;width:100%"
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>Anulează</button>
+          </>}
+        >
+          <div style="padding:8px;display:grid;gap:6px;overflow-y:auto;max-height:60vh">
+            <For each={vehicolPickList()}>
+              {(item) => (
+                <button
+                  style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;cursor:pointer;text-align:left;width:100%"
+                  onClick={() => { applyVehicolWithClient(item); setShowVehicolPickModal(false); }}
+                >
+                  <div>
+                    <div style="font-weight:600;font-size:14px">{item.vehicol.numar_masina}</div>
+                    <div style="font-size:12px;color:var(--text-muted)">
+                      {[item.vehicol.marca, item.vehicol.model].filter(Boolean).join(" ") || "—"}
                     </div>
-                    <div style="font-size:12px;color:var(--text-muted);text-align:right">
-                      <div>{item.client.nume}</div>
-                      <Show when={item.client.cui}>
-                        <div>CUI: {item.client.cui}</div>
-                      </Show>
-                    </div>
-                  </button>
-                )}
-              </For>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolPickModal(false)}>Anulează</button>
-            </div>
+                  </div>
+                  <div style="font-size:12px;color:var(--text-muted);text-align:right">
+                    <div>{item.client.nume}</div>
+                    <Show when={item.client.cui}>
+                      <div>CUI: {item.client.cui}</div>
+                    </Show>
+                  </div>
+                </button>
+              )}
+            </For>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Vehicol modal */}
       <Show when={showVehicolModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:600px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Vehicul</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>✕</button>
-            </div>
-            <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:75vh">
+        <Modal
+          open
+          title="Vehicul"
+          onClose={() => setShowVehicolModal(false)}
+          style="max-width:600px;width:100%"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <Show when={vehicol() !== null}>
+              <button class="btn btn-ghost btn-sm" onClick={() => { setVehicol(null); setShowVehicolModal(false); }}>Șterge</button>
+            </Show>
+            <div style="flex:1" />
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>Anulează</button>
+            <button
+              class="btn btn-primary btn-sm"
+              disabled={vehicolDraft().numarMasina.trim() === ""}
+              onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
+            >
+              Salvează
+            </button>
+          </>}
+        >
+          <div style="padding:12px;display:grid;gap:8px;overflow-y:auto;max-height:75vh">
+            <input
+              class="input"
+              placeholder="Număr mașină *"
+              value={vehicolDraft().numarMasina}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, numarMasina: e.currentTarget.value.toUpperCase() }))}
+            />
+            <input
+              class="input"
+              placeholder="Marcă"
+              value={vehicolDraft().marca ?? ""}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, marca: e.currentTarget.value || null }))}
+            />
+            <input
+              class="input"
+              placeholder="Model"
+              value={vehicolDraft().model ?? ""}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, model: e.currentTarget.value || null }))}
+            />
+            <input
+              class="input"
+              type="number"
+              min="1900"
+              max="2100"
+              placeholder="Anul fabricației"
+              value={vehicolDraft().anFabricatie ?? ""}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, anFabricatie: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
+            />
+            <input
+              class="input"
+              type="number"
+              min="0"
+              placeholder="Număr kilometri"
+              value={vehicolDraft().numarKilometrii ?? ""}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, numarKilometrii: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
+            />
+            <input
+              class="input"
+              placeholder="VIN"
+              maxlength={17}
+              value={vehicolDraft().vin ?? ""}
+              onInput={(e) => setVehicolDraft((d) => ({ ...d, vin: e.currentTarget.value.toUpperCase() || null }))}
+            />
+            <textarea
+              class="sl-modal-textarea"
+              placeholder="Observații..."
+              rows={10}
+              style={obsUppercase() ? "text-transform:uppercase" : ""}
+              value={vehicolDraft().observatii ?? ""}
+              onInput={(e) => {
+                const val = obsUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+                setVehicolDraft((d) => ({ ...d, observatii: val || null }));
+              }}
+            />
+            <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
               <input
-                class="input"
-                placeholder="Număr mașină *"
-                value={vehicolDraft().numarMasina}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarMasina: e.currentTarget.value.toUpperCase() }))}
+                type="checkbox"
+                checked={!obsUppercase()}
+                onChange={(e) => setObsUppercase(!e.currentTarget.checked)}
               />
-              <input
-                class="input"
-                placeholder="Marcă"
-                value={vehicolDraft().marca ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, marca: e.currentTarget.value || null }))}
-              />
-              <input
-                class="input"
-                placeholder="Model"
-                value={vehicolDraft().model ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, model: e.currentTarget.value || null }))}
-              />
-              <input
-                class="input"
-                type="number"
-                min="1900"
-                max="2100"
-                placeholder="Anul fabricației"
-                value={vehicolDraft().anFabricatie ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, anFabricatie: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
-              />
-              <input
-                class="input"
-                type="number"
-                min="0"
-                placeholder="Număr kilometri"
-                value={vehicolDraft().numarKilometrii ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, numarKilometrii: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
-              />
-              <input
-                class="input"
-                placeholder="VIN"
-                maxlength={17}
-                value={vehicolDraft().vin ?? ""}
-                onInput={(e) => setVehicolDraft((d) => ({ ...d, vin: e.currentTarget.value.toUpperCase() || null }))}
-              />
-              <textarea
-                class="sl-modal-textarea"
-                placeholder="Observații..."
-                rows={10}
-                style={obsUppercase() ? "text-transform:uppercase" : ""}
-                value={vehicolDraft().observatii ?? ""}
-                onInput={(e) => {
-                  const val = obsUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
-                  setVehicolDraft((d) => ({ ...d, observatii: val || null }));
-                }}
-              />
-              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
-                <input
-                  type="checkbox"
-                  checked={!obsUppercase()}
-                  onChange={(e) => setObsUppercase(!e.currentTarget.checked)}
-                />
-                Scriere normală (litere mici/mari)
-              </label>
-            </div>
-            <div class="sl-modal-footer">
-              <Show when={vehicol() !== null}>
-                <button class="btn btn-ghost btn-sm" onClick={() => { setVehicol(null); setShowVehicolModal(false); }}>Șterge</button>
-              </Show>
-              <div style="flex:1" />
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>Anulează</button>
-              <button
-                class="btn btn-primary btn-sm"
-                disabled={vehicolDraft().numarMasina.trim() === ""}
-                onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
-              >
-                Salvează
-              </button>
-            </div>
+              Scriere normală (litere mici/mari)
+            </label>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* FDL modal — câmpuri specifice Fișa de Lucru */}
       <Show when={showFdlModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal sl-modal--fdl">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Fișă de Lucru</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowFdlModal(false)}>✕</button>
-            </div>
-            <div class="sl-fdl-body">
-              <p class="sl-fdl-intro">
-                Fișa de Lucru este o <strong>estimare</strong> — nu intră în totaluri sau rapoarte
-                până nu este transformată în deviz din Recepție.
-              </p>
+        <Modal
+          open
+          title="Fișă de Lucru"
+          onClose={() => setShowFdlModal(false)}
+          class="sl-modal--fdl"
+          footerStyle="justify-content:space-between"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-danger-outline btn-sm"
+              onClick={() => {
+                setFdlMode(false);
+                setShowFdlModal(false);
+              }}
+              title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal. Constatările, sugestiile și timpul estimat rămân salvate dacă reactivezi FDL."
+            >
+              Transformă în deviz
+            </button>
+            <button class="btn btn-primary btn-sm" onClick={() => setShowFdlModal(false)}>
+              Salvează în Fișă
+            </button>
+          </>}
+        >
+          <div class="sl-fdl-body">
+            <p class="sl-fdl-intro">
+              Fișa de Lucru este o <strong>estimare</strong> — nu intră în totaluri sau rapoarte
+              până nu este transformată în deviz din Recepție.
+            </p>
 
-              <div class="sl-fdl-grid">
-                {/* Coloana stânga: sumar Vehicul + Client (vertical) */}
-                <div class="sl-fdl-left">
-                <div class="sl-fdl-info-card">
-                  <div class="sl-fdl-info-card-header">
-                    <span class="sl-fdl-info-card-title">Vehicul</span>
-                    <button
-                      class="btn btn-ghost btn-xs"
-                      onClick={() => {
-                        const draft = vehicol() ?? { numarMasina: titlu().trim() };
-                        setVehicolDraft({ ...draft });
-                        setObsUppercase(true);
-                        // FDL state (constatari/sugestii/timp) e deja persistat
-                        // în signals + localStorage; închidem fereastra FDL ca să
-                        // se vadă clar modalul nou de Vehicul.
-                        setShowFdlModal(false);
-                        setShowVehicolModal(true);
-                      }}
-                    >
-                      {vehicol() ? "Editează" : "Adaugă"}
-                    </button>
-                  </div>
-                  <Show
-                    when={vehicol()}
-                    fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun vehicul asociat.</div>}
+            <div class="sl-fdl-grid">
+              {/* Coloana stânga: sumar Vehicul + Client (vertical) */}
+              <div class="sl-fdl-left">
+              <div class="sl-fdl-info-card">
+                <div class="sl-fdl-info-card-header">
+                  <span class="sl-fdl-info-card-title">Vehicul</span>
+                  <button
+                    class="btn btn-ghost btn-xs"
+                    onClick={() => {
+                      const draft = vehicol() ?? { numarMasina: titlu().trim() };
+                      setVehicolDraft({ ...draft });
+                      setObsUppercase(true);
+                      // FDL state (constatari/sugestii/timp) e deja persistat
+                      // în signals + localStorage; închidem fereastra FDL ca să
+                      // se vadă clar modalul nou de Vehicul.
+                      setShowFdlModal(false);
+                      setShowVehicolModal(true);
+                    }}
                   >
-                    <div class="sl-fdl-info-card-body">
-                      <div class="sl-fdl-info-row">
-                        <span class="sl-fdl-info-row-key">Nr. mașină:</span>
-                        <span class="sl-fdl-info-row-val"><strong>{vehicol()!.numarMasina}</strong></span>
-                      </div>
-                      <Show when={vehicol()!.marca || vehicol()!.model}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">Marcă / Model:</span>
-                          <span class="sl-fdl-info-row-val">
-                            {[vehicol()!.marca, vehicol()!.model].filter(Boolean).join(" ")}
-                          </span>
-                        </div>
-                      </Show>
-                      <Show when={vehicol()!.anFabricatie != null}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">An fabricație:</span>
-                          <span class="sl-fdl-info-row-val">{vehicol()!.anFabricatie}</span>
-                        </div>
-                      </Show>
-                      <Show when={vehicol()!.numarKilometrii != null}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">Kilometri:</span>
-                          <span class="sl-fdl-info-row-val">{vehicol()!.numarKilometrii} km</span>
-                        </div>
-                      </Show>
-                      <Show when={vehicol()!.vin}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">VIN:</span>
-                          <span class="sl-fdl-info-row-val">{vehicol()!.vin}</span>
-                        </div>
-                      </Show>
-                      <Show when={vehicol()!.observatii}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">Obs.:</span>
-                          <span class="sl-fdl-info-row-val">{vehicol()!.observatii}</span>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
+                    {vehicol() ? "Editează" : "Adaugă"}
+                  </button>
                 </div>
-
-                <div class="sl-fdl-info-card">
-                  <div class="sl-fdl-info-card-header">
-                    <span class="sl-fdl-info-card-title">Client</span>
-                    <button
-                      class="btn btn-ghost btn-xs"
-                      onClick={() => {
-                        // Închidem FDL ca să se vadă modalul de client.
-                        setShowFdlModal(false);
-                        if (selectedClient()) setShowEditClientModal(true);
-                        else setShowAddClientModal(true);
-                      }}
-                    >
-                      {selectedClient() ? "Editează" : "Adaugă"}
-                    </button>
-                  </div>
-                  <Show
-                    when={selectedClient()}
-                    fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun client asociat.</div>}
-                  >
-                    <div class="sl-fdl-info-card-body">
+                <Show
+                  when={vehicol()}
+                  fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun vehicul asociat.</div>}
+                >
+                  <div class="sl-fdl-info-card-body">
+                    <div class="sl-fdl-info-row">
+                      <span class="sl-fdl-info-row-key">Nr. mașină:</span>
+                      <span class="sl-fdl-info-row-val"><strong>{vehicol()!.numarMasina}</strong></span>
+                    </div>
+                    <Show when={vehicol()!.marca || vehicol()!.model}>
                       <div class="sl-fdl-info-row">
-                        <span class="sl-fdl-info-row-key">Nume:</span>
-                        <span class="sl-fdl-info-row-val"><strong>{selectedClient()!.nume}</strong></span>
-                      </div>
-                      <div class="sl-fdl-info-row">
-                        <span class="sl-fdl-info-row-key">Tip:</span>
+                        <span class="sl-fdl-info-row-key">Marcă / Model:</span>
                         <span class="sl-fdl-info-row-val">
-                          {selectedClient()!.tip === "juridic" ? "Juridică" : "Fizică"}
+                          {[vehicol()!.marca, vehicol()!.model].filter(Boolean).join(" ")}
                         </span>
                       </div>
-                      <Show when={selectedClient()!.cui}>
-                        <div class="sl-fdl-info-row">
-                          <span class="sl-fdl-info-row-key">CUI:</span>
-                          <span class="sl-fdl-info-row-val">{selectedClient()!.cui}</span>
-                        </div>
-                      </Show>
-                    </div>
-                  </Show>
-                </div>
-                </div>
-
-                {/* Coloana dreapta: câmpurile FDL */}
-                <div class="sl-fdl-right">
-              <div class="sl-fdl-field">
-                <label class="sl-fdl-label">Constatări (observații tehnician)</label>
-                <textarea
-                  ref={(el) => createEffect(() => { constatari(); queueMicrotask(() => autoGrowTextarea(el)); })}
-                  class="sl-modal-textarea sl-fdl-textarea"
-                  placeholder="• discuri uzate&#10;• suspensie defectă&#10;• lichid de frână sub nivel"
-                  rows={6}
-                  value={constatari()}
-                  onFocus={ensureBulletPrefix(setConstatari, constatari)}
-                  onInput={handleBulletInput(setConstatari, constatari)}
-                  onKeyDown={handleBulletKeyDown(setConstatari)}
-                />
+                    </Show>
+                    <Show when={vehicol()!.anFabricatie != null}>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">An fabricație:</span>
+                        <span class="sl-fdl-info-row-val">{vehicol()!.anFabricatie}</span>
+                      </div>
+                    </Show>
+                    <Show when={vehicol()!.numarKilometrii != null}>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">Kilometri:</span>
+                        <span class="sl-fdl-info-row-val">{vehicol()!.numarKilometrii} km</span>
+                      </div>
+                    </Show>
+                    <Show when={vehicol()!.vin}>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">VIN:</span>
+                        <span class="sl-fdl-info-row-val">{vehicol()!.vin}</span>
+                      </div>
+                    </Show>
+                    <Show when={vehicol()!.observatii}>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">Obs.:</span>
+                        <span class="sl-fdl-info-row-val">{vehicol()!.observatii}</span>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
               </div>
-              <div class="sl-fdl-field">
-                <label class="sl-fdl-label">Sugestii / Recomandări către client</label>
-                <textarea
-                  ref={(el) => createEffect(() => { sugestii(); queueMicrotask(() => autoGrowTextarea(el)); })}
-                  class="sl-modal-textarea sl-fdl-textarea"
-                  placeholder="• înlocuire plăcuțe + discuri față&#10;• schimb ulei cutie"
-                  rows={5}
-                  value={sugestii()}
-                  onFocus={ensureBulletPrefix(setSugestii, sugestii)}
-                  onInput={handleBulletInput(setSugestii, sugestii)}
-                  onKeyDown={handleBulletKeyDown(setSugestii)}
-                />
-              </div>
-                </div>
 
-                {/* Coloana 3: Timp estimat manoperă */}
-                <div class="sl-fdl-right">
-                  <div class="sl-fdl-field">
-                    <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
-                    <input
-                      class="input sl-fdl-time-input"
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      placeholder="Ex: 2.5"
-                      value={timpEstimatOre()}
-                      onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
-                    />
-                    <div class="sl-fdl-time-presets">
-                      <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
-                        {(v) => (
-                          <button
-                            class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
-                            classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
-                            onClick={() => setTimpEstimatOre(String(v))}
-                            type="button"
-                          >
-                            {v}h
-                          </button>
-                        )}
-                      </For>
+              <div class="sl-fdl-info-card">
+                <div class="sl-fdl-info-card-header">
+                  <span class="sl-fdl-info-card-title">Client</span>
+                  <button
+                    class="btn btn-ghost btn-xs"
+                    onClick={() => {
+                      // Închidem FDL ca să se vadă modalul de client.
+                      setShowFdlModal(false);
+                      if (selectedClient()) setShowEditClientModal(true);
+                      else setShowAddClientModal(true);
+                    }}
+                  >
+                    {selectedClient() ? "Editează" : "Adaugă"}
+                  </button>
+                </div>
+                <Show
+                  when={selectedClient()}
+                  fallback={<div class="sl-fdl-info-card-body sl-fdl-info-card-body--empty">Niciun client asociat.</div>}
+                >
+                  <div class="sl-fdl-info-card-body">
+                    <div class="sl-fdl-info-row">
+                      <span class="sl-fdl-info-row-key">Nume:</span>
+                      <span class="sl-fdl-info-row-val"><strong>{selectedClient()!.nume}</strong></span>
                     </div>
+                    <div class="sl-fdl-info-row">
+                      <span class="sl-fdl-info-row-key">Tip:</span>
+                      <span class="sl-fdl-info-row-val">
+                        {selectedClient()!.tip === "juridic" ? "Juridică" : "Fizică"}
+                      </span>
+                    </div>
+                    <Show when={selectedClient()!.cui}>
+                      <div class="sl-fdl-info-row">
+                        <span class="sl-fdl-info-row-key">CUI:</span>
+                        <span class="sl-fdl-info-row-val">{selectedClient()!.cui}</span>
+                      </div>
+                    </Show>
+                  </div>
+                </Show>
+              </div>
+              </div>
+
+              {/* Coloana dreapta: câmpurile FDL */}
+              <div class="sl-fdl-right">
+            <div class="sl-fdl-field">
+              <label class="sl-fdl-label">Constatări (observații tehnician)</label>
+              <textarea
+                ref={(el) => createEffect(() => { constatari(); queueMicrotask(() => autoGrowTextarea(el)); })}
+                class="sl-modal-textarea sl-fdl-textarea"
+                placeholder="• discuri uzate&#10;• suspensie defectă&#10;• lichid de frână sub nivel"
+                rows={6}
+                value={constatari()}
+                onFocus={ensureBulletPrefix(setConstatari, constatari)}
+                onInput={handleBulletInput(setConstatari, constatari)}
+                onKeyDown={handleBulletKeyDown(setConstatari)}
+              />
+            </div>
+            <div class="sl-fdl-field">
+              <label class="sl-fdl-label">Sugestii / Recomandări către client</label>
+              <textarea
+                ref={(el) => createEffect(() => { sugestii(); queueMicrotask(() => autoGrowTextarea(el)); })}
+                class="sl-modal-textarea sl-fdl-textarea"
+                placeholder="• înlocuire plăcuțe + discuri față&#10;• schimb ulei cutie"
+                rows={5}
+                value={sugestii()}
+                onFocus={ensureBulletPrefix(setSugestii, sugestii)}
+                onInput={handleBulletInput(setSugestii, sugestii)}
+                onKeyDown={handleBulletKeyDown(setSugestii)}
+              />
+            </div>
+              </div>
+
+              {/* Coloana 3: Timp estimat manoperă */}
+              <div class="sl-fdl-right">
+                <div class="sl-fdl-field">
+                  <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
+                  <input
+                    class="input sl-fdl-time-input"
+                    type="number"
+                    min="0"
+                    step="0.5"
+                    placeholder="Ex: 2.5"
+                    value={timpEstimatOre()}
+                    onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
+                  />
+                  <div class="sl-fdl-time-presets">
+                    <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
+                      {(v) => (
+                        <button
+                          class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
+                          classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
+                          onClick={() => setTimpEstimatOre(String(v))}
+                          type="button"
+                        >
+                          {v}h
+                        </button>
+                      )}
+                    </For>
                   </div>
                 </div>
               </div>
             </div>
-            <div class="sl-modal-footer" style="justify-content:space-between">
-              <button
-                class="btn btn-danger-outline btn-sm"
-                onClick={() => {
-                  setFdlMode(false);
-                  setShowFdlModal(false);
-                }}
-                title="Renunță la modul Fișă de Lucru — bonul va fi salvat ca deviz normal. Constatările, sugestiile și timpul estimat rămân salvate dacă reactivezi FDL."
-              >
-                Transformă în deviz
-              </button>
-              <button class="btn btn-primary btn-sm" onClick={() => setShowFdlModal(false)}>
-                Salvează în Fișă
-              </button>
-            </div>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Modal */}
       <Show when={modal() !== null}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:1000px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">
-                {modal() === "descriere" ? "Descriere" : "Observații"}
-              </span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>✕</button>
+        <Modal
+          open
+          title={modal() === "descriere" ? "Descriere" : "Observații"}
+          onClose={() => setModal(null)}
+          style="max-width:1000px;width:100%"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Anuleaza</button>
+            <button class="btn btn-primary btn-sm" onClick={confirmModal}>Salveaza</button>
+          </>}
+        >
+          <textarea
+            class="sl-modal-textarea"
+            placeholder={modal() === "descriere" ? "• Scrie o descriere..." : "• Observații ..."}
+            maxlength={modal() === "dateTehn" ? 5000 : 200}
+            value={modalDraft()}
+            onFocus={() => { if (modalDraft().trim() === "") setModalDraft(BULLET); }}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              const ta = e.currentTarget as HTMLTextAreaElement;
+              const before = ta.value.slice(0, ta.selectionStart);
+              const after = ta.value.slice(ta.selectionEnd);
+              const next = before + "\n" + BULLET + after;
+              setModalDraft(modal() === "dateTehn" && modalUppercase() ? next.toUpperCase() : next);
+              queueMicrotask(() => {
+                const pos = (before + "\n" + BULLET).length;
+                ta.selectionStart = ta.selectionEnd = pos;
+              });
+            }}
+            onInput={(e) => {
+              const val = modal() === "dateTehn" && modalUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
+              setModalDraft(val);
+            }}
+            rows={24}
+            style={`min-height:460px;${modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase;" : ""}`}
+            autofocus
+          />
+          <Show when={modal() === "dateTehn"}>
+            <div style="padding:4px 12px 8px">
+              <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
+                <input
+                  type="checkbox"
+                  checked={!modalUppercase()}
+                  onChange={(e) => setModalUppercase(!e.currentTarget.checked)}
+                />
+                Scriere normală (litere mici/mari)
+              </label>
             </div>
-            <textarea
-              class="sl-modal-textarea"
-              placeholder={modal() === "descriere" ? "• Scrie o descriere..." : "• Observații ..."}
-              maxlength={modal() === "dateTehn" ? 5000 : 200}
-              value={modalDraft()}
-              onFocus={() => { if (modalDraft().trim() === "") setModalDraft(BULLET); }}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                e.preventDefault();
-                const ta = e.currentTarget as HTMLTextAreaElement;
-                const before = ta.value.slice(0, ta.selectionStart);
-                const after = ta.value.slice(ta.selectionEnd);
-                const next = before + "\n" + BULLET + after;
-                setModalDraft(modal() === "dateTehn" && modalUppercase() ? next.toUpperCase() : next);
-                queueMicrotask(() => {
-                  const pos = (before + "\n" + BULLET).length;
-                  ta.selectionStart = ta.selectionEnd = pos;
-                });
-              }}
-              onInput={(e) => {
-                const val = modal() === "dateTehn" && modalUppercase() ? e.currentTarget.value.toUpperCase() : e.currentTarget.value;
-                setModalDraft(val);
-              }}
-              rows={24}
-              style={`min-height:460px;${modal() === "dateTehn" && modalUppercase() ? "text-transform:uppercase;" : ""}`}
-              autofocus
-            />
-            <Show when={modal() === "dateTehn"}>
-              <div style="padding:4px 12px 8px">
-                <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;user-select:none">
-                  <input
-                    type="checkbox"
-                    checked={!modalUppercase()}
-                    onChange={(e) => setModalUppercase(!e.currentTarget.checked)}
-                  />
-                  Scriere normală (litere mici/mari)
-                </label>
-              </div>
-            </Show>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setModal(null)}>Anuleaza</button>
-              <button class="btn btn-primary btn-sm" onClick={confirmModal}>Salveaza</button>
-            </div>
-          </div>
-        </div>
+          </Show>
+        </Modal>
       </Show>
 
     </div>

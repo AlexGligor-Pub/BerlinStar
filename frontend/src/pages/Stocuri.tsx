@@ -1,10 +1,11 @@
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onMount } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import {
   createSolidTable, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
 import { apiFetch } from "../utils/api";
+import { useIsMobile } from "../hooks/createMediaQuery";
 import { device } from "../store/deviceStore";
 import { notify } from "../store/notificationsStore";
 import {
@@ -12,6 +13,7 @@ import {
   loadStocuri, updateItemMeta, intrareMarfa, ajustareStoc,
   type StocRow,
 } from "../store/stocStore";
+import Modal from "../components/ui/Modal";
 
 interface Loc { id: number; name: string }
 
@@ -32,10 +34,7 @@ export default function Stocuri() {
 
   const locationId = createMemo(() => device()?.locationId ?? null);
 
-  const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
-  function onResize() { setIsMobile(window.innerWidth < 768); }
-  onMount(() => { window.addEventListener("resize", onResize); });
-  onCleanup(() => window.removeEventListener("resize", onResize));
+  const isMobile = useIsMobile();
 
   async function loadLocName() {
     const id = locationId();
@@ -505,50 +504,48 @@ function EditMetaModal(props: {
   }
 
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">Editează produs</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
-        </div>
-        <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-          <div style="font-size:13px;background:var(--surface-2);padding:10px;border-radius:6px">
-            <div style="font-weight:600;font-size:14px">{props.row.name}</div>
-            <div style="color:var(--text-muted);margin-top:2px;font-size:12px">
-              {props.row.department_name} → {props.row.category_name} · Preț vânzare: <b>{Number(props.row.price).toFixed(2)}</b>
-            </div>
-          </div>
-          <label style="font-size:13px;font-weight:500">Preț cumpărare</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            class="input"
-            value={costPrice()}
-            placeholder="ex. 12.50 (gol = necunoscut)"
-            onInput={(e) => setCostPrice(e.currentTarget.value)}
-          />
-          <label style="font-size:13px;font-weight:500">Stoc minim (alertă)</label>
-          <input
-            type="number"
-            min="0"
-            class="input"
-            value={stocMinim()}
-            placeholder="0 = fără alertă"
-            onInput={(e) => setStocMinim(e.currentTarget.value)}
-          />
-          <div style="font-size:12px;color:var(--text-muted)">
-            Setează stoc minim &gt; 0 pentru a evidenția automat produsul când stocul scade sub acest prag.
-          </div>
-        </div>
-        <div class="sl-modal-footer">
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-          <button class="btn btn-primary btn-sm" disabled={saving()} onClick={save}>
-            {saving() ? "..." : "Salvează"}
-          </button>
+    <Modal
+      open
+      title="Editează produs"
+      onClose={props.onClose}
+      closeOnEscape={false}
+      bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:10px"
+      footer={<>
+        <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+        <button class="btn btn-primary btn-sm" disabled={saving()} onClick={save}>
+          {saving() ? "..." : "Salvează"}
+        </button>
+      </>}
+    >
+      <div style="font-size:13px;background:var(--surface-2);padding:10px;border-radius:6px">
+        <div style="font-weight:600;font-size:14px">{props.row.name}</div>
+        <div style="color:var(--text-muted);margin-top:2px;font-size:12px">
+          {props.row.department_name} → {props.row.category_name} · Preț vânzare: <b>{Number(props.row.price).toFixed(2)}</b>
         </div>
       </div>
-    </div>
+      <label style="font-size:13px;font-weight:500">Preț cumpărare</label>
+      <input
+        type="number"
+        step="0.01"
+        min="0"
+        class="input"
+        value={costPrice()}
+        placeholder="ex. 12.50 (gol = necunoscut)"
+        onInput={(e) => setCostPrice(e.currentTarget.value)}
+      />
+      <label style="font-size:13px;font-weight:500">Stoc minim (alertă)</label>
+      <input
+        type="number"
+        min="0"
+        class="input"
+        value={stocMinim()}
+        placeholder="0 = fără alertă"
+        onInput={(e) => setStocMinim(e.currentTarget.value)}
+      />
+      <div style="font-size:12px;color:var(--text-muted)">
+        Setează stoc minim &gt; 0 pentru a evidenția automat produsul când stocul scade sub acest prag.
+      </div>
+    </Modal>
   );
 }
 
@@ -591,35 +588,33 @@ function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onS
   }
 
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">Intrare marfă</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
-        </div>
-        <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-          <label style="font-size:13px;font-weight:500">Caută produs</label>
-          <input type="text" class="input" placeholder="ex. ulei" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
-          <label style="font-size:13px;font-weight:500">Produs</label>
-          <select class="input" value={itemId() ?? ""} onChange={(e) => setItemId(Number(e.currentTarget.value) || null)}>
-            <option value="">— alege —</option>
-            <For each={options()}>{(o) => <option value={o.id}>{o.label}</option>}</For>
-          </select>
-          <label style="font-size:13px;font-weight:500">Cantitate</label>
-          <input type="number" class="input" min="1" value={qty()} onInput={(e) => setQty(Number(e.currentTarget.value) || 0)} />
-          <label style="font-size:13px;font-weight:500">Preț unitar cumpărare (opțional)</label>
-          <input type="number" step="0.01" class="input" value={unitCost()} onInput={(e) => setUnitCost(e.currentTarget.value)} />
-          <label style="font-size:13px;font-weight:500">Notă (ex. furnizor)</label>
-          <input type="text" class="input" value={note()} onInput={(e) => setNote(e.currentTarget.value)} maxlength="500" />
-        </div>
-        <div class="sl-modal-footer">
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-          <button class="btn btn-primary btn-sm" disabled={saving() || !itemId() || qty() <= 0} onClick={save}>
-            {saving() ? "..." : "Salvează"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <Modal
+      open
+      title="Intrare marfă"
+      onClose={props.onClose}
+      closeOnEscape={false}
+      bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:10px"
+      footer={<>
+        <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+        <button class="btn btn-primary btn-sm" disabled={saving() || !itemId() || qty() <= 0} onClick={save}>
+          {saving() ? "..." : "Salvează"}
+        </button>
+      </>}
+    >
+      <label style="font-size:13px;font-weight:500">Caută produs</label>
+      <input type="text" class="input" placeholder="ex. ulei" value={search()} onInput={(e) => setSearch(e.currentTarget.value)} />
+      <label style="font-size:13px;font-weight:500">Produs</label>
+      <select class="input" value={itemId() ?? ""} onChange={(e) => setItemId(Number(e.currentTarget.value) || null)}>
+        <option value="">— alege —</option>
+        <For each={options()}>{(o) => <option value={o.id}>{o.label}</option>}</For>
+      </select>
+      <label style="font-size:13px;font-weight:500">Cantitate</label>
+      <input type="number" class="input" min="1" value={qty()} onInput={(e) => setQty(Number(e.currentTarget.value) || 0)} />
+      <label style="font-size:13px;font-weight:500">Preț unitar cumpărare (opțional)</label>
+      <input type="number" step="0.01" class="input" value={unitCost()} onInput={(e) => setUnitCost(e.currentTarget.value)} />
+      <label style="font-size:13px;font-weight:500">Notă (ex. furnizor)</label>
+      <input type="text" class="input" value={note()} onInput={(e) => setNote(e.currentTarget.value)} maxlength="500" />
+    </Modal>
   );
 }
 
@@ -646,179 +641,178 @@ function AjustareModal(props: { row: StocRow; locationId: number; onClose: () =>
   }
 
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" onClick={(e) => e.stopPropagation()}>
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">Ajustare stoc</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
-        </div>
-        <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-          <div style="font-size:13px;background:var(--surface-2);padding:10px;border-radius:6px">
-            <div style="font-weight:600;font-size:14px">{props.row.name}</div>
-            <div style="color:var(--text-muted);margin-top:2px">
-              Stoc curent: <b>{props.row.qty}</b> {props.row.unit}
-            </div>
-          </div>
-          <label style="font-size:13px;font-weight:500">Stoc nou</label>
-          <input type="number" min="0" class="input" value={newQty()} onInput={(e) => setNewQty(Number(e.currentTarget.value) || 0)} />
-          <Show when={delta() !== 0}>
-            <div style={`font-size:13px;color:${delta() > 0 ? "var(--success,#198754)" : "var(--danger)"}`}>
-              Delta: {delta() > 0 ? "+" : ""}{delta()}
-            </div>
-          </Show>
-          <label style="font-size:13px;font-weight:500">Motiv / notă</label>
-          <input type="text" class="input" value={note()} placeholder="ex. inventar lunar"
-                 onInput={(e) => setNote(e.currentTarget.value)} maxlength="500" />
-        </div>
-        <div class="sl-modal-footer">
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-          <button class="btn btn-primary btn-sm" disabled={saving() || newQty() < 0} onClick={save}>
-            {saving() ? "..." : "Salvează"}
-          </button>
+    <Modal
+      open
+      title="Ajustare stoc"
+      onClose={props.onClose}
+      closeOnEscape={false}
+      bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:10px"
+      footer={<>
+        <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
+        <button class="btn btn-primary btn-sm" disabled={saving() || newQty() < 0} onClick={save}>
+          {saving() ? "..." : "Salvează"}
+        </button>
+      </>}
+    >
+      <div style="font-size:13px;background:var(--surface-2);padding:10px;border-radius:6px">
+        <div style="font-weight:600;font-size:14px">{props.row.name}</div>
+        <div style="color:var(--text-muted);margin-top:2px">
+          Stoc curent: <b>{props.row.qty}</b> {props.row.unit}
         </div>
       </div>
-    </div>
+      <label style="font-size:13px;font-weight:500">Stoc nou</label>
+      <input type="number" min="0" class="input" value={newQty()} onInput={(e) => setNewQty(Number(e.currentTarget.value) || 0)} />
+      <Show when={delta() !== 0}>
+        <div style={`font-size:13px;color:${delta() > 0 ? "var(--success,#198754)" : "var(--danger)"}`}>
+          Delta: {delta() > 0 ? "+" : ""}{delta()}
+        </div>
+      </Show>
+      <label style="font-size:13px;font-weight:500">Motiv / notă</label>
+      <input type="text" class="input" value={note()} placeholder="ex. inventar lunar"
+             onInput={(e) => setNote(e.currentTarget.value)} maxlength="500" />
+    </Modal>
   );
 }
 
 function InfoModal(props: { onClose: () => void }) {
   return (
-    <div class="sl-modal-overlay">
-      <div class="sl-modal" onClick={(e) => e.stopPropagation()} style="max-width:720px;width:95vw">
-        <div class="sl-modal-header">
-          <span class="sl-modal-title">ⓘ Ghid de utilizare — Stocuri</span>
-          <button class="btn btn-ghost btn-sm" onClick={props.onClose}>✕</button>
-        </div>
-        <div
-          class="sl-modal-body"
-          style="padding:20px 24px;max-height:75vh;overflow-y:auto;line-height:1.55;font-size:14px"
-        >
-          <p style="margin:0 0 16px;color:var(--text-muted)">
-            Pagina <b>Stocuri</b> îți arată în orice moment câte bucăți ai din fiecare produs la locația
-            dispozitivului curent, cât te-a costat marfa, cu cât o vinzi și cât profit faci la fiecare
-            tranzacție. Stocul scade automat când un bon este marcat ca <b>plătit</b> la Recepție și se
-            întoarce automat dacă bonul e șters sau revine la „Neplătit".
+    <Modal
+      open
+      title="ⓘ Ghid de utilizare — Stocuri"
+      onClose={props.onClose}
+      class="sl-modal"
+      style="max-width:720px;width:95vw"
+      bodyClass="sl-modal-body--stack"
+      footer={<>
+        <button class="btn btn-primary btn-sm" onClick={props.onClose}>Am înțeles</button>
+      </>}
+    >
+      <div
+        class="sl-modal-body"
+        style="padding:20px 24px;max-height:75vh;overflow-y:auto;line-height:1.55;font-size:14px"
+      >
+        <p style="margin:0 0 16px;color:var(--text-muted)">
+          Pagina <b>Stocuri</b> îți arată în orice moment câte bucăți ai din fiecare produs la locația
+          dispozitivului curent, cât te-a costat marfa, cu cât o vinzi și cât profit faci la fiecare
+          tranzacție. Stocul scade automat când un bon este marcat ca <b>plătit</b> la Recepție și se
+          întoarce automat dacă bonul e șters sau revine la „Neplătit".
+        </p>
+
+        <Section title="Pentru ce serveste">
+          <ul style="margin:6px 0;padding-left:20px">
+            <li><b>Inventar fizic în timp real</b> — vezi câte bucăți mai ai din fiecare produs.</li>
+            <li><b>Marjă vizibilă</b> — pentru fiecare produs apare procentul de profit (pe baza prețului de cumpărare introdus).</li>
+            <li><b>Alertă stoc mic</b> — produsele care au coborât sub un prag setat de tine sunt evidențiate vizual.</li>
+            <li><b>Audit complet</b> — fiecare mișcare (vânzare, intrare marfă, ajustare, storno) e logată: cine, când, ce, câte bucăți, la ce preț. Vezi raportul „Stocuri" în Rapoarte.</li>
+          </ul>
+        </Section>
+
+        <Section title="Locatia dispozitivului">
+          <p style="margin:6px 0">
+            Pagina afișează stocul <b>doar pentru locația asociată dispozitivului curent</b>. Asocierea se
+            face din <i>Configurări → Dispozitivul meu</i>. Dacă dispozitivul nu e legat de o locație,
+            pagina îți arată un mesaj clar. Același produs poate exista cu stocuri diferite la mai multe
+            locații — fiecare punct de lucru își vede propriul inventar.
           </p>
+        </Section>
 
-          <Section title="Pentru ce serveste">
-            <ul style="margin:6px 0;padding-left:20px">
-              <li><b>Inventar fizic în timp real</b> — vezi câte bucăți mai ai din fiecare produs.</li>
-              <li><b>Marjă vizibilă</b> — pentru fiecare produs apare procentul de profit (pe baza prețului de cumpărare introdus).</li>
-              <li><b>Alertă stoc mic</b> — produsele care au coborât sub un prag setat de tine sunt evidențiate vizual.</li>
-              <li><b>Audit complet</b> — fiecare mișcare (vânzare, intrare marfă, ajustare, storno) e logată: cine, când, ce, câte bucăți, la ce preț. Vezi raportul „Stocuri" în Rapoarte.</li>
-            </ul>
-          </Section>
+        <Section title="Coloanele din tabel">
+          <Field name="#">numărul de ordine al rândului în lista curentă (se actualizează după filtru/sortare).</Field>
+          <Field name="Departament / Categorie">ierarhia produsului din catalog. Poți sorta sau filtra după ele.</Field>
+          <Field name="Produs">denumirea produsului + unitatea de măsură. Dacă produsul e sub stoc minim, apare badge-ul roșu <i>stoc mic</i>.</Field>
+          <Field name="Preț cumpărare">cât te costă pe tine o bucată (cost). Este opțional; dacă e gol apare „—". Folosit pentru calculul marjei și a valorii stocului la cost.</Field>
+          <Field name="Preț vânzare">prețul cu care vinzi produsul (definit la produs, în Configurări → Produse și Servicii). Nu se modifică din pagina Stocuri.</Field>
+          <Field name="Marjă">procentul de profit calculat ca <code>(preț vânzare − preț cumpărare) / preț cumpărare × 100</code>. Apare „—" dacă nu ai setat preț cumpărare.</Field>
+          <Field name="Stoc">câte bucăți ai fizic la locația curentă. Apare colorat: roșu dacă e negativ, portocaliu dacă e sub stoc minim.</Field>
+          <Field name="Stoc minim">pragul de alertă. Când <i>Stoc ≤ Stoc minim</i> și pragul e &gt; 0, produsul e evidențiat. Setează 0 pentru „fără alertă".</Field>
+          <Field name="Acțiuni">butoanele <b>Edit</b> (preț cumpărare + stoc minim) și <b>Ajustează</b> (modifică direct cantitatea, ex. după inventar).</Field>
+        </Section>
 
-          <Section title="Locatia dispozitivului">
-            <p style="margin:6px 0">
-              Pagina afișează stocul <b>doar pentru locația asociată dispozitivului curent</b>. Asocierea se
-              face din <i>Configurări → Dispozitivul meu</i>. Dacă dispozitivul nu e legat de o locație,
-              pagina îți arată un mesaj clar. Același produs poate exista cu stocuri diferite la mai multe
-              locații — fiecare punct de lucru își vede propriul inventar.
-            </p>
-          </Section>
+        <Section title="Statistici (cardurile de sus)">
+          <Field name="Produse">numărul total de produse de tip „Produs" pentru acest cont (serviciile nu apar aici).</Field>
+          <Field name="Total bucăți">suma cantităților din toate produsele de la locația curentă.</Field>
+          <Field name="Sub stoc minim">câte produse au coborât sub pragul de alertă. Dacă e &gt; 0, cardul devine roșu — semn că trebuie să te aprovizionezi.</Field>
+        </Section>
 
-          <Section title="Coloanele din tabel">
-            <Field name="#">numărul de ordine al rândului în lista curentă (se actualizează după filtru/sortare).</Field>
-            <Field name="Departament / Categorie">ierarhia produsului din catalog. Poți sorta sau filtra după ele.</Field>
-            <Field name="Produs">denumirea produsului + unitatea de măsură. Dacă produsul e sub stoc minim, apare badge-ul roșu <i>stoc mic</i>.</Field>
-            <Field name="Preț cumpărare">cât te costă pe tine o bucată (cost). Este opțional; dacă e gol apare „—". Folosit pentru calculul marjei și a valorii stocului la cost.</Field>
-            <Field name="Preț vânzare">prețul cu care vinzi produsul (definit la produs, în Configurări → Produse și Servicii). Nu se modifică din pagina Stocuri.</Field>
-            <Field name="Marjă">procentul de profit calculat ca <code>(preț vânzare − preț cumpărare) / preț cumpărare × 100</code>. Apare „—" dacă nu ai setat preț cumpărare.</Field>
-            <Field name="Stoc">câte bucăți ai fizic la locația curentă. Apare colorat: roșu dacă e negativ, portocaliu dacă e sub stoc minim.</Field>
-            <Field name="Stoc minim">pragul de alertă. Când <i>Stoc ≤ Stoc minim</i> și pragul e &gt; 0, produsul e evidențiat. Setează 0 pentru „fără alertă".</Field>
-            <Field name="Acțiuni">butoanele <b>Edit</b> (preț cumpărare + stoc minim) și <b>Ajustează</b> (modifică direct cantitatea, ex. după inventar).</Field>
-          </Section>
+        <Section title="Filtrare si sortare">
+          <ul style="margin:6px 0;padding-left:20px">
+            <li>Câmpul de căutare din partea de sus filtrează după <b>nume produs, departament sau categorie</b> simultan.</li>
+            <li>Comutatorul <b>„Doar sub stoc minim"</b> îți arată instant produsele care necesită aprovizionare.</li>
+            <li>Click pe orice <b>header de coloană</b> sortează crescător; al doilea click sortează descrescător; al treilea click oprește sortarea pe acea coloană.</li>
+          </ul>
+        </Section>
 
-          <Section title="Statistici (cardurile de sus)">
-            <Field name="Produse">numărul total de produse de tip „Produs" pentru acest cont (serviciile nu apar aici).</Field>
-            <Field name="Total bucăți">suma cantităților din toate produsele de la locația curentă.</Field>
-            <Field name="Sub stoc minim">câte produse au coborât sub pragul de alertă. Dacă e &gt; 0, cardul devine roșu — semn că trebuie să te aprovizionezi.</Field>
-          </Section>
-
-          <Section title="Filtrare si sortare">
-            <ul style="margin:6px 0;padding-left:20px">
-              <li>Câmpul de căutare din partea de sus filtrează după <b>nume produs, departament sau categorie</b> simultan.</li>
-              <li>Comutatorul <b>„Doar sub stoc minim"</b> îți arată instant produsele care necesită aprovizionare.</li>
-              <li>Click pe orice <b>header de coloană</b> sortează crescător; al doilea click sortează descrescător; al treilea click oprește sortarea pe acea coloană.</li>
-            </ul>
-          </Section>
-
-          <Section title={'Buton „Edit" (creion ✎)'}>
-            <p style="margin:6px 0">
-              Deschide un modal unde poți modifica <b>Prețul de cumpărare</b> și/sau <b>Stoc minim</b> pentru
-              acel produs. Doar câmpurile efectiv schimbate se trimit la salvare. Modificările sunt globale
-              pentru produs (nu doar la locația curentă) — așa că marja calculată e consistentă oriunde
-              vezi produsul.
-            </p>
-          </Section>
-
-          <Section title={'Buton „Ajustează"'}>
-            <p style="margin:6px 0">
-              Folosește-l <b>doar pentru inventarul fizic</b> (ex. la sfârșit de lună numeri stocul și
-              constați diferențe). Setezi cantitatea reală și opțional o notă (ex. „inventar mai 2026").
-              Sistemul calculează automat <i>delta</i> (diferența pozitivă sau negativă) și o salvează ca
-              mișcare de tip <b>ADJUSTMENT</b> în raportul de mișcări — așa că rămâne urma cine și când a
-              modificat manual stocul.
-            </p>
-          </Section>
-
-          <Section title={'Buton „+ Intrare marfa"'}>
-            <p style="margin:6px 0">
-              Pentru când primești marfă de la furnizor (NIR). Alegi produsul, pui cantitatea (bucățile noi
-              care se adaugă la stocul actual), opțional prețul de cumpărare pentru această tranșă și o
-              notă (ex. numele furnizorului). Se salvează ca mișcare <b>PURCHASE</b>. <i>Notă: prețul de
-              cumpărare introdus aici nu suprascrie automat <code>cost_price</code> de pe produs — îl
-              actualizezi separat din butonul Edit, dacă vrei să reflecte noul cost.</i>
-            </p>
-          </Section>
-
-          <Section title="Cum scade stocul automat (vanzare)">
-            <ol style="margin:6px 0;padding-left:20px">
-              <li>În <b>POS</b> creezi un bon și adaugi produse pe el. <b>Stocul NU se modifică încă</b> — bonul e „Neplătit".</li>
-              <li>În <b>Recepție</b> marchezi bonul ca „Platit cash", „Platit cu cardul", „Platit prin OP" sau „Platit Partial".</li>
-              <li>În acel moment <b>stocul scade automat</b> cu cantitățile de pe bon, pentru fiecare produs (linie de tip „Produs"). Serviciile nu afectează stocul.</li>
-              <li>Se salvează o mișcare <b>SALE</b>: produs, cantitate, angajat, bon, prețul de vânzare și prețul de cumpărare snapshot.</li>
-            </ol>
-            <p style="margin:6px 0;color:var(--text-muted);font-size:13px">
-              Stocul <b>poate deveni negativ</b> dacă vinzi mai mult decât ai în sistem — alegere intenționată,
-              ca să nu blochezi vânzări reale când inventarul nu e actualizat. Cantitățile negative apar colorate
-              cu roșu și e un semnal clar că trebuie să faci o ajustare.
-            </p>
-          </Section>
-
-          <Section title="Storno (cand bonul revine)">
-            <ul style="margin:6px 0;padding-left:20px">
-              <li>Dacă un bon plătit este <b>marcat înapoi ca „Neplătit"</b> în Recepție, stocul se întoarce automat (mișcare <b>SALE_REVERSE</b>).</li>
-              <li>Dacă <b>ștergi</b> un bon plătit, la fel — stocul revine.</li>
-              <li>Dacă <b>editezi conținutul</b> unui bon deja plătit (adaugi/scoți produse sau modifici cantitățile), sistemul face automat reverse pe liniile vechi și apply pe noile. Stocul rămâne corect.</li>
-            </ul>
-          </Section>
-
-          <Section title="Mobile vs desktop">
-            <p style="margin:6px 0">
-              Pe ecrane sub 768px, tabelul se transformă în <b>carduri</b> cu același conținut, pentru a fi
-              ușor de folosit pe telefon. Butoanele Edit și Ajustează rămân disponibile pe fiecare card.
-            </p>
-          </Section>
-
-          <Section title="Rapoarte de stoc">
-            <p style="margin:6px 0">
-              În secțiunea <i>Rapoarte → Stocuri</i> ai 4 panouri: <b>Snapshot</b> (valoare stoc curent),
-              <b>Top produse vândute</b>, <b>Vânzări per angajat</b> și <b>Istoric mișcări</b> (toate
-              evenimentele SALE / SALE_REVERSE / PURCHASE / ADJUSTMENT, filtrabile pe perioadă).
-            </p>
-          </Section>
-
-          <p style="margin:18px 0 0;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border);padding-top:10px">
-            Pentru întrebări sau dacă întâlnești comportament neașteptat, contactează administratorul aplicației.
+        <Section title={'Buton „Edit" (creion ✎)'}>
+          <p style="margin:6px 0">
+            Deschide un modal unde poți modifica <b>Prețul de cumpărare</b> și/sau <b>Stoc minim</b> pentru
+            acel produs. Doar câmpurile efectiv schimbate se trimit la salvare. Modificările sunt globale
+            pentru produs (nu doar la locația curentă) — așa că marja calculată e consistentă oriunde
+            vezi produsul.
           </p>
-        </div>
-        <div class="sl-modal-footer">
-          <button class="btn btn-primary btn-sm" onClick={props.onClose}>Am înțeles</button>
-        </div>
+        </Section>
+
+        <Section title={'Buton „Ajustează"'}>
+          <p style="margin:6px 0">
+            Folosește-l <b>doar pentru inventarul fizic</b> (ex. la sfârșit de lună numeri stocul și
+            constați diferențe). Setezi cantitatea reală și opțional o notă (ex. „inventar mai 2026").
+            Sistemul calculează automat <i>delta</i> (diferența pozitivă sau negativă) și o salvează ca
+            mișcare de tip <b>ADJUSTMENT</b> în raportul de mișcări — așa că rămâne urma cine și când a
+            modificat manual stocul.
+          </p>
+        </Section>
+
+        <Section title={'Buton „+ Intrare marfa"'}>
+          <p style="margin:6px 0">
+            Pentru când primești marfă de la furnizor (NIR). Alegi produsul, pui cantitatea (bucățile noi
+            care se adaugă la stocul actual), opțional prețul de cumpărare pentru această tranșă și o
+            notă (ex. numele furnizorului). Se salvează ca mișcare <b>PURCHASE</b>. <i>Notă: prețul de
+            cumpărare introdus aici nu suprascrie automat <code>cost_price</code> de pe produs — îl
+            actualizezi separat din butonul Edit, dacă vrei să reflecte noul cost.</i>
+          </p>
+        </Section>
+
+        <Section title="Cum scade stocul automat (vanzare)">
+          <ol style="margin:6px 0;padding-left:20px">
+            <li>În <b>POS</b> creezi un bon și adaugi produse pe el. <b>Stocul NU se modifică încă</b> — bonul e „Neplătit".</li>
+            <li>În <b>Recepție</b> marchezi bonul ca „Platit cash", „Platit cu cardul", „Platit prin OP" sau „Platit Partial".</li>
+            <li>În acel moment <b>stocul scade automat</b> cu cantitățile de pe bon, pentru fiecare produs (linie de tip „Produs"). Serviciile nu afectează stocul.</li>
+            <li>Se salvează o mișcare <b>SALE</b>: produs, cantitate, angajat, bon, prețul de vânzare și prețul de cumpărare snapshot.</li>
+          </ol>
+          <p style="margin:6px 0;color:var(--text-muted);font-size:13px">
+            Stocul <b>poate deveni negativ</b> dacă vinzi mai mult decât ai în sistem — alegere intenționată,
+            ca să nu blochezi vânzări reale când inventarul nu e actualizat. Cantitățile negative apar colorate
+            cu roșu și e un semnal clar că trebuie să faci o ajustare.
+          </p>
+        </Section>
+
+        <Section title="Storno (cand bonul revine)">
+          <ul style="margin:6px 0;padding-left:20px">
+            <li>Dacă un bon plătit este <b>marcat înapoi ca „Neplătit"</b> în Recepție, stocul se întoarce automat (mișcare <b>SALE_REVERSE</b>).</li>
+            <li>Dacă <b>ștergi</b> un bon plătit, la fel — stocul revine.</li>
+            <li>Dacă <b>editezi conținutul</b> unui bon deja plătit (adaugi/scoți produse sau modifici cantitățile), sistemul face automat reverse pe liniile vechi și apply pe noile. Stocul rămâne corect.</li>
+          </ul>
+        </Section>
+
+        <Section title="Mobile vs desktop">
+          <p style="margin:6px 0">
+            Pe ecrane sub 768px, tabelul se transformă în <b>carduri</b> cu același conținut, pentru a fi
+            ușor de folosit pe telefon. Butoanele Edit și Ajustează rămân disponibile pe fiecare card.
+          </p>
+        </Section>
+
+        <Section title="Rapoarte de stoc">
+          <p style="margin:6px 0">
+            În secțiunea <i>Rapoarte → Stocuri</i> ai 4 panouri: <b>Snapshot</b> (valoare stoc curent),
+            <b>Top produse vândute</b>, <b>Vânzări per angajat</b> și <b>Istoric mișcări</b> (toate
+            evenimentele SALE / SALE_REVERSE / PURCHASE / ADJUSTMENT, filtrabile pe perioadă).
+          </p>
+        </Section>
+
+        <p style="margin:18px 0 0;color:var(--text-muted);font-size:12px;border-top:1px solid var(--border);padding-top:10px">
+          Pentru întrebări sau dacă întâlnești comportament neașteptat, contactează administratorul aplicației.
+        </p>
       </div>
-    </div>
+    </Modal>
   );
 }
 

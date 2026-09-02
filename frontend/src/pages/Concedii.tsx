@@ -267,9 +267,9 @@ function MiniCalendarPicker(props: {
   return (
     <div class="mini-cal">
       <div class="mini-cal-header">
-        <button type="button" class="mini-cal-nav" onClick={prev}>‹</button>
+        <button type="button" class="mini-cal-nav" onClick={prev} aria-label="Luna anterioară">‹</button>
         <span class="mini-cal-title">{RO_MONTHS_FULL[vM()]} {vY()}</span>
-        <button type="button" class="mini-cal-nav" onClick={next}>›</button>
+        <button type="button" class="mini-cal-nav" onClick={next} aria-label="Luna următoare">›</button>
       </div>
       <div class="mini-cal-grid">
         <For each={RO_DAYS_SHORT}>{(d) => <span class="mini-cal-dow">{d}</span>}</For>

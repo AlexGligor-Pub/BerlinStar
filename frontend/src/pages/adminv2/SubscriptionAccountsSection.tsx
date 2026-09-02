@@ -2,6 +2,7 @@ import { For, Show, createSignal, onMount } from "solid-js";
 import { adminFetch } from "./admin-auth";
 import { readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
+import Modal from "../../components/ui/Modal";
 
 interface AccountItem {
   account_id: number;
@@ -165,47 +166,45 @@ export default function SubscriptionAccountsSection() {
 
       <Show when={historyFor()}>
         {(item) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:760px" onClick={(e) => e.stopPropagation()}>
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Istoric plăţi — {item().account_name}</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => { setHistoryFor(null); setHistory([]); }}>✕</button>
-              </div>
-              <div class="sl-modal-body" style="padding:16px 20px">
-                <Show
-                  when={history().length > 0}
-                  fallback={<div style="color:var(--text-muted)">Nu există plăţi.</div>}
-                >
-                  <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
-                    <thead>
-                      <tr style="background:var(--surface-2,#f1f5f9);text-align:left">
-                        <th style="padding:6px 8px">Factura</th>
-                        <th style="padding:6px 8px">Plătit la</th>
-                        <th style="padding:6px 8px">EUR</th>
-                        <th style="padding:6px 8px">RON</th>
-                        <th style="padding:6px 8px">Status</th>
-                        <th style="padding:6px 8px">SPV</th>
+          <Modal
+            open
+            title={<>Istoric plăţi — {item().account_name}</>}
+            onClose={() => { setHistoryFor(null); setHistory([]); }}
+            style="max-width:760px"
+            bodyStyle="padding:16px 20px"
+          >
+            <Show
+              when={history().length > 0}
+              fallback={<div style="color:var(--text-muted)">Nu există plăţi.</div>}
+            >
+              <table style="width:100%;border-collapse:collapse;font-size:0.9rem">
+                <thead>
+                  <tr style="background:var(--surface-2,#f1f5f9);text-align:left">
+                    <th style="padding:6px 8px">Factura</th>
+                    <th style="padding:6px 8px">Plătit la</th>
+                    <th style="padding:6px 8px">EUR</th>
+                    <th style="padding:6px 8px">RON</th>
+                    <th style="padding:6px 8px">Status</th>
+                    <th style="padding:6px 8px">SPV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={history()}>
+                    {(p) => (
+                      <tr style="border-bottom:1px solid var(--border,#e5e7eb)">
+                        <td style="padding:6px 8px">{p.invoice_number || "—"}</td>
+                        <td style="padding:6px 8px">{p.paid_at?.split("T")[0] || "—"}</td>
+                        <td style="padding:6px 8px">{p.amount_eur.toFixed(2)}</td>
+                        <td style="padding:6px 8px">{p.amount_ron.toFixed(2)}</td>
+                        <td style="padding:6px 8px">{p.status}</td>
+                        <td style="padding:6px 8px">{p.anaf_status || "—"}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      <For each={history()}>
-                        {(p) => (
-                          <tr style="border-bottom:1px solid var(--border,#e5e7eb)">
-                            <td style="padding:6px 8px">{p.invoice_number || "—"}</td>
-                            <td style="padding:6px 8px">{p.paid_at?.split("T")[0] || "—"}</td>
-                            <td style="padding:6px 8px">{p.amount_eur.toFixed(2)}</td>
-                            <td style="padding:6px 8px">{p.amount_ron.toFixed(2)}</td>
-                            <td style="padding:6px 8px">{p.status}</td>
-                            <td style="padding:6px 8px">{p.anaf_status || "—"}</td>
-                          </tr>
-                        )}
-                      </For>
-                    </tbody>
-                  </table>
-                </Show>
-              </div>
-            </div>
-          </div>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </Show>
+          </Modal>
         )}
       </Show>
     </div>

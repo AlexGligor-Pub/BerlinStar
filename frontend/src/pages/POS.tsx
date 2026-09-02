@@ -8,6 +8,7 @@ import { device } from "../store/deviceStore";
 import ProductCard from "../components/ProductCard";
 import ShoppingList from "../components/ShoppingList";
 import SplitName from "../components/SplitName";
+import Modal from "../components/ui/Modal";
 
 const PAGE_SIZE = 20;
 
@@ -388,93 +389,101 @@ export default function POS() {
       </div>
 
       <Show when={showNewDevizConfirm()}>
-        <div class="sl-modal-overlay" style="z-index:500">
-          <div class="sl-modal" style="max-width:520px;width:100%;text-align:center">
-            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
-              <span class="sl-modal-title">Deviz Nou</span>
-            </div>
-            <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
-                Lista curentă (produse, client, mașină, observații, angajat, departament și context POS-Hotel) va fi <strong>ștearsă complet</strong>.
-                <br />Continui?
-              </p>
-            </div>
-            <div class="sl-modal-footer" style="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none">
-              <button
-                class="btn btn-ghost"
-                style="min-width:160px;min-height:96px;font-size:16px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
-                onClick={() => setShowNewDevizConfirm(false)}
-              >
-                Anulează
-              </button>
-              <button
-                class="btn btn-primary"
-                style="min-width:160px;min-height:96px;font-size:16px;font-weight:700;border-radius:10px"
-                onClick={confirmNewDeviz}
-              >
-                Începe Deviz Nou
-              </button>
-            </div>
+        <Modal
+          open
+          title="Deviz Nou"
+          hideClose
+          style="max-width:520px;width:100%;text-align:center"
+          overlayStyle="z-index:500"
+          headerStyle="justify-content:center;border-bottom:none;padding-bottom:0"
+          footerStyle="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none"
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-ghost"
+              style="min-width:160px;min-height:96px;font-size:16px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
+              onClick={() => setShowNewDevizConfirm(false)}
+            >
+              Anulează
+            </button>
+            <button
+              class="btn btn-primary"
+              style="min-width:160px;min-height:96px;font-size:16px;font-weight:700;border-radius:10px"
+              onClick={confirmNewDeviz}
+            >
+              Începe Deviz Nou
+            </button>
+          </>}
+        >
+          <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
+              Lista curentă (produse, client, mașină, observații, angajat, departament și context POS-Hotel) va fi <strong>ștearsă complet</strong>.
+              <br />Continui?
+            </p>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       <Show when={showDevizModal()}>
-        <div class="sl-modal-overlay">
-          <div class="deviz-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Deschide existent</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowDevizModal(false)}>✕</button>
-            </div>
-            <input
-              class="input"
-              type="search"
-              placeholder="Cauta dupa nume..."
-              value={devizSearch()}
-              onInput={(e) => { setDevizSearch(e.currentTarget.value); setVisibleCount(PAGE_SIZE); }}
-              autofocus
-            />
-            <div
-              class="deviz-modal-list"
-              onScroll={(e) => {
-                const el = e.currentTarget;
-                if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
-                  setVisibleCount((c) => Math.min(c + PAGE_SIZE, unpaidFiltered().length));
-                }
-              }}
-            >
-              <Show when={unpaidFiltered().length === 0}>
-                <div class="deviz-modal-empty">Nicio fișă deschisă</div>
-              </Show>
-              <For each={unpaidFiltered().slice(0, visibleCount())}>
-                {(r) => {
-                  const isFdl = r.source === "fdl";
-                  return (
-                    <button
-                      class="deviz-modal-row"
-                      classList={{ "deviz-modal-row--fdl": isFdl }}
-                      onClick={() => selectDeviz(r)}
-                    >
-                      <span
-                        class="deviz-modal-row-tag"
-                        classList={{ "deviz-modal-row-tag--fdl": isFdl, "deviz-modal-row-tag--deviz": !isFdl }}
-                      >
-                        {isFdl ? "FDL" : "DEVIZ"}
-                      </span>
-                      <span class="deviz-modal-row-title">{r.titlu}</span>
-                      <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
-                    </button>
-                  );
-                }}
-              </For>
-            </div>
+        <Modal
+          open
+          bare
+          class="deviz-modal"
+          ariaLabel="Deschide existent"
+          closeOnEscape={false}
+        >
+          <div class="sl-modal-header">
+            <span class="sl-modal-title">Deschide existent</span>
+            <button type="button" class="btn btn-ghost btn-sm" onClick={() => setShowDevizModal(false)} aria-label="Închide">✕</button>
           </div>
-        </div>
+          <input
+            class="input"
+            type="search"
+            placeholder="Cauta dupa nume..."
+            value={devizSearch()}
+            onInput={(e) => { setDevizSearch(e.currentTarget.value); setVisibleCount(PAGE_SIZE); }}
+            autofocus
+          />
+          <div
+            class="deviz-modal-list"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) {
+                setVisibleCount((c) => Math.min(c + PAGE_SIZE, unpaidFiltered().length));
+              }
+            }}
+          >
+            <Show when={unpaidFiltered().length === 0}>
+              <div class="deviz-modal-empty">Nicio fișă deschisă</div>
+            </Show>
+            <For each={unpaidFiltered().slice(0, visibleCount())}>
+              {(r) => {
+                const isFdl = r.source === "fdl";
+                return (
+                  <button
+                    class="deviz-modal-row"
+                    classList={{ "deviz-modal-row--fdl": isFdl }}
+                    onClick={() => selectDeviz(r)}
+                  >
+                    <span
+                      class="deviz-modal-row-tag"
+                      classList={{ "deviz-modal-row-tag--fdl": isFdl, "deviz-modal-row-tag--deviz": !isFdl }}
+                    >
+                      {isFdl ? "FDL" : "DEVIZ"}
+                    </span>
+                    <span class="deviz-modal-row-title">{r.titlu}</span>
+                    <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
+                  </button>
+                );
+              }}
+            </For>
+          </div>
+        </Modal>
       </Show>
     </div>
   );

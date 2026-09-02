@@ -7,6 +7,7 @@ import { readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
 import { fmtDate } from "./shared";
+import Modal from "../../components/ui/Modal";
 
 type Status = "pending" | "approved" | "rejected";
 
@@ -415,93 +416,96 @@ export default function RotiMasinaAnvelopeSection() {
 
       {/* Modal: Adaugă marcă */}
       <Show when={addOpen()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:480px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Marcă nouă (aprobată direct)</span>
+        <Modal
+          open
+          title="Marcă nouă (aprobată direct)"
+          hideClose
+          style="max-width:480px;width:100%"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+        >
+          <form onSubmit={doAdd} style="display:contents">
+            <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+              <label class="form-label">Nume marcă</label>
+              <input
+                class="input"
+                type="text"
+                value={addName()}
+                onInput={(e) => setAddName(e.currentTarget.value)}
+                placeholder="ex: Michelin"
+                autofocus
+              />
+              <Show when={addErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{addErr()}</p>
+              </Show>
             </div>
-            <form onSubmit={doAdd} style="display:contents">
-              <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-                <label class="form-label">Nume marcă</label>
-                <input
-                  class="input"
-                  type="text"
-                  value={addName()}
-                  onInput={(e) => setAddName(e.currentTarget.value)}
-                  placeholder="ex: Michelin"
-                  autofocus
-                />
-                <Show when={addErr()}>
-                  <p style="color:var(--danger);font-size:13px;margin:0">{addErr()}</p>
-                </Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button type="button" class="btn btn-ghost btn-sm" disabled={addSaving()} onClick={() => setAddOpen(false)}>Anulează</button>
-                <button type="submit" class="btn btn-primary btn-sm" disabled={addSaving() || !addName().trim()}>
-                  {addSaving() ? "Se salvează..." : "Salvează"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div class="sl-modal-footer">
+              <button type="button" class="btn btn-ghost btn-sm" disabled={addSaving()} onClick={() => setAddOpen(false)}>Anulează</button>
+              <button type="submit" class="btn btn-primary btn-sm" disabled={addSaving() || !addName().trim()}>
+                {addSaving() ? "Se salvează..." : "Salvează"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       </Show>
 
       {/* Modal: Editează marcă */}
       <Show when={editTarget()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:480px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Editează marcă</span>
+        <Modal
+          open
+          title="Editează marcă"
+          hideClose
+          style="max-width:480px;width:100%"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+        >
+          <form onSubmit={doEdit} style="display:contents">
+            <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
+              <label class="form-label">Nume marcă</label>
+              <input
+                class="input"
+                type="text"
+                value={editName()}
+                onInput={(e) => setEditName(e.currentTarget.value)}
+                autofocus
+              />
+              <Show when={editErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
+              </Show>
             </div>
-            <form onSubmit={doEdit} style="display:contents">
-              <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-                <label class="form-label">Nume marcă</label>
-                <input
-                  class="input"
-                  type="text"
-                  value={editName()}
-                  onInput={(e) => setEditName(e.currentTarget.value)}
-                  autofocus
-                />
-                <Show when={editErr()}>
-                  <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
-                </Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button type="button" class="btn btn-ghost btn-sm" disabled={editSaving()} onClick={() => setEditTarget(null)}>Anulează</button>
-                <button type="submit" class="btn btn-primary btn-sm" disabled={editSaving() || !editName().trim()}>
-                  {editSaving() ? "Se salvează..." : "Salvează"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div class="sl-modal-footer">
+              <button type="button" class="btn btn-ghost btn-sm" disabled={editSaving()} onClick={() => setEditTarget(null)}>Anulează</button>
+              <button type="submit" class="btn btn-primary btn-sm" disabled={editSaving() || !editName().trim()}>
+                {editSaving() ? "Se salvează..." : "Salvează"}
+              </button>
+            </div>
+          </form>
+        </Modal>
       </Show>
 
       {/* Modal: Confirmare ștergere */}
       <Show when={delTarget()}>
         {(t) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:480px;width:100%">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Șterge marcă</span>
-              </div>
-              <div class="sl-modal-body" style="padding:16px 20px">
-                <p style="margin:0;font-size:14px;line-height:1.5">
-                  Ștergi marca <strong>„{t().nume}”</strong>? Anvelopele/montajele care o referă păstrează istoricul, dar marca nu va mai apărea în dropdown-uri.
-                </p>
-              </div>
-              <div class="sl-modal-footer">
-                <button class="btn btn-ghost btn-sm" disabled={deleting()} onClick={() => setDelTarget(null)}>Anulează</button>
-                <button
-                  class="btn btn-sm"
-                  style="background:var(--danger,#ef4444);color:#fff"
-                  disabled={deleting()}
-                  onClick={doDelete}
-                >{deleting() ? "Se șterge..." : "Șterge"}</button>
-              </div>
-            </div>
-          </div>
+          <Modal
+            open
+            title="Șterge marcă"
+            hideClose
+            style="max-width:480px;width:100%"
+            bodyStyle="padding:16px 20px"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" disabled={deleting()} onClick={() => setDelTarget(null)}>Anulează</button>
+              <button
+                class="btn btn-sm"
+                style="background:var(--danger,#ef4444);color:#fff"
+                disabled={deleting()}
+                onClick={doDelete}
+              >{deleting() ? "Se șterge..." : "Șterge"}</button>
+            </>}
+          >
+            <p style="margin:0;font-size:14px;line-height:1.5">
+              Ștergi marca <strong>„{t().nume}”</strong>? Anvelopele/montajele care o referă păstrează istoricul, dar marca nu va mai apărea în dropdown-uri.
+            </p>
+          </Modal>
         )}
       </Show>
     </div>

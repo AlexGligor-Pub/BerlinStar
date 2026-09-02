@@ -21,6 +21,7 @@ import {
 import Modal from "./ui/Modal";
 import { readApiError, type ApiFetchOptions } from "../utils/api";
 import { notify } from "../store/notificationsStore";
+import { useIsTablet } from "../hooks/createMediaQuery";
 import { ALL_ROLES, ROLE_DESCRIPTION, ROLE_LABEL, type Role } from "../store/permissions";
 import { exportCSV, exportPDF } from "../pages/configurari/shared";
 
@@ -264,8 +265,7 @@ export default function UsersManager(props: UsersManagerProps) {
   const [filter, setFilter] = createSignal("");
   const [sorting, setSorting] = createSignal<SortingState>([{ id: "username", desc: false }]);
 
-  const [isMobile, setIsMobile] = createSignal(window.innerWidth < 900);
-  function onResize() { setIsMobile(window.innerWidth < 900); }
+  const isMobile = useIsTablet();
 
   // Modaluri: „create" | „edit" | „password" | „delete" | „sessions"
   const [modal, setModal] = createSignal<null | "create" | "edit" | "password" | "delete" | "sessions">(null);
@@ -299,10 +299,8 @@ export default function UsersManager(props: UsersManagerProps) {
   }
 
   onMount(() => {
-    window.addEventListener("resize", onResize);
     void load();
   });
-  onCleanup(() => window.removeEventListener("resize", onResize));
 
   function closeModal() {
     setModal(null);

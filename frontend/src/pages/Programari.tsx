@@ -12,6 +12,8 @@ import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { apiFetch } from "../utils/api";
+import { createDebouncedSearch } from "../utils/debounce";
+import Modal from "../components/ui/Modal";
 
 // ─── Calendar constants ──────────────────────────────────────────────────────
 
@@ -497,16 +499,24 @@ export default function Programari() {
     setFormError(null);
   }
 
-  async function searchClients(val: string) {
-    if (!val.trim()) { setClientRes([]); setClientOpen(false); return; }
-    setClientSearching(true);
-    try {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=10`);
-      if (!res.ok) return;
+  const clientSearch = createDebouncedSearch<ClientItem[] | null>({
+    fetch: async (val, signal) => {
+      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=10`, { signal });
+      if (!res.ok) return null;
       const data = await res.json();
-      setClientRes((data.items ?? []).map((c: any) => ({ id: c.id, nume: c.nume, numar_masina: c.numar_masina ?? null })));
+      return (data.items ?? []).map((c: any) => ({ id: c.id, nume: c.nume, numar_masina: c.numar_masina ?? null }));
+    },
+    onResult: (items) => {
+      if (!items) return;
+      setClientRes(items);
       setClientOpen(true); // deschide mereu — chiar si gol, sa arate optiunea de creare
-    } finally { setClientSearching(false); }
+    },
+    onPending: setClientSearching,
+  });
+  async function searchClients(val: string, immediate = false): Promise<void> {
+    if (!val.trim()) { clientSearch.cancel(); setClientRes([]); setClientOpen(false); return; }
+    if (immediate) await clientSearch.searchNow(val);
+    else clientSearch.search(val);
   }
 
   function pickClient(c: ClientItem) {
@@ -587,9 +597,9 @@ export default function Programari() {
   const renderMiniCal = (opts: { closeOnPick?: boolean } = {}) => (
     <div class="prgm-mini-cal">
       <div class="prgm-mini-cal-header">
-        <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={prevMiniMonth}>‹</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={prevMiniMonth} aria-label="Luna anterioară">‹</button>
         <span class="prgm-mini-cal-title">{miniMonthLabel()}</span>
-        <button class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={nextMiniMonth}>›</button>
+        <button type="button" class="btn btn-ghost btn-sm" style="padding:0 8px" onClick={nextMiniMonth} aria-label="Luna următoare">›</button>
       </div>
       <div class="prgm-mini-cal-grid">
         <For each={MINI_DAY_NAMES}>{(n) => <div class="prgm-mini-dow">{n}</div>}</For>
@@ -747,278 +757,274 @@ export default function Programari() {
       {/* ── Detail modal ────────────────────────────────────────────────── */}
       <Show when={selectedAppt()}>
         {(appt) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:440px;width:100%" onClick={(e) => e.stopPropagation()}>
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">{appt().titlu}</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setSelectedAppt(null)}>✕</button>
-              </div>
-              <div class="sl-modal-body" style="padding:16px 20px;display:grid;gap:10px;font-size:14px">
-                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                  <span style={`display:inline-block;padding:3px 10px;border-radius:12px;background:${STATUS_COLORS[appt().status]};color:#fff;font-size:12px;font-weight:600`}>{appt().status}</span>
-                  <Show when={appt().departmentName}>
-                    <span style="color:var(--text-muted);font-size:12px">{appt().departmentName}</span>
-                  </Show>
-                </div>
-                <div>
-                  <span style="color:var(--text-muted);font-size:12px">Data</span><br />
-                  {new Date(appt().startTime).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </div>
-                <div>
-                  <span style="color:var(--text-muted);font-size:12px">Interval orar</span><br />
-                  {formatTime(appt().startTime)} – {formatTime(appt().endTime)}
-                </div>
-                <Show when={appt().clientNume}>
-                  <div>
-                    <span style="color:var(--text-muted);font-size:12px">Client</span><br />
-                    {appt().clientNume}
-                  </div>
+          <Modal
+            open
+            title={appt().titlu}
+            onClose={() => setSelectedAppt(null)}
+            style="max-width:440px;width:100%"
+            footerStyle="flex-wrap:wrap;gap:6px"
+            bodyStyle="padding:16px 20px;display:grid;gap:10px;font-size:14px"
+            footer={<>
+              <Show when={canManage() && deleteConfirm() === appt().id}>
+                <span style="font-size:13px;color:var(--danger)">Confirmi?</span>
+                <button class="btn btn-sm" style="background:var(--danger,#ef4444);color:#fff" onClick={() => handleDelete(appt().id)}>Șterge</button>
+                <button class="btn btn-ghost btn-sm" onClick={() => setDeleteConfirm(null)}>Nu</button>
+              </Show>
+              <Show when={deleteConfirm() !== appt().id}>
+                <Show when={canManage()}>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--danger,#ef4444)" onClick={() => setDeleteConfirm(appt().id)}>Șterge</button>
                 </Show>
-                <Show when={appt().notite}>
-                  <div>
-                    <span style="color:var(--text-muted);font-size:12px">Notițe</span><br />
-                    <span style="white-space:pre-wrap">{appt().notite}</span>
-                  </div>
+                <div style="flex:1" />
+                <button class="btn btn-ghost btn-sm" onClick={() => openEditModal(appt())}>Editează</button>
+                <Show when={appt().status === "Programat" || appt().status === "In lucru"}>
+                  <button class="btn btn-primary btn-sm" onClick={() => handleStartWork(appt())}>Începe lucru</button>
                 </Show>
-              </div>
-              <div class="sl-modal-footer" style="flex-wrap:wrap;gap:6px">
-                <Show when={canManage() && deleteConfirm() === appt().id}>
-                  <span style="font-size:13px;color:var(--danger)">Confirmi?</span>
-                  <button class="btn btn-sm" style="background:var(--danger,#ef4444);color:#fff" onClick={() => handleDelete(appt().id)}>Șterge</button>
-                  <button class="btn btn-ghost btn-sm" onClick={() => setDeleteConfirm(null)}>Nu</button>
-                </Show>
-                <Show when={deleteConfirm() !== appt().id}>
-                  <Show when={canManage()}>
-                    <button class="btn btn-ghost btn-sm" style="color:var(--danger,#ef4444)" onClick={() => setDeleteConfirm(appt().id)}>Șterge</button>
-                  </Show>
-                  <div style="flex:1" />
-                  <button class="btn btn-ghost btn-sm" onClick={() => openEditModal(appt())}>Editează</button>
-                  <Show when={appt().status === "Programat" || appt().status === "In lucru"}>
-                    <button class="btn btn-primary btn-sm" onClick={() => handleStartWork(appt())}>Începe lucru</button>
-                  </Show>
-                </Show>
-              </div>
+              </Show>
+            </>}
+          >
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span style={`display:inline-block;padding:3px 10px;border-radius:12px;background:${STATUS_COLORS[appt().status]};color:#fff;font-size:12px;font-weight:600`}>{appt().status}</span>
+              <Show when={appt().departmentName}>
+                <span style="color:var(--text-muted);font-size:12px">{appt().departmentName}</span>
+              </Show>
             </div>
-          </div>
+            <div>
+              <span style="color:var(--text-muted);font-size:12px">Data</span><br />
+              {new Date(appt().startTime).toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+            </div>
+            <div>
+              <span style="color:var(--text-muted);font-size:12px">Interval orar</span><br />
+              {formatTime(appt().startTime)} – {formatTime(appt().endTime)}
+            </div>
+            <Show when={appt().clientNume}>
+              <div>
+                <span style="color:var(--text-muted);font-size:12px">Client</span><br />
+                {appt().clientNume}
+              </div>
+            </Show>
+            <Show when={appt().notite}>
+              <div>
+                <span style="color:var(--text-muted);font-size:12px">Notițe</span><br />
+                <span style="white-space:pre-wrap">{appt().notite}</span>
+              </div>
+            </Show>
+          </Modal>
         )}
       </Show>
 
       {/* ── Calendar modal (doar pe mobil; pe desktop e în sidebar) ───── */}
       <Show when={calendarOpen()}>
-        <div class="sl-modal-overlay" onClick={() => setCalendarOpen(false)}>
-          <div class="sl-modal prgm-cal-modal" onClick={(e) => e.stopPropagation()}>
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Calendar</span>
-              <button class="btn btn-ghost btn-sm" aria-label="Închide" onClick={() => setCalendarOpen(false)}>✕</button>
-            </div>
-            <div class="sl-modal-body" style="display:flex;flex-direction:column;gap:10px">
-              <button class="btn btn-ghost btn-sm w-full" onClick={() => { setWeekOffset(0); setCalendarOpen(false); }}>Azi</button>
-              {renderMiniCal({ closeOnPick: true })}
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(false)}>Închide</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          open
+          title="Calendar"
+          onClose={() => setCalendarOpen(false)}
+          class="prgm-cal-modal"
+          bodyStyle="display:flex;flex-direction:column;gap:10px"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setCalendarOpen(false)}>Închide</button>
+          </>}
+        >
+          <button class="btn btn-ghost btn-sm w-full" onClick={() => { setWeekOffset(0); setCalendarOpen(false); }}>Azi</button>
+          {renderMiniCal({ closeOnPick: true })}
+        </Modal>
       </Show>
 
       {/* ── Create / Edit modal ─────────────────────────────────────────── */}
       <Show when={showFormModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal prgm-form-modal" onClick={(e) => e.stopPropagation()}>
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">{formAppt() ? "Editează programare" : "Programare nouă"}</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowFormModal(false)}>✕</button>
-            </div>
-            <div class="sl-modal-body prgm-form-body">
+        <Modal
+          open
+          title={formAppt() ? "Editează programare" : "Programare nouă"}
+          onClose={() => setShowFormModal(false)}
+          class="prgm-form-modal"
+          closeOnEscape={false}
+          bodyClass="prgm-form-body"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowFormModal(false)}>Anulează</button>
+            <button class="btn btn-primary btn-sm" disabled={formSaving()} onClick={handleFormSave}>
+              {formSaving() ? "Se salvează..." : "Salvează"}
+            </button>
+          </>}
+        >
 
-              {/* Titlu */}
+          {/* Titlu */}
+          <input
+            class="input"
+            placeholder="Titlu *"
+            value={formTitlu()}
+            onInput={(e) => setFormTitlu(e.currentTarget.value)}
+          />
+
+          {/* Notite */}
+          <textarea
+            class="input"
+            placeholder="Notițe (opțional)"
+            rows={2}
+            style="resize:vertical"
+            value={formNotite()}
+            onInput={(e) => setFormNotite(e.currentTarget.value)}
+          />
+
+          {/* Client search */}
+          <div style="position:relative">
+            <div style="display:flex;gap:6px;align-items:center">
               <input
                 class="input"
-                placeholder="Titlu *"
-                value={formTitlu()}
-                onInput={(e) => setFormTitlu(e.currentTarget.value)}
+                style="flex:1;font-size:13px"
+                placeholder="Caută client după nume sau nr. mașină..."
+                value={clientQ()}
+                disabled={!!formClient()}
+                onInput={(e) => { setClientQ(e.currentTarget.value); void searchClients(e.currentTarget.value); }}
+                onFocus={() => { if (clientRes().length || clientQ().trim()) setClientOpen(true); }}
+                onBlur={() => setTimeout(() => setClientOpen(false), 200)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void searchClients(clientQ(), true); } }}
               />
-
-              {/* Notite */}
-              <textarea
-                class="input"
-                placeholder="Notițe (opțional)"
-                rows={2}
-                style="resize:vertical"
-                value={formNotite()}
-                onInput={(e) => setFormNotite(e.currentTarget.value)}
-              />
-
-              {/* Client search */}
-              <div style="position:relative">
-                <div style="display:flex;gap:6px;align-items:center">
-                  <input
-                    class="input"
-                    style="flex:1;font-size:13px"
-                    placeholder="Caută client după nume sau nr. mașină..."
-                    value={clientQ()}
-                    disabled={!!formClient()}
-                    onInput={(e) => { setClientQ(e.currentTarget.value); void searchClients(e.currentTarget.value); }}
-                    onFocus={() => { if (clientRes().length || clientQ().trim()) setClientOpen(true); }}
-                    onBlur={() => setTimeout(() => setClientOpen(false), 200)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void searchClients(clientQ()); } }}
-                  />
-                  <Show when={!formClient()}>
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      style="white-space:nowrap;flex-shrink:0"
-                      disabled={clientSearching()}
-                      onClick={() => void searchClients(clientQ())}
-                    >
-                      {clientSearching() ? "..." : "Caută"}
-                    </button>
-                  </Show>
-                  <Show when={formClient()}>
-                    <button class="btn btn-ghost btn-sm" style="padding:0 8px;flex-shrink:0" onClick={clearClient}>✕</button>
-                  </Show>
-                </div>
-                <Show when={clientOpen()}>
-                  <div style="position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card,#fff);border:1px solid var(--border);border-radius:6px;z-index:30;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)">
-                    <For each={clientRes()}>{(c) =>
-                      <div
-                        style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center"
-                        onMouseDown={() => pickClient(c)}
-                      >
-                        <span>{c.nume}</span>
-                        <Show when={c.numar_masina}>
-                          <span style="color:var(--text-muted);font-size:11px">{c.numar_masina}</span>
-                        </Show>
-                      </div>
-                    }</For>
-                    <Show when={clientQ().trim()}>
-                      <div
-                        style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--primary,#3b82f6);border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"
-                        onMouseDown={() => {
-                          setClientOpen(false);
-                          setShowClientCreate(true);
-                          setClientCreateNume(clientQ());
-                        }}
-                      >
-                        <span style="font-weight:700">+</span> Creează client nou: <em style="margin-left:2px">"{clientQ()}"</em>
-                      </div>
+              <Show when={!formClient()}>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  style="white-space:nowrap;flex-shrink:0"
+                  disabled={clientSearching()}
+                  onClick={() => void searchClients(clientQ(), true)}
+                >
+                  {clientSearching() ? "..." : "Caută"}
+                </button>
+              </Show>
+              <Show when={formClient()}>
+                <button type="button" class="btn btn-ghost btn-sm" style="padding:0 8px;flex-shrink:0" onClick={clearClient} aria-label="Șterge client">✕</button>
+              </Show>
+            </div>
+            <Show when={clientOpen()}>
+              <div style="position:absolute;top:calc(100% + 2px);left:0;right:0;background:var(--bg-card,#fff);border:1px solid var(--border);border-radius:6px;z-index:30;max-height:200px;overflow-y:auto;box-shadow:0 4px 12px rgba(0,0,0,.12)">
+                <For each={clientRes()}>{(c) =>
+                  <div
+                    style="padding:8px 12px;cursor:pointer;font-size:13px;display:flex;gap:8px;align-items:center"
+                    onMouseDown={() => pickClient(c)}
+                  >
+                    <span>{c.nume}</span>
+                    <Show when={c.numar_masina}>
+                      <span style="color:var(--text-muted);font-size:11px">{c.numar_masina}</span>
                     </Show>
+                  </div>
+                }</For>
+                <Show when={clientQ().trim()}>
+                  <div
+                    style="padding:8px 12px;cursor:pointer;font-size:13px;color:var(--primary,#3b82f6);border-top:1px solid var(--border);display:flex;align-items:center;gap:6px"
+                    onMouseDown={() => {
+                      setClientOpen(false);
+                      setShowClientCreate(true);
+                      setClientCreateNume(clientQ());
+                    }}
+                  >
+                    <span style="font-weight:700">+</span> Creează client nou: <em style="margin-left:2px">"{clientQ()}"</em>
                   </div>
                 </Show>
               </div>
+            </Show>
+          </div>
 
-              {/* Quick client create */}
-              <Show when={showClientCreate()}>
-                <div style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:grid;gap:8px;background:var(--bg-hover,#f9fafb)">
-                  <div style="font-size:12px;font-weight:600;color:var(--text-muted)">Client nou</div>
-                  <div style="display:grid;grid-template-columns:90px 1fr;gap:6px">
-                    <select class="input" style="font-size:12px" value={clientCreateTip()} onChange={(e) => setClientCreateTip(e.currentTarget.value as "fizic" | "juridic")}>
-                      <option value="fizic">Fizic</option>
-                      <option value="juridic">Juridic</option>
-                    </select>
-                    <input class="input" style="font-size:13px" placeholder="Nume *" value={clientCreateNume()} onInput={(e) => setClientCreateNume(e.currentTarget.value)} />
-                  </div>
-                  <Show when={clientCreateTip() === "fizic"}>
-                    <input class="input" style="font-size:13px" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={clientCreateCnp()} onFocus={(e) => e.currentTarget.select()} onInput={(e) => setClientCreateCnp(e.currentTarget.value)} />
-                  </Show>
-                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-                    <input class="input" style="font-size:13px" placeholder="Telefon" value={clientCreateTelefon()} onInput={(e) => setClientCreateTelefon(e.currentTarget.value)} />
-                    <input class="input" style="font-size:13px" placeholder="Nr. mașină" value={clientCreateMasina()} onInput={(e) => setClientCreateMasina(e.currentTarget.value)} />
-                  </div>
-                  <div style="display:flex;gap:6px;justify-content:flex-end">
-                    <button class="btn btn-ghost btn-sm" onClick={() => setShowClientCreate(false)}>Anulează</button>
-                    <button class="btn btn-primary btn-sm" disabled={clientCreateSaving() || !clientCreateNume().trim()} onClick={handleClientCreate}>
-                      {clientCreateSaving() ? "Se salvează..." : "Salvează client"}
-                    </button>
-                  </div>
-                </div>
+          {/* Quick client create */}
+          <Show when={showClientCreate()}>
+            <div style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:grid;gap:8px;background:var(--bg-hover,#f9fafb)">
+              <div style="font-size:12px;font-weight:600;color:var(--text-muted)">Client nou</div>
+              <div style="display:grid;grid-template-columns:90px 1fr;gap:6px">
+                <select class="input" style="font-size:12px" value={clientCreateTip()} onChange={(e) => setClientCreateTip(e.currentTarget.value as "fizic" | "juridic")}>
+                  <option value="fizic">Fizic</option>
+                  <option value="juridic">Juridic</option>
+                </select>
+                <input class="input" style="font-size:13px" placeholder="Nume *" value={clientCreateNume()} onInput={(e) => setClientCreateNume(e.currentTarget.value)} />
+              </div>
+              <Show when={clientCreateTip() === "fizic"}>
+                <input class="input" style="font-size:13px" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={clientCreateCnp()} onFocus={(e) => e.currentTarget.select()} onInput={(e) => setClientCreateCnp(e.currentTarget.value)} />
               </Show>
-
-              {/* Date + time grid */}
-              <div class="prgm-form-row3">
-                <div>
-                  <div class="prgm-form-label">Data</div>
-                  <input
-                    class="input"
-                    type="date"
-                    value={dateToInputValue(formDay())}
-                    onInput={(e) => setFormDay(new Date(e.currentTarget.value + "T00:00:00"))}
-                  />
-                </div>
-                <div>
-                  <div class="prgm-form-label">Ora start</div>
-                  <input
-                    class="input"
-                    type="time"
-                    step={1800}
-                    value={minToTimeInput(formStartMin())}
-                    onInput={(e) => {
-                      const m = timeInputToMin(e.currentTarget.value);
-                      setFormStartMin(m);
-                      if (formEndMin() <= m) setFormEndMin(m + 60);
-                    }}
-                  />
-                </div>
-                <div>
-                  <div class="prgm-form-label">Ora sfârșit</div>
-                  <input
-                    class="input"
-                    type="time"
-                    step={1800}
-                    value={minToTimeInput(formEndMin())}
-                    onInput={(e) => setFormEndMin(timeInputToMin(e.currentTarget.value))}
-                  />
-                </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <input class="input" style="font-size:13px" placeholder="Telefon" value={clientCreateTelefon()} onInput={(e) => setClientCreateTelefon(e.currentTarget.value)} />
+                <input class="input" style="font-size:13px" placeholder="Nr. mașină" value={clientCreateMasina()} onInput={(e) => setClientCreateMasina(e.currentTarget.value)} />
               </div>
-
-              {/* Duration quick buttons */}
-              <div>
-                <div class="prgm-form-label">Durată rapidă</div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap">
-                  <For each={[30, 40, 50, 60, 90, 120]}>{(dur) =>
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      style="font-size:12px;min-width:52px"
-                      onClick={() => setFormEndMin(formStartMin() + dur)}
-                    >{dur} min</button>
-                  }</For>
-                </div>
+              <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button class="btn btn-ghost btn-sm" onClick={() => setShowClientCreate(false)}>Anulează</button>
+                <button class="btn btn-primary btn-sm" disabled={clientCreateSaving() || !clientCreateNume().trim()} onClick={handleClientCreate}>
+                  {clientCreateSaving() ? "Se salvează..." : "Salvează client"}
+                </button>
               </div>
-
-              {/* Status + Departament */}
-              <div class="prgm-form-row2">
-                <div>
-                  <div class="prgm-form-label">Status</div>
-                  <select class="input" style="font-size:13px" value={formStatus()} onChange={(e) => setFormStatus(e.currentTarget.value as ProgramareStatus)}>
-                    <option value="Programat">Programat</option>
-                    <option value="In lucru">In lucru</option>
-                    <option value="Executat">Executat</option>
-                    <option value="Anulat">Anulat</option>
-                  </select>
-                </div>
-                <div>
-                  <div class="prgm-form-label">Departament</div>
-                  <select class="input" style="font-size:13px" value={formDeptId() ?? ""} onChange={(e) => setFormDeptId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
-                    <option value="">— niciun departament —</option>
-                    <For each={catalogDepartments()}>{(d) =>
-                      <option value={d.id}>{d.name}</option>
-                    }</For>
-                  </select>
-                </div>
-              </div>
-
-              <Show when={formError()}>
-                <span style="color:var(--danger,#ef4444);font-size:13px">{formError()}</span>
-              </Show>
             </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowFormModal(false)}>Anulează</button>
-              <button class="btn btn-primary btn-sm" disabled={formSaving()} onClick={handleFormSave}>
-                {formSaving() ? "Se salvează..." : "Salvează"}
-              </button>
+          </Show>
+
+          {/* Date + time grid */}
+          <div class="prgm-form-row3">
+            <div>
+              <div class="prgm-form-label">Data</div>
+              <input
+                class="input"
+                type="date"
+                value={dateToInputValue(formDay())}
+                onInput={(e) => setFormDay(new Date(e.currentTarget.value + "T00:00:00"))}
+              />
+            </div>
+            <div>
+              <div class="prgm-form-label">Ora start</div>
+              <input
+                class="input"
+                type="time"
+                step={1800}
+                value={minToTimeInput(formStartMin())}
+                onInput={(e) => {
+                  const m = timeInputToMin(e.currentTarget.value);
+                  setFormStartMin(m);
+                  if (formEndMin() <= m) setFormEndMin(m + 60);
+                }}
+              />
+            </div>
+            <div>
+              <div class="prgm-form-label">Ora sfârșit</div>
+              <input
+                class="input"
+                type="time"
+                step={1800}
+                value={minToTimeInput(formEndMin())}
+                onInput={(e) => setFormEndMin(timeInputToMin(e.currentTarget.value))}
+              />
             </div>
           </div>
-        </div>
+
+          {/* Duration quick buttons */}
+          <div>
+            <div class="prgm-form-label">Durată rapidă</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <For each={[30, 40, 50, 60, 90, 120]}>{(dur) =>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  style="font-size:12px;min-width:52px"
+                  onClick={() => setFormEndMin(formStartMin() + dur)}
+                >{dur} min</button>
+              }</For>
+            </div>
+          </div>
+
+          {/* Status + Departament */}
+          <div class="prgm-form-row2">
+            <div>
+              <div class="prgm-form-label">Status</div>
+              <select class="input" style="font-size:13px" value={formStatus()} onChange={(e) => setFormStatus(e.currentTarget.value as ProgramareStatus)}>
+                <option value="Programat">Programat</option>
+                <option value="In lucru">In lucru</option>
+                <option value="Executat">Executat</option>
+                <option value="Anulat">Anulat</option>
+              </select>
+            </div>
+            <div>
+              <div class="prgm-form-label">Departament</div>
+              <select class="input" style="font-size:13px" value={formDeptId() ?? ""} onChange={(e) => setFormDeptId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
+                <option value="">— niciun departament —</option>
+                <For each={catalogDepartments()}>{(d) =>
+                  <option value={d.id}>{d.name}</option>
+                }</For>
+              </select>
+            </div>
+          </div>
+
+          <Show when={formError()}>
+            <span style="color:var(--danger,#ef4444);font-size:13px">{formError()}</span>
+          </Show>
+        </Modal>
       </Show>
     </div>
     </div>

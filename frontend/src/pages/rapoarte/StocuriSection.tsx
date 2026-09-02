@@ -118,33 +118,35 @@ export default function StocuriSection() {
 
         {/* Top produse */}
         <h3 style="margin:24px 0 8px">Top produse vândute</h3>
-        <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:var(--surface-2);text-align:left">
-              <th style="padding:6px 10px">Produs</th>
-              <th style="padding:6px 10px;width:80px">Buc.</th>
-              <th style="padding:6px 10px;width:120px">Valoare</th>
-              <th style="padding:6px 10px;width:120px">Cost</th>
-              <th style="padding:6px 10px;width:120px">Marjă</th>
-            </tr>
-          </thead>
-          <tbody>
-            <For each={topRows()}>
-              {(r) => (
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:6px 10px">{r.item_name}</td>
-                  <td style="padding:6px 10px">{r.qty_total}</td>
-                  <td style="padding:6px 10px">{fmtMoney(r.valoare_vanzare)}</td>
-                  <td style="padding:6px 10px">{fmtMoney(r.valoare_cost)}</td>
-                  <td style="padding:6px 10px;font-weight:600">{fmtMoney(r.marja)}</td>
-                </tr>
-              )}
-            </For>
-            <Show when={topRows().length === 0 && !loading()}>
-              <tr><td colspan="5" style="padding:12px;color:var(--text-muted);text-align:center">Nicio vânzare în perioadă.</td></tr>
-            </Show>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:var(--surface-2);text-align:left">
+                <th style="padding:6px 10px">Produs</th>
+                <th style="padding:6px 10px;width:80px">Buc.</th>
+                <th style="padding:6px 10px;width:120px">Valoare</th>
+                <th style="padding:6px 10px;width:120px">Cost</th>
+                <th style="padding:6px 10px;width:120px">Marjă</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={topRows()}>
+                {(r) => (
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:6px 10px">{r.item_name}</td>
+                    <td style="padding:6px 10px">{r.qty_total}</td>
+                    <td style="padding:6px 10px">{fmtMoney(r.valoare_vanzare)}</td>
+                    <td style="padding:6px 10px">{fmtMoney(r.valoare_cost)}</td>
+                    <td style="padding:6px 10px;font-weight:600">{fmtMoney(r.marja)}</td>
+                  </tr>
+                )}
+              </For>
+              <Show when={topRows().length === 0 && !loading()}>
+                <tr><td colspan="5" style="padding:12px;color:var(--text-muted);text-align:center">Nicio vânzare în perioadă.</td></tr>
+              </Show>
+            </tbody>
+          </table>
+        </div>
 
         {/* Per angajat */}
         <h3 style="margin:24px 0 8px">Vânzări per angajat</h3>
@@ -155,19 +157,21 @@ export default function StocuriSection() {
                 <span>{g.name}</span>
                 <span style="color:var(--text-muted);font-weight:400">{g.total_qty} buc. · {fmtMoney(g.total_val)}</span>
               </div>
-              <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
-                <tbody>
-                  <For each={g.items}>
-                    {(r) => (
-                      <tr style="border-bottom:1px solid var(--border)">
-                        <td style="padding:4px 10px">{r.item_name}</td>
-                        <td style="padding:4px 10px;width:80px">{r.qty_total}</td>
-                        <td style="padding:4px 10px;width:120px">{fmtMoney(r.valoare)}</td>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
+                  <tbody>
+                    <For each={g.items}>
+                      {(r) => (
+                        <tr style="border-bottom:1px solid var(--border)">
+                          <td style="padding:4px 10px">{r.item_name}</td>
+                          <td style="padding:4px 10px;width:80px">{r.qty_total}</td>
+                          <td style="padding:4px 10px;width:120px">{fmtMoney(r.valoare)}</td>
+                        </tr>
+                      )}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </For>
@@ -186,39 +190,41 @@ export default function StocuriSection() {
             <option value="ADJUSTMENT">Ajustări</option>
           </select>
         </div>
-        <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
-          <thead>
-            <tr style="background:var(--surface-2);text-align:left">
-              <th style="padding:6px 10px;width:140px">Dată</th>
-              <th style="padding:6px 10px;width:130px">Tip</th>
-              <th style="padding:6px 10px">Produs</th>
-              <th style="padding:6px 10px;width:80px">Delta</th>
-              <th style="padding:6px 10px;width:140px">Angajat</th>
-              <th style="padding:6px 10px;width:80px">Bon</th>
-              <th style="padding:6px 10px">Notă</th>
-            </tr>
-          </thead>
-          <tbody>
-            <For each={miscari()}>
-              {(m) => (
-                <tr style="border-bottom:1px solid var(--border)">
-                  <td style="padding:4px 10px">{fmtRoDate(m.created_at)}</td>
-                  <td style="padding:4px 10px">{MOVEMENT_LABELS[m.movement_type] || m.movement_type}</td>
-                  <td style="padding:4px 10px">{m.item_name}</td>
-                  <td style={`padding:4px 10px;font-weight:600;${m.qty_delta < 0 ? "color:var(--danger)" : "color:var(--success,#198754)"}`}>
-                    {m.qty_delta > 0 ? "+" : ""}{m.qty_delta}
-                  </td>
-                  <td style="padding:4px 10px">{m.employee_name ?? (m.created_by_user ?? "—")}</td>
-                  <td style="padding:4px 10px">{m.receipt_id ? `#${m.receipt_id}` : "—"}</td>
-                  <td style="padding:4px 10px;color:var(--text-muted)">{m.note ?? ""}</td>
-                </tr>
-              )}
-            </For>
-            <Show when={miscari().length === 0 && !loading()}>
-              <tr><td colspan="7" style="padding:12px;color:var(--text-muted);text-align:center">Nicio mișcare în perioadă.</td></tr>
-            </Show>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table class="table" style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="background:var(--surface-2);text-align:left">
+                <th style="padding:6px 10px;width:140px">Dată</th>
+                <th style="padding:6px 10px;width:130px">Tip</th>
+                <th style="padding:6px 10px">Produs</th>
+                <th style="padding:6px 10px;width:80px">Delta</th>
+                <th style="padding:6px 10px;width:140px">Angajat</th>
+                <th style="padding:6px 10px;width:80px">Bon</th>
+                <th style="padding:6px 10px">Notă</th>
+              </tr>
+            </thead>
+            <tbody>
+              <For each={miscari()}>
+                {(m) => (
+                  <tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:4px 10px">{fmtRoDate(m.created_at)}</td>
+                    <td style="padding:4px 10px">{MOVEMENT_LABELS[m.movement_type] || m.movement_type}</td>
+                    <td style="padding:4px 10px">{m.item_name}</td>
+                    <td style={`padding:4px 10px;font-weight:600;${m.qty_delta < 0 ? "color:var(--danger)" : "color:var(--success,#198754)"}`}>
+                      {m.qty_delta > 0 ? "+" : ""}{m.qty_delta}
+                    </td>
+                    <td style="padding:4px 10px">{m.employee_name ?? (m.created_by_user ?? "—")}</td>
+                    <td style="padding:4px 10px">{m.receipt_id ? `#${m.receipt_id}` : "—"}</td>
+                    <td style="padding:4px 10px;color:var(--text-muted)">{m.note ?? ""}</td>
+                  </tr>
+                )}
+              </For>
+              <Show when={miscari().length === 0 && !loading()}>
+                <tr><td colspan="7" style="padding:12px;color:var(--text-muted);text-align:center">Nicio mișcare în perioadă.</td></tr>
+              </Show>
+            </tbody>
+          </table>
+        </div>
       </Show>
     </div>
   );

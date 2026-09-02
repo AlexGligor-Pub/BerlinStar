@@ -1,10 +1,11 @@
-import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onMount } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import {
   createSolidTable, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
 import { device } from "../store/deviceStore";
+import { useIsMobile } from "../hooks/createMediaQuery";
 import { loadMiscari, stocuri, loadStocuri, type MiscareStoc, type StocRow } from "../store/stocStore";
 
 const MOVEMENT_LABELS: Record<string, string> = {
@@ -54,10 +55,7 @@ export default function StocActivitate() {
   const [dateTo, setDateTo] = createSignal(todayISO());
   const [sorting, setSorting] = createSignal<SortingState>([{ id: "created_at", desc: true }]);
 
-  const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
-  function onResize() { setIsMobile(window.innerWidth < 768); }
-  onMount(() => { window.addEventListener("resize", onResize); });
-  onCleanup(() => window.removeEventListener("resize", onResize));
+  const isMobile = useIsMobile();
 
   const product = createMemo<StocRow | undefined>(() =>
     stocuri().find((r) => r.item_id === itemId()),

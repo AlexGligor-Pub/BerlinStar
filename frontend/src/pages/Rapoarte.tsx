@@ -2,6 +2,7 @@ import { For, Show, Switch, Match, createSignal, onMount, createMemo, createEffe
 import * as d3 from "d3";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
+import { useIsMobile } from "../hooks/createMediaQuery";
 import { generalSettings } from "../store/generalSettingsStore";
 import { toNumber, fmtMoney, todayISO, fmtRoDate, toLocalISO } from "./rapoarte/format";
 import {
@@ -3254,10 +3255,7 @@ function ConcediiReportPanel() {
   const [filter, setFilter] = createSignal("");
   const [sorting, setSorting] = createSignal<TanstackSorting>([{ id: "start_date", desc: false }]);
 
-  const [isMobile, setIsMobile] = createSignal(typeof window !== "undefined" && window.innerWidth < 768);
-  function onResize() { setIsMobile(window.innerWidth < 768); }
-  onMount(() => window.addEventListener("resize", onResize));
-  onCleanup(() => window.removeEventListener("resize", onResize));
+  const isMobile = useIsMobile();
 
   function prev() { if (m() === 0) { setY((v) => v - 1); setM(11); } else setM((v) => v - 1); }
   function next() { if (m() === 11) { setY((v) => v + 1); setM(0); } else setM((v) => v + 1); }

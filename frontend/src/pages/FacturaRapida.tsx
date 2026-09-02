@@ -1,5 +1,6 @@
-import { Show, For, createSignal, onMount, onCleanup } from "solid-js";
+import { Show, For, createSignal, onMount } from "solid-js";
 import { apiFetch } from "../utils/api";
+import { useIsMobile } from "../hooks/createMediaQuery";
 import { notify } from "../store/notificationsStore";
 import { uploadToSpv, deleteReceipt, mapReceiptFromApi, type Receipt, type RawReceipt } from "../store/receiptsStore";
 import Modal from "../components/ui/Modal";
@@ -40,13 +41,7 @@ export default function FacturaRapida() {
   const [editing, setEditing] = createSignal<Receipt | null>(null);
   const [viewing, setViewing] = createSignal<Receipt | null>(null);
   const [confirmDelete, setConfirmDelete] = createSignal<Receipt | null>(null);
-  const [isMobile, setIsMobile] = createSignal(typeof window !== "undefined" && window.innerWidth < 768);
-
-  function onResize() { setIsMobile(window.innerWidth < 768); }
-  onMount(() => {
-    window.addEventListener("resize", onResize);
-    onCleanup(() => window.removeEventListener("resize", onResize));
-  });
+  const isMobile = useIsMobile();
 
   async function loadCompanies() {
     try {

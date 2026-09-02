@@ -19,6 +19,7 @@ import { setResume } from "../store/resumeStore";
 import { apiFetch, API_BASE, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
+import Modal from "../components/ui/Modal";
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
@@ -95,9 +96,9 @@ function RangeCalendar(props: {
   return (
     <div class="mini-cal mini-cal--range">
       <div class="mini-cal-header">
-        <button class="mini-cal-nav" type="button" onClick={prevMonth}>‹</button>
+        <button class="mini-cal-nav" type="button" onClick={prevMonth} aria-label="Luna anterioară">‹</button>
         <span class="mini-cal-title">{RO_MONTHS_FULL[viewMonth()]} {viewYear()}</span>
-        <button class="mini-cal-nav" type="button" onClick={nextMonth} disabled={!canNext()}>›</button>
+        <button class="mini-cal-nav" type="button" onClick={nextMonth} disabled={!canNext()} aria-label="Luna următoare">›</button>
       </div>
       <div class="mini-cal-grid">
         <For each={RO_DAYS_SHORT}>{(d) => <span class="mini-cal-dow">{d}</span>}</For>
@@ -430,26 +431,26 @@ function ClientSection(props: { receipt: Receipt; readOnly?: boolean }) {
 
       {/* Modal adăugare client */}
       <Show when={showModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:420px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Client nou</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}>✕</button>
-            </div>
-            <div style="padding:0 16px 8px">
-              <ClientFormFields f={modalForm()} setF={setModalForm} />
-              <Show when={modalError()}>
-                <p class="cfg-error" style="margin-top:6px">{modalError()}</p>
-              </Show>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}>Anulează</button>
-              <button class="btn btn-primary btn-sm" disabled={saving()} onClick={saveNewClient}>
-                {saving() ? "Se salvează..." : "Salvează"}
-              </button>
-            </div>
+        <Modal
+          open
+          title="Client nou"
+          onClose={() => setShowModal(false)}
+          style="max-width:420px;width:100%"
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowModal(false)}>Anulează</button>
+            <button class="btn btn-primary btn-sm" disabled={saving()} onClick={saveNewClient}>
+              {saving() ? "Se salvează..." : "Salvează"}
+            </button>
+          </>}
+        >
+          <div style="padding:0 16px 8px">
+            <ClientFormFields f={modalForm()} setF={setModalForm} />
+            <Show when={modalError()}>
+              <p class="cfg-error" style="margin-top:6px">{modalError()}</p>
+            </Show>
           </div>
-        </div>
+        </Modal>
       </Show>
     </div>
   );
@@ -1384,275 +1385,263 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
       {/* Modal pasul 1: selectează elementele legate (cazări + montaje) */}
       <Show when={deleteStage() === "select"}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:520px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Sterge bon — elemente legate</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>✕</button>
-            </div>
-            <div style="padding:0 16px 8px">
-              <p style="font-size:0.88rem;margin-bottom:10px">
-                Bonul <strong>{r.titlu}</strong> are elemente legate. Bifează ce vrei să se șteargă împreună cu bonul (debifează ce vrei să păstrezi):
-              </p>
+        <Modal
+          open
+          title="Sterge bon — elemente legate"
+          onClose={() => setDeleteStage("closed")}
+          style="max-width:520px;width:100%"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>Anuleaza</button>
+            <button class="btn btn-primary btn-sm" onClick={() => setDeleteStage("final")}>Continuă</button>
+          </>}
+        >
+          <div style="padding:0 16px 8px">
+            <p style="font-size:0.88rem;margin-bottom:10px">
+              Bonul <strong>{r.titlu}</strong> are elemente legate. Bifează ce vrei să se șteargă împreună cu bonul (debifează ce vrei să păstrezi):
+            </p>
 
-              <Show when={cazariHotel().length > 0}>
-                <div style="margin-bottom:12px">
-                  <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Cazări Hotel Anvelope</div>
-                  <For each={cazariHotel()}>{(c) => (
-                    <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
-                      <input
-                        type="checkbox"
-                        checked={cazariSelected().has(c.id)}
-                        onChange={() => toggleCazareSelected(c.id)}
-                      />
-                      <span>
-                        {c.numar_masina ?? "fără număr"} · check-in {c.data_checkin}
-                        {c.data_checkout ? ` · check-out ${c.data_checkout}` : " · încă în hotel"}
-                      </span>
-                    </label>
-                  )}</For>
-                </div>
-              </Show>
+            <Show when={cazariHotel().length > 0}>
+              <div style="margin-bottom:12px">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Cazări Hotel Anvelope</div>
+                <For each={cazariHotel()}>{(c) => (
+                  <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
+                    <input
+                      type="checkbox"
+                      checked={cazariSelected().has(c.id)}
+                      onChange={() => toggleCazareSelected(c.id)}
+                    />
+                    <span>
+                      {c.numar_masina ?? "fără număr"} · check-in {c.data_checkin}
+                      {c.data_checkout ? ` · check-out ${c.data_checkout}` : " · încă în hotel"}
+                    </span>
+                  </label>
+                )}</For>
+              </div>
+            </Show>
 
-              <Show when={montajRoti().length > 0}>
-                <div style="margin-bottom:12px">
-                  <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Montaje roți</div>
-                  <For each={montajRoti()}>{(m) => (
-                    <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
-                      <input
-                        type="checkbox"
-                        checked={montajeSelected().has(m.id)}
-                        onChange={() => toggleMontajSelected(m.id)}
-                      />
-                      <span>
-                        Poziție {m.pozitie}
-                        {m.marcaNume ? ` · ${m.marcaNume}` : ""}
-                        {m.dimensiuneValoare ? ` · ${m.dimensiuneValoare}` : ""}
-                        {m.profilValoare ? ` ${m.profilValoare}` : ""}
-                      </span>
-                    </label>
-                  )}</For>
-                </div>
-              </Show>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>Anuleaza</button>
-              <button class="btn btn-primary btn-sm" onClick={() => setDeleteStage("final")}>Continuă</button>
-            </div>
+            <Show when={montajRoti().length > 0}>
+              <div style="margin-bottom:12px">
+                <div style="font-weight:600;font-size:0.85rem;margin-bottom:6px;color:var(--text-muted)">Montaje roți</div>
+                <For each={montajRoti()}>{(m) => (
+                  <label style="display:flex;gap:8px;align-items:center;padding:6px 0;cursor:pointer;font-size:0.85rem">
+                    <input
+                      type="checkbox"
+                      checked={montajeSelected().has(m.id)}
+                      onChange={() => toggleMontajSelected(m.id)}
+                    />
+                    <span>
+                      Poziție {m.pozitie}
+                      {m.marcaNume ? ` · ${m.marcaNume}` : ""}
+                      {m.dimensiuneValoare ? ` · ${m.dimensiuneValoare}` : ""}
+                      {m.profilValoare ? ` ${m.profilValoare}` : ""}
+                    </span>
+                  </label>
+                )}</For>
+              </div>
+            </Show>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Modal Facturează: confirmare alocare număr factură pe baza devizului */}
       <Show when={showFactureazaModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Generează factură din deviz</span>
-              <button
-                class="btn btn-ghost btn-sm"
-                disabled={factureazaPending()}
-                onClick={() => setShowFactureazaModal(false)}
-              >✕</button>
-            </div>
-            <Show
-              when={live().clientId !== null}
-              fallback={
-                <>
-                  <div style="padding:0 16px 8px;font-size:0.88rem">
-                    <p class="cfg-error" role="alert" style="margin:0 0 10px">
-                      Nu poți emite o factură fără client.
-                    </p>
-                    <p style="margin:0 0 10px">
-                      Bonul <strong>{r.titlu}</strong> nu are un client asociat. O factură fiscală
-                      trebuie să conțină datele cumpărătorului (nume, CUI/CNP, adresă).
-                    </p>
-                    <p style="margin:0;color:var(--text-muted)">
-                      Pentru a continua, extinde cardul bonului și folosește secțiunea
-                      <strong> „Client" </strong> pentru a căuta sau adăuga un client. După
-                      asociere, revino aici și apasă din nou <strong>Facturează</strong>.
-                    </p>
-                  </div>
-                  <div class="sl-modal-footer">
-                    <button
-                      class="btn btn-primary btn-sm"
-                      onClick={() => setShowFactureazaModal(false)}
-                    >Am înțeles</button>
-                  </div>
-                </>
-              }
-            >
-              <div style="padding:0 16px 8px;font-size:0.88rem">
-                <p style="margin-bottom:10px">
-                  Se va aloca un număr nou de factură din registrul locației pentru bonul:
-                </p>
-                <ul style="margin:0 0 12px 16px;padding:0">
-                  <li><strong>{r.titlu}</strong></li>
-                  <li>
-                    Deviz:&nbsp;
-                    <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
-                      D {live().devizSerie}{live().devizNr}
-                    </span>
-                  </li>
-                  <li>Client: <strong>{live().clientNume}</strong></li>
-                  <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
-                </ul>
-                <p style="color:var(--text-muted);margin:0">
-                  După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
-                  numărul de factură nu poate fi reutilizat.
-                </p>
-                <Show when={factureazaError()}>
-                  <p class="cfg-error" role="alert" style="margin-top:10px">{factureazaError()}</p>
-                </Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button
-                  class="btn btn-ghost btn-sm"
-                  disabled={factureazaPending()}
-                  onClick={() => setShowFactureazaModal(false)}
-                >Anulează</button>
-                <button
-                  class="btn btn-primary btn-sm"
-                  disabled={factureazaPending()}
-                  onClick={handleFactureazaConfirm}
-                >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
-              </div>
-            </Show>
-          </div>
-        </div>
-      </Show>
-
-      {/* Modal Transformă FDL în deviz */}
-      <Show when={showConvertConfirm()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Transformă în deviz</span>
-              <button
-                class="btn btn-ghost btn-sm"
-                disabled={convertPending()}
-                onClick={() => setShowConvertConfirm(false)}
-              >✕</button>
-            </div>
+        <Modal
+          open
+          title="Generează factură din deviz"
+          onClose={() => setShowFactureazaModal(false)}
+          closeDisabled={factureazaPending()}
+          bodyClass="sl-modal-body--stack"
+        >
+          <Show
+            when={live().clientId !== null}
+            fallback={
+              <>
+                <div style="padding:0 16px 8px;font-size:0.88rem">
+                  <p class="cfg-error" role="alert" style="margin:0 0 10px">
+                    Nu poți emite o factură fără client.
+                  </p>
+                  <p style="margin:0 0 10px">
+                    Bonul <strong>{r.titlu}</strong> nu are un client asociat. O factură fiscală
+                    trebuie să conțină datele cumpărătorului (nume, CUI/CNP, adresă).
+                  </p>
+                  <p style="margin:0;color:var(--text-muted)">
+                    Pentru a continua, extinde cardul bonului și folosește secțiunea
+                    <strong> „Client" </strong> pentru a căuta sau adăuga un client. După
+                    asociere, revino aici și apasă din nou <strong>Facturează</strong>.
+                  </p>
+                </div>
+                <div class="sl-modal-footer">
+                  <button
+                    class="btn btn-primary btn-sm"
+                    onClick={() => setShowFactureazaModal(false)}
+                  >Am înțeles</button>
+                </div>
+              </>
+            }
+          >
             <div style="padding:0 16px 8px;font-size:0.88rem">
               <p style="margin-bottom:10px">
-                Fișa de Lucru <strong>{r.titlu}</strong> va deveni un deviz real.
-              </p>
-              <ul style="margin:0 0 12px 16px;padding:0;color:var(--text-muted)">
-                <li>Va intra în totalurile zilei și în rapoarte.</li>
-                <li>Poți aloca număr de deviz / factură ca pentru orice deviz normal.</li>
-                <li>Constatările, sugestiile și timpul estimat sunt păstrate ca istoric.</li>
-              </ul>
-              <p style="color:var(--text-muted);margin:0">
-                Acțiunea este reversibilă doar prin ștergerea bonului.
-              </p>
-            </div>
-            <div class="sl-modal-footer">
-              <button
-                class="btn btn-ghost btn-sm"
-                disabled={convertPending()}
-                onClick={() => setShowConvertConfirm(false)}
-              >Anulează</button>
-              <button
-                class="btn btn-primary btn-sm"
-                disabled={convertPending()}
-                onClick={handleConvertFdl}
-              >{convertPending() ? "Se transformă..." : "Transformă în deviz"}</button>
-            </div>
-          </div>
-        </div>
-      </Show>
-
-      {/* Modal Trimite în SPV */}
-      <Show when={showSpvModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Trimite factura în SPV (ANAF)</span>
-              <button
-                class="btn btn-ghost btn-sm"
-                disabled={spvPending()}
-                onClick={() => setShowSpvModal(false)}
-              >✕</button>
-            </div>
-            <div style="padding:0 16px 8px;font-size:0.88rem">
-              <p style="margin-bottom:10px">
-                Se va trimite factura electronică (UBL 2.1) către ANAF — Spațiul Privat Virtual.
+                Se va aloca un număr nou de factură din registrul locației pentru bonul:
               </p>
               <ul style="margin:0 0 12px 16px;padding:0">
                 <li><strong>{r.titlu}</strong></li>
                 <li>
-                  Factura:&nbsp;
-                  <span class="rcard-doc-tag rcard-doc-tag--factura" style="display:inline-block">
-                    F {live().facturaSerie}{live().facturaNr}
+                  Deviz:&nbsp;
+                  <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
+                    D {live().devizSerie}{live().devizNr}
                   </span>
                 </li>
-                <li>Client: <strong>{live().clientNume ?? "—"}</strong></li>
+                <li>Client: <strong>{live().clientNume}</strong></li>
                 <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
               </ul>
               <p style="color:var(--text-muted);margin:0">
-                După trimitere, bonul va fi <strong>blocat</strong> — nu va mai putea fi editat
-                (cu excepția metodei de plată). Procesarea ANAF durează între câteva secunde și câteva
-                minute; status-ul se actualizează automat.
+                După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
+                numărul de factură nu poate fi reutilizat.
               </p>
-              <Show when={spvError()}>
-                <p class="cfg-error" role="alert" style="margin-top:10px">{spvError()}</p>
+              <Show when={factureazaError()}>
+                <p class="cfg-error" role="alert" style="margin-top:10px">{factureazaError()}</p>
               </Show>
             </div>
             <div class="sl-modal-footer">
               <button
                 class="btn btn-ghost btn-sm"
-                disabled={spvPending()}
-                onClick={() => setShowSpvModal(false)}
+                disabled={factureazaPending()}
+                onClick={() => setShowFactureazaModal(false)}
               >Anulează</button>
               <button
                 class="btn btn-primary btn-sm"
-                disabled={spvPending()}
-                onClick={handleSpvConfirm}
-              >{spvPending() ? "Se trimite..." : "Confirmă trimiterea"}</button>
+                disabled={factureazaPending()}
+                onClick={handleFactureazaConfirm}
+              >{factureazaPending() ? "Se generează..." : "Confirmă și facturează"}</button>
             </div>
+          </Show>
+        </Modal>
+      </Show>
+
+      {/* Modal Transformă FDL în deviz */}
+      <Show when={showConvertConfirm()}>
+        <Modal
+          open
+          title="Transformă în deviz"
+          onClose={() => setShowConvertConfirm(false)}
+          closeDisabled={convertPending()}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-ghost btn-sm"
+              disabled={convertPending()}
+              onClick={() => setShowConvertConfirm(false)}
+            >Anulează</button>
+            <button
+              class="btn btn-primary btn-sm"
+              disabled={convertPending()}
+              onClick={handleConvertFdl}
+            >{convertPending() ? "Se transformă..." : "Transformă în deviz"}</button>
+          </>}
+        >
+          <div style="padding:0 16px 8px;font-size:0.88rem">
+            <p style="margin-bottom:10px">
+              Fișa de Lucru <strong>{r.titlu}</strong> va deveni un deviz real.
+            </p>
+            <ul style="margin:0 0 12px 16px;padding:0;color:var(--text-muted)">
+              <li>Va intra în totalurile zilei și în rapoarte.</li>
+              <li>Poți aloca număr de deviz / factură ca pentru orice deviz normal.</li>
+              <li>Constatările, sugestiile și timpul estimat sunt păstrate ca istoric.</li>
+            </ul>
+            <p style="color:var(--text-muted);margin:0">
+              Acțiunea este reversibilă doar prin ștergerea bonului.
+            </p>
           </div>
-        </div>
+        </Modal>
+      </Show>
+
+      {/* Modal Trimite în SPV */}
+      <Show when={showSpvModal()}>
+        <Modal
+          open
+          title="Trimite factura în SPV (ANAF)"
+          onClose={() => setShowSpvModal(false)}
+          closeDisabled={spvPending()}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-ghost btn-sm"
+              disabled={spvPending()}
+              onClick={() => setShowSpvModal(false)}
+            >Anulează</button>
+            <button
+              class="btn btn-primary btn-sm"
+              disabled={spvPending()}
+              onClick={handleSpvConfirm}
+            >{spvPending() ? "Se trimite..." : "Confirmă trimiterea"}</button>
+          </>}
+        >
+          <div style="padding:0 16px 8px;font-size:0.88rem">
+            <p style="margin-bottom:10px">
+              Se va trimite factura electronică (UBL 2.1) către ANAF — Spațiul Privat Virtual.
+            </p>
+            <ul style="margin:0 0 12px 16px;padding:0">
+              <li><strong>{r.titlu}</strong></li>
+              <li>
+                Factura:&nbsp;
+                <span class="rcard-doc-tag rcard-doc-tag--factura" style="display:inline-block">
+                  F {live().facturaSerie}{live().facturaNr}
+                </span>
+              </li>
+              <li>Client: <strong>{live().clientNume ?? "—"}</strong></li>
+              <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
+            </ul>
+            <p style="color:var(--text-muted);margin:0">
+              După trimitere, bonul va fi <strong>blocat</strong> — nu va mai putea fi editat
+              (cu excepția metodei de plată). Procesarea ANAF durează între câteva secunde și câteva
+              minute; status-ul se actualizează automat.
+            </p>
+            <Show when={spvError()}>
+              <p class="cfg-error" role="alert" style="margin-top:10px">{spvError()}</p>
+            </Show>
+          </div>
+        </Modal>
       </Show>
 
       {/* Modal pasul 2: confirmare finală */}
       <Show when={deleteStage() === "final"}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Confirmare ștergere</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteStage("closed")}>✕</button>
-            </div>
-            <div style="padding:0 16px 8px;font-size:0.88rem">
-              <p style="margin-bottom:8px">Vei șterge definitiv:</p>
-              <ul style="margin:0 0 8px 16px;padding:0">
-                <li><strong>Bonul {r.titlu}</strong></li>
-                <Show when={cazariSelected().size > 0}>
-                  <li><strong>{cazariSelected().size}</strong> cazare(i) Hotel Anvelope</li>
-                </Show>
-                <Show when={montajeSelected().size > 0}>
-                  <li><strong>{montajeSelected().size}</strong> montaj(e) roți</li>
-                </Show>
-              </ul>
-              <p style="color:var(--text-muted)">Acțiunea este ireversibilă.</p>
-            </div>
-            <div class="sl-modal-footer">
-              <button
-                class="btn btn-ghost btn-sm"
-                disabled={deletePending()}
-                onClick={() => {
-                  if (cazariHotel().length > 0 || montajRoti().length > 0) setDeleteStage("select");
-                  else setDeleteStage("closed");
-                }}
-              >Înapoi</button>
-              <button
-                class="btn btn-danger btn-sm"
-                disabled={deletePending()}
-                onClick={handleConfirmDelete}
-              >{deletePending() ? "Se șterge..." : "Sterge definitiv"}</button>
-            </div>
+        <Modal
+          open
+          title="Confirmare ștergere"
+          onClose={() => setDeleteStage("closed")}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-ghost btn-sm"
+              disabled={deletePending()}
+              onClick={() => {
+                if (cazariHotel().length > 0 || montajRoti().length > 0) setDeleteStage("select");
+                else setDeleteStage("closed");
+              }}
+            >Înapoi</button>
+            <button
+              class="btn btn-danger btn-sm"
+              disabled={deletePending()}
+              onClick={handleConfirmDelete}
+            >{deletePending() ? "Se șterge..." : "Sterge definitiv"}</button>
+          </>}
+        >
+          <div style="padding:0 16px 8px;font-size:0.88rem">
+            <p style="margin-bottom:8px">Vei șterge definitiv:</p>
+            <ul style="margin:0 0 8px 16px;padding:0">
+              <li><strong>Bonul {r.titlu}</strong></li>
+              <Show when={cazariSelected().size > 0}>
+                <li><strong>{cazariSelected().size}</strong> cazare(i) Hotel Anvelope</li>
+              </Show>
+              <Show when={montajeSelected().size > 0}>
+                <li><strong>{montajeSelected().size}</strong> montaj(e) roți</li>
+              </Show>
+            </ul>
+            <p style="color:var(--text-muted)">Acțiunea este ireversibilă.</p>
           </div>
-        </div>
+        </Modal>
       </Show>
     </div>
   );
@@ -1922,31 +1911,35 @@ export default function Reception() {
       </div>
 
       <Show when={showDateModal()}>
-        <div class="sl-modal-overlay">
-          <div class="date-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Filtru dupa data</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>✕</button>
-            </div>
-            <div class="date-modal-body date-modal-body--single">
-              <div class="date-modal-range-label">
-                {draftStart() === draftEnd()
-                  ? fmtDateShort(draftStart())
-                  : `${fmtDateShort(draftStart())} — ${fmtDateShort(draftEnd())}`}
-              </div>
-              <RangeCalendar
-                start={draftStart()}
-                end={draftEnd()}
-                onChange={(s, e) => { setDraftStart(s); setDraftEnd(e); }}
-                maxDate={todayYMD}
-              />
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>Anuleaza</button>
-              <button class="btn btn-primary btn-sm" onClick={applyDateFilter}>Aplica</button>
-            </div>
+        <Modal
+          open
+          bare
+          class="date-modal"
+          ariaLabel="Filtru dupa data"
+          closeOnEscape={false}
+        >
+          <div class="sl-modal-header">
+            <span class="sl-modal-title">Filtru dupa data</span>
+            <button type="button" class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)} aria-label="Închide">✕</button>
           </div>
-        </div>
+          <div class="date-modal-body date-modal-body--single">
+            <div class="date-modal-range-label">
+              {draftStart() === draftEnd()
+                ? fmtDateShort(draftStart())
+                : `${fmtDateShort(draftStart())} — ${fmtDateShort(draftEnd())}`}
+            </div>
+            <RangeCalendar
+              start={draftStart()}
+              end={draftEnd()}
+              onChange={(s, e) => { setDraftStart(s); setDraftEnd(e); }}
+              maxDate={todayYMD}
+            />
+          </div>
+          <div class="sl-modal-footer">
+            <button class="btn btn-ghost btn-sm" onClick={() => setShowDateModal(false)}>Anuleaza</button>
+            <button class="btn btn-primary btn-sm" onClick={applyDateFilter}>Aplica</button>
+          </div>
+        </Modal>
       </Show>
     </div>
   );

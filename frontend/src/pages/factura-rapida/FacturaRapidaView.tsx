@@ -160,34 +160,36 @@ export default function FacturaRapidaView(props: Props) {
 
             <div>
               <div style="font-weight:600;margin-bottom:4px">Articole</div>
-              <table style="width:100%;border-collapse:collapse;font-size:13px">
-                <thead>
-                  <tr style="text-align:left;border-bottom:1px solid var(--border)">
-                    <th style="padding:6px 4px">Descriere</th>
-                    <th style="padding:6px 4px;text-align:right">Cant</th>
-                    <th style="padding:6px 4px;text-align:right">Pret</th>
-                    <th style="padding:6px 4px;text-align:right">TVA</th>
-                    <th style="padding:6px 4px;text-align:right">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={r().items}>
-                    {(it) => {
-                      const sub = it.price * it.qty;
-                      const vat = it.vatPercent ?? 19;
-                      return (
-                        <tr style="border-bottom:1px solid var(--border)">
-                          <td style="padding:6px 4px">{it.name}</td>
-                          <td style="padding:6px 4px;text-align:right">{it.qty} {it.unit}</td>
-                          <td style="padding:6px 4px;text-align:right">{it.price.toFixed(2)}</td>
-                          <td style="padding:6px 4px;text-align:right">{vat}%</td>
-                          <td style="padding:6px 4px;text-align:right">{(sub * (1 + vat / 100)).toFixed(2)}</td>
-                        </tr>
-                      );
-                    }}
-                  </For>
-                </tbody>
-              </table>
+              <div class="table-wrap">
+                <table style="width:100%;border-collapse:collapse;font-size:13px">
+                  <thead>
+                    <tr style="text-align:left;border-bottom:1px solid var(--border)">
+                      <th style="padding:6px 4px">Descriere</th>
+                      <th style="padding:6px 4px;text-align:right">Cant</th>
+                      <th style="padding:6px 4px;text-align:right">Pret</th>
+                      <th style="padding:6px 4px;text-align:right">TVA</th>
+                      <th style="padding:6px 4px;text-align:right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <For each={r().items}>
+                      {(it) => {
+                        const sub = it.price * it.qty;
+                        const vat = it.vatPercent ?? 19;
+                        return (
+                          <tr style="border-bottom:1px solid var(--border)">
+                            <td style="padding:6px 4px">{it.name}</td>
+                            <td style="padding:6px 4px;text-align:right">{it.qty} {it.unit}</td>
+                            <td style="padding:6px 4px;text-align:right">{it.price.toFixed(2)}</td>
+                            <td style="padding:6px 4px;text-align:right">{vat}%</td>
+                            <td style="padding:6px 4px;text-align:right">{(sub * (1 + vat / 100)).toFixed(2)}</td>
+                          </tr>
+                        );
+                      }}
+                    </For>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div style="display:flex;justify-content:space-between;align-items:center;font-weight:600;border-top:1px solid var(--border);padding-top:8px">

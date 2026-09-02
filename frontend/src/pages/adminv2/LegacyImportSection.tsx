@@ -389,44 +389,46 @@ export default function LegacyImportSection() {
               {(ver) => (
                 <div>
                   <div style="font-weight:600;margin-bottom:8px">Verificare counts</div>
-                  <table class="adminv2-table" style="width:100%;border-collapse:collapse">
-                    <thead>
-                      <tr style="background:var(--surface-2);text-align:left">
-                        <th style="padding:8px;border:1px solid var(--border)">Entitate</th>
-                        <th style="padding:8px;border:1px solid var(--border);text-align:right">Asteptat</th>
-                        <th style="padding:8px;border:1px solid var(--border);text-align:right">Importat</th>
-                        <th style="padding:8px;border:1px solid var(--border);text-align:center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <For each={verifRows(ver())}>
-                        {(row) => {
-                          const matches = row.expected == null ? null : Number(row.got) === row.expected;
-                          return (
-                            <tr>
-                              <td style="padding:6px 8px;border:1px solid var(--border)">{row.label}</td>
-                              <td style="padding:6px 8px;border:1px solid var(--border);text-align:right;font-family:monospace">
-                                {row.expected ?? "—"}
-                              </td>
-                              <td style="padding:6px 8px;border:1px solid var(--border);text-align:right;font-family:monospace">
-                                {row.got}
-                              </td>
-                              <td style="padding:6px 8px;border:1px solid var(--border);text-align:center">
-                                <Show
-                                  when={matches !== null}
-                                  fallback={<span style="color:var(--text-muted)">—</span>}
-                                >
-                                  <span style={`color:${matches ? "var(--success)" : "var(--danger)"};font-weight:600`}>
-                                    {matches ? "✓" : "✗"}
-                                  </span>
-                                </Show>
-                              </td>
-                            </tr>
-                          );
-                        }}
-                      </For>
-                    </tbody>
-                  </table>
+                  <div class="table-wrap">
+                    <table class="adminv2-table" style="width:100%;border-collapse:collapse">
+                      <thead>
+                        <tr style="background:var(--surface-2);text-align:left">
+                          <th style="padding:8px;border:1px solid var(--border)">Entitate</th>
+                          <th style="padding:8px;border:1px solid var(--border);text-align:right">Asteptat</th>
+                          <th style="padding:8px;border:1px solid var(--border);text-align:right">Importat</th>
+                          <th style="padding:8px;border:1px solid var(--border);text-align:center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={verifRows(ver())}>
+                          {(row) => {
+                            const matches = row.expected == null ? null : Number(row.got) === row.expected;
+                            return (
+                              <tr>
+                                <td style="padding:6px 8px;border:1px solid var(--border)">{row.label}</td>
+                                <td style="padding:6px 8px;border:1px solid var(--border);text-align:right;font-family:monospace">
+                                  {row.expected ?? "—"}
+                                </td>
+                                <td style="padding:6px 8px;border:1px solid var(--border);text-align:right;font-family:monospace">
+                                  {row.got}
+                                </td>
+                                <td style="padding:6px 8px;border:1px solid var(--border);text-align:center">
+                                  <Show
+                                    when={matches !== null}
+                                    fallback={<span style="color:var(--text-muted)">—</span>}
+                                  >
+                                    <span style={`color:${matches ? "var(--success)" : "var(--danger)"};font-weight:600`}>
+                                      {matches ? "✓" : "✗"}
+                                    </span>
+                                  </Show>
+                                </td>
+                              </tr>
+                            );
+                          }}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </Show>

@@ -1,6 +1,7 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
 import { useSearchParams, useNavigate } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
+import { createDebouncedSearch } from "../utils/debounce";
 import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
@@ -27,6 +28,7 @@ interface ClientVehicol {
 import { generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere } from "../utils/generateDocuments";
 import type { CompanyData } from "../utils/generateDocuments";
 import { generalSettings, type GeneralSettingsData } from "../store/generalSettingsStore";
+import Modal from "../components/ui/Modal";
 
 const hotelShowField = (key: keyof GeneralSettingsData): boolean => {
   const s = generalSettings();
@@ -101,17 +103,24 @@ function ClientSearch(props: {
   const [open, setOpen] = createSignal(false);
   const [searched, setSearched] = createSignal(false);
 
-  async function search(val: string) {
-    if (!val.trim()) { setResults([]); setOpen(false); setSearched(false); return; }
-    setSearching(true);
-    try {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`);
-      if (!res.ok) return;
+  const clientSearch = createDebouncedSearch<ClientItem[] | null>({
+    fetch: async (val, signal) => {
+      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`, { signal });
+      if (!res.ok) return null;
       const data = await res.json();
-      setResults(data.items ?? []);
+      return data.items ?? [];
+    },
+    onResult: (items) => {
+      if (!items) return;
+      setResults(items);
       setSearched(true);
       setOpen(true);
-    } finally { setSearching(false); }
+    },
+    onPending: setSearching,
+  });
+  function search(val: string) {
+    if (!val.trim()) { clientSearch.cancel(); setResults([]); setOpen(false); setSearched(false); return; }
+    clientSearch.search(val);
   }
 
   function pick(c: ClientItem) {
@@ -140,7 +149,7 @@ function ClientSearch(props: {
           onFocus={() => { if (results().length) setOpen(true); }}
         />
         <Show when={props.value}>
-          <button class="btn btn-ghost btn-sm" onClick={clear} title="Șterge">✕</button>
+          <button type="button" class="btn btn-ghost btn-sm" onClick={clear} title="Șterge" aria-label="Șterge client">✕</button>
         </Show>
       </div>
       <Show when={open() && results().length > 0}>
@@ -492,27 +501,26 @@ function AnvelopaForm(props: {
 
       {/* Modal: Confirmare propunere marca noua */}
       <Show when={proposingMarca() !== null}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:520px;width:100%">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Propune marcă nouă</span>
-            </div>
-            <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:10px">
-              <p style="margin:0;font-size:14px;line-height:1.5">
-                Marca <strong>„{proposingMarca()}”</strong> nu există în lista globală. Vrei să o propui adminului?
-              </p>
-              <div style="background:var(--warn-bg,rgba(245,158,11,.1));border:1px solid var(--warn,#f59e0b);border-radius:6px;padding:10px;font-size:13px;line-height:1.5">
-                <strong>Atenție:</strong> marca va fi disponibilă pentru utilizare DOAR după ce administratorul o aprobă. Până atunci, anvelopa va rămâne fără marcă.
-              </div>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" disabled={proposingBusy()} onClick={() => setProposingMarca(null)}>Anulează</button>
-              <button class="btn btn-primary btn-sm" disabled={proposingBusy()} onClick={confirmProposeMarca}>
-                {proposingBusy() ? "Se trimite..." : "Trimite propunerea"}
-              </button>
-            </div>
+        <Modal
+          open
+          title="Propune marcă nouă"
+          hideClose
+          style="max-width:520px;width:100%"
+          bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:10px"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" disabled={proposingBusy()} onClick={() => setProposingMarca(null)}>Anulează</button>
+            <button class="btn btn-primary btn-sm" disabled={proposingBusy()} onClick={confirmProposeMarca}>
+              {proposingBusy() ? "Se trimite..." : "Trimite propunerea"}
+            </button>
+          </>}
+        >
+          <p style="margin:0;font-size:14px;line-height:1.5">
+            Marca <strong>„{proposingMarca()}”</strong> nu există în lista globală. Vrei să o propui adminului?
+          </p>
+          <div style="background:var(--warn-bg,rgba(245,158,11,.1));border:1px solid var(--warn,#f59e0b);border-radius:6px;padding:10px;font-size:13px;line-height:1.5">
+            <strong>Atenție:</strong> marca va fi disponibilă pentru utilizare DOAR după ce administratorul o aprobă. Până atunci, anvelopa va rămâne fără marcă.
           </div>
-        </div>
+        </Modal>
       </Show>
     </div>
   );
@@ -1856,194 +1864,480 @@ export default function HotelAnvelope() {
 
       {/* Modal: Administrare */}
       <Show when={adminOpen()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Administrare</span>
-              <button class="btn btn-ghost btn-sm" aria-label="Închide" onClick={() => setAdminOpen(false)}>✕</button>
-            </div>
-            <div class="sl-modal-body" style="padding:16px 20px;overflow-y:auto">
-              {/* Tab-uri admin (marcile sunt globale, gestionate in AdminV2) */}
-              <div style="display:flex;gap:4px;margin-bottom:14px">
-                <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("locuri")}>Locuri</button>
-                <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("dimensiuni")}>Dimensiuni</button>
-                <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("profiluri")}>Profiluri</button>
-              </div>
-
-              {/* Locuri */}
-              <Show when={adminTab() === "locuri"}>
-                <div style="display:flex;flex-direction:column;gap:8px">
-                  <input class="input" placeholder="Nume loc *" value={newLocNume()} onInput={(e) => setNewLocNume(e.currentTarget.value)} />
-                  <input class="input" placeholder="Descriere" value={newLocDesc()} onInput={(e) => setNewLocDesc(e.currentTarget.value)} />
-                  <button class="btn btn-primary btn-sm w-full" onClick={addLoc} disabled={!newLocNume().trim()}>+ Adaugă</button>
-                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                    <For each={locuriCazare()}>
-                      {(loc) => (
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
-                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
-                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Dimensiuni */}
-              <Show when={adminTab() === "dimensiuni"}>
-                <div style="display:flex;flex-direction:column;gap:8px">
-                  <input class="input" placeholder="ex: 205/55 R16 *" value={newDimValoare()} onInput={(e) => setNewDimValoare(e.currentTarget.value)} />
-                  <button class="btn btn-primary btn-sm w-full" onClick={addDim} disabled={!newDimValoare().trim()}>+ Adaugă</button>
-                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                    <For each={dimensiuni()}>
-                      {(d) => (
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
-                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
-                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-
-              {/* Profiluri */}
-              <Show when={adminTab() === "profiluri"}>
-                <div style="display:flex;flex-direction:column;gap:8px">
-                  <input class="input" placeholder="ex: 60, 55, 45 *" value={newProfilValoare()} onInput={(e) => setNewProfilValoare(e.currentTarget.value)} />
-                  <button class="btn btn-primary btn-sm w-full" onClick={addProfilAdmin} disabled={!newProfilValoare().trim()}>+ Adaugă</button>
-                  <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
-                    <For each={profiluri()}>
-                      {(p) => (
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
-                          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{p.valoare}</span>
-                          <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "profil", id: p.id, valoare: p.valoare })}>Edit</button>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              </Show>
-            </div>
-            <div class="sl-modal-footer">
-              <button class="btn btn-ghost btn-sm" onClick={() => setAdminOpen(false)}>Închide</button>
-            </div>
+        <Modal
+          open
+          title="Administrare"
+          onClose={() => setAdminOpen(false)}
+          style="max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column"
+          closeOnEscape={false}
+          bodyStyle="padding:16px 20px;overflow-y:auto"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setAdminOpen(false)}>Închide</button>
+          </>}
+        >
+          {/* Tab-uri admin (marcile sunt globale, gestionate in AdminV2) */}
+          <div style="display:flex;gap:4px;margin-bottom:14px">
+            <button class={`btn btn-sm ${adminTab() === "locuri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("locuri")}>Locuri</button>
+            <button class={`btn btn-sm ${adminTab() === "dimensiuni" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("dimensiuni")}>Dimensiuni</button>
+            <button class={`btn btn-sm ${adminTab() === "profiluri" ? "btn-primary" : "btn-ghost"}`} style="flex:1" onClick={() => setAdminTab("profiluri")}>Profiluri</button>
           </div>
-        </div>
+
+          {/* Locuri */}
+          <Show when={adminTab() === "locuri"}>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input class="input" placeholder="Nume loc *" value={newLocNume()} onInput={(e) => setNewLocNume(e.currentTarget.value)} />
+              <input class="input" placeholder="Descriere" value={newLocDesc()} onInput={(e) => setNewLocDesc(e.currentTarget.value)} />
+              <button class="btn btn-primary btn-sm w-full" onClick={addLoc} disabled={!newLocNume().trim()}>+ Adaugă</button>
+              <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                <For each={locuriCazare()}>
+                  {(loc) => (
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"><strong>{loc.nume}</strong></span>
+                      <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "loc", id: loc.id, nume: loc.nume, description: loc.description ?? "" })}>Edit</button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
+          {/* Dimensiuni */}
+          <Show when={adminTab() === "dimensiuni"}>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input class="input" placeholder="ex: 205/55 R16 *" value={newDimValoare()} onInput={(e) => setNewDimValoare(e.currentTarget.value)} />
+              <button class="btn btn-primary btn-sm w-full" onClick={addDim} disabled={!newDimValoare().trim()}>+ Adaugă</button>
+              <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                <For each={dimensiuni()}>
+                  {(d) => (
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{d.valoare}</span>
+                      <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "dim", id: d.id, valoare: d.valoare })}>Edit</button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+
+          {/* Profiluri */}
+          <Show when={adminTab() === "profiluri"}>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input class="input" placeholder="ex: 60, 55, 45 *" value={newProfilValoare()} onInput={(e) => setNewProfilValoare(e.currentTarget.value)} />
+              <button class="btn btn-primary btn-sm w-full" onClick={addProfilAdmin} disabled={!newProfilValoare().trim()}>+ Adaugă</button>
+              <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+                <For each={profiluri()}>
+                  {(p) => (
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--bg);border-radius:6px;font-size:13px">
+                      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">{p.valoare}</span>
+                      <button class="btn btn-ghost btn-sm" onClick={() => openAdminEdit({ type: "profil", id: p.id, valoare: p.valoare })}>Edit</button>
+                    </div>
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+        </Modal>
       </Show>
 
       {/* Modal: Confirmare Stergere */}
       <Show when={deleteTarget()}>
         {(t) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Șterge cazare</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>✕</button>
-              </div>
-              <div style="padding:16px 24px;font-size:14px">
-                Ești sigur că vrei să ștergi cazarea lui <strong>{t().name}</strong>? Acțiunea este ireversibilă.
-              </div>
-              <div class="sl-modal-footer">
-                <button class="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>Anulează</button>
-                <button class="btn btn-danger btn-sm" onClick={doDelete} disabled={deleting()}>
-                  {deleting() ? "..." : "Șterge definitiv"}
-                </button>
-              </div>
+          <Modal
+            open
+            title="Șterge cazare"
+            onClose={() => setDeleteTarget(null)}
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" onClick={() => setDeleteTarget(null)}>Anulează</button>
+              <button class="btn btn-danger btn-sm" onClick={doDelete} disabled={deleting()}>
+                {deleting() ? "..." : "Șterge definitiv"}
+              </button>
+            </>}
+          >
+            <div style="padding:16px 24px;font-size:14px">
+              Ești sigur că vrei să ștergi cazarea lui <strong>{t().name}</strong>? Acțiunea este ireversibilă.
             </div>
-          </div>
+          </Modal>
         )}
       </Show>
 
       {/* Modal: Editare Cazare */}
       <Show when={editCazare()}>
         {(c) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:1100px;width:100%;max-height:90vh;overflow-y:auto">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Editare Cazare — {c().clientNume ?? "—"}</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>✕</button>
+          <Modal
+            open
+            title={<>Editare Cazare — {c().clientNume ?? "—"}</>}
+            onClose={() => setEditCazare(null)}
+            style="max-width:1100px;width:100%;max-height:90vh;overflow-y:auto"
+            footerStyle="justify-content:space-between"
+            closeOnEscape={false}
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <Show when={canManage()}>
+                <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
+              </Show>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>Anulează</button>
+                <button class="btn btn-primary btn-sm" onClick={doEdit} disabled={editSaving()}>
+                  {editSaving() ? "Se salvează..." : "Salvează"}
+                </button>
+              </div>
+            </>}
+          >
+
+            <div class="sl-modal-body" style="padding:20px 24px">
+              <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start">
+
+              {/* ─ Coloana stânga: Client ─ */}
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
+                <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+                  <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
+                  <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
+                  <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
+                </div>
+                <Show when={editClientVehicole().length > 0}>
+                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
+                      <Show when={editVehicolLocked() && editClientVehicole().length > 1}>
+                        <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px" onClick={() => setEditVehicolLocked(false)}>Schimbă</button>
+                      </Show>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:3px">
+                      <For each={editClientVehicole()}>
+                        {(v) => (
+                          <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:${editVehicolLocked() ? "default" : "pointer"};background:${editSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
+                            <input
+                              type="radio"
+                              name="edit-vehicol"
+                              checked={editSelectedVehicol() === v.numar_masina}
+                              disabled={editVehicolLocked() && editClientVehicole().length > 1}
+                              onChange={() => setEditSelectedVehicol(v.numar_masina)}
+                            />
+                            <strong>{v.numar_masina}</strong>
+                            <Show when={v.marca || v.model}>
+                              <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                            </Show>
+                          </label>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                </Show>
+                <Show when={editReferintaCazareId() !== null}>
+                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
+                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
+                      <span style="flex:1">Cazare #{editReferintaCazareId()} — {editClientCazariVechi().find((c) => c.id === editReferintaCazareId())?.dataCheckin ?? ""}</span>
+                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setEditReferintaCazareId(null); setEditMontatePeMasina(false); }}>✕</button>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
+                      <input
+                        type="checkbox"
+                        checked={editMontatePeMasina()}
+                        onChange={(e) => setEditMontatePeMasina(e.currentTarget.checked)}
+                      />
+                      Anvelopele din cazarea veche au fost montate pe mașină
+                    </label>
+                  </div>
+                </Show>
               </div>
 
-              <div class="sl-modal-body" style="padding:20px 24px">
-                <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:16px;align-items:start">
+              {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
+              <div style="display:flex;flex-direction:column;gap:16px">
 
-                {/* ─ Coloana stânga: Client ─ */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
-                  <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
-                    <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
-                    <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
-                    <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c().clientTelefon}</div></Show>
-                  </div>
-                  <Show when={editClientVehicole().length > 0}>
-                    <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-                      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                        <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
-                        <Show when={editVehicolLocked() && editClientVehicole().length > 1}>
-                          <button class="btn btn-ghost btn-sm" style="padding:1px 8px;font-size:11px" onClick={() => setEditVehicolLocked(false)}>Schimbă</button>
-                        </Show>
-                      </div>
-                      <div style="display:flex;flex-direction:column;gap:3px">
-                        <For each={editClientVehicole()}>
-                          {(v) => (
-                            <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:${editVehicolLocked() ? "default" : "pointer"};background:${editSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
-                              <input
-                                type="radio"
-                                name="edit-vehicol"
-                                checked={editSelectedVehicol() === v.numar_masina}
-                                disabled={editVehicolLocked() && editClientVehicole().length > 1}
-                                onChange={() => setEditSelectedVehicol(v.numar_masina)}
-                              />
-                              <strong>{v.numar_masina}</strong>
-                              <Show when={v.marca || v.model}>
-                                <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
-                              </Show>
-                            </label>
-                          )}
-                        </For>
-                      </div>
-                    </div>
-                  </Show>
-                  <Show when={editReferintaCazareId() !== null}>
-                    <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
-                      <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
-                        <span style="flex:1">Cazare #{editReferintaCazareId()} — {editClientCazariVechi().find((c) => c.id === editReferintaCazareId())?.dataCheckin ?? ""}</span>
-                        <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setEditReferintaCazareId(null); setEditMontatePeMasina(false); }}>✕</button>
-                      </div>
-                      <label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;cursor:pointer">
+              {/* ─ Anvelope ─ */}
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <For each={editAnvelope()}>
+                    {(a) => (
+                      <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
                         <input
                           type="checkbox"
-                          checked={editMontatePeMasina()}
-                          onChange={(e) => setEditMontatePeMasina(e.currentTarget.checked)}
+                          checked={editSelectedIds().has(a.id)}
+                          onChange={() => setEditSelectedIds((prev) => {
+                            const next = new Set(prev);
+                            next.has(a.id) ? next.delete(a.id) : next.add(a.id);
+                            return next;
+                          })}
+                          style="flex-shrink:0"
                         />
-                        Anvelopele din cazarea veche au fost montate pe mașină
-                      </label>
-                    </div>
-                  </Show>
+                        <span style="flex:1;min-width:0">
+                          <strong>{a.marcaNume ?? "—"}</strong>
+                          <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                          <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
+                          {" · "}{TIP_LABELS[a.tip]}
+                          <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                          <Show when={a.id < 0}>
+                            <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
+                          </Show>
+                        </span>
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                          title="Editează"
+                          onClick={() => { setEditAnvEditId(a.id); setShowEditAnvForm(true); }}
+                        >Edit</button>
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                          title="Copiază"
+                          onClick={() => {
+                            const tempId = -Date.now();
+                            const copy = { ...a, id: tempId };
+                            setEditAnvelope((prev) => [...prev, copy]);
+                            setEditSelectedIds((prev) => new Set([...prev, tempId]));
+                          }}
+                        >Copy</button>
+                      </div>
+                    )}
+                  </For>
                 </div>
+                <Show when={!showEditAnvForm()}>
+                  <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setEditAnvEditId(null); setShowEditAnvForm(true); }}>+ Anvelopă nouă</button>
+                </Show>
+                <Show when={editAnvelope().length > 0}>
+                  <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                      {([
+                        ["Anvelope", editDepAnvelope, setEditDepAnvelope],
+                        ["Capace", editDepCapace, setEditDepCapace],
+                        ["Roti complete", editDepRotiComplete, setEditDepRotiComplete],
+                        ["Antifurturi", editDepAntifurturi, setEditDepAntifurturi],
+                        ["Prezoane", editDepPrezoane, setEditDepPrezoane],
+                      ] as const).map(([label, get, set]) => (
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                          <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </Show>
+                <Show when={showEditAnvForm()}>
+                  <AnvelopaForm
+                    clientId={c().clientId ?? 0}
+                    initialData={editAnvEditId() !== null ? editAnvelope().find((a) => a.id === editAnvEditId()) : undefined}
+                    onSaved={(a) => {
+                      if (editAnvEditId() !== null) {
+                        const oldId = editAnvEditId()!;
+                        setEditAnvelope((prev) => prev.map((x) => x.id === oldId ? a : x));
+                        setEditSelectedIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(a.id); return s; });
+                      } else {
+                        setEditAnvelope((prev) => [...prev, a]);
+                        setEditSelectedIds((prev) => new Set([...prev, a.id]));
+                      }
+                      setShowEditAnvForm(false);
+                      setEditAnvEditId(null);
+                    }}
+                    onCancel={() => { setShowEditAnvForm(false); setEditAnvEditId(null); }}
+                  />
+                </Show>
+              </div>
 
-                {/* ─ Coloana dreapta: Anvelope + Date Cazare ─ */}
-                <div style="display:flex;flex-direction:column;gap:16px">
+              {/* ─ Date Cazare ─ */}
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
+                <div style="display:grid;gap:8px">
+                  <SearchableSelect items={locuriCazare()} value={editLocId()} onSelect={setEditLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
+                  <SearchableSelect items={employees()} value={editEmpId()} onSelect={setEditEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
+                  <div>
+                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
+                    <input class="input" type="date" value={editCheckin()} onInput={(e) => setEditCheckin(e.currentTarget.value)} />
+                  </div>
+                  <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={editComments()} onInput={(e) => setEditComments(e.currentTarget.value)} />
+                </div>
+              </div>
 
-                {/* ─ Anvelope ─ */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
-                  <div style="display:flex;flex-direction:column;gap:4px">
-                    <For each={editAnvelope()}>
-                      {(a) => (
+              <Show when={editErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
+              </Show>
+
+              </div>{/* end coloana dreapta */}
+              </div>{/* end grid */}
+            </div>
+
+          </Modal>
+        )}
+      </Show>
+
+      {/* Modal: Admin Edit */}
+      <Show when={editAdminTarget()}>
+        {(t) => (
+          <Modal
+            open
+            title={t().type === "loc" ? "Editare loc cazare" : t().type === "dim" ? "Editare dimensiune" : "Editare profil"}
+            onClose={() => setEditAdminTarget(null)}
+            style="max-width:420px;width:100%"
+            footerStyle="justify-content:space-between"
+            closeOnEscape={false}
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <Show when={canManage()}>
+                <button
+                  class="btn btn-danger btn-sm"
+                  onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}
+                >Șterge</button>
+              </Show>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>Anulează</button>
+                  <button class="btn btn-primary btn-sm" onClick={saveAdminEdit} disabled={editAdminSaving() || !editAdminVal1().trim()}>
+                    {editAdminSaving() ? "..." : "Salvează"}
+                  </button>
+                </div>
+            </>}
+          >
+            <div style="padding:16px 24px;display:flex;flex-direction:column;gap:8px">
+              <input
+                class="input"
+                placeholder={t().type === "dim" ? "Valoare (ex: 205/55 R16)" : t().type === "profil" ? "Valoare profil (ex: 60)" : "Nume *"}
+                value={editAdminVal1()}
+                onInput={(e) => setEditAdminVal1(e.currentTarget.value)}
+              />
+              <Show when={t().type === "loc"}>
+                <input
+                  class="input"
+                  placeholder="Descriere"
+                  value={editAdminVal2()}
+                  onInput={(e) => setEditAdminVal2(e.currentTarget.value)}
+                />
+              </Show>
+            </div>
+          </Modal>
+        )}
+      </Show>
+
+      {/* Modal: Admin Delete */}
+      <Show when={adminDeleteTarget()}>
+        {(t) => (
+          <Modal
+            open
+            title="Confirmare ștergere"
+            onClose={() => setAdminDeleteTarget(null)}
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>Anulează</button>
+              <button class="btn btn-danger btn-sm" onClick={doAdminDelete} disabled={adminDeleting()}>
+                {adminDeleting() ? "..." : "Șterge definitiv"}
+              </button>
+            </>}
+          >
+            <div style="padding:16px 24px;font-size:14px">
+              Ștergi <strong>{t().label}</strong>? Acțiunea este ireversibilă.
+            </div>
+          </Modal>
+        )}
+      </Show>
+
+      {/* Modal: Cazare Noua */}
+      <Show when={showNewModal()}>
+        <Modal
+          open
+          title="Cazare Nouă"
+          onClose={cancelNewModal}
+          style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0"
+          headerStyle="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0"
+          footerStyle="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0"
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>Anulează</button>
+            <button class="btn btn-primary btn-sm" onClick={saveCazare} disabled={saving()}>
+              {saving() ? "Se salvează..." : "Salvează Cazarea"}
+            </button>
+          </>}
+        >
+
+          <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1.8fr 1.3fr;min-height:0">
+
+            {/* ─ Coloana stânga: Client ─ */}
+            <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border)">
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
+              <ClientSearch value={newClient()} onSelect={handleClientSelect} />
+              <ClientInfoBlock client={newClient()} />
+              <Show when={newClient() && newClientVehicole().length > 0}>
+                <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                  <div style="margin-bottom:4px">
+                    <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <For each={newClientVehicole()}>
+                      {(v) => (
+                        <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer;background:${newSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
+                          <input
+                            type="radio"
+                            name="new-vehicol"
+                            checked={newSelectedVehicol() === v.numar_masina}
+                            onChange={() => setNewSelectedVehicol(v.numar_masina)}
+                          />
+                          <strong>{v.numar_masina}</strong>
+                          <Show when={v.marca || v.model}>
+                            <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
+                          </Show>
+                        </label>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </Show>
+              <Show when={newReferintaCazareId() !== null}>
+                <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
+                  <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
+                    <span style="flex:1">Cazare #{newReferintaCazareId()} — {clientCazariVechi().find((c) => c.id === newReferintaCazareId())?.dataCheckin ?? ""}</span>
+                    <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setNewReferintaCazareId(null); setNewMontatePeMasina(false); }}>✕</button>
+                  </div>
+                  <div style="margin-top:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Anvelopele scoase au fost</div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                      <input type="radio" name="new-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
+                      <div>
+                        <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehiculul clientului</div>
+                      </div>
+                    </label>
+                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                      <input type="radio" name="new-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
+                      <div>
+                        <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                        <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </Show>
+            </div>
+            </div>
+
+            {/* ─ Coloana mijloc: Anvelope + Date Cazare ─ */}
+            <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:16px">
+
+            {/* ─ Zona: Anvelope ─ */}
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
+              <Show when={!newClient()}>
+                <p style="color:var(--text-muted);font-size:13px;margin:0">Selectați un client mai întâi.</p>
+              </Show>
+              <Show when={newClient()}>
+                <Show when={clientAnvelope().length === 0 && !showAnvForm()}>
+                  <p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Clientul nu are anvelope înregistrate.</p>
+                </Show>
+                <div style="display:flex;flex-direction:column;gap:4px">
+                  <For each={clientAnvelope()}>
+                    {(a, idx) => (
+                      <div style="display:flex;flex-direction:column">
                         <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
                           <input
                             type="checkbox"
-                            checked={editSelectedIds().has(a.id)}
-                            onChange={() => setEditSelectedIds((prev) => {
-                              const next = new Set(prev);
-                              next.has(a.id) ? next.delete(a.id) : next.add(a.id);
-                              return next;
-                            })}
+                            checked={selectedAnvIds().has(a.id)}
+                            onChange={() => toggleAnv(a.id)}
                             style="flex-shrink:0"
                           />
+                          <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
                           <span style="flex:1;min-width:0">
                             <strong>{a.marcaNume ?? "—"}</strong>
                             <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
@@ -2056,10 +2350,13 @@ export default function HotelAnvelope() {
                           </span>
                           <button
                             class="btn btn-ghost btn-sm"
-                            style="padding:1px 6px;font-size:11px;flex-shrink:0"
+                            style={`padding:1px 6px;font-size:11px;flex-shrink:0;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
                             title="Editează"
-                            onClick={() => { setEditAnvEditId(a.id); setShowEditAnvForm(true); }}
-                          >Edit</button>
+                            onClick={() => {
+                              if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
+                              else { setAnvEditId(a.id); setShowAnvForm(true); }
+                            }}
+                          >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
                           <button
                             class="btn btn-ghost btn-sm"
                             style="padding:1px 6px;font-size:11px;flex-shrink:0"
@@ -2067,397 +2364,110 @@ export default function HotelAnvelope() {
                             onClick={() => {
                               const tempId = -Date.now();
                               const copy = { ...a, id: tempId };
-                              setEditAnvelope((prev) => [...prev, copy]);
-                              setEditSelectedIds((prev) => new Set([...prev, tempId]));
+                              setClientAnvelope((prev) => [...prev, copy]);
+                              setSelectedAnvIds((prev) => new Set([...prev, tempId]));
                             }}
                           >Copy</button>
                         </div>
-                      )}
-                    </For>
-                  </div>
-                  <Show when={!showEditAnvForm()}>
-                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setEditAnvEditId(null); setShowEditAnvForm(true); }}>+ Anvelopă nouă</button>
-                  </Show>
-                  <Show when={editAnvelope().length > 0}>
-                    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
-                      <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
-                        {([
-                          ["Anvelope", editDepAnvelope, setEditDepAnvelope],
-                          ["Capace", editDepCapace, setEditDepCapace],
-                          ["Roti complete", editDepRotiComplete, setEditDepRotiComplete],
-                          ["Antifurturi", editDepAntifurturi, setEditDepAntifurturi],
-                          ["Prezoane", editDepPrezoane, setEditDepPrezoane],
-                        ] as const).map(([label, get, set]) => (
-                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-                            <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
-                            {label}
-                          </label>
-                        ))}
+                        <Show when={showAnvForm() && anvEditId() === a.id}>
+                          <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
+                            <AnvelopaForm
+                              clientId={newClient()!.id}
+                              initialData={a}
+                              compact={true}
+                              onSaved={(saved) => {
+                                const oldId = a.id;
+                                setClientAnvelope((prev) => prev.map((x) => x.id === oldId ? saved : x));
+                                setSelectedAnvIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(saved.id); return s; });
+                                setShowAnvForm(false);
+                                setAnvEditId(null);
+                              }}
+                              onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
+                            />
+                          </div>
+                        </Show>
                       </div>
-                    </div>
-                  </Show>
-                  <Show when={showEditAnvForm()}>
-                    <AnvelopaForm
-                      clientId={c().clientId ?? 0}
-                      initialData={editAnvEditId() !== null ? editAnvelope().find((a) => a.id === editAnvEditId()) : undefined}
-                      onSaved={(a) => {
-                        if (editAnvEditId() !== null) {
-                          const oldId = editAnvEditId()!;
-                          setEditAnvelope((prev) => prev.map((x) => x.id === oldId ? a : x));
-                          setEditSelectedIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(a.id); return s; });
-                        } else {
-                          setEditAnvelope((prev) => [...prev, a]);
-                          setEditSelectedIds((prev) => new Set([...prev, a.id]));
-                        }
-                        setShowEditAnvForm(false);
-                        setEditAnvEditId(null);
-                      }}
-                      onCancel={() => { setShowEditAnvForm(false); setEditAnvEditId(null); }}
-                    />
-                  </Show>
+                    )}
+                  </For>
                 </div>
-
-                {/* ─ Date Cazare ─ */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
-                  <div style="display:grid;gap:8px">
-                    <SearchableSelect items={locuriCazare()} value={editLocId()} onSelect={setEditLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
-                    <SearchableSelect items={employees()} value={editEmpId()} onSelect={setEditEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
-                    <div>
-                      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
-                      <input class="input" type="date" value={editCheckin()} onInput={(e) => setEditCheckin(e.currentTarget.value)} />
+                <Show when={!showAnvForm()}>
+                  <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
+                </Show>
+                <Show when={clientAnvelope().length > 0}>
+                  <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                      {([
+                        ["Anvelope", newDepAnvelope, setNewDepAnvelope],
+                        ["Capace", newDepCapace, setNewDepCapace],
+                        ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
+                        ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
+                        ["Prezoane", newDepPrezoane, setNewDepPrezoane],
+                      ] as const).map(([label, get, set]) => (
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                          <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                          {label}
+                        </label>
+                      ))}
                     </div>
-                    <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={editComments()} onInput={(e) => setEditComments(e.currentTarget.value)} />
                   </div>
-                </div>
-
-                <Show when={editErr()}>
-                  <p style="color:var(--danger);font-size:13px;margin:0">{editErr()}</p>
                 </Show>
-
-                </div>{/* end coloana dreapta */}
-                </div>{/* end grid */}
-              </div>
-
-              <div class="sl-modal-footer" style="justify-content:space-between">
-                <Show when={canManage()}>
-                  <button class="btn btn-danger btn-sm" onClick={() => { setDeleteTarget({ id: c().id, name: c().clientNume ?? "—" }); setEditCazare(null); }}>Șterge</button>
-                </Show>
-                <div style="display:flex;gap:8px">
-                  <button class="btn btn-ghost btn-sm" onClick={() => setEditCazare(null)}>Anulează</button>
-                  <button class="btn btn-primary btn-sm" onClick={doEdit} disabled={editSaving()}>
-                    {editSaving() ? "Se salvează..." : "Salvează"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Show>
-
-      {/* Modal: Admin Edit */}
-      <Show when={editAdminTarget()}>
-        {(t) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:420px;width:100%">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">
-                  {t().type === "loc" ? "Editare loc cazare" : t().type === "dim" ? "Editare dimensiune" : "Editare profil"}
-                </span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>✕</button>
-              </div>
-              <div style="padding:16px 24px;display:flex;flex-direction:column;gap:8px">
-                <input
-                  class="input"
-                  placeholder={t().type === "dim" ? "Valoare (ex: 205/55 R16)" : t().type === "profil" ? "Valoare profil (ex: 60)" : "Nume *"}
-                  value={editAdminVal1()}
-                  onInput={(e) => setEditAdminVal1(e.currentTarget.value)}
-                />
-                <Show when={t().type === "loc"}>
-                  <input
-                    class="input"
-                    placeholder="Descriere"
-                    value={editAdminVal2()}
-                    onInput={(e) => setEditAdminVal2(e.currentTarget.value)}
+                <Show when={showAnvForm() && anvEditId() === null}>
+                  <AnvelopaForm
+                    clientId={newClient()!.id}
+                    initialData={undefined}
+                    onSaved={(a) => {
+                      setClientAnvelope((prev) => [...prev, a]);
+                      setSelectedAnvIds((prev) => new Set([...prev, a.id]));
+                      setShowAnvForm(false);
+                      setAnvEditId(null);
+                    }}
+                    onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
                   />
                 </Show>
-              </div>
-              <div class="sl-modal-footer" style="justify-content:space-between">
-                <Show when={canManage()}>
-                  <button
-                    class="btn btn-danger btn-sm"
-                    onClick={() => { setAdminDeleteTarget({ type: t().type, id: t().id, label: editAdminVal1() }); setEditAdminTarget(null); }}
-                  >Șterge</button>
-                </Show>
-                  <div style="display:flex;gap:8px">
-                    <button class="btn btn-ghost btn-sm" onClick={() => setEditAdminTarget(null)}>Anulează</button>
-                    <button class="btn btn-primary btn-sm" onClick={saveAdminEdit} disabled={editAdminSaving() || !editAdminVal1().trim()}>
-                      {editAdminSaving() ? "..." : "Salvează"}
-                    </button>
-                  </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </Show>
-
-      {/* Modal: Admin Delete */}
-      <Show when={adminDeleteTarget()}>
-        {(t) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Confirmare ștergere</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>✕</button>
-              </div>
-              <div style="padding:16px 24px;font-size:14px">
-                Ștergi <strong>{t().label}</strong>? Acțiunea este ireversibilă.
-              </div>
-              <div class="sl-modal-footer">
-                <button class="btn btn-ghost btn-sm" onClick={() => setAdminDeleteTarget(null)}>Anulează</button>
-                <button class="btn btn-danger btn-sm" onClick={doAdminDelete} disabled={adminDeleting()}>
-                  {adminDeleting() ? "..." : "Șterge definitiv"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Show>
-
-      {/* Modal: Cazare Noua */}
-      <Show when={showNewModal()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal" style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
-            <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
-              <span class="sl-modal-title">Cazare Nouă</span>
-              <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>✕</button>
-            </div>
-
-            <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1.8fr 1.3fr;min-height:0">
-
-              {/* ─ Coloana stânga: Client ─ */}
-              <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border)">
-              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
-                <ClientSearch value={newClient()} onSelect={handleClientSelect} />
-                <ClientInfoBlock client={newClient()} />
-                <Show when={newClient() && newClientVehicole().length > 0}>
-                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="margin-bottom:4px">
-                      <div style="font-size:12px;color:var(--text-muted)">Mașini client</div>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:3px">
-                      <For each={newClientVehicole()}>
-                        {(v) => (
-                          <label style={`display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:13px;cursor:pointer;background:${newSelectedVehicol() === v.numar_masina ? "var(--primary-bg,rgba(99,102,241,.1))" : "var(--bg)"}`}>
-                            <input
-                              type="radio"
-                              name="new-vehicol"
-                              checked={newSelectedVehicol() === v.numar_masina}
-                              onChange={() => setNewSelectedVehicol(v.numar_masina)}
-                            />
-                            <strong>{v.numar_masina}</strong>
-                            <Show when={v.marca || v.model}>
-                              <span style="color:var(--text-muted);font-size:11px">{[v.marca, v.model].filter(Boolean).join(" ")}</span>
-                            </Show>
-                          </label>
-                        )}
-                      </For>
-                    </div>
-                  </div>
-                </Show>
-                <Show when={newReferintaCazareId() !== null}>
-                  <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-                    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Referință cazare anterioară</div>
-                    <div style="display:flex;align-items:center;gap:6px;font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
-                      <span style="flex:1">Cazare #{newReferintaCazareId()} — {clientCazariVechi().find((c) => c.id === newReferintaCazareId())?.dataCheckin ?? ""}</span>
-                      <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { setNewReferintaCazareId(null); setNewMontatePeMasina(false); }}>✕</button>
-                    </div>
-                    <div style="margin-top:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Anvelopele scoase au fost</div>
-                    <div style="display:flex;flex-direction:column;gap:6px">
-                      <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
-                        <input type="radio" name="new-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
-                        <div>
-                          <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
-                          <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehiculul clientului</div>
-                        </div>
-                      </label>
-                      <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
-                        <input type="radio" name="new-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
-                        <div>
-                          <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
-                          <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </Show>
-              </div>
-              </div>
-
-              {/* ─ Coloana mijloc: Anvelope + Date Cazare ─ */}
-              <div style="overflow-y:auto;padding:16px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:16px">
-
-              {/* ─ Zona: Anvelope ─ */}
-              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
-                <Show when={!newClient()}>
-                  <p style="color:var(--text-muted);font-size:13px;margin:0">Selectați un client mai întâi.</p>
-                </Show>
-                <Show when={newClient()}>
-                  <Show when={clientAnvelope().length === 0 && !showAnvForm()}>
-                    <p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Clientul nu are anvelope înregistrate.</p>
-                  </Show>
-                  <div style="display:flex;flex-direction:column;gap:4px">
-                    <For each={clientAnvelope()}>
-                      {(a, idx) => (
-                        <div style="display:flex;flex-direction:column">
-                          <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
-                            <input
-                              type="checkbox"
-                              checked={selectedAnvIds().has(a.id)}
-                              onChange={() => toggleAnv(a.id)}
-                              style="flex-shrink:0"
-                            />
-                            <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
-                            <span style="flex:1;min-width:0">
-                              <strong>{a.marcaNume ?? "—"}</strong>
-                              <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                              <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                              {" · "}{TIP_LABELS[a.tip]}
-                              <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
-                              <Show when={a.id < 0}>
-                                <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
-                              </Show>
-                            </span>
-                            <button
-                              class="btn btn-ghost btn-sm"
-                              style={`padding:1px 6px;font-size:11px;flex-shrink:0;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
-                              title="Editează"
-                              onClick={() => {
-                                if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
-                                else { setAnvEditId(a.id); setShowAnvForm(true); }
-                              }}
-                            >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
-                            <button
-                              class="btn btn-ghost btn-sm"
-                              style="padding:1px 6px;font-size:11px;flex-shrink:0"
-                              title="Copiază"
-                              onClick={() => {
-                                const tempId = -Date.now();
-                                const copy = { ...a, id: tempId };
-                                setClientAnvelope((prev) => [...prev, copy]);
-                                setSelectedAnvIds((prev) => new Set([...prev, tempId]));
-                              }}
-                            >Copy</button>
-                          </div>
-                          <Show when={showAnvForm() && anvEditId() === a.id}>
-                            <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
-                              <AnvelopaForm
-                                clientId={newClient()!.id}
-                                initialData={a}
-                                compact={true}
-                                onSaved={(saved) => {
-                                  const oldId = a.id;
-                                  setClientAnvelope((prev) => prev.map((x) => x.id === oldId ? saved : x));
-                                  setSelectedAnvIds((prev) => { const s = new Set(prev); s.delete(oldId); s.add(saved.id); return s; });
-                                  setShowAnvForm(false);
-                                  setAnvEditId(null);
-                                }}
-                                onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
-                              />
-                            </div>
-                          </Show>
-                        </div>
-                      )}
-                    </For>
-                  </div>
-                  <Show when={!showAnvForm()}>
-                    <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
-                  </Show>
-                  <Show when={clientAnvelope().length > 0}>
-                    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lasat pentru depozitare urmatoarele:</div>
-                      <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
-                        {([
-                          ["Anvelope", newDepAnvelope, setNewDepAnvelope],
-                          ["Capace", newDepCapace, setNewDepCapace],
-                          ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
-                          ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
-                          ["Prezoane", newDepPrezoane, setNewDepPrezoane],
-                        ] as const).map(([label, get, set]) => (
-                          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-                            <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
-                            {label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </Show>
-                  <Show when={showAnvForm() && anvEditId() === null}>
-                    <AnvelopaForm
-                      clientId={newClient()!.id}
-                      initialData={undefined}
-                      onSaved={(a) => {
-                        setClientAnvelope((prev) => [...prev, a]);
-                        setSelectedAnvIds((prev) => new Set([...prev, a.id]));
-                        setShowAnvForm(false);
-                        setAnvEditId(null);
-                      }}
-                      onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
-                    />
-                  </Show>
-                </Show>
-              </div>
-
-              {/* ─ Date Cazare ─ */}
-              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
-                <div style="display:grid;gap:8px">
-                  <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
-                  <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
-                  <div>
-                    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
-                    <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
-                  </div>
-                  <textarea class="input" rows={4} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
-                </div>
-              </div>
-
-              <Show when={saveErr()}>
-                <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
               </Show>
+            </div>
 
-              </div>{/* end coloana mijloc */}
-
-              {/* ─ Coloana dreapta: Imagine Cazare Roti ─ */}
-              <div style="overflow:hidden;position:relative">
-                <Show
-                  when={cazareImageUrl()}
-                  fallback={
-                    <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface2)">
-                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
-                        <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
-                      </svg>
-                      <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
-                    </div>
-                  }
-                >
-                  <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:cover;display:block" />
-                </Show>
+            {/* ─ Date Cazare ─ */}
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
+              <div style="display:grid;gap:8px">
+                <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
+                <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
+                  <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
+                </div>
+                <textarea class="input" rows={4} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
               </div>
-
             </div>
 
-            <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0">
-              <button class="btn btn-ghost btn-sm" onClick={cancelNewModal}>Anulează</button>
-              <button class="btn btn-primary btn-sm" onClick={saveCazare} disabled={saving()}>
-                {saving() ? "Se salvează..." : "Salvează Cazarea"}
-              </button>
+            <Show when={saveErr()}>
+              <p style="color:var(--danger);font-size:13px;margin:0">{saveErr()}</p>
+            </Show>
+
+            </div>{/* end coloana mijloc */}
+
+            {/* ─ Coloana dreapta: Imagine Cazare Roti ─ */}
+            <div style="overflow:hidden;position:relative">
+              <Show
+                when={cazareImageUrl()}
+                fallback={
+                  <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:var(--surface2)">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                      <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                    </svg>
+                    <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
+                  </div>
+                }
+              >
+                <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:cover;display:block" />
+              </Show>
             </div>
+
           </div>
-        </div>
+
+        </Modal>
       </Show>
 
       {/* Modal: Sugestie anvelope din ultimul montaj */}
@@ -2468,108 +2478,115 @@ export default function HotelAnvelope() {
           const clientMismatch = () => s.clientId !== null && currentClientId() !== null && s.clientId !== currentClientId();
           const dateStr = () => (s.montajCreatedAt ? s.montajCreatedAt.slice(0, 10) : null);
           return (
-            <div class="sl-modal-overlay" style="z-index:1100">
-              <div class="sl-modal" style="width:min(900px,96vw);max-height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
-                <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
-                  <span class="sl-modal-title">Sugestie cazare</span>
-                  <button class="btn btn-ghost btn-sm" onClick={() => setMontajSuggestion(null)}>✕</button>
+            <Modal
+              open
+              title="Sugestie cazare"
+              onClose={() => setMontajSuggestion(null)}
+              style="width:min(900px,96vw);max-height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0"
+              overlayStyle="z-index:1100"
+              headerStyle="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0"
+              footerStyle="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0;display:flex;justify-content:flex-end;gap:8px"
+              bodyClass="sl-modal-body--stack"
+              footer={<>
+                <button class="btn btn-ghost btn-sm" onClick={() => setMontajSuggestion(null)}>Introduc manual</button>
+                <button
+                  class="btn btn-primary btn-sm"
+                  disabled={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}
+                  onClick={applySuggestion}
+                >
+                  Folosește aceste anvelope
+                </button>
+              </>}
+            >
+
+              <div style="padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px">
+                <div style="font-size:14px;line-height:1.5">
+                  Pentru plăcuța <strong>{s.numarMasina}</strong> am identificat un montaj din data <strong>{fmtDate(dateStr())}</strong>.
+                  Confirmă dacă acestea sunt anvelopele care se doresc cazate.
                 </div>
 
-                <div style="padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:12px">
-                  <div style="font-size:14px;line-height:1.5">
-                    Pentru plăcuța <strong>{s.numarMasina}</strong> am identificat un montaj din data <strong>{fmtDate(dateStr())}</strong>.
-                    Confirmă dacă acestea sunt anvelopele care se doresc cazate.
+                <Show when={clientMismatch()}>
+                  <div style="background:#fff4e5;border:1px solid #f0b400;color:#8a5a00;padding:8px 10px;border-radius:6px;font-size:13px">
+                    Atenție: clientul de pe receipt-ul anterior (<strong>{s.clientNume ?? "necunoscut"}</strong>) diferă de clientul curent.
                   </div>
+                </Show>
 
-                  <Show when={clientMismatch()}>
-                    <div style="background:#fff4e5;border:1px solid #f0b400;color:#8a5a00;padding:8px 10px;border-radius:6px;font-size:13px">
-                      Atenție: clientul de pe receipt-ul anterior (<strong>{s.clientNume ?? "necunoscut"}</strong>) diferă de clientul curent.
-                    </div>
-                  </Show>
-
-                  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-                    <For each={s.wheels.slice(0, 5)}>
-                      {(w) => (
-                        <div style="border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface)">
-                          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
-                            <strong style="font-size:13px">{POZITIE_LABELS[w.pozitie]}</strong>
-                            <span style="font-size:11px;color:var(--text-muted);background:var(--bg-alt,#f5f5f5);padding:2px 6px;border-radius:4px">{TIP_LABELS[w.tip]}</span>
-                          </div>
-                          <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12px">
-                            <span style="color:var(--text-muted)">Marcă:</span><span>{w.marcaNume ?? "—"}</span>
-                            <span style="color:var(--text-muted)">Dimensiune:</span><span>{w.dimensiuneValoare ?? "—"}</span>
-                            <span style="color:var(--text-muted)">Profil:</span><span>{w.profilValoare ?? "—"}</span>
-                            <span style="color:var(--text-muted)">DOT:</span><span>{w.dotValoare ?? "—"}</span>
-                            <span style="color:var(--text-muted)">Adâncime:</span><span>{w.adancime != null ? `${w.adancime} mm` : "—"}</span>
-                            <span style="color:var(--text-muted)">Indice viteză:</span><span>{w.indiceViteza ?? "—"}</span>
-                            <span style="color:var(--text-muted)">Indice sarcină:</span><span>{w.indiceSarcina ?? "—"}</span>
-                            <Show when={w.comments}>
-                              <span style="color:var(--text-muted)">Note:</span><span>{w.comments}</span>
-                            </Show>
-                          </div>
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+                  <For each={s.wheels.slice(0, 5)}>
+                    {(w) => (
+                      <div style="border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface)">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px">
+                          <strong style="font-size:13px">{POZITIE_LABELS[w.pozitie]}</strong>
+                          <span style="font-size:11px;color:var(--text-muted);background:var(--bg-alt,#f5f5f5);padding:2px 6px;border-radius:4px">{TIP_LABELS[w.tip]}</span>
                         </div>
-                      )}
-                    </For>
-                  </div>
-
-                  <Show when={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}>
-                    <div style="font-size:12px;color:var(--text-muted)">Atenție: toate roțile din montajul anterior sunt marcate ca rezervă. Niciuna nu va fi pre-populată automat.</div>
-                  </Show>
+                        <div style="display:grid;grid-template-columns:auto 1fr;gap:3px 8px;font-size:12px">
+                          <span style="color:var(--text-muted)">Marcă:</span><span>{w.marcaNume ?? "—"}</span>
+                          <span style="color:var(--text-muted)">Dimensiune:</span><span>{w.dimensiuneValoare ?? "—"}</span>
+                          <span style="color:var(--text-muted)">Profil:</span><span>{w.profilValoare ?? "—"}</span>
+                          <span style="color:var(--text-muted)">DOT:</span><span>{w.dotValoare ?? "—"}</span>
+                          <span style="color:var(--text-muted)">Adâncime:</span><span>{w.adancime != null ? `${w.adancime} mm` : "—"}</span>
+                          <span style="color:var(--text-muted)">Indice viteză:</span><span>{w.indiceViteza ?? "—"}</span>
+                          <span style="color:var(--text-muted)">Indice sarcină:</span><span>{w.indiceSarcina ?? "—"}</span>
+                          <Show when={w.comments}>
+                            <span style="color:var(--text-muted)">Note:</span><span>{w.comments}</span>
+                          </Show>
+                        </div>
+                      </div>
+                    )}
+                  </For>
                 </div>
 
-                <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0;display:flex;justify-content:flex-end;gap:8px">
-                  <button class="btn btn-ghost btn-sm" onClick={() => setMontajSuggestion(null)}>Introduc manual</button>
-                  <button
-                    class="btn btn-primary btn-sm"
-                    disabled={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}
-                    onClick={applySuggestion}
-                  >
-                    Folosește aceste anvelope
-                  </button>
-                </div>
+                <Show when={s.wheels.filter((w) => w.pozitie !== "rezerva").length === 0}>
+                  <div style="font-size:12px;color:var(--text-muted)">Atenție: toate roțile din montajul anterior sunt marcate ca rezervă. Niciuna nu va fi pre-populată automat.</div>
+                </Show>
               </div>
-            </div>
+
+            </Modal>
           );
         }}
       </Show>
 
       {/* Prompt de intrare din POS → întrebare cazare nouă sau căutare istoric */}
       <Show when={entryChoicePrompt()}>
-        <div class="sl-modal-overlay" style="z-index:1100">
-          <div class="sl-modal" style="max-width:560px;width:100%;text-align:center">
-            <div class="sl-modal-header" style="justify-content:center;border-bottom:none;padding-bottom:0">
-              <span class="sl-modal-title">Cum continuați?</span>
-            </div>
-            <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="12" y1="8" x2="12" y2="12"/>
-                <line x1="12" y1="16" x2="12.01" y2="16"/>
-              </svg>
-              <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
-                Pentru plăcuța <strong>{posHotelCtx()?.titlu}</strong> alegeți acțiunea dorită:
-              </p>
-            </div>
-            <div class="sl-modal-footer" style="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none;flex-wrap:wrap">
-              <button
-                class="btn btn-ghost"
-                style="min-width:180px;min-height:96px;font-size:15px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
-                onClick={() => { setEntryChoicePrompt(false); openNewModal(); }}
-              >
-                Cazare nouă
-                <div style="font-size:11px;font-weight:400;color:var(--text-muted);margin-top:4px">Adăugați anvelope noi</div>
-              </button>
-              <button
-                class="btn btn-primary"
-                style="min-width:180px;min-height:96px;font-size:15px;font-weight:700;border-radius:10px"
-                onClick={enterHistorySearchMode}
-              >
-                Caută în istoric
-                <div style="font-size:11px;font-weight:400;opacity:.85;margin-top:4px">Scoate anvelope de la alt client</div>
-              </button>
-            </div>
+        <Modal
+          open
+          title="Cum continuați?"
+          hideClose
+          style="max-width:560px;width:100%;text-align:center"
+          overlayStyle="z-index:1100"
+          headerStyle="justify-content:center;border-bottom:none;padding-bottom:0"
+          footerStyle="justify-content:center;gap:16px;padding:20px 24px 24px;border-top:none;flex-wrap:wrap"
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              class="btn btn-ghost"
+              style="min-width:180px;min-height:96px;font-size:15px;font-weight:600;border-radius:10px;border:2px solid var(--border)"
+              onClick={() => { setEntryChoicePrompt(false); openNewModal(); }}
+            >
+              Cazare nouă
+              <div style="font-size:11px;font-weight:400;color:var(--text-muted);margin-top:4px">Adăugați anvelope noi</div>
+            </button>
+            <button
+              class="btn btn-primary"
+              style="min-width:180px;min-height:96px;font-size:15px;font-weight:700;border-radius:10px"
+              onClick={enterHistorySearchMode}
+            >
+              Caută în istoric
+              <div style="font-size:11px;font-weight:400;opacity:.85;margin-top:4px">Scoate anvelope de la alt client</div>
+            </button>
+          </>}
+        >
+          <div style="padding:16px 24px 8px;display:flex;flex-direction:column;align-items:center;gap:12px">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <p style="color:var(--text);font-size:15px;line-height:1.5;margin:0">
+              Pentru plăcuța <strong>{posHotelCtx()?.titlu}</strong> alegeți acțiunea dorită:
+            </p>
           </div>
-        </div>
+        </Modal>
       </Show>
 
       {/* Modal: Scoatere și Introducere Nouă */}
@@ -2577,303 +2594,306 @@ export default function HotelAnvelope() {
         {(_) => {
           const c = combinedCazare()!;
           return (
-            <div class="sl-modal-overlay">
-              <div class="sl-modal" style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0">
-                <div class="sl-modal-header" style="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0">
-                  <span class="sl-modal-title">Scoatere și Introducere Nouă</span>
-                  <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>✕</button>
+            <Modal
+              open
+              title="Scoatere și Introducere Nouă"
+              onClose={() => setCombinedCazare(null)}
+              style="width:98vw;max-width:none;height:96vh;padding:0;overflow:hidden;display:flex;flex-direction:column;gap:0"
+              headerStyle="padding:14px 20px;border-bottom:1px solid var(--border);flex-shrink:0;margin-bottom:0"
+              footerStyle="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0"
+              closeOnEscape={false}
+              bodyClass="sl-modal-body--stack"
+              footer={<>
+                <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>Anulează</button>
+                <button class="btn btn-primary btn-sm" onClick={doCombinedCheckoutNew} disabled={combinedSaving()}>
+                  {combinedSaving() ? "Se procesează..." : "Confirmă Scoaterea și Introducerea"}
+                </button>
+              </>}
+            >
+
+              <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:0">
+
+                {/* ─ Stânga: View scoatere ─ */}
+                <div style="overflow-y:auto;padding:16px;border-right:2px solid #1e3a8a;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1e3a8a;padding-bottom:6px;border-bottom:2px solid #1e3a8a">
+                    Scoatere din depozit
+                  </div>
+
+                  {/* Row: Client + S-a depozitat */}
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    {/* Client info */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Client</div>
+                      <div style="display:grid;gap:4px;font-size:13px">
+                        <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c.clientNume ?? "—"}</strong></div>
+                        <Show when={c.clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c.clientCui}</div></Show>
+                        <Show when={c.clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c.clientTelefon}</div></Show>
+                        <Show when={c.numarMasina}><div><span style="color:var(--text-muted)">Mașină:</span> {c.numarMasina}</div></Show>
+                      </div>
+                    </div>
+
+                    {/* Dep items */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">S-a depozitat</div>
+                      <div style="display:flex;flex-wrap:wrap;gap:6px">
+                        <For each={[
+                          [c.depAnvelope, "Anvelope"],
+                          [c.depCapace, "Capace"],
+                          [c.depRotiComplete, "Roți complete"],
+                          [c.depAntifurturi, "Antifurturi"],
+                          [c.depPrezoane, "Prezoane"],
+                        ] as [boolean, string][]}>
+                          {([val, label]) => (
+                            <Show when={val}>
+                              <span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af">{label}</span>
+                            </Show>
+                          )}
+                        </For>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tires table */}
+                  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope ({c.items.length})</div>
+                    <Show when={c.items.length > 0}>
+                      <div style="overflow-x:auto">
+                        <table style="width:100%;border-collapse:collapse;font-size:12px">
+                          <thead>
+                            <tr style="background:#1e3a8a;color:white">
+                              <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
+                              <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
+                              <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
+                              <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
+                              <th style="padding:5px 8px;text-align:left;font-weight:600">Adânc.</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <For each={c.items.filter(i => i.anvelopa)}>
+                              {(item, idx) => (
+                                <tr style={`background:${idx() % 2 === 0 ? "var(--bg)" : "transparent"}`}>
+                                  <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
+                                  <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                                  <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
+                                  <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
+                                  <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime}mm` : "—"}</td>
+                                </tr>
+                              )}
+                            </For>
+                          </tbody>
+                        </table>
+                      </div>
+                    </Show>
+                    <Show when={c.items.length === 0}>
+                      <p style="color:var(--text-muted);font-size:12px;margin:0">—</p>
+                    </Show>
+                  </div>
+
+                  {/* Row: Anvelopele scoase au fost + Date scoatere */}
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                    {/* Anvelopele scoase au fost (montate/predate) */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelopele scoase au fost</div>
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                          <input type="radio" name="combined-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
+                          <div>
+                            <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                            <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                          </div>
+                        </label>
+                        <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                          <input type="radio" name="combined-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
+                          <div>
+                            <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                            <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Checkout date + comments */}
+                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date scoatere</div>
+                      <div style="display:grid;gap:8px">
+                        <div>
+                          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data scoatere</label>
+                          <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
+                        </div>
+                        <textarea class="input" rows={2} placeholder="Comentarii scoatere..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Imagine ghidare: Montare / Scoatere roți */}
+                  <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
+                    <Show
+                      when={newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl()}
+                      fallback={
+                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                            <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                          </svg>
+                          <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
+                        </div>
+                      }
+                    >
+                      <img
+                        src={(newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl())!}
+                        alt={newMontatePeMasina() ? "Montare Roti" : "Scoatere Roti"}
+                        style="width:100%;height:100%;object-fit:contain;display:block"
+                      />
+                    </Show>
+                  </div>
                 </div>
 
-                <div style="flex:1;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:0">
+                {/* ─ Dreapta: Cazare nouă ─ */}
+                <div style="overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+                  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#065f46;padding-bottom:6px;border-bottom:2px solid #059669">
+                    Introducere nouă la depozitare
+                  </div>
 
-                  {/* ─ Stânga: View scoatere ─ */}
-                  <div style="overflow-y:auto;padding:16px;border-right:2px solid #1e3a8a;display:flex;flex-direction:column;gap:12px">
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#1e3a8a;padding-bottom:6px;border-bottom:2px solid #1e3a8a">
-                      Scoatere din depozit
-                    </div>
-
-                    {/* Row: Client + S-a depozitat */}
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                      {/* Client info */}
-                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Client</div>
-                        <div style="display:grid;gap:4px;font-size:13px">
-                          <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c.clientNume ?? "—"}</strong></div>
-                          <Show when={c.clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c.clientCui}</div></Show>
-                          <Show when={c.clientTelefon}><div><span style="color:var(--text-muted)">Tel:</span> {c.clientTelefon}</div></Show>
-                          <Show when={c.numarMasina}><div><span style="color:var(--text-muted)">Mașină:</span> {c.numarMasina}</div></Show>
-                        </div>
+                  {/* Client pre-filled */}
+                  <Show when={newClient()}>
+                    <div style="border:1px solid #059669;border-radius:8px;padding:10px 12px;background:rgba(5,150,105,.06)">
+                      <div style="font-size:14px;font-weight:700;color:#065f46">
+                        Client <span>{newClient()!.nume}</span> preluat
                       </div>
+                      <Show when={newClient()!.telefon}><div style="font-size:12px;color:var(--text-muted);margin-top:2px">{newClient()!.telefon}</div></Show>
+                    </div>
+                  </Show>
 
-                      {/* Dep items */}
-                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">S-a depozitat</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px">
-                          <For each={[
-                            [c.depAnvelope, "Anvelope"],
-                            [c.depCapace, "Capace"],
-                            [c.depRotiComplete, "Roți complete"],
-                            [c.depAntifurturi, "Antifurturi"],
-                            [c.depPrezoane, "Prezoane"],
-                          ] as [boolean, string][]}>
-                            {([val, label]) => (
-                              <Show when={val}>
-                                <span style="padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af">{label}</span>
+                  {/* Tires */}
+                  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope de introdus</div>
+                    <Show when={!newClient()}>
+                      <p style="color:var(--text-muted);font-size:13px;margin:0">Se încarcă clientul...</p>
+                    </Show>
+                    <Show when={newClient()}>
+                      <Show when={clientAnvelope().length === 0 && !showAnvForm()}>
+                        <p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Nicio anvelopă înregistrată.</p>
+                      </Show>
+                      <div style="display:flex;flex-direction:column;gap:4px">
+                        <For each={clientAnvelope()}>
+                          {(a, idx) => (
+                            <div style="display:flex;flex-direction:column">
+                              <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
+                                <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
+                                <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
+                                <span style="flex:1;min-width:0">
+                                  <strong>{a.marcaNume ?? "—"}</strong>
+                                  <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
+                                  <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
+                                  {" · "}{TIP_LABELS[a.tip]}
+                                  <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                                  <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
+                                </span>
+                                <button
+                                  class="btn btn-ghost btn-sm"
+                                  style={`padding:1px 6px;font-size:11px;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
+                                  onClick={() => {
+                                    if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
+                                    else { setAnvEditId(a.id); setShowAnvForm(true); }
+                                  }}
+                                >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
+                                <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
+                              </div>
+                              <Show when={showAnvForm() && anvEditId() === a.id}>
+                                <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
+                                  <AnvelopaForm
+                                    clientId={newClient()!.id}
+                                    initialData={a}
+                                    compact={true}
+                                    onSaved={(saved) => {
+                                      const oldId = a.id;
+                                      setClientAnvelope(p => p.map(x => x.id === oldId ? saved : x));
+                                      setSelectedAnvIds(p => { const s = new Set(p); s.delete(oldId); s.add(saved.id); return s; });
+                                      setShowAnvForm(false); setAnvEditId(null);
+                                    }}
+                                    onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
+                                  />
+                                </div>
                               </Show>
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Tires table */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope ({c.items.length})</div>
-                      <Show when={c.items.length > 0}>
-                        <div style="overflow-x:auto">
-                          <table style="width:100%;border-collapse:collapse;font-size:12px">
-                            <thead>
-                              <tr style="background:#1e3a8a;color:white">
-                                <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
-                                <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
-                                <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
-                                <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
-                                <th style="padding:5px 8px;text-align:left;font-weight:600">Adânc.</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <For each={c.items.filter(i => i.anvelopa)}>
-                                {(item, idx) => (
-                                  <tr style={`background:${idx() % 2 === 0 ? "var(--bg)" : "transparent"}`}>
-                                    <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
-                                    <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
-                                    <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
-                                    <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
-                                    <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime}mm` : "—"}</td>
-                                  </tr>
-                                )}
-                              </For>
-                            </tbody>
-                          </table>
-                        </div>
-                      </Show>
-                      <Show when={c.items.length === 0}>
-                        <p style="color:var(--text-muted);font-size:12px;margin:0">—</p>
-                      </Show>
-                    </div>
-
-                    {/* Row: Anvelopele scoase au fost + Date scoatere */}
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-                      {/* Anvelopele scoase au fost (montate/predate) */}
-                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelopele scoase au fost</div>
-                        <div style="display:flex;flex-direction:column;gap:6px">
-                          <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${newMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${newMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
-                            <input type="radio" name="combined-montate" checked={newMontatePeMasina()} onChange={() => setNewMontatePeMasina(true)} />
-                            <div>
-                              <div style={`font-weight:600;font-size:13px;color:${newMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
-                              <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
                             </div>
-                          </label>
-                          <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!newMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!newMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
-                            <input type="radio" name="combined-montate" checked={!newMontatePeMasina()} onChange={() => setNewMontatePeMasina(false)} />
-                            <div>
-                              <div style={`font-weight:600;font-size:13px;color:${!newMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
-                              <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
-                            </div>
-                          </label>
-                        </div>
+                          )}
+                        </For>
                       </div>
-
-                      {/* Checkout date + comments */}
-                      <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date scoatere</div>
-                        <div style="display:grid;gap:8px">
-                          <div>
-                            <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data scoatere</label>
-                            <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
-                          </div>
-                          <textarea class="input" rows={2} placeholder="Comentarii scoatere..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Imagine ghidare: Montare / Scoatere roți */}
-                    <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
-                      <Show
-                        when={newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl()}
-                        fallback={
-                          <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
-                              <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
-                            </svg>
-                            <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
-                          </div>
-                        }
-                      >
-                        <img
-                          src={(newMontatePeMasina() ? montareImageUrl() : scoatereImageUrl())!}
-                          alt={newMontatePeMasina() ? "Montare Roti" : "Scoatere Roti"}
-                          style="width:100%;height:100%;object-fit:contain;display:block"
+                      <Show when={!showAnvForm()}>
+                        <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
+                      </Show>
+                      <Show when={showAnvForm() && anvEditId() === null}>
+                        <AnvelopaForm
+                          clientId={newClient()!.id}
+                          initialData={undefined}
+                          onSaved={(a) => {
+                            setClientAnvelope(p => [...p, a]);
+                            setSelectedAnvIds(p => new Set([...p, a.id]));
+                            setShowAnvForm(false); setAnvEditId(null);
+                          }}
+                          onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
                         />
                       </Show>
+                      {/* Dep items */}
+                      <Show when={clientAnvelope().length > 0}>
+                        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                          <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lăsat pentru depozitare:</div>
+                          <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
+                            {([
+                              ["Anvelope", newDepAnvelope, setNewDepAnvelope],
+                              ["Capace", newDepCapace, setNewDepCapace],
+                              ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
+                              ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
+                              ["Prezoane", newDepPrezoane, setNewDepPrezoane],
+                            ] as const).map(([label, get, set]) => (
+                              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
+                                <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </Show>
+                    </Show>
+                  </div>
+
+                  {/* Cazare details */}
+                  <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
+                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date cazare nouă</div>
+                    <div style="display:grid;gap:8px">
+                      <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
+                      <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
+                      <div>
+                        <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
+                        <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
+                      </div>
+                      <textarea class="input" rows={3} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
                     </div>
                   </div>
 
-                  {/* ─ Dreapta: Cazare nouă ─ */}
-                  <div style="overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
-                    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#065f46;padding-bottom:6px;border-bottom:2px solid #059669">
-                      Introducere nouă la depozitare
-                    </div>
+                  <Show when={combinedErr()}>
+                    <p style="color:var(--danger);font-size:13px;margin:0">{combinedErr()}</p>
+                  </Show>
 
-                    {/* Client pre-filled */}
-                    <Show when={newClient()}>
-                      <div style="border:1px solid #059669;border-radius:8px;padding:10px 12px;background:rgba(5,150,105,.06)">
-                        <div style="font-size:14px;font-weight:700;color:#065f46">
-                          Client <span>{newClient()!.nume}</span> preluat
+                  {/* Imagine ghidare: Cazare Roti */}
+                  <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
+                    <Show
+                      when={cazareImageUrl()}
+                      fallback={
+                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+                          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
+                            <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
+                          </svg>
+                          <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
                         </div>
-                        <Show when={newClient()!.telefon}><div style="font-size:12px;color:var(--text-muted);margin-top:2px">{newClient()!.telefon}</div></Show>
-                      </div>
+                      }
+                    >
+                      <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:contain;display:block" />
                     </Show>
-
-                    {/* Tires */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Anvelope de introdus</div>
-                      <Show when={!newClient()}>
-                        <p style="color:var(--text-muted);font-size:13px;margin:0">Se încarcă clientul...</p>
-                      </Show>
-                      <Show when={newClient()}>
-                        <Show when={clientAnvelope().length === 0 && !showAnvForm()}>
-                          <p style="color:var(--text-muted);font-size:13px;margin:0 0 8px">Nicio anvelopă înregistrată.</p>
-                        </Show>
-                        <div style="display:flex;flex-direction:column;gap:4px">
-                          <For each={clientAnvelope()}>
-                            {(a, idx) => (
-                              <div style="display:flex;flex-direction:column">
-                                <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;font-size:13px;background:var(--bg)">
-                                  <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
-                                  <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
-                                  <span style="flex:1;min-width:0">
-                                    <strong>{a.marcaNume ?? "—"}</strong>
-                                    <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                                    <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                                    {" · "}{TIP_LABELS[a.tip]}
-                                    <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
-                                    <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
-                                  </span>
-                                  <button
-                                    class="btn btn-ghost btn-sm"
-                                    style={`padding:1px 6px;font-size:11px;${anvEditId() === a.id ? "background:var(--primary-bg,rgba(99,102,241,.12))" : ""}`}
-                                    onClick={() => {
-                                      if (anvEditId() === a.id) { setShowAnvForm(false); setAnvEditId(null); }
-                                      else { setAnvEditId(a.id); setShowAnvForm(true); }
-                                    }}
-                                  >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
-                                  <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
-                                </div>
-                                <Show when={showAnvForm() && anvEditId() === a.id}>
-                                  <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
-                                    <AnvelopaForm
-                                      clientId={newClient()!.id}
-                                      initialData={a}
-                                      compact={true}
-                                      onSaved={(saved) => {
-                                        const oldId = a.id;
-                                        setClientAnvelope(p => p.map(x => x.id === oldId ? saved : x));
-                                        setSelectedAnvIds(p => { const s = new Set(p); s.delete(oldId); s.add(saved.id); return s; });
-                                        setShowAnvForm(false); setAnvEditId(null);
-                                      }}
-                                      onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
-                                    />
-                                  </div>
-                                </Show>
-                              </div>
-                            )}
-                          </For>
-                        </div>
-                        <Show when={!showAnvForm()}>
-                          <button class="btn btn-ghost btn-sm" style="margin-top:8px" onClick={() => { setAnvEditId(null); setShowAnvForm(true); }}>+ Anvelopă nouă</button>
-                        </Show>
-                        <Show when={showAnvForm() && anvEditId() === null}>
-                          <AnvelopaForm
-                            clientId={newClient()!.id}
-                            initialData={undefined}
-                            onSaved={(a) => {
-                              setClientAnvelope(p => [...p, a]);
-                              setSelectedAnvIds(p => new Set([...p, a.id]));
-                              setShowAnvForm(false); setAnvEditId(null);
-                            }}
-                            onCancel={() => { setShowAnvForm(false); setAnvEditId(null); }}
-                          />
-                        </Show>
-                        {/* Dep items */}
-                        <Show when={clientAnvelope().length > 0}>
-                          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:6px">S-au lăsat pentru depozitare:</div>
-                            <div style="display:flex;flex-wrap:wrap;gap:10px 18px">
-                              {([
-                                ["Anvelope", newDepAnvelope, setNewDepAnvelope],
-                                ["Capace", newDepCapace, setNewDepCapace],
-                                ["Roti complete", newDepRotiComplete, setNewDepRotiComplete],
-                                ["Antifurturi", newDepAntifurturi, setNewDepAntifurturi],
-                                ["Prezoane", newDepPrezoane, setNewDepPrezoane],
-                              ] as const).map(([label, get, set]) => (
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">
-                                  <input type="checkbox" checked={get()} onChange={() => set(v => !v)} style="width:15px;height:15px;cursor:pointer" />
-                                  {label}
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </Show>
-                      </Show>
-                    </div>
-
-                    {/* Cazare details */}
-                    <div style="border:1px solid var(--border);border-radius:8px;padding:12px">
-                      <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Date cazare nouă</div>
-                      <div style="display:grid;gap:8px">
-                        <SearchableSelect items={locuriCazare()} value={newLocId()} onSelect={setNewLocId} getLabel={(l) => l.nume} placeholder="Loc de cazare" onAddNew={addLocInline} />
-                        <SearchableSelect items={employees()} value={newEmpId()} onSelect={setNewEmpId} getLabel={(e) => e.name} placeholder="Angajat" />
-                        <div>
-                          <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data cazare</label>
-                          <input class="input" type="date" value={newCheckin()} onInput={(e) => setNewCheckin(e.currentTarget.value)} />
-                        </div>
-                        <textarea class="input" rows={3} placeholder="Comentarii..." style="resize:vertical" value={newComments()} onInput={(e) => setNewComments(e.currentTarget.value)} />
-                      </div>
-                    </div>
-
-                    <Show when={combinedErr()}>
-                      <p style="color:var(--danger);font-size:13px;margin:0">{combinedErr()}</p>
-                    </Show>
-
-                    {/* Imagine ghidare: Cazare Roti */}
-                    <div style="flex:1 1 auto;min-height:200px;border:1px solid var(--border);border-radius:8px;overflow:hidden;position:relative;background:var(--surface2)">
-                      <Show
-                        when={cazareImageUrl()}
-                        fallback={
-                          <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="color:var(--border)">
-                              <rect x="2" y="3" width="20" height="18" rx="2"/><path d="M4 16l4-4 4 4 4-6 4 6"/>
-                            </svg>
-                            <span style="font-size:13px;color:var(--text-muted)">Nicio imagine configurată</span>
-                          </div>
-                        }
-                      >
-                        <img src={cazareImageUrl()!} alt="Cazare Roti" style="width:100%;height:100%;object-fit:contain;display:block" />
-                      </Show>
-                    </div>
                   </div>
-                </div>
-
-                <div class="sl-modal-footer" style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;margin-top:0">
-                  <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>Anulează</button>
-                  <button class="btn btn-primary btn-sm" onClick={doCombinedCheckoutNew} disabled={combinedSaving()}>
-                    {combinedSaving() ? "Se procesează..." : "Confirmă Scoaterea și Introducerea"}
-                  </button>
                 </div>
               </div>
-            </div>
+
+            </Modal>
           );
         }}
       </Show>
@@ -2881,273 +2901,269 @@ export default function HotelAnvelope() {
       {/* Modal: Checkout */}
       <Show when={checkoutCazare()}>
         {(c) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Scoatere Anvelope</span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setCheckoutCazare(null)}>✕</button>
-              </div>
+          <Modal
+            open
+            title="Scoatere Anvelope"
+            onClose={() => setCheckoutCazare(null)}
+            style="max-width:520px;width:100%;max-height:90vh;overflow-y:auto"
+            closeOnEscape={false}
+            bodyStyle="padding:20px 24px;display:flex;flex-direction:column;gap:16px"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" onClick={() => setCheckoutCazare(null)}>Anulează</button>
+              <button class="btn btn-primary btn-sm" onClick={() => doCheckout()} disabled={checkoutSaving()}>
+                {checkoutSaving() ? "Se procesează..." : "Confirmă Scoaterea"}
+              </button>
+            </>}
+          >
 
-              <div class="sl-modal-body" style="padding:20px 24px;display:flex;flex-direction:column;gap:16px">
 
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
-                  <div style="display:grid;gap:6px;font-size:13px">
-                    <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
-                    <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
-                    <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div></Show>
-                    <Show when={c().clientAdresa}><div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div></Show>
-                  </div>
-                </div>
-
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
-                  <Show when={c().items.length === 0}>
-                    <p style="color:var(--text-muted);font-size:13px;margin:0">—</p>
-                  </Show>
-                  <Show when={c().items.length > 0}>
-                    <div style="overflow-x:auto">
-                      <table style="width:100%;border-collapse:collapse;font-size:12px">
-                        <thead>
-                          <tr style="background:var(--bg);color:var(--text-muted)">
-                            <th style="padding:4px 8px;text-align:left">Marcă</th>
-                            <th style="padding:4px 8px;text-align:left">Dimensiune</th>
-                            <th style="padding:4px 8px;text-align:left">DOT</th>
-                            <th style="padding:4px 8px;text-align:left">Tip</th>
-                            <th style="padding:4px 8px;text-align:left">Adâncime</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <For each={c().items}>
-                            {(item) => (
-                              <Show when={item.anvelopa}>
-                                <tr>
-                                  <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
-                                  <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
-                                  <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
-                                  <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
-                                  <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
-                                </tr>
-                              </Show>
-                            )}
-                          </For>
-                        </tbody>
-                      </table>
-                    </div>
-                  </Show>
-                </div>
-
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelopele scoase au fost</div>
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${checkoutMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${checkoutMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
-                      <input type="radio" name="checkout-montate" checked={checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(true)} />
-                      <div>
-                        <div style={`font-weight:600;font-size:13px;color:${checkoutMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
-                        <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
-                      </div>
-                    </label>
-                    <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!checkoutMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!checkoutMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
-                      <input type="radio" name="checkout-montate" checked={!checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(false)} />
-                      <div>
-                        <div style={`font-weight:600;font-size:13px;color:${!checkoutMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
-                        <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
-
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
-                  <div style="display:grid;gap:8px;font-size:13px">
-                    <Show when={c().locCazareNume}><div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div></Show>
-                    <Show when={c().employeeName}><div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div></Show>
-                    <div><span style="color:var(--text-muted)">Cazare:</span> {fmtDate(c().dataCheckin)}</div>
-                    <div>
-                      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data check-out</label>
-                      <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
-                    </div>
-                    <Show when={checkoutDate()}>
-                      <div style="font-weight:600;color:var(--primary);font-size:14px">
-                        Durată: {daysBetween(c().dataCheckin, checkoutDate())} zile
-                      </div>
-                    </Show>
-                    <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
-                  </div>
-                </div>
-              </div>
-
-              <div class="sl-modal-footer">
-                <button class="btn btn-ghost btn-sm" onClick={() => setCheckoutCazare(null)}>Anulează</button>
-                <button class="btn btn-primary btn-sm" onClick={() => doCheckout()} disabled={checkoutSaving()}>
-                  {checkoutSaving() ? "Se procesează..." : "Confirmă Scoaterea"}
-                </button>
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Client</div>
+              <div style="display:grid;gap:6px;font-size:13px">
+                <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume ?? "—"}</strong></div>
+                <Show when={c().clientCui}><div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div></Show>
+                <Show when={c().clientTelefon}><div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div></Show>
+                <Show when={c().clientAdresa}><div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div></Show>
               </div>
             </div>
-          </div>
+
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelope</div>
+              <Show when={c().items.length === 0}>
+                <p style="color:var(--text-muted);font-size:13px;margin:0">—</p>
+              </Show>
+              <Show when={c().items.length > 0}>
+                <div style="overflow-x:auto">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                      <tr style="background:var(--bg);color:var(--text-muted)">
+                        <th style="padding:4px 8px;text-align:left">Marcă</th>
+                        <th style="padding:4px 8px;text-align:left">Dimensiune</th>
+                        <th style="padding:4px 8px;text-align:left">DOT</th>
+                        <th style="padding:4px 8px;text-align:left">Tip</th>
+                        <th style="padding:4px 8px;text-align:left">Adâncime</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={c().items}>
+                        {(item) => (
+                          <Show when={item.anvelopa}>
+                            <tr>
+                              <td style="padding:4px 8px">{item.anvelopa!.marcaNume ?? "—"}</td>
+                              <td style="padding:4px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                              <td style="padding:4px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
+                              <td style="padding:4px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
+                              <td style="padding:4px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
+                            </tr>
+                          </Show>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </Show>
+            </div>
+
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Anvelopele scoase au fost</div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${checkoutMontatePeMasina() ? "#16a34a" : "var(--border)"};background:${checkoutMontatePeMasina() ? "rgba(22,163,74,.08)" : "var(--bg)"}`}>
+                  <input type="radio" name="checkout-montate" checked={checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(true)} />
+                  <div>
+                    <div style={`font-weight:600;font-size:13px;color:${checkoutMontatePeMasina() ? "#16a34a" : "var(--text)"}`}>✓ Montate pe mașină</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Scoase și montate direct pe vehicul</div>
+                  </div>
+                </label>
+                <label style={`display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;cursor:pointer;border:2px solid ${!checkoutMontatePeMasina() ? "#dc2626" : "var(--border)"};background:${!checkoutMontatePeMasina() ? "rgba(220,38,38,.08)" : "var(--bg)"}`}>
+                  <input type="radio" name="checkout-montate" checked={!checkoutMontatePeMasina()} onChange={() => setCheckoutMontatePeMasina(false)} />
+                  <div>
+                    <div style={`font-weight:600;font-size:13px;color:${!checkoutMontatePeMasina() ? "#dc2626" : "var(--text)"}`}>✗ Predate clientului</div>
+                    <div style="font-size:11px;color:var(--text-muted)">Scoase și predate fără a fi montate</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:10px">Date Cazare</div>
+              <div style="display:grid;gap:8px;font-size:13px">
+                <Show when={c().locCazareNume}><div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div></Show>
+                <Show when={c().employeeName}><div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div></Show>
+                <div><span style="color:var(--text-muted)">Cazare:</span> {fmtDate(c().dataCheckin)}</div>
+                <div>
+                  <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:4px">Data check-out</label>
+                  <input class="input" type="date" value={checkoutDate()} onInput={(e) => setCheckoutDate(e.currentTarget.value)} />
+                </div>
+                <Show when={checkoutDate()}>
+                  <div style="font-weight:600;color:var(--primary);font-size:14px">
+                    Durată: {daysBetween(c().dataCheckin, checkoutDate())} zile
+                  </div>
+                </Show>
+                <textarea class="input" rows={2} placeholder="Comentarii..." style="resize:vertical" value={checkoutComments()} onInput={(e) => setCheckoutComments(e.currentTarget.value)} />
+              </div>
+            </div>
+
+          </Modal>
         )}
       </Show>
 
       {/* Modal View-Only Cazare */}
       <Show when={viewOnlyCazare()}>
         {(c) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal" style="max-width:700px;width:95%;max-height:90vh;overflow-y:auto">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">
-                  {c().dataCheckout ? "Scoatere Anvelope" : "Cazare Anvelope"} — Vizualizare
-                </span>
-                <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>✕</button>
-              </div>
-              <div class="sl-modal-body" style="padding:16px 20px;display:flex;flex-direction:column;gap:14px">
-
-                {/* Client + Vehicul + Date Cazare (auto-fit pe latimea modalului) */}
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
-                  {/* Client */}
-                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
-                    <div style="display:grid;gap:5px;font-size:13px">
-                      <Show when={c().clientNume}>
-                        <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume}</strong></div>
-                      </Show>
-                      <Show when={c().clientCui}>
-                        <div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div>
-                      </Show>
-                      <Show when={c().clientTelefon}>
-                        <div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div>
-                      </Show>
-                      <Show when={c().clientAdresa}>
-                        <div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div>
-                      </Show>
-                      <Show when={c().clientReprezentant}>
-                        <div><span style="color:var(--text-muted)">Reprezentant:</span> {c().clientReprezentant}</div>
-                      </Show>
-                    </div>
-                  </div>
-
-                  {/* Vehicul */}
-                  <Show when={c().numarMasina || viewOnlyVehicle()}>
-                    <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                      <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Vehicul</div>
-                      <div style="display:grid;gap:5px;font-size:13px">
-                        <Show when={c().numarMasina}>
-                          <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
-                        </Show>
-                        <Show when={viewOnlyVehicle()?.marca || viewOnlyVehicle()?.model}>
-                          <div>
-                            <span style="color:var(--text-muted)">Marcă/Model:</span>{" "}
-                            {[viewOnlyVehicle()?.marca, viewOnlyVehicle()?.model].filter(Boolean).join(" ")}
-                          </div>
-                        </Show>
-                        <Show when={viewOnlyVehicle()?.anFabricatie != null}>
-                          <div><span style="color:var(--text-muted)">An fabricație:</span> {viewOnlyVehicle()!.anFabricatie}</div>
-                        </Show>
-                        <Show when={viewOnlyVehicle()?.numarKilometrii != null}>
-                          <div><span style="color:var(--text-muted)">Km:</span> {viewOnlyVehicle()!.numarKilometrii!.toLocaleString("ro-RO")}</div>
-                        </Show>
-                        <Show when={viewOnlyVehicle()?.vin}>
-                          <div><span style="color:var(--text-muted)">VIN:</span> {viewOnlyVehicle()!.vin}</div>
-                        </Show>
-                        <Show when={viewOnlyVehicle()?.observatii}>
-                          <div><span style="color:var(--text-muted)">Observații:</span> {viewOnlyVehicle()!.observatii}</div>
-                        </Show>
-                      </div>
-                    </div>
-                  </Show>
-
-                  {/* Date Cazare */}
-                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Date Cazare</div>
-                    <div style="display:grid;gap:5px;font-size:13px">
-                      <div><span style="color:var(--text-muted)">Check-in:</span> <strong>{fmtDate(c().dataCheckin)}</strong></div>
-                      <Show when={c().dataCheckout}>
-                        <div><span style="color:var(--text-muted)">Check-out:</span> <strong>{fmtDate(c().dataCheckout)}</strong></div>
-                        <div style="font-weight:600;color:var(--primary)">Durată: {daysBetween(c().dataCheckin, c().dataCheckout!)} zile</div>
-                      </Show>
-                      <Show when={c().locCazareNume}>
-                        <div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div>
-                      </Show>
-                      <Show when={c().employeeName}>
-                        <div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div>
-                      </Show>
-                      <Show when={c().comments}>
-                        <div><span style="color:var(--text-muted)">Comentarii:</span> {c().comments}</div>
-                      </Show>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Depozitare */}
-                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">S-au lăsat la depozitare</div>
-                  <div style="display:flex;flex-wrap:wrap;gap:6px">
-                    <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depAnvelope ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Anvelope</span>
-                    <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depCapace ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Capace</span>
-                    <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depRotiComplete ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Roți complete</span>
-                    <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depAntifurturi ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Antifurturi</span>
-                    <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depPrezoane ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Prezoane</span>
-                  </div>
-                </div>
-
-                {/* Anvelope */}
-                <Show when={c().items.length > 0}>
-                  <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
-                    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Anvelope ({c().items.length})</div>
-                    <div style="overflow-x:auto">
-                      <table style="width:100%;border-collapse:collapse;font-size:12px">
-                        <thead>
-                          <tr style="background:var(--bg);color:var(--text-muted)">
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">#</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">Profil</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
-                            <th style="padding:5px 8px;text-align:left;font-weight:600">Adâncime</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <For each={c().items}>
-                            {(item, idx) => (
-                              <Show when={item.anvelopa}>
-                                <tr style={`border-top:1px solid var(--border);${idx() % 2 === 1 ? "background:var(--bg)" : ""}`}>
-                                  <td style="padding:5px 8px;color:var(--text-muted)">{idx() + 1}</td>
-                                  <td style="padding:5px 8px;font-weight:600">{item.anvelopa!.marcaNume ?? "—"}</td>
-                                  <td style="padding:5px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
-                                  <td style="padding:5px 8px">{item.anvelopa!.profilValoare ?? "—"}</td>
-                                  <td style="padding:5px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
-                                  <td style="padding:5px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
-                                  <td style="padding:5px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
-                                </tr>
-                              </Show>
-                            )}
-                          </For>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </Show>
-
-              </div>
-              <div class="sl-modal-footer" style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkin", c())} disabled={viewPdfLoading() === "checkin"}>
-                  {viewPdfLoading() === "checkin" ? "..." : "PDF Cazare"}
+          <Modal
+            open
+            title={<>{c().dataCheckout ? "Scoatere Anvelope" : "Cazare Anvelope"} — Vizualizare</>}
+            onClose={() => setViewOnlyCazare(null)}
+            style="max-width:700px;width:95%;max-height:90vh;overflow-y:auto"
+            footerStyle="display:flex;gap:6px;flex-wrap:wrap"
+            bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:14px"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkin", c())} disabled={viewPdfLoading() === "checkin"}>
+                {viewPdfLoading() === "checkin" ? "..." : "PDF Cazare"}
+              </button>
+              <Show when={c().dataCheckout}>
+                <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkout", c())} disabled={viewPdfLoading() === "checkout"}>
+                  {viewPdfLoading() === "checkout" ? "..." : "PDF Scoatere"}
                 </button>
-                <Show when={c().dataCheckout}>
-                  <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkout", c())} disabled={viewPdfLoading() === "checkout"}>
-                    {viewPdfLoading() === "checkout" ? "..." : "PDF Scoatere"}
-                  </button>
-                </Show>
-                <Show when={c().dataCheckout && c().successorCazareId != null}>
-                  <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("combined", c())} disabled={viewPdfLoading() === "combined"}>
-                    {viewPdfLoading() === "combined" ? "..." : "PDF Scoatere + Cazare"}
-                  </button>
-                </Show>
-                <div style="flex:1"></div>
-                <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>Închide</button>
+              </Show>
+              <Show when={c().dataCheckout && c().successorCazareId != null}>
+                <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("combined", c())} disabled={viewPdfLoading() === "combined"}>
+                  {viewPdfLoading() === "combined" ? "..." : "PDF Scoatere + Cazare"}
+                </button>
+              </Show>
+              <div style="flex:1"></div>
+              <button class="btn btn-ghost btn-sm" onClick={() => setViewOnlyCazare(null)}>Închide</button>
+            </>}
+          >
+
+            {/* Client + Vehicul + Date Cazare (auto-fit pe latimea modalului) */}
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+              {/* Client */}
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
+                <div style="display:grid;gap:5px;font-size:13px">
+                  <Show when={c().clientNume}>
+                    <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume}</strong></div>
+                  </Show>
+                  <Show when={c().clientCui}>
+                    <div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div>
+                  </Show>
+                  <Show when={c().clientTelefon}>
+                    <div><span style="color:var(--text-muted)">Telefon:</span> {c().clientTelefon}</div>
+                  </Show>
+                  <Show when={c().clientAdresa}>
+                    <div><span style="color:var(--text-muted)">Adresă:</span> {c().clientAdresa}</div>
+                  </Show>
+                  <Show when={c().clientReprezentant}>
+                    <div><span style="color:var(--text-muted)">Reprezentant:</span> {c().clientReprezentant}</div>
+                  </Show>
+                </div>
+              </div>
+
+              {/* Vehicul */}
+              <Show when={c().numarMasina || viewOnlyVehicle()}>
+                <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Vehicul</div>
+                  <div style="display:grid;gap:5px;font-size:13px">
+                    <Show when={c().numarMasina}>
+                      <div><span style="color:var(--text-muted)">Nr. mașină:</span> <strong>{c().numarMasina}</strong></div>
+                    </Show>
+                    <Show when={viewOnlyVehicle()?.marca || viewOnlyVehicle()?.model}>
+                      <div>
+                        <span style="color:var(--text-muted)">Marcă/Model:</span>{" "}
+                        {[viewOnlyVehicle()?.marca, viewOnlyVehicle()?.model].filter(Boolean).join(" ")}
+                      </div>
+                    </Show>
+                    <Show when={viewOnlyVehicle()?.anFabricatie != null}>
+                      <div><span style="color:var(--text-muted)">An fabricație:</span> {viewOnlyVehicle()!.anFabricatie}</div>
+                    </Show>
+                    <Show when={viewOnlyVehicle()?.numarKilometrii != null}>
+                      <div><span style="color:var(--text-muted)">Km:</span> {viewOnlyVehicle()!.numarKilometrii!.toLocaleString("ro-RO")}</div>
+                    </Show>
+                    <Show when={viewOnlyVehicle()?.vin}>
+                      <div><span style="color:var(--text-muted)">VIN:</span> {viewOnlyVehicle()!.vin}</div>
+                    </Show>
+                    <Show when={viewOnlyVehicle()?.observatii}>
+                      <div><span style="color:var(--text-muted)">Observații:</span> {viewOnlyVehicle()!.observatii}</div>
+                    </Show>
+                  </div>
+                </div>
+              </Show>
+
+              {/* Date Cazare */}
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Date Cazare</div>
+                <div style="display:grid;gap:5px;font-size:13px">
+                  <div><span style="color:var(--text-muted)">Check-in:</span> <strong>{fmtDate(c().dataCheckin)}</strong></div>
+                  <Show when={c().dataCheckout}>
+                    <div><span style="color:var(--text-muted)">Check-out:</span> <strong>{fmtDate(c().dataCheckout)}</strong></div>
+                    <div style="font-weight:600;color:var(--primary)">Durată: {daysBetween(c().dataCheckin, c().dataCheckout!)} zile</div>
+                  </Show>
+                  <Show when={c().locCazareNume}>
+                    <div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div>
+                  </Show>
+                  <Show when={c().employeeName}>
+                    <div><span style="color:var(--text-muted)">Angajat:</span> {c().employeeName}</div>
+                  </Show>
+                  <Show when={c().comments}>
+                    <div><span style="color:var(--text-muted)">Comentarii:</span> {c().comments}</div>
+                  </Show>
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Depozitare */}
+            <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+              <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">S-au lăsat la depozitare</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px">
+                <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depAnvelope ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Anvelope</span>
+                <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depCapace ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Capace</span>
+                <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depRotiComplete ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Roți complete</span>
+                <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depAntifurturi ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Antifurturi</span>
+                <span style={`padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;${c().depPrezoane ? "background:#d1fae5;color:#065f46" : "background:var(--bg);color:var(--text-muted);text-decoration:line-through"}`}>Prezoane</span>
+              </div>
+            </div>
+
+            {/* Anvelope */}
+            <Show when={c().items.length > 0}>
+              <div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Anvelope ({c().items.length})</div>
+                <div style="overflow-x:auto">
+                  <table style="width:100%;border-collapse:collapse;font-size:12px">
+                    <thead>
+                      <tr style="background:var(--bg);color:var(--text-muted)">
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">#</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">Marcă</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">Dimensiune</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">Profil</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">DOT</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">Tip</th>
+                        <th style="padding:5px 8px;text-align:left;font-weight:600">Adâncime</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <For each={c().items}>
+                        {(item, idx) => (
+                          <Show when={item.anvelopa}>
+                            <tr style={`border-top:1px solid var(--border);${idx() % 2 === 1 ? "background:var(--bg)" : ""}`}>
+                              <td style="padding:5px 8px;color:var(--text-muted)">{idx() + 1}</td>
+                              <td style="padding:5px 8px;font-weight:600">{item.anvelopa!.marcaNume ?? "—"}</td>
+                              <td style="padding:5px 8px">{item.anvelopa!.dimensiuneValoare ?? "—"}</td>
+                              <td style="padding:5px 8px">{item.anvelopa!.profilValoare ?? "—"}</td>
+                              <td style="padding:5px 8px">{item.anvelopa!.dotValoare ?? "—"}</td>
+                              <td style="padding:5px 8px">{TIP_LABELS[item.anvelopa!.tip]}</td>
+                              <td style="padding:5px 8px">{item.anvelopa!.adancime != null ? `${item.anvelopa!.adancime} mm` : "—"}</td>
+                            </tr>
+                          </Show>
+                        )}
+                      </For>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </Show>
+
+          </Modal>
         )}
       </Show>
 

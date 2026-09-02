@@ -4,6 +4,8 @@ import {
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
 import { readJsonSafe } from "../../utils/api";
+import { debounce } from "../../utils/debounce";
+import { useIsMobile } from "../../hooks/createMediaQuery";
 import type { ApiMessageBody } from "../../types";
 import { loginAsImpersonatedUser } from "../../store/authStore";
 import { adminFetch } from "./admin-auth";
@@ -85,29 +87,34 @@ export default function AccountsSection() {
   const [lastId, setLastId] = createSignal<number | null>(null);
   const [sorting, setSorting] = createSignal<SortingState>([{ id: "id", desc: true }]);
 
-  const [isMobile, setIsMobile] = createSignal(window.innerWidth < 768);
-  function onResize() { setIsMobile(window.innerWidth < 768); }
-  onMount(() => { window.addEventListener("resize", onResize); });
-  onCleanup(() => window.removeEventListener("resize", onResize));
+  const isMobile = useIsMobile();
 
+  let accountsAbort: AbortController | null = null;
   async function loadAccounts(reset = true) {
+    accountsAbort?.abort();
+    const ctrl = new AbortController();
+    accountsAbort = ctrl;
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: "50", sort: "id" });
       if (search()) params.set("q", search());
       if (includeDeleted()) params.set("include_deleted", "true");
       if (!reset && lastId() !== null) params.set("last_id", String(lastId()));
-      const res = await adminFetch(`/api/accounts?${params}`);
-      if (!res.ok) return;
+      const res = await adminFetch(`/api/accounts?${params}`, { signal: ctrl.signal });
+      if (ctrl.signal.aborted || !res.ok) return;
       const data: { items: Account[]; next_cursor: number | null } = await res.json();
+      if (ctrl.signal.aborted) return;
       if (reset) setAccounts(data.items);
       else setAccounts((prev) => [...prev, ...data.items]);
       setHasMore(data.next_cursor !== null);
       setLastId(data.next_cursor);
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") throw err;
     } finally {
-      setLoading(false);
+      if (accountsAbort === ctrl) { accountsAbort = null; setLoading(false); }
     }
   }
+  const debouncedLoadAccounts = debounce(() => { void loadAccounts(); }, 300);
 
   onMount(() => loadAccounts());
 
@@ -498,7 +505,7 @@ export default function AccountsSection() {
             type="search"
             placeholder="Cauta dupa nume / username..."
             value={search()}
-            onInput={(e) => { setSearch(e.currentTarget.value); loadAccounts(); }}
+            onInput={(e) => { setSearch(e.currentTarget.value); debouncedLoadAccounts(); }}
           />
           <label class="admin-chk-label">
             <input
@@ -631,45 +638,45 @@ export default function AccountsSection() {
 
       {/* Modal: Create */}
       <Show when={addOpen()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Cont nou</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>✕</button>
+        <Modal
+          open
+          title="Cont nou"
+          onClose={() => setAddOpen(false)}
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+        >
+          <form onSubmit={doAdd} style="display:contents">
+            <div class="admin-modal-body">
+              <div class="admin-form-row"><label class="admin-form-label">Nume *</label>
+                <input class="input" value={addForm().name} onInput={(e) => setField(setAddForm, "name", e.currentTarget.value)} /></div>
+              <div class="admin-form-row"><label class="admin-form-label">Username *</label>
+                <input class="input" value={addForm().username} placeholder="doar litere mici și cifre" onInput={(e) => setField(setAddForm, "username", sanitizeUsername(e.currentTarget.value))} /></div>
+              <div class="admin-form-row"><label class="admin-form-label">Parola *</label>
+                <input class="input" type="password" value={addForm().password} onInput={(e) => setField(setAddForm, "password", e.currentTarget.value)} /></div>
+              <div class="admin-form-row"><label class="admin-form-label">Email</label>
+                <input class="input" value={addForm().email} onInput={(e) => setField(setAddForm, "email", e.currentTarget.value)} /></div>
+              <div class="admin-form-row"><label class="admin-form-label">Descriere</label>
+                <textarea class="input admin-textarea" value={addForm().description} onInput={(e) => setField(setAddForm, "description", e.currentTarget.value)} /></div>
+              <div class="admin-form-row"><label class="admin-form-label">Image URL</label>
+                <input class="input" value={addForm().image_url} onInput={(e) => setField(setAddForm, "image_url", e.currentTarget.value)} /></div>
+              <div class="admin-form-row admin-form-row--check">
+                <label class="admin-chk-label">
+                  <input type="checkbox" checked={addForm().is_locked} onChange={(e) => setField(setAddForm, "is_locked", e.currentTarget.checked)} />
+                  Trial (is_locked)
+                </label>
+              </div>
+              <Show when={addForm().is_locked}>
+                <div class="admin-form-row"><label class="admin-form-label">Locked at</label>
+                  <input class="input" type="datetime-local" value={addForm().locked_at} onInput={(e) => setField(setAddForm, "locked_at", e.currentTarget.value)} /></div>
+              </Show>
+              <Show when={addErr()}><p style="color:var(--danger);font-size:13px;margin:0">{addErr()}</p></Show>
             </div>
-            <form onSubmit={doAdd} style="display:contents">
-              <div class="admin-modal-body">
-                <div class="admin-form-row"><label class="admin-form-label">Nume *</label>
-                  <input class="input" value={addForm().name} onInput={(e) => setField(setAddForm, "name", e.currentTarget.value)} /></div>
-                <div class="admin-form-row"><label class="admin-form-label">Username *</label>
-                  <input class="input" value={addForm().username} placeholder="doar litere mici și cifre" onInput={(e) => setField(setAddForm, "username", sanitizeUsername(e.currentTarget.value))} /></div>
-                <div class="admin-form-row"><label class="admin-form-label">Parola *</label>
-                  <input class="input" type="password" value={addForm().password} onInput={(e) => setField(setAddForm, "password", e.currentTarget.value)} /></div>
-                <div class="admin-form-row"><label class="admin-form-label">Email</label>
-                  <input class="input" value={addForm().email} onInput={(e) => setField(setAddForm, "email", e.currentTarget.value)} /></div>
-                <div class="admin-form-row"><label class="admin-form-label">Descriere</label>
-                  <textarea class="input admin-textarea" value={addForm().description} onInput={(e) => setField(setAddForm, "description", e.currentTarget.value)} /></div>
-                <div class="admin-form-row"><label class="admin-form-label">Image URL</label>
-                  <input class="input" value={addForm().image_url} onInput={(e) => setField(setAddForm, "image_url", e.currentTarget.value)} /></div>
-                <div class="admin-form-row admin-form-row--check">
-                  <label class="admin-chk-label">
-                    <input type="checkbox" checked={addForm().is_locked} onChange={(e) => setField(setAddForm, "is_locked", e.currentTarget.checked)} />
-                    Trial (is_locked)
-                  </label>
-                </div>
-                <Show when={addForm().is_locked}>
-                  <div class="admin-form-row"><label class="admin-form-label">Locked at</label>
-                    <input class="input" type="datetime-local" value={addForm().locked_at} onInput={(e) => setField(setAddForm, "locked_at", e.currentTarget.value)} /></div>
-                </Show>
-                <Show when={addErr()}><p style="color:var(--danger);font-size:13px;margin:0">{addErr()}</p></Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button type="button" class="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>Anulează</button>
-                <button type="submit" class="btn btn-primary btn-sm" disabled={addSaving()}>{addSaving() ? "Se salvează..." : "Creează"}</button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div class="sl-modal-footer">
+              <button type="button" class="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>Anulează</button>
+              <button type="submit" class="btn btn-primary btn-sm" disabled={addSaving()}>{addSaving() ? "Se salvează..." : "Creează"}</button>
+            </div>
+          </form>
+        </Modal>
       </Show>
 
       {/* Modal: Preview / Edit / Delete */}
@@ -682,7 +689,7 @@ export default function AccountsSection() {
               <Show when={previewMode() === "view"}>
                 <div class="sl-modal-header">
                   <span class="sl-modal-title">#{a().id} — {a().name}</span>
-                  <button class="btn btn-ghost btn-sm" onClick={closePreview}>✕</button>
+                  <button type="button" class="btn btn-ghost btn-sm" onClick={closePreview} aria-label="Închide">✕</button>
                 </div>
                 <div class="admin-modal-body" style="flex:1;min-height:0;max-height:none;overflow:auto;gap:14px">
 
@@ -1018,43 +1025,43 @@ export default function AccountsSection() {
 
       <Show when={confirmSupportOpen() && previewAccount()}>
         {(a) => (
-          <div class="sl-modal-overlay">
-            <div class="sl-modal">
-              <div class="sl-modal-header">
-                <span class="sl-modal-title">Logare ca support tehnic</span>
-              </div>
-              <div class="admin-modal-body">
-                <p style="margin:0 0 12px">
-                  Te vei loga ca <strong>{a().name}</strong> ({a().username}) cu drepturi
-                  complete pe acel cont. Sesiunea ta de administrator se va închide și
-                  vei părăsi pagina AdminV2.
-                </p>
-                <p style="margin:0 0 12px">
-                  Pentru a reveni va trebui să te delogi și să reintroduci parolele
-                  administrator.
-                </p>
-                <Show when={supportErr()}>
-                  <p style="color:var(--danger);font-size:13px;margin:0">{supportErr()}</p>
-                </Show>
-              </div>
-              <div class="sl-modal-footer">
-                <button
-                  class="btn btn-ghost btn-sm"
-                  disabled={impersonating()}
-                  onClick={() => setConfirmSupportOpen(false)}
-                >
-                  Anulează
-                </button>
-                <button
-                  class="btn btn-primary btn-sm"
-                  disabled={impersonating()}
-                  onClick={doImpersonate}
-                >
-                  {impersonating() ? "Se loghează..." : "Da, loghează-mă"}
-                </button>
-              </div>
+          <Modal
+            open
+            title="Logare ca support tehnic"
+            hideClose
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <button
+                class="btn btn-ghost btn-sm"
+                disabled={impersonating()}
+                onClick={() => setConfirmSupportOpen(false)}
+              >
+                Anulează
+              </button>
+              <button
+                class="btn btn-primary btn-sm"
+                disabled={impersonating()}
+                onClick={doImpersonate}
+              >
+                {impersonating() ? "Se loghează..." : "Da, loghează-mă"}
+              </button>
+            </>}
+          >
+            <div class="admin-modal-body">
+              <p style="margin:0 0 12px">
+                Te vei loga ca <strong>{a().name}</strong> ({a().username}) cu drepturi
+                complete pe acel cont. Sesiunea ta de administrator se va închide și
+                vei părăsi pagina AdminV2.
+              </p>
+              <p style="margin:0 0 12px">
+                Pentru a reveni va trebui să te delogi și să reintroduci parolele
+                administrator.
+              </p>
+              <Show when={supportErr()}>
+                <p style="color:var(--danger);font-size:13px;margin:0">{supportErr()}</p>
+              </Show>
             </div>
-          </div>
+          </Modal>
         )}
       </Show>
     </div>

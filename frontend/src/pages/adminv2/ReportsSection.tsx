@@ -4,6 +4,7 @@ import { notify } from "../../store/notificationsStore";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
 import { fmtDate } from "./shared";
+import Modal from "../../components/ui/Modal";
 
 interface ReportStatus {
   report_type: string;
@@ -282,58 +283,59 @@ export default function ReportsSection() {
       </Show>
 
       <Show when={advancedOpen()}>
-        <div class="sl-modal-overlay">
-          <div class="sl-modal">
-            <div class="sl-modal-header">
-              <span class="sl-modal-title">Run avansat — toate rapoartele</span>
-              <button class="btn btn-ghost btn-sm" onClick={() => setAdvancedOpen(false)} disabled={runAllBusy()}>✕</button>
+        <Modal
+          open
+          title="Run avansat — toate rapoartele"
+          onClose={() => setAdvancedOpen(false)}
+          closeDisabled={runAllBusy()}
+          closeOnEscape={false}
+          bodyClass="sl-modal-body--stack"
+          footer={<>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              onClick={() => setAdvancedOpen(false)}
+              disabled={runAllBusy()}
+            >
+              Anulează
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              onClick={() => void submitAdvanced()}
+              disabled={runAllBusy()}
+            >
+              {runAllBusy() ? "Pornește..." : "Rulează"}
+            </button>
+          </>}
+        >
+          <div class="admin-modal-body">
+            <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px">
+              Rebuild idempotent pentru toate rapoartele pe intervalul ales. Datele existente pe perioadă sunt înlocuite.
             </div>
-            <div class="admin-modal-body">
-              <div style="font-size:0.85rem;color:var(--text-muted);margin-bottom:12px">
-                Rebuild idempotent pentru toate rapoartele pe intervalul ales. Datele existente pe perioadă sunt înlocuite.
-              </div>
-              <div class="admin-form-row">
-                <label class="admin-form-label">Data început *</label>
-                <input
-                  class="input"
-                  type="date"
-                  value={advStart()}
-                  onInput={(e) => setAdvStart(e.currentTarget.value)}
-                />
-              </div>
-              <div class="admin-form-row">
-                <label class="admin-form-label">Data sfârșit *</label>
-                <input
-                  class="input"
-                  type="date"
-                  value={advEnd()}
-                  onInput={(e) => setAdvEnd(e.currentTarget.value)}
-                />
-              </div>
-              <Show when={advErr()}>
-                <p style="color:var(--danger);font-size:13px;margin:8px 0 0">{advErr()}</p>
-              </Show>
+            <div class="admin-form-row">
+              <label class="admin-form-label">Data început *</label>
+              <input
+                class="input"
+                type="date"
+                value={advStart()}
+                onInput={(e) => setAdvStart(e.currentTarget.value)}
+              />
             </div>
-            <div class="sl-modal-footer">
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm"
-                onClick={() => setAdvancedOpen(false)}
-                disabled={runAllBusy()}
-              >
-                Anulează
-              </button>
-              <button
-                type="button"
-                class="btn btn-primary btn-sm"
-                onClick={() => void submitAdvanced()}
-                disabled={runAllBusy()}
-              >
-                {runAllBusy() ? "Pornește..." : "Rulează"}
-              </button>
+            <div class="admin-form-row">
+              <label class="admin-form-label">Data sfârșit *</label>
+              <input
+                class="input"
+                type="date"
+                value={advEnd()}
+                onInput={(e) => setAdvEnd(e.currentTarget.value)}
+              />
             </div>
+            <Show when={advErr()}>
+              <p style="color:var(--danger);font-size:13px;margin:8px 0 0">{advErr()}</p>
+            </Show>
           </div>
-        </div>
+        </Modal>
       </Show>
     </div>
   );

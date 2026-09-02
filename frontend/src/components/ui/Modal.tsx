@@ -1,20 +1,36 @@
-import { Show, onMount, onCleanup, type JSX } from "solid-js";
+import { Show, onMount, onCleanup, createUniqueId, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
+
+type StyleProp = string | JSX.CSSProperties | undefined;
 
 export interface ModalProps {
   open: boolean;
   onClose?: () => void;
-  title?: string;
+  title?: JSX.Element;
   closeOnEscape?: boolean;
   ariaLabel?: string;
   children: JSX.Element;
   footer?: JSX.Element;
   size?: "sm" | "md" | "lg";
+  /** Extra classes / inline style on the dialog panel (.sl-modal). */
+  class?: string;
+  style?: StyleProp;
+  overlayClass?: string;
+  overlayStyle?: StyleProp;
+  headerStyle?: StyleProp;
+  footerStyle?: StyleProp;
+  bodyClass?: string;
+  bodyStyle?: StyleProp;
+  hideClose?: boolean;
+  closeDisabled?: boolean;
+  /** Render children directly inside the panel (custom layout, no header/body/footer). */
+  bare?: boolean;
 }
 
 export default function Modal(props: ModalProps) {
   let dialogRef: HTMLDivElement | undefined;
   let lastFocused: Element | null = null;
+  const titleId = createUniqueId();
 
   function getFocusable(): HTMLElement[] {
     if (!dialogRef) return [];
@@ -48,6 +64,7 @@ export default function Modal(props: ModalProps) {
     if (isOpen) {
       lastFocused = document.activeElement;
       queueMicrotask(() => {
+        if (dialogRef?.contains(document.activeElement)) return;
         const fs = getFocusable();
         fs[0]?.focus();
       });
@@ -58,6 +75,11 @@ export default function Modal(props: ModalProps) {
     }
   }
 
+  const panelClass = () => {
+    if (props.bare) return props.class ?? "";
+    return `sl-modal sl-modal--${props.size ?? "md"}${props.class ? ` ${props.class}` : ""}`;
+  };
+
   let lastOpen = false;
   return (
     <Show when={props.open}>
@@ -66,31 +88,41 @@ export default function Modal(props: ModalProps) {
         onCleanup(() => { if (lastOpen) { lastOpen = false; handleOpenChange(false); } });
         return (
           <Portal>
-            <div class="sl-modal-overlay" role="presentation">
+            <div class={`sl-modal-overlay${props.overlayClass ? ` ${props.overlayClass}` : ""}`} style={props.overlayStyle} role="presentation">
               <div
                 ref={dialogRef}
-                class={`sl-modal sl-modal--${props.size ?? "md"}`}
+                class={panelClass()}
+                style={props.style}
                 role="dialog"
                 aria-modal="true"
                 aria-label={props.ariaLabel}
-                aria-labelledby={props.title ? "modal-title" : undefined}
+                aria-labelledby={props.title ? titleId : undefined}
               >
-                <Show when={props.title}>
-                  <div class="sl-modal-header">
-                    <span id="modal-title" class="sl-modal-title">{props.title}</span>
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-sm"
-                      aria-label="Închide"
-                      onClick={() => props.onClose?.()}
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </Show>
-                <div class="sl-modal-body">{props.children}</div>
-                <Show when={props.footer}>
-                  <div class="sl-modal-footer">{props.footer}</div>
+                <Show when={props.bare} fallback={
+                  <>
+                    <Show when={props.title}>
+                      <div class="sl-modal-header" style={props.headerStyle}>
+                        <span id={titleId} class="sl-modal-title">{props.title}</span>
+                        <Show when={!props.hideClose}>
+                          <button
+                            type="button"
+                            class="btn btn-ghost btn-sm"
+                            aria-label="Închide"
+                            disabled={props.closeDisabled}
+                            onClick={() => props.onClose?.()}
+                          >
+                            ✕
+                          </button>
+                        </Show>
+                      </div>
+                    </Show>
+                    <div class={`sl-modal-body${props.bodyClass ? ` ${props.bodyClass}` : ""}`} style={props.bodyStyle}>{props.children}</div>
+                    <Show when={props.footer}>
+                      <div class="sl-modal-footer" style={props.footerStyle}>{props.footer}</div>
+                    </Show>
+                  </>
+                }>
+                  {props.children}
                 </Show>
               </div>
             </div>
