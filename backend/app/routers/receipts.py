@@ -98,12 +98,6 @@ def _line_key(name: str | None, item_id: int | None) -> tuple:
     return ((name or "").strip().lower(), item_id)
 
 
-def _list_price(it) -> Decimal:
-    """Pretul „de lista" al unei linii: cel dinainte de reducere daca exista,
-    altfel pretul practicat."""
-    return _q2(it.original_price if it.original_price is not None else it.price)
-
-
 DENIED_DISCOUNT = "Doar administratorul sau managerul poate acorda sau modifica reduceri."
 
 
@@ -114,22 +108,12 @@ async def _assert_may_change_prices(
     new_items: list,
     ctx: AuthContext,
 ) -> None:
-    """Un `worker` poate edita bonul, dar nu poate ieftini nimic.
+    """Reducerile explicite (`original_price`) rămân pe admin/manager.
 
-    Sunt doua cai spre acelasi rezultat si le inchidem pe amandoua:
-
-      1. reducerea explicita (`original_price`) — o poate acorda doar admin/manager;
-      2. scaderea directa a lui `price`, care nu lasa nicio urma de reducere.
-         Fara (2), regula ar fi pur cosmetica: modalul de reducere e ascuns, dar
-         POS-ul permite oricum editarea pretului pe linie.
-
-    Referinta fata de care masuram „mai ieftin":
-      - pentru o linie care exista deja pe bon (aceeasi cheie), pretul ei curent
-        de lista — asa nu invalidam o reducere pe care un manager a acordat-o
-        deja si pe care worker-ul doar o retrimite;
-      - pentru o linie noua legata de catalog, pretul din `items`;
-      - pentru o linie manuala noua, nimic — operatorul tasteaza o valoare care
-        nu are corespondent, iar asta e un flux POS legitim.
+    Pretul pe linie e liber pentru toate rolurile — operatorul de la tejghea
+    negociaza preturi, deci un `worker` poate tasta orice valoare. Ce nu poate
+    e sa acorde, sa modifice sau sa stearga o reducere marcata ca atare, care
+    apare pe deviz si in rapoarte ca reducere.
     """
     if ctx.can(Resource.SETTINGS):
         return
@@ -145,7 +129,7 @@ async def _assert_may_change_prices(
     # iar o a treia adaugata de worker sa fie respinsa.
     def _disc_counter(items) -> Counter:
         return Counter(
-            (_line_key(it.name, it.item_id), _q2(it.price), _q2(it.original_price))
+            (_line_key(it.name, it.item_id), _q2(it.original_price))
             for it in items if it.original_price is not None
         )
 
@@ -174,46 +158,6 @@ async def _assert_may_change_prices(
         must_keep = min(n_old, new_total.get(key, 0))
         if new_disc_n.get(key, 0) < must_keep:
             raise HTTPException(403, DENIED_DISCOUNT)
-
-    # ── 2. Scaderea directa de pret ───────────────────────────────────────────
-    floors: dict[tuple, Decimal] = {}
-    for it in existing:
-        key = _line_key(it.name, it.item_id)
-        price = _list_price(it)
-        # Cand acelasi articol apare de mai multe ori la preturi diferite,
-        # referinta e cea mai mica: altfel o editare legitima ar fi respinsa.
-        floors[key] = min(floors[key], price) if key in floors else price
-
-    # Articolele noi (fara corespondent pe bon) se masoara fata de catalog.
-    catalog_ids = {
-        it.item_id for it in new_items
-        if it.item_id is not None and _line_key(it.name, it.item_id) not in floors
-    }
-    if catalog_ids:
-        rows = (await db.execute(
-            select(Item.id, Item.price).where(
-                Item.id.in_(catalog_ids),
-                Item.account_id == account_id,
-                Item.is_deleted == False,
-            )
-        )).all()
-        catalog = {r.id: _q2(r.price) for r in rows}
-        for it in new_items:
-            key = _line_key(it.name, it.item_id)
-            if key not in floors and it.item_id in catalog:
-                floors[key] = catalog[it.item_id]
-
-    for it in new_items:
-        floor = floors.get(_line_key(it.name, it.item_id))
-        if floor is None:
-            continue
-        if _list_price(it) < floor:
-            raise HTTPException(
-                403,
-                f"Linia '{it.name}' este trimisa la {_list_price(it)} lei, sub pretul "
-                f"de referinta de {floor} lei. Doar administratorul sau managerul "
-                "poate reduce preturile.",
-            )
 
 
 async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids: set[int]) -> None:

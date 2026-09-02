@@ -6,7 +6,7 @@ import { createPagination } from "../hooks/createPagination";
 import { notify } from "../store/notificationsStore";
 import Pagination from "../components/data/Pagination";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
-import { CNP_PLACEHOLDER, cnpError, normalizeCnp } from "../types/client";
+import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 
 interface Client {
   id: number;
@@ -50,7 +50,7 @@ function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: ()
 }
 
 function emptyForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: CNP_PLACEHOLDER, reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
 function emptyVForm() {
@@ -170,7 +170,7 @@ export default function Clienti() {
   function startEdit(c: Client) {
     setEditId(c.id);
     setViewId(null);
-    setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? "", reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", numar_masina: c.numar_masina ?? "", comments: c.comments ?? "" });
+    setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? CNP_PLACEHOLDER, reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", numar_masina: c.numar_masina ?? "", comments: c.comments ?? "" });
     setAddMode(false);
     setError(null);
   }
@@ -188,7 +188,7 @@ export default function Clienti() {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
           reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
@@ -229,7 +229,7 @@ export default function Clienti() {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
           reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
@@ -395,7 +395,7 @@ export default function Clienti() {
           >Persoană juridică</button>
         </div>
         <Show when={props.f.tip === "fizic"}>
-          <input class="input" placeholder="CNP *" aria-label="CNP" inputmode="numeric" maxlength="13" value={props.f.cui} onInput={(e) => props.setF({ ...props.f, cui: e.currentTarget.value })} />
+          <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={props.f.cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => props.setF({ ...props.f, cui: e.currentTarget.value })} />
           <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
         </Show>
         <Show when={props.f.tip === "juridic"}>

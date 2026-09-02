@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
 import { canManage } from "../store/permissions";
-import { cnpError, normalizeCnp } from "../types/client";
+import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
 import PaymentsSection from "../components/PaymentsSection";
@@ -147,7 +147,7 @@ interface ClientItem {
 }
 
 function emptyClientForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", comments: "" };
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: CNP_PLACEHOLDER, reprezentant: "", telefon: "", email: "", adresa: "", comments: "" };
 }
 
 type ClientForm = ReturnType<typeof emptyClientForm>;
@@ -182,7 +182,7 @@ function ClientFormFields(props: { f: ClientForm; setF: (v: ClientForm) => void 
         <input class="input" placeholder="Reprezentant" value={f().reprezentant} onInput={e => s({ reprezentant: e.currentTarget.value })} />
       </Show>
       <Show when={f().tip === "fizic"}>
-        <input class="input" placeholder="CNP *" aria-label="CNP" inputmode="numeric" maxlength="13" value={f().cui} onInput={e => s({ cui: e.currentTarget.value })} />
+        <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={f().cui} onFocus={(e) => e.currentTarget.select()} onInput={e => s({ cui: e.currentTarget.value })} />
       </Show>
       <input class="input" placeholder="Telefon" value={f().telefon} onInput={e => s({ telefon: e.currentTarget.value })} />
       <input class="input" placeholder="Email" value={f().email} onInput={e => s({ email: e.currentTarget.value })} />
@@ -306,7 +306,7 @@ function ClientSection(props: { receipt: Receipt; readOnly?: boolean }) {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
           reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, comments: f.comments.trim() || null,
@@ -803,13 +803,13 @@ function ReceiptCard(props: { receipt: Receipt }) {
   // registrul: backendul a inregistrat deja diferenta de bani corespunzatoare.
   const [payRefresh, setPayRefresh] = createSignal(0);
   const [showDiscount, setShowDiscount] = createSignal(false);
-  /** Reducerea si registrul de plati se inchid in acelasi moment: dupa incasarea
-   *  integrala sau dupa ANAF. Pe Neplatit/Platit partial raman deschise. */
-  const ledgerLocked = createMemo(() => {
+  /** „Platit Partial" se comporta ca „Neplatit": bonul rămâne deschis — se poate
+   *  edita in POS, i se poate schimba clientul, se pot aplica reduceri si miscari
+   *  in registru. Se inchide doar la incasarea integrala sau dupa ANAF. */
+  const receiptLocked = createMemo(() => {
     const m = live().metodaPlata;
     return live().efacturaLocked || (!!m && m !== "Platit Partial");
   });
-  const discountLocked = ledgerLocked;
 
   // Reducerea e scazuta din pretul fiecarei linii; `originalPrice` pastreaza
   // pretul de lista, deci diferenta insumata e reducerea totala de pe bon.
@@ -909,7 +909,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
               </span>
             </Show>
           </div>
-          <Show when={!live().metodaPlata && !live().efacturaLocked}>
+          <Show when={!receiptLocked()}>
             <button
               class="btn btn-sm btn-primary rcard-continua-btn"
               onClick={(e) => {
@@ -1153,8 +1153,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   <div class="receipt-actions-row">
                     <button
                       class="btn btn-ghost btn-sm btn-warning-text"
-                      disabled={discountLocked()}
-                      title={discountLocked()
+                      disabled={receiptLocked()}
+                      title={receiptLocked()
                         ? "Reducerea se poate aplica doar cât timp bonul e Neplătit sau Plătit parțial."
                         : undefined}
                       onClick={() => setShowDiscount(true)}
@@ -1191,7 +1191,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
           {/* Coloana dreapta */}
           <div class="rcard-extra-col">
-            <ClientSection receipt={live()} readOnly={live().efacturaLocked || !!live().metodaPlata} />
+            <ClientSection receipt={live()} readOnly={receiptLocked()} />
             {/* Status plata — ascuns pentru FDL (estimare, nu se incaseaza) */}
             <Show when={!isFdl()}>
               <div class="rcard-extra-card">
@@ -1238,7 +1238,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 // Registrul se inchide odata cu incasarea integrala: miscarile de
                 // bani se mai pot adauga sau sterge doar cat timp statusul e
                 // Neplatit sau Platit partial (si bonul n-a plecat la ANAF).
-                readOnly={ledgerLocked()}
+                readOnly={receiptLocked()}
                 readOnlyReason={
                   live().efacturaLocked
                     ? "Bon trimis la ANAF — registrul nu mai poate fi modificat."

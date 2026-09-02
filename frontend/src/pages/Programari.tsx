@@ -8,7 +8,7 @@ import {
 } from "../store/programariStore";
 import type { Programare, ProgramareStatus, ProgramareInput } from "../store/programariStore";
 import { triggerLoad } from "../store/resumeStore";
-import { cnpError, normalizeCnp } from "../types/client";
+import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { apiFetch } from "../utils/api";
@@ -485,7 +485,7 @@ export default function Programari() {
   const [clientCreateNume,    setClientCreateNume]    = createSignal("");
   const [clientCreateTelefon, setClientCreateTelefon] = createSignal("");
   const [clientCreateMasina,  setClientCreateMasina]  = createSignal("");
-  const [clientCreateCnp,     setClientCreateCnp]     = createSignal("");
+  const [clientCreateCnp,     setClientCreateCnp]     = createSignal(CNP_PLACEHOLDER);
   const [clientCreateSaving,  setClientCreateSaving]  = createSignal(false);
 
   function initForm(day: Date, startMin: number, endMin: number) {
@@ -532,7 +532,7 @@ export default function Programari() {
         body: JSON.stringify({
           tip: clientCreateTip(),
           nume: clientCreateNume().trim(),
-          cui: clientCreateTip() === "fizic" ? normalizeCnp(clientCreateCnp()) : null,
+          cui: clientCreateTip() === "fizic" ? cnpForSave(clientCreateCnp()) : null,
           telefon: clientCreateTelefon().trim() || null,
           numar_masina: clientCreateMasina().trim() || null,
         }),
@@ -542,7 +542,7 @@ export default function Programari() {
       pickClient({ id: data.id, nume: data.nume, numar_masina: data.numar_masina ?? null });
       setShowClientCreate(false);
       setClientCreateNume(""); setClientCreateTelefon(""); setClientCreateMasina("");
-      setClientCreateCnp(""); setClientCreateTip("fizic");
+      setClientCreateCnp(CNP_PLACEHOLDER); setClientCreateTip("fizic");
     } catch (err: any) {
       setFormError(err?.message ?? "Eroare la creare client.");
     } finally {
@@ -919,7 +919,7 @@ export default function Programari() {
                     <input class="input" style="font-size:13px" placeholder="Nume *" value={clientCreateNume()} onInput={(e) => setClientCreateNume(e.currentTarget.value)} />
                   </div>
                   <Show when={clientCreateTip() === "fizic"}>
-                    <input class="input" style="font-size:13px" placeholder="CNP *" aria-label="CNP" inputmode="numeric" maxlength="13" value={clientCreateCnp()} onInput={(e) => setClientCreateCnp(e.currentTarget.value)} />
+                    <input class="input" style="font-size:13px" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={clientCreateCnp()} onFocus={(e) => e.currentTarget.select()} onInput={(e) => setClientCreateCnp(e.currentTarget.value)} />
                   </Show>
                   <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
                     <input class="input" style="font-size:13px" placeholder="Telefon" value={clientCreateTelefon()} onInput={(e) => setClientCreateTelefon(e.currentTarget.value)} />

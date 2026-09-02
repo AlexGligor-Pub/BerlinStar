@@ -3,7 +3,7 @@ import { apiFetch } from "../../utils/api";
 import Input from "../../components/ui/Input";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
 import { VAT_OPTIONS, lineTotalGross, newLine } from "./types";
-import { cnpError, normalizeCnp } from "../../types/client";
+import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../../types/client";
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   accepted: { bg: "rgba(34,197,94,.15)", fg: "var(--success)" },
@@ -185,7 +185,7 @@ export function ClientSearch(props: {
 
 export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => void }) {
   const [nume, setNume] = createSignal("");
-  const [cnp, setCnp] = createSignal("");
+  const [cnp, setCnp] = createSignal(CNP_PLACEHOLDER);
   const [adresa, setAdresa] = createSignal("");
   const [telefon, setTelefon] = createSignal("");
   const [error, setError] = createSignal<string | null>(null);
@@ -194,9 +194,9 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
   async function save() {
     setError(null);
     if (!nume().trim()) { setError("Numele e obligatoriu."); return; }
-    const cnpVal = normalizeCnp(cnp());
-    const cnpErr = cnpError(cnpVal);
+    const cnpErr = cnpError(cnp());
     if (cnpErr) { setError(cnpErr); return; }
+    const cnpVal = cnpForSave(cnp());
     setLoading(true);
     try {
       const res = await apiFetch("/api/clienti", {
@@ -216,14 +216,14 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
       }
       const created: ClientLite = await res.json();
       props.onClientCreated(created);
-      setNume(""); setCnp(""); setAdresa(""); setTelefon("");
+      setNume(""); setCnp(CNP_PLACEHOLDER); setAdresa(""); setTelefon("");
     } finally { setLoading(false); }
   }
 
   return (
     <div style="display:flex;flex-direction:column;gap:8px">
       <Input label="Nume *" value={nume()} placeholder="Nume si prenume" onInput={(v) => setNume(v)} />
-      <Input label="CNP *" value={cnp()} placeholder="13 cifre" maxlength={13} onInput={(v) => setCnp(v)} />
+      <Input label="CNP" value={cnp()} placeholder="13 cifre" maxlength={13} onFocus={(e) => e.currentTarget.select()} onInput={(v) => setCnp(v)} />
       <Input label="Adresa" value={adresa()} placeholder="Adresa" onInput={(v) => setAdresa(v)} />
       <Input label="Telefon" value={telefon()} placeholder="Telefon" onInput={(v) => setTelefon(v)} />
       <Show when={error()}><span class="field-error" role="alert">{error()}</span></Show>

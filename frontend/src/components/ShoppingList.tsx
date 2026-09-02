@@ -8,8 +8,7 @@ import { apiFetch, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { savePosHotelCtx, consumePendingPosReturn, clearPosHotelCtx } from "../store/posHotelStore";
 import { notify } from "../store/notificationsStore";
-import { canManage } from "../store/permissions";
-import { cnpError, normalizeCnp } from "../types/client";
+import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
 import SplitName from "./SplitName";
@@ -60,7 +59,7 @@ interface ClientItem {
 }
 
 function emptyClientForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: "", reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
+  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: CNP_PLACEHOLDER, reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
 }
 
 interface VehicolWithClient {
@@ -238,7 +237,7 @@ function AddClientModal(props: {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
           reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
@@ -291,7 +290,7 @@ function AddClientModal(props: {
             </Show>
           </Show>
           <Show when={form().tip === "fizic"}>
-            <input class="input" placeholder="CNP *" inputmode="numeric" maxlength="13" value={form().cui} onInput={(e) => pf("cui", e.currentTarget.value)} />
+            <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
           </Show>
           <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
           <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -340,7 +339,7 @@ function EditClientModal(props: {
         tip: data.tip ?? "fizic",
         nume: data.nume ?? "",
         description: data.description ?? "",
-        cui: data.cui ?? "",
+        cui: data.cui ?? CNP_PLACEHOLDER,
         reprezentant: data.reprezentant ?? "",
         telefon: data.telefon ?? "",
         email: data.email ?? "",
@@ -386,7 +385,7 @@ function EditClientModal(props: {
         body: JSON.stringify({
           tip: f.tip, nume: f.nume.trim(),
           description: f.description.trim() || null,
-          cui: f.tip === "fizic" ? normalizeCnp(f.cui) : (f.cui.trim() || null),
+          cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
           reprezentant: f.reprezentant.trim() || null,
           telefon: f.telefon.trim() || null, email: f.email.trim() || null,
           adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
@@ -443,7 +442,7 @@ function EditClientModal(props: {
               </Show>
             </Show>
             <Show when={form().tip === "fizic"}>
-              <input class="input" placeholder="CNP *" inputmode="numeric" maxlength="13" value={form().cui} onInput={(e) => pf("cui", e.currentTarget.value)} />
+              <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={form().cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => pf("cui", e.currentTarget.value)} />
             </Show>
             <input class="input" placeholder="Nume *" value={form().nume} onInput={(e) => pf("nume", e.currentTarget.value)} />
             <input class="input" placeholder="Descriere" value={form().description} onInput={(e) => pf("description", e.currentTarget.value)} />
@@ -1649,36 +1648,17 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
                   <button class="btn btn-ghost btn-xs sl-qty-preset-btn" onClick={() => setEditQty(String(v))}>{v}</button>
                 ))}
               </div>
-              {/* Pretul e editabil doar pentru admin/manager: altfel „reducerea"
-                  s-ar putea acorda pur si simplu tastand un pret mai mic, ocolind
-                  modalul de reducere. Serverul refuza oricum coborarea sub pretul
-                  de referinta (vezi _assert_may_change_prices), asa ca aici doar
-                  facem UI-ul sa spuna acelasi lucru. */}
               <div class="sl-edit-item-row">
                 <label class="sl-edit-label">Pret (lei)</label>
-                <Show
-                  when={canManage()}
-                  fallback={
-                    <div class="sl-edit-input" style="display:flex;align-items:center;opacity:0.7">
-                      {(parseFloat(editPrice()) || 0).toFixed(2)}
-                    </div>
-                  }
-                >
-                  <input
-                    class="input sl-edit-input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editPrice()}
-                    onInput={(e) => setEditPrice(e.currentTarget.value)}
-                  />
-                </Show>
+                <input
+                  class="input sl-edit-input"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editPrice()}
+                  onInput={(e) => setEditPrice(e.currentTarget.value)}
+                />
               </div>
-              <Show when={!canManage()}>
-                <div style="font-size:0.75rem;color:var(--text-muted);margin:-4px 0 6px">
-                  Prețul se modifică de către administrator sau manager.
-                </div>
-              </Show>
               <div class="sl-edit-item-total">
                 Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
               </div>

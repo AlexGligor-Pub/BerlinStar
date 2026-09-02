@@ -4,8 +4,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Persoanele fizice nu au CUI: coloana `cui` tine CNP-ul, iar e-Factura B2C cere
-# 13 cifre in PartyLegalEntity/CompanyID. Placeholder-ul e doar pentru randurile
-# vechi normalizate de migratia cnp01 — la scriere CNP-ul e obligatoriu.
+# 13 cifre in PartyLegalEntity/CompanyID — 13 zerouri cand CNP-ul real lipseste,
+# ca lipsa lui sa nu blocheze inregistrarea clientului.
 CNP_PLACEHOLDER = "0000000000000"
 
 
@@ -25,7 +25,7 @@ class ClientCreate(BaseModel):
     def _normalize_cnp(self):
         if self.tip != "fizic":
             return self
-        cnp = re.sub(r"[\s.\-]", "", self.cui or "")
+        cnp = re.sub(r"[\s.\-]", "", self.cui or "") or CNP_PLACEHOLDER
         if not re.fullmatch(r"\d{13}", cnp):
             raise ValueError("CNP invalid: trebuie sa aiba exact 13 cifre.")
         self.cui = cnp
