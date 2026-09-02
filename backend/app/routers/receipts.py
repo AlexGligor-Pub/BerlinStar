@@ -111,9 +111,9 @@ async def _assert_may_change_prices(
     """Reducerile explicite (`original_price`) rămân pe admin/manager.
 
     Pretul pe linie e liber pentru toate rolurile — operatorul de la tejghea
-    negociaza preturi, deci un `worker` poate tasta orice valoare. Ce nu poate
-    e sa acorde, sa modifice sau sa stearga o reducere marcata ca atare, care
-    apare pe deviz si in rapoarte ca reducere.
+    negociaza preturi, deci un `worker` poate tasta orice valoare, si sub cea
+    din catalog. Ce nu poate e sa acorde, sa adanceasca sau sa stearga o
+    reducere marcata ca atare, fiindca aceea apare pe deviz si in rapoarte.
     """
     if ctx.can(Resource.SETTINGS):
         return
@@ -129,7 +129,7 @@ async def _assert_may_change_prices(
     # iar o a treia adaugata de worker sa fie respinsa.
     def _disc_counter(items) -> Counter:
         return Counter(
-            (_line_key(it.name, it.item_id), _q2(it.original_price))
+            (_line_key(it.name, it.item_id), _q2(it.price), _q2(it.original_price))
             for it in items if it.original_price is not None
         )
 

@@ -24,7 +24,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import (
     ALGORITHM,
@@ -33,7 +32,7 @@ from app.config import (
     ASSISTANT_ENABLED,
     SECRET_KEY,
 )
-from app.database import get_db
+from app.database import AsyncSessionLocal
 from app.models.account import Account
 from app.rate_limit import limiter
 from app.routers.admin import _require_super_admin
@@ -74,9 +73,12 @@ def _mint_stream_token(account_id: int) -> str:
 
 async def _require_assistant_admin_from_query(
     token: str = Query(...),
-    db: AsyncSession = Depends(get_db),
 ) -> Account:
-    """Valideaza token-ul de stream (scope=assistant) si ca e contul admin."""
+    """Valideaza token-ul de stream (scope=assistant) si ca e contul admin.
+
+    Sesiune deschisa local, nu prin `Depends(get_db)`: vezi
+    `get_account_id_from_query` — pe un SSE dependinta nu s-ar inchide niciodata.
+    """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError:
@@ -89,13 +91,14 @@ async def _require_assistant_admin_from_query(
         account_id = int(payload.get("sub"))
     except (TypeError, ValueError):
         raise HTTPException(401, "Token invalid.")
-    account = (await db.execute(
-        select(Account).where(
-            Account.id == account_id,
-            Account.is_deleted == False,  # noqa: E712
-            Account.username == "admin",
-        )
-    )).scalar_one_or_none()
+    async with AsyncSessionLocal() as db:
+        account = (await db.execute(
+            select(Account).where(
+                Account.id == account_id,
+                Account.is_deleted == False,  # noqa: E712
+                Account.username == "admin",
+            )
+        )).scalar_one_or_none()
     if account is None:
         raise HTTPException(403, "Acces interzis.")
     return account

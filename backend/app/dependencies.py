@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth_context import AuthContext, resolve_auth_context
 from app.config import SECRET_KEY, ALGORITHM
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models.account import Account
 from app.permissions import Resource
 
@@ -123,10 +123,15 @@ async def get_account_id(ctx: AuthContext = Depends(get_auth_context)) -> int:
 async def get_account_id_from_query(
     request: Request,
     token: str = Query(...),
-    db: AsyncSession = Depends(get_db),
 ) -> int:
     """Varianta cu token in query string, pentru EventSource (SSE), care nu poate
-    trimite headere. Valideaza sesiunea la fel ca fluxul normal."""
+    trimite headere. Valideaza sesiunea la fel ca fluxul normal.
+
+    Sesiunea DB e deschisa local, NU prin `Depends(get_db)`: FastAPI inchide
+    dependintele cu yield abia dupa ce raspunsul s-a terminat de trimis, iar un
+    SSE nu se termina niciodata — fiecare tab deschis ar tine o conexiune din
+    pool blocata `idle in transaction` pana la epuizarea lui.
+    """
     payload = _decode_payload(token)
     sub = payload.get("sub")
     uid = payload.get("uid")
@@ -137,11 +142,12 @@ async def get_account_id_from_query(
         raise HTTPException(401, "Token invalid.")
     if account_id is None:
         raise HTTPException(401, "Token invalid.")
-    ctx = await resolve_auth_context(
-        request=request, db=db, account_id=account_id,
-        user_id=user_id, jti=payload.get("jti"),
-    )
-    return ctx.account_id
+    async with AsyncSessionLocal() as db:
+        ctx = await resolve_auth_context(
+            request=request, db=db, account_id=account_id,
+            user_id=user_id, jti=payload.get("jti"),
+        )
+        return ctx.account_id
 
 
 async def get_current_account(ctx: AuthContext = Depends(get_auth_context)) -> Account:

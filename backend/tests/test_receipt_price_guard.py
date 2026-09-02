@@ -1,10 +1,8 @@
-"""Un `worker` nu poate ieftini un bon — nici cu reducere, nici pe furis.
+"""Un `worker` poate tasta orice pret, dar nu poate atinge o reducere.
 
-Regula are doua cai de ocolire si amandoua trebuie inchise:
-  1. `original_price` — reducerea explicita, acordata din modalul de Reducere;
-  2. pur si simplu un `price` mai mic, fara sa marcheze nimic ca reducere.
-Fara (2), restrictia ar fi decorativa: POS-ul permite oricum editarea pretului
-pe linie, deci ar fi de ajuns sa scrii 1 in loc de 100.
+Pretul pe linie e liber pentru toate rolurile — se negociaza la tejghea. Ce
+rămâne pe admin/manager e `original_price`: reducerea marcata ca atare, care
+apare pe deviz si in rapoarte. Un worker nu o poate acorda, adanci sau sterge.
 
 Vezi app/routers/receipts.py :: _assert_may_change_prices
 
@@ -120,22 +118,21 @@ async def test_same_name_discounted_and_not_is_not_a_false_positive():
     )
 
 
-# ─── 2. Reducerea mascata: pretul scazut direct ───────────────────────────────
+# ─── 2. Pretul simplu, fara marcaj de reducere ────────────────────────────────
 
-async def test_worker_cannot_lower_the_price_of_an_existing_line():
+async def test_worker_may_lower_the_price_of_an_existing_line():
     db, acc, item, receipt = await _fixture()
     await add_line(db, receipt, "Ulei 5W30", "100.00", item_id=item.id)
-    detail = await raises_http(403, _assert_may_change_prices(
+    await _assert_may_change_prices(
         db, acc.id, receipt.id, [Line("Ulei 5W30", "1.00", item_id=item.id)], WORKER,
-    ))
-    assert "sub pretul de referinta" in detail
+    )
 
 
-async def test_worker_cannot_add_a_catalog_item_below_list_price():
+async def test_worker_may_add_a_catalog_item_below_list_price():
     db, acc, item, receipt = await _fixture()
-    await raises_http(403, _assert_may_change_prices(
+    await _assert_may_change_prices(
         db, acc.id, receipt.id, [Line("Ulei 5W30", "40.00", item_id=item.id)], WORKER,
-    ))
+    )
 
 
 async def test_worker_may_raise_a_price():
@@ -163,11 +160,9 @@ async def test_manual_new_line_has_no_reference_price():
     )
 
 
-async def test_reference_is_the_line_not_the_catalog_when_manager_already_discounted():
-    """Regresie: daca referinta ar fi mereu catalogul, retrimiterea unui bon pe
-    care managerul l-a redus deja ar fi respinsa la orice editare a worker-ului."""
+async def test_line_below_catalog_without_flag_is_left_alone():
     db, acc, item, receipt = await _fixture()
-    await add_line(db, receipt, "Ulei 5W30", "70.00", item_id=item.id)  # sub catalog, fara flag
+    await add_line(db, receipt, "Ulei 5W30", "70.00", item_id=item.id)
     await _assert_may_change_prices(
         db, acc.id, receipt.id,
         [Line("Ulei 5W30", "70.00", qty=2, item_id=item.id)],
@@ -186,11 +181,11 @@ async def test_new_receipt_cannot_start_discounted():
     ))
 
 
-async def test_new_receipt_cannot_start_below_catalog():
+async def test_new_receipt_may_start_below_catalog():
     db, acc, item, _ = await _fixture()
-    await raises_http(403, _assert_may_change_prices(
+    await _assert_may_change_prices(
         db, acc.id, None, [Line("Ulei 5W30", "10.00", item_id=item.id)], WORKER,
-    ))
+    )
 
 
 # ─── 4. Rolurile privilegiate trec neatinse ───────────────────────────────────
