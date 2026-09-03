@@ -6,7 +6,7 @@ import { connectivityStatus, retryConnectivity } from "../../store/connectivityS
  *  - fara internet (navigator offline)
  *  - serverul nu raspunde (internet ok, dar API/DB inaccesibil)
  *
- * Recuperarea e automata (polling pe /api/health), butonul doar forteaza o verificare.
+ * Recuperarea e automata (re-verificare cu backoff cat timp serverul e inaccesibil), butonul doar forteaza o verificare.
  */
 export default function ConnectivityBanner() {
   const status = createMemo(() => connectivityStatus());

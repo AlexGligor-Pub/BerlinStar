@@ -21,5 +21,4 @@ exec gunicorn app.main:app \
   --timeout 600 \
   --graceful-timeout 30 \
   --max-requests 0 \
-  --preload \
-  --access-logfile -
+  --preload

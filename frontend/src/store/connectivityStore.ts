@@ -1,21 +1,9 @@
 import { createSignal } from "solid-js";
 
-/**
- * Store global de conectivitate.
- *
- * Distinge intre doua tipuri de probleme client-side:
- *  - "no-internet"  -> browserul raporteaza offline (navigator.onLine === false)
- *  - "server-down"  -> avem internet, dar serverul nostru nu raspunde
- *
- * Sursele de semnal:
- *  1. evenimentele `online`/`offline` ale browserului
- *  2. raportarile din apiFetch (reportServerReachable / reportServerUnreachable)
- *  3. un health-check periodic pe /api/health (recuperare automata + detectie
- *     proactiva cand nu exista activitate de la user)
- */
+// Conectivitate: online/offline din browser + rezultatele apiFetch; /api/health e lovit
+// doar cat timp serverul e inaccesibil (backoff 5s->60s, pauza cu tab-ul ascuns).
 
-// Acelasi calcul ca API_BASE din utils/api.ts, recalculat aici ca sa evitam
-// un import circular (api.ts importa functiile de raportare din acest store).
+// Duplicat din utils/api.ts ca sa evitam importul circular.
 const API_BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 const HEALTH_URL = `${API_BASE}/api/health`;
 
@@ -37,12 +25,15 @@ export function isConnected(): boolean {
   return connectivityStatus() === "online";
 }
 
-const HEALTHY_POLL_MS = 30_000; // verificare lejera cand totul e ok
-const DEGRADED_POLL_MS = 7_000; // verificare deasa cand incercam sa ne recuperam
+const DEGRADED_POLL_MIN_MS = 5_000;
+const DEGRADED_POLL_MAX_MS = 60_000;
 const PING_TIMEOUT_MS = 5_000;
+const FAILURE_PING_THROTTLE_MS = 10_000;
 
 let pingInFlight = false;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
+let degradedDelay = DEGRADED_POLL_MIN_MS;
+let lastFailurePingAt = 0;
 let started = false;
 
 /** Lovește /api/health si actualizeaza serverReachable. Returneaza true daca serverul raspunde. */
@@ -55,16 +46,16 @@ export async function pingHealth(): Promise<boolean> {
       cache: "no-store",
       signal: AbortSignal.timeout(PING_TIMEOUT_MS),
     });
-    const ok = res.ok;
-    setServerReachable(ok);
-    if (ok) setOnline(true);
-    return ok;
+    setServerReachable(res.ok);
+    if (res.ok) setOnline(true);
+    return res.ok;
   } catch {
-    // Eroare de retea / timeout -> serverul e inaccesibil din acest client.
     setServerReachable(false);
     return false;
   } finally {
     pingInFlight = false;
+    if (connectivityStatus() === "online") stopDegradedPolling();
+    else scheduleDegradedPoll();
   }
 }
 
@@ -73,33 +64,38 @@ export function retryConnectivity(): Promise<boolean> {
   return pingHealth();
 }
 
-function scheduleNextPoll(): void {
+function stopDegradedPolling(): void {
   if (pollTimer) clearTimeout(pollTimer);
-  const delay = connectivityStatus() === "online" ? HEALTHY_POLL_MS : DEGRADED_POLL_MS;
+  pollTimer = null;
+  degradedDelay = DEGRADED_POLL_MIN_MS;
+}
+
+function scheduleDegradedPoll(): void {
+  if (pollTimer || typeof document === "undefined") return;
+  if (document.hidden || !online()) return;
   pollTimer = setTimeout(async () => {
-    // Daca browserul stie ca e offline, nu mai are sens sa lovim reteaua;
-    // asteptam evenimentul `online`.
-    if (online()) await pingHealth();
-    scheduleNextPoll();
-  }, delay);
+    pollTimer = null;
+    degradedDelay = Math.min(degradedDelay * 2, DEGRADED_POLL_MAX_MS);
+    await pingHealth();
+  }, degradedDelay);
 }
 
 /** Apelat din apiFetch cand un request a primit raspuns de la server (orice status HTTP). */
 export function reportServerReachable(): void {
   if (!serverReachable()) setServerReachable(true);
   if (!online()) setOnline(true);
+  stopDegradedPolling();
 }
 
-/**
- * Apelat din apiFetch cand un request a esuat la nivel de retea (server inaccesibil).
- * Nu marcam direct offline dintr-un singur esec (poate fi un request anulat sau o
- * eroare punctuala) — confirmam printr-un ping pe /api/health.
- */
+/** Din apiFetch la eroare de retea: confirmam cu un ping, cel mult unul la 10s. */
 export function reportServerUnreachable(): void {
+  const now = Date.now();
+  if (now - lastFailurePingAt < FAILURE_PING_THROTTLE_MS) return;
+  lastFailurePingAt = now;
   void pingHealth();
 }
 
-/** Porneste listeners-ii + polling-ul. Idempotent — apelat o singura data din App. */
+/** Porneste listeners-ii. Idempotent — apelat o singura data din App. */
 export function initConnectivity(): void {
   if (started || typeof window === "undefined") return;
   started = true;
@@ -110,10 +106,12 @@ export function initConnectivity(): void {
   });
   window.addEventListener("offline", () => {
     setOnline(false);
+    stopDegradedPolling();
   });
-
-  void pingHealth();
-  scheduleNextPoll();
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopDegradedPolling();
+    else if (connectivityStatus() !== "online") void pingHealth();
+  });
 }
 
 export { online, serverReachable };
