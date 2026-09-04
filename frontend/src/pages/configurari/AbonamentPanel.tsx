@@ -1,7 +1,8 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
-import { subscriptionApi } from "../../api/subscription";
+import { paymentMethodLabel, subscriptionApi, type PaymentItem } from "../../api/subscription";
 import SubscriptionCheckoutModal from "../../components/subscription/SubscriptionCheckoutModal";
 
 interface SubscriptionStatus {
@@ -14,19 +15,7 @@ interface SubscriptionStatus {
   message: string;
   price_eur: number;
   vat_percent: number;
-}
-
-interface PaymentItem {
-  id: number;
-  status: string;
-  paid_at: string | null;
-  amount_ron: number;
-  amount_eur: number;
-  invoice_number: string | null;
-  invoice_issue_date: string | null;
-  anaf_status: string | null;
-  pdf_available: boolean;
-  zip_available: boolean;
+  test_mode: boolean;
 }
 
 function statusLabel(status: string): string {
@@ -75,6 +64,7 @@ export default function AbonamentPanel() {
   const [payments, setPayments] = createSignal<PaymentItem[]>([]);
   const [loading, setLoading] = createSignal(false);
   const [showCheckout, setShowCheckout] = createSignal(false);
+  const [searchParams, setSearchParams] = useSearchParams<{ payment?: string; payment_id?: string }>();
 
   async function loadAll() {
     setLoading(true);
@@ -92,7 +82,27 @@ export default function AbonamentPanel() {
     }
   }
 
-  onMount(() => { void loadAll(); });
+  // Intoarcerea din Stripe Checkout (success_url) sau din redirect-ul unei metode
+  // ca PayPal: reconciliem plata imediat, fara sa asteptam webhook-ul.
+  async function handleStripeReturn() {
+    const outcome = searchParams.payment;
+    const id = Number(searchParams.payment_id);
+    if (!outcome) return;
+    setSearchParams({ payment: undefined, payment_id: undefined }, { replace: true });
+    if (outcome === "success" && id) {
+      try {
+        const p = await subscriptionApi.syncPayment(id);
+        if (p.status === "succeeded") notify("Plata a fost confirmată. Emitem factura...", "success");
+        else notify(`Plata este în starea „${statusLabel(p.status)}”. Reactualizează în câteva secunde.`, "info");
+      } catch {
+        notify("Nu am putut verifica plata la Stripe. Apasă Reactualizează.", "error");
+      }
+    } else if (outcome === "cancel") {
+      notify("Plata a fost anulată.", "info");
+    }
+  }
+
+  onMount(async () => { await handleStripeReturn(); void loadAll(); });
 
   function downloadFile(url: string) {
     const link = document.createElement("a");
@@ -124,7 +134,12 @@ export default function AbonamentPanel() {
 
   return (
     <div class="cfg-panel">
-      <h2 class="cfg-panel-title">Abonament BerlinStar</h2>
+      <h2 class="cfg-panel-title">
+        Abonament BerlinStar
+        <Show when={status()?.test_mode}>
+          <span style="margin-left:10px;font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;vertical-align:middle">STRIPE TEST</span>
+        </Show>
+      </h2>
       <p class="cfg-hint" style="margin:0 0 18px">
         Plata anuală pentru accesul la platforma BerlinStar. Încasare prin
         Stripe în lei (curs BNR la momentul plăţii). Factura
@@ -207,6 +222,8 @@ export default function AbonamentPanel() {
                   <th style="padding:8px 10px">Factura</th>
                   <th style="padding:8px 10px">Data</th>
                   <th style="padding:8px 10px">Sumă</th>
+                  <th style="padding:8px 10px">Perioadă</th>
+                  <th style="padding:8px 10px">Metodă</th>
                   <th style="padding:8px 10px">Status</th>
                   <th style="padding:8px 10px">SPV</th>
                   <th style="padding:8px 10px">Acţiuni</th>
@@ -226,7 +243,11 @@ export default function AbonamentPanel() {
                           ({p.amount_eur.toFixed(2)} EUR)
                         </div>
                       </td>
-                      <td style="padding:8px 10px">{statusLabel(p.status)}</td>
+                      <td style="padding:8px 10px;font-size:0.8rem;white-space:nowrap">
+                        <Show when={p.period_start} fallback="—">{p.period_start} → {p.period_end}</Show>
+                      </td>
+                      <td style="padding:8px 10px">{paymentMethodLabel(p.payment_method)}</td>
+                      <td style="padding:8px 10px" title={p.failure_reason ?? undefined}>{statusLabel(p.status)}</td>
                       <td style="padding:8px 10px">{anafLabel(p.anaf_status)}</td>
                       <td style="padding:8px 10px;white-space:nowrap">
                         <Show when={p.pdf_available}>
@@ -261,8 +282,8 @@ export default function AbonamentPanel() {
           onClose={() => setShowCheckout(false)}
           onSuccess={() => {
             setShowCheckout(false);
-            notify("Plata a fost iniţiată. Statusul se va actualiza după confirmarea Stripe.", "info");
-            setTimeout(() => void loadAll(), 4000);
+            void loadAll();
+            setTimeout(() => void loadAll(), 6000);
           }}
         />
       </Show>

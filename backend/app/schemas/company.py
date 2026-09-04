@@ -52,6 +52,8 @@ class CompanyRead(BaseModel):
     nr_reg_com: str | None
     phone: str | None
     postal_code: str | None
+    city: str | None = None
+    county_code: str | None = None
     is_vat_payer: bool | None
     tva_percentage: float | None
     registration_status: str | None

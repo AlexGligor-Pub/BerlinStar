@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -71,8 +72,9 @@ class AccountSubscription(Base):
 class SubscriptionPayment(Base):
     """Istoricul platilor de abonament (Stripe).
 
-    Pe `payment_intent.succeeded` se actualizeaza statusul, se genereaza
-    factura (XML+PDF), se trimite in SPV si se avanseaza
+    O plata porneste fie ca PaymentIntent (Payment Element in pagina), fie ca
+    Checkout Session (pagina Stripe hosted, afisata ca QR). La confirmare se
+    genereaza factura (XML+PDF), se trimite in SPV si se avanseaza
     `AccountSubscription.next_payment_date`.
     """
     __tablename__ = "subscription_payment"
@@ -84,6 +86,11 @@ class SubscriptionPayment(Base):
             "stripe_payment_intent_id",
             unique=True,
         ),
+        Index(
+            "ix_subscription_payment_stripe_cs",
+            "stripe_checkout_session_id",
+            unique=True,
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -91,8 +98,11 @@ class SubscriptionPayment(Base):
         Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
     )
 
-    stripe_payment_intent_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # PI-ul unei Checkout Session apare abia dupa ce clientul confirma plata.
+    stripe_payment_intent_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_checkout_session_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     stripe_charge_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    payment_method_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="requires_payment"
     )  # requires_payment | processing | succeeded | failed | canceled
@@ -110,7 +120,7 @@ class SubscriptionPayment(Base):
     # Snapshot al datelor clientului completate la checkout — necesar pentru
     # factura (numele firmei, CUI, adresa, etc., asa cum erau la momentul
     # platii).
-    customer_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    customer_snapshot: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
 
     # Factura emisa
     invoice_series: Mapped[str | None] = mapped_column(String(20), nullable=True)

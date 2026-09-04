@@ -20,6 +20,8 @@ export interface CompanyItem {
   nr_reg_com: string | null;
   phone: string | null;
   postal_code: string | null;
+  city: string | null;
+  county_code: string | null;
   is_vat_payer: boolean | null;
   tva_percentage: number | null;
   registration_status: string | null;

@@ -1,4 +1,5 @@
 import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { can, type Resource } from "../store/permissions";
 import { Dynamic } from "solid-js/web";
 
@@ -60,8 +61,15 @@ const PANELS: Record<TopicId, Component> = {
   abonament: lazy(() => import("./configurari/AbonamentPanel")),
 };
 
+const TOPIC_IDS = new Set<string>(TOPIC_GROUPS.flatMap((g) => g.items.map((t) => t.id)));
+
 export default function Configurari() {
-  const [active, setActive] = createSignal<TopicId | null>(null);
+  // `?topic=abonament` — deep-link folosit de return_url-ul Stripe si de bannerul de abonament.
+  const [searchParams] = useSearchParams<{ topic?: string }>();
+  const initial = searchParams.topic;
+  const [active, setActive] = createSignal<TopicId | null>(
+    initial && TOPIC_IDS.has(initial) ? (initial as TopicId) : null,
+  );
 
   // Ascundem intrarile pe care rolul curent nu le poate deschide (serverul le
   // respinge oricum cu 403) si grupurile ramase goale.

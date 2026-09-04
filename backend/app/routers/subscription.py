@@ -7,7 +7,6 @@ catre noi sunt treaba proprietarului, nu a managerilor.
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, EmailStr, Field
@@ -39,6 +38,7 @@ class SubscriptionStatusOut(BaseModel):
     message: str
     price_eur: float
     vat_percent: float
+    test_mode: bool
 
 
 class CheckoutCustomer(BaseModel):
@@ -59,16 +59,31 @@ class CheckoutRequest(BaseModel):
     customer: CheckoutCustomer
 
 
-class CheckoutResponse(BaseModel):
-    client_secret: str
-    payment_intent_id: str
+class CheckoutSessionRequest(CheckoutRequest):
+    return_url: str = Field(..., min_length=8, max_length=500, pattern="^https?://")
+
+
+class AmountsOut(BaseModel):
+    payment_id: int
     amount_ron: float
     amount_eur: float
     vat_amount_ron: float
     fx_rate: float
     fx_date: str
     currency: str
+    test_mode: bool
+
+
+class CheckoutResponse(AmountsOut):
+    client_secret: str
+    payment_intent_id: str
     publishable_key: str
+
+
+class CheckoutSessionResponse(AmountsOut):
+    session_id: str
+    url: str
+    expires_at: str
 
 
 class InvoiceHistoryItem(BaseModel):
@@ -77,6 +92,10 @@ class InvoiceHistoryItem(BaseModel):
     paid_at: str | None
     amount_ron: float
     amount_eur: float
+    payment_method: str | None
+    period_start: str | None
+    period_end: str | None
+    failure_reason: str | None
     invoice_number: str | None
     invoice_issue_date: str | None
     anaf_status: str | None
@@ -89,6 +108,46 @@ class ConfigOut(BaseModel):
     price_eur: float
     vat_percent: float
     currency: str
+    test_mode: bool
+
+
+def _invoice_label(p: SubscriptionPayment) -> str | None:
+    if p.invoice_series and p.invoice_number:
+        return f"{p.invoice_series}{p.invoice_number:04d}"
+    return None
+
+
+def _to_item(r: SubscriptionPayment) -> InvoiceHistoryItem:
+    return InvoiceHistoryItem(
+        id=r.id,
+        status=r.status,
+        paid_at=r.paid_at.isoformat() if r.paid_at else None,
+        amount_ron=float(r.amount_ron),
+        amount_eur=float(r.amount_eur),
+        payment_method=r.payment_method_type,
+        period_start=r.period_start.isoformat() if r.period_start else None,
+        period_end=r.period_end.isoformat() if r.period_end else None,
+        failure_reason=r.failure_reason,
+        invoice_number=_invoice_label(r),
+        invoice_issue_date=r.invoice_issue_date.isoformat() if r.invoice_issue_date else None,
+        anaf_status=r.anaf_status,
+        pdf_available=bool(r.pdf_s3_key),
+        zip_available=bool(r.anaf_response_zip_s3_key),
+    )
+
+
+async def _own_payment(db: AsyncSession, account: Account, payment_id: int) -> SubscriptionPayment:
+    payment = (
+        await db.execute(
+            select(SubscriptionPayment).where(
+                SubscriptionPayment.id == payment_id,
+                SubscriptionPayment.account_id == account.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if payment is None:
+        raise HTTPException(404, "Plata inexistenta.")
+    return payment
 
 
 @router.get("/config", response_model=ConfigOut)
@@ -103,6 +162,7 @@ async def subscription_config(db: AsyncSession = Depends(get_db)):
         price_eur=float(gs.subscription_price_eur or 0),
         vat_percent=float(gs.subscription_vat_percent or 0),
         currency=(gs.subscription_currency_charge or "RON").upper(),
+        test_mode=stripe_service.is_test_mode(gs),
     )
 
 
@@ -123,6 +183,7 @@ async def my_subscription_status(
         message=status["message"],
         price_eur=float(gs.subscription_price_eur or 0),
         vat_percent=float(gs.subscription_vat_percent or 0),
+        test_mode=stripe_service.is_test_mode(gs),
     )
 
 
@@ -139,26 +200,34 @@ async def my_payments(
             .limit(50)
         )
     ).scalars().all()
-    out: list[InvoiceHistoryItem] = []
-    for r in rows:
-        invoice_label = None
-        if r.invoice_series and r.invoice_number:
-            invoice_label = f"{r.invoice_series}{r.invoice_number:04d}"
-        out.append(
-            InvoiceHistoryItem(
-                id=r.id,
-                status=r.status,
-                paid_at=r.paid_at.isoformat() if r.paid_at else None,
-                amount_ron=float(r.amount_ron),
-                amount_eur=float(r.amount_eur),
-                invoice_number=invoice_label,
-                invoice_issue_date=r.invoice_issue_date.isoformat() if r.invoice_issue_date else None,
-                anaf_status=r.anaf_status,
-                pdf_available=bool(r.pdf_s3_key),
-                zip_available=bool(r.anaf_response_zip_s3_key),
-            )
-        )
-    return out
+    return [_to_item(r) for r in rows]
+
+
+@router.get("/payments/{payment_id}", response_model=InvoiceHistoryItem)
+async def payment_status(
+    payment_id: int,
+    account: Account = Depends(get_admin_account),
+    db: AsyncSession = Depends(get_db),
+):
+    return _to_item(await _own_payment(db, account, payment_id))
+
+
+@router.post("/payments/{payment_id}/sync", response_model=InvoiceHistoryItem)
+async def payment_sync(
+    payment_id: int,
+    account: Account = Depends(get_admin_account),
+    db: AsyncSession = Depends(get_db),
+):
+    """Reconciliere cu Stripe fara webhook (QR platit pe telefon, dev local)."""
+    payment = await _own_payment(db, account, payment_id)
+    try:
+        payment = await stripe_service.sync_payment(db, payment)
+    except SubscriptionConfigError as exc:
+        raise HTTPException(503, str(exc))
+    except Exception:  # noqa: BLE001
+        log.exception("Sync failed for payment_id=%s", payment_id)
+        raise HTTPException(502, "Stripe nu a raspuns; reincearca in cateva secunde.")
+    return _to_item(payment)
 
 
 @router.post("/checkout", response_model=CheckoutResponse)
@@ -169,17 +238,42 @@ async def checkout(
 ):
     try:
         result = await stripe_service.create_payment_intent(
-            db,
-            account,
-            customer=body.customer.model_dump(),
+            db, account, customer=body.customer.model_dump()
         )
     except SubscriptionConfigError as exc:
         raise HTTPException(503, str(exc))
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         log.exception("Checkout failed for account_id=%s", account.id)
-        raise HTTPException(500, f"Eroare la initierea platii: {exc}")
-
+        raise HTTPException(500, "Eroare la initierea platii.")
     return CheckoutResponse(**result)
+
+
+@router.post("/checkout-session", response_model=CheckoutSessionResponse)
+async def checkout_session(
+    body: CheckoutSessionRequest,
+    account: Account = Depends(get_admin_account),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pagina Stripe hosted, afisata ca QR: card / Google Pay / Apple Pay / PayPal."""
+    try:
+        result = await stripe_service.create_checkout_session(
+            db, account, customer=body.customer.model_dump(), return_url=body.return_url
+        )
+    except SubscriptionConfigError as exc:
+        raise HTTPException(503, str(exc))
+    except Exception:  # noqa: BLE001
+        log.exception("Checkout session failed for account_id=%s", account.id)
+        raise HTTPException(500, "Eroare la initierea platii.")
+    return CheckoutSessionResponse(**result)
+
+
+def _file_response(payment: SubscriptionPayment, data: bytes, media_type: str, suffix: str) -> Response:
+    label = _invoice_label(payment) or f"factura-{payment.id}"
+    return Response(
+        content=data,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{label}{suffix}"'},
+    )
 
 
 @router.get("/invoices/{payment_id}/pdf")
@@ -188,32 +282,14 @@ async def download_pdf(
     account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
-    payment = (
-        await db.execute(
-            select(SubscriptionPayment).where(
-                SubscriptionPayment.id == payment_id,
-                SubscriptionPayment.account_id == account.id,
-            )
-        )
-    ).scalar_one_or_none()
-    if payment is None:
-        raise HTTPException(404, "Factura inexistenta.")
+    payment = await _own_payment(db, account, payment_id)
     if not payment.pdf_s3_key:
         raise HTTPException(404, "PDF nu este inca generat.")
     try:
         data = invoice_service.get_pdf_bytes(payment)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
-    invoice_label = (
-        f"{payment.invoice_series}{payment.invoice_number:04d}"
-        if payment.invoice_series and payment.invoice_number
-        else f"factura-{payment.id}"
-    )
-    return Response(
-        content=data,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{invoice_label}.pdf"'},
-    )
+    return _file_response(payment, data, "application/pdf", ".pdf")
 
 
 @router.get("/invoices/{payment_id}/anaf-zip")
@@ -222,29 +298,11 @@ async def download_anaf_zip(
     account: Account = Depends(get_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
-    payment = (
-        await db.execute(
-            select(SubscriptionPayment).where(
-                SubscriptionPayment.id == payment_id,
-                SubscriptionPayment.account_id == account.id,
-            )
-        )
-    ).scalar_one_or_none()
-    if payment is None:
-        raise HTTPException(404, "Factura inexistenta.")
+    payment = await _own_payment(db, account, payment_id)
     if not payment.anaf_response_zip_s3_key:
         raise HTTPException(404, "ZIP-ul ANAF nu este inca disponibil.")
     try:
         data = invoice_service.get_zip_bytes(payment)
     except FileNotFoundError as exc:
         raise HTTPException(404, str(exc))
-    invoice_label = (
-        f"{payment.invoice_series}{payment.invoice_number:04d}"
-        if payment.invoice_series and payment.invoice_number
-        else f"factura-{payment.id}"
-    )
-    return Response(
-        content=data,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{invoice_label}-anaf.zip"'},
-    )
+    return _file_response(payment, data, "application/zip", "-anaf.zip")

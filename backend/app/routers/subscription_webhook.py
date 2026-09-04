@@ -59,7 +59,7 @@ async def stripe_webhook(
     try:
         await stripe_service.handle_event(db, event)
     except Exception:  # noqa: BLE001
-        log.exception("Webhook handler raised — verifica logurile")
-        # Returnam 200 oricum ca sa nu intre Stripe in retry loop infinit;
-        # erorile sunt logate si vizibile in /admin/subscription.
+        # Handler-ele sunt idempotente, deci lasam Stripe sa reincerce (backoff, max 3 zile).
+        log.exception("Webhook handler raised (type=%s)", event.get("type"))
+        raise HTTPException(500, "Eroare interna la procesarea webhook-ului.")
     return {"received": True}
