@@ -82,6 +82,12 @@ export const APP_ROUTES: AppRoute[] = [
     nav: { label: "Rapoarte", icon: svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>') },
   },
   {
+    path: "/radar",
+    component: lazy(() => import("./pages/Radar")),
+    requires: "settings",
+    nav: { label: "Radar AI", icon: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>') },
+  },
+  {
     path: "/efactura",
     component: lazy(() => import("./pages/efactura/EFacturaLayout")),
     requires: "advanced",

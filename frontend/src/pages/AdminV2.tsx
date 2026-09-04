@@ -7,7 +7,7 @@ import { adminFetch, setAdminToken } from "./adminv2/admin-auth";
 
 const AssistantSection = lazy(() => import("./adminv2/AssistantSection"));
 
-type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi";
+type Section = "conturi" | "hotel" | "montare" | "roti-anvelope" | "email" | "rapoarte" | "efactura" | "tasks" | "logs" | "import-legacy" | "demo-seed" | "abonament-setari" | "abonament-conturi" | "ai-setari" | "ai-consum";
 
 const SECTIONS: Record<Section, Component> = {
   conturi: lazy(() => import("./adminv2/AccountsSection")),
@@ -23,6 +23,8 @@ const SECTIONS: Record<Section, Component> = {
   "demo-seed": lazy(() => import("./adminv2/DemoSeedSection")),
   "abonament-setari": lazy(() => import("./adminv2/SubscriptionSettingsSection")),
   "abonament-conturi": lazy(() => import("./adminv2/SubscriptionAccountsSection")),
+  "ai-setari": lazy(() => import("./adminv2/AiSettingsSection")),
+  "ai-consum": lazy(() => import("./adminv2/AiUsageSection")),
 };
 
 interface NavItem { id: Section; label: string; icon: string }
@@ -61,6 +63,13 @@ const NAV_CATEGORIES: NavCategory[] = [
     items: [
       { id: "abonament-setari", label: "Setări", icon: "💳" },
       { id: "abonament-conturi", label: "Conturi", icon: "📅" },
+    ],
+  },
+  {
+    label: "Radar AI",
+    items: [
+      { id: "ai-setari", label: "AI Radar", icon: "🛰️" },
+      { id: "ai-consum", label: "Consum AI", icon: "📈" },
     ],
   },
   {

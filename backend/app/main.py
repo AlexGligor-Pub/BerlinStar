@@ -22,7 +22,7 @@ from app.rate_limit import limiter
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant, users, admin_users, receipt_payments
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant, users, admin_users, receipt_payments, radar, admin_ai
 from app.services.reports import start_scheduler, stop_scheduler
 from app.efactura import router_admin as efactura_admin
 from app.efactura import router as efactura_user
@@ -65,9 +65,19 @@ async def lifespan(app: FastAPI):
 
     await start_scheduler()
     await start_efactura_scheduler()
+    try:
+        from app.radar.scheduler import start_radar_scheduler
+        await start_radar_scheduler()
+    except ImportError:
+        log.info("Radar AI: scheduler indisponibil, sar peste.")
     log.info("BerlinStar POS API starting up")
     yield
     log.info("BerlinStar POS API shutting down")
+    try:
+        from app.radar.scheduler import stop_radar_scheduler
+        await stop_radar_scheduler()
+    except ImportError:
+        pass
     await stop_efactura_scheduler()
     await stop_scheduler()
     await http_client.aclose()
@@ -167,6 +177,8 @@ app.include_router(subscription_webhook.router, prefix="/api/subscription",    t
 app.include_router(admin_subscription.router,   prefix="/api/admin/subscription", tags=["admin-subscription"])
 app.include_router(factura_rapida.router,   prefix="/api/factura-rapida",      tags=["factura-rapida"])
 app.include_router(admin_assistant.router,  prefix="/api/admin/assistant",     tags=["admin-assistant"])
+app.include_router(radar.router,            prefix="/api/radar",               tags=["radar"])
+app.include_router(admin_ai.router,         prefix="/api/admin",               tags=["admin-ai"])
 
 
 @app.get("/api/health")

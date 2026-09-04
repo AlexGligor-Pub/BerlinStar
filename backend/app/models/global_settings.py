@@ -88,3 +88,10 @@ class GlobalSettings(Base):
     platform_anaf_auto_upload: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="1"
     )
+
+    # ── Radar AI (chei criptate cu Fernet-ul global din efactura) ──────────
+    anthropic_api_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    google_places_api_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ai_price_in_usd_mtok: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    ai_price_out_usd_mtok: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
