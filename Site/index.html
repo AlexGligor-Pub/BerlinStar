@@ -3,810 +3,159 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-<meta name="theme-color" content="#0B1120" />
-<meta name="description" content="Berlin Star, produsul Professor Prime, este software-ul dedicat vulcanizărilor și service-urilor auto din România: eFactura ANAF, Hotel Anvelope, programări, devize și gestiune stocuri." />
-<meta name="keywords" content="professor prime, berlin star, software vulcanizare, software service auto, eFactura, ANAF, hotel anvelope, programari service auto" />
-<meta property="og:title" content="Professor Prime — Berlin Star · Software pentru vulcanizări și service auto" />
-<meta property="og:description" content="Berlin Star, produsul Professor Prime, este software-ul dedicat vulcanizărilor și service-urilor auto din România." />
+<meta name="theme-color" content="#ffffff" />
+<meta name="description" content="Berlin Star ține hotelul de anvelope, programările, devizele și stocul la un loc și trimite fiecare factură automat la ANAF prin eFactura." />
+<meta property="og:title" content="Berlin Star — Software pentru vulcanizări și service auto" />
+<meta property="og:description" content="Berlin Star ține hotelul de anvelope, programările, devizele și stocul la un loc și trimite fiecare factură automat la ANAF prin eFactura." />
 <meta property="og:type" content="website" />
 <meta property="og:locale" content="ro_RO" />
+<meta property="og:image" content="images/produs.png" />
 <link rel="icon" type="image/png" href="images/logo.png" />
 <link rel="shortcut icon" type="image/png" href="images/logo.png" />
 <link rel="apple-touch-icon" href="images/logo.png" />
-<title>Professor Prime — Berlin Star · Software pentru vulcanizări și service auto</title>
-
+<title>Berlin Star — Software pentru vulcanizări și service auto</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
-
-<style>
-/* ============================================================
-   RESET + TOKENS
-   ============================================================ */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-size: 16px;
-  line-height: 1.6;
-  color: #334155;
-  background: #FFFFFF;
-  overflow-x: hidden;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-img { max-width: 100%; height: auto; display: block; }
-a { color: inherit; text-decoration: none; }
-button { font-family: inherit; cursor: pointer; border: none; background: none; }
-
-:root {
-  --navy: #0B1120;
-  --navy-soft: #1E293B;
-  --ink: #0F172A;
-  --gold: #F59E0B;
-  --gold-soft: #FFFBEB;
-  --slate-50: #F8FAFC;
-  --slate-100: #F1F5F9;
-  --slate-200: #E2E8F0;
-  --slate-400: #94A3B8;
-  --slate-500: #64748B;
-  --slate-600: #475569;
-  --slate-700: #334155;
-  --green: #10B981;
-  --container: 1120px;
-  --radius: 14px;
-  --radius-lg: 20px;
-  --shadow-sm: 0 1px 2px rgba(15,23,42,.05);
-  --shadow: 0 8px 24px -12px rgba(15,23,42,.18);
-}
-
-/* ============================================================
-   LAYOUT + TYPOGRAPHY
-   ============================================================ */
-.container { width: 100%; max-width: var(--container); margin: 0 auto; padding: 0 22px; }
-.section { padding: 72px 0; }
-.section-head { max-width: 640px; margin: 0 auto 44px; text-align: center; }
-.section-head.left { margin-left: 0; text-align: left; }
-
-.eyebrow {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.4px;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 14px;
-}
-
-h1, h2, h3, h4 {
-  font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
-  line-height: 1.18;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-h1 { font-size: clamp(2rem, 5.2vw, 3.2rem); font-weight: 800; }
-h2 { font-size: clamp(1.55rem, 3.6vw, 2.2rem); font-weight: 800; margin-bottom: 14px; }
-h3 { font-size: 1.12rem; font-weight: 700; margin-bottom: 8px; }
-p.lead { font-size: clamp(1rem, 2.2vw, 1.14rem); color: var(--slate-600); }
-.muted { color: var(--slate-500); }
-
-/* ============================================================
-   BUTTONS
-   ============================================================ */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  gap: 8px;
-  padding: 13px 22px;
-  border-radius: 11px;
-  font-weight: 600;
-  font-size: 15px;
-  transition: transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease;
-  white-space: nowrap;
-  min-height: 48px;
-}
-.btn svg { flex-shrink: 0; }
-.btn-primary {
-  background: var(--gold);
-  color: var(--navy);
-  font-weight: 700;
-  box-shadow: 0 6px 16px -8px rgba(245,158,11,.7);
-}
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -8px rgba(245,158,11,.8); }
-.btn-dark { background: var(--navy); color: #fff; }
-.btn-dark:hover { transform: translateY(-1px); background: #111c33; }
-.btn-outline { background: #fff; color: var(--ink); border: 1px solid var(--slate-200); }
-.btn-outline:hover { border-color: var(--slate-400); }
-.btn-ghost-light {
-  background: rgba(255,255,255,.06);
-  color: #fff;
-  border: 1px solid rgba(255,255,255,.2);
-}
-.btn-ghost-light:hover { background: rgba(255,255,255,.12); }
-.btn-block { width: 100%; }
-
-/* ============================================================
-   NAV
-   ============================================================ */
-.nav {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(11,17,32,.82);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255,255,255,.07);
-}
-.nav-inner { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-.brand { display: flex; align-items: center; gap: 11px; color: #fff; }
-.brand-logo {
-  width: 36px; height: 36px; border-radius: 9px; background: #fff;
-  display: grid; place-items: center; overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0,0,0,.22);
-}
-.brand-logo img { width: 100%; height: 100%; object-fit: cover; }
-.brand-text { display: flex; flex-direction: column; line-height: 1.1; font-family: 'Plus Jakarta Sans', sans-serif; }
-.brand-name { font-weight: 800; font-size: 1.02rem; color: #fff; }
-.brand-sub { font-size: 0.66rem; font-weight: 600; color: var(--gold); letter-spacing: 0.8px; text-transform: uppercase; margin-top: 1px; }
-
-.nav-links { display: flex; align-items: center; gap: 30px; }
-.nav-links a { color: rgba(255,255,255,.74); font-size: 14px; font-weight: 500; transition: color .15s; }
-.nav-links a:hover { color: #fff; }
-.nav-cta { margin-left: 6px; padding: 10px 18px; min-height: 42px; }
-
-.hamburger {
-  display: none;
-  width: 44px; height: 44px;
-  align-items: center; justify-content: center;
-  border-radius: 10px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.12);
-}
-.hamburger span { display: block; width: 20px; height: 2px; background: #fff; position: relative; transition: transform .25s, opacity .25s; }
-.hamburger span::before, .hamburger span::after { content: ''; position: absolute; left: 0; width: 100%; height: 2px; background: #fff; transition: transform .25s; }
-.hamburger span::before { top: -6px; }
-.hamburger span::after { top: 6px; }
-.hamburger.open span { background: transparent; }
-.hamburger.open span::before { transform: translateY(6px) rotate(45deg); }
-.hamburger.open span::after { transform: translateY(-6px) rotate(-45deg); }
-
-/* ============================================================
-   HERO
-   ============================================================ */
-.hero {
-  position: relative;
-  background:
-    linear-gradient(100deg, rgba(8,12,22,0.95) 0%, rgba(11,17,32,0.88) 42%, rgba(11,17,32,0.55) 72%, rgba(11,17,32,0.28) 100%),
-    url('images/produs.png') no-repeat center right / cover;
-  color: #fff;
-  padding: 128px 0 84px;
-}
-.hero-inner { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; text-align: center; }
-.hero .tag {
-  display: inline-flex; align-items: center; gap: 8px;
-  font-size: 12.5px; font-weight: 600; letter-spacing: .3px;
-  color: rgba(255,255,255,.85);
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.16);
-  padding: 7px 14px; border-radius: 999px;
-  margin-bottom: 22px;
-}
-.hero .tag .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
-.hero h1 { color: #fff; line-height: 1.1; }
-.hero h1 .accent { color: var(--gold); }
-.hero p.lead { color: rgba(255,255,255,.82); margin-top: 18px; max-width: 540px; margin-left: auto; margin-right: auto; }
-.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 30px; justify-content: center; }
-.hero-note { margin-top: 16px; font-size: 13px; color: rgba(255,255,255,.6); display: flex; align-items: center; justify-content: center; gap: 8px; }
-.hero-note svg { color: var(--green); }
-
-/* ============================================================
-   TRUST STRIP
-   ============================================================ */
-.trust { border-bottom: 1px solid var(--slate-200); background: var(--slate-50); }
-.trust-row {
-  display: flex; flex-wrap: wrap; gap: 14px 28px;
-  justify-content: center; align-items: center;
-  padding: 22px 0;
-}
-.trust-item {
-  display: inline-flex; align-items: center; gap: 9px;
-  font-size: 13.5px; font-weight: 600; color: var(--slate-600);
-}
-.trust-item svg { color: var(--gold); flex-shrink: 0; }
-
-/* ============================================================
-   FEATURES (modules)
-   ============================================================ */
-.features-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-.feature {
-  background: #fff;
-  border: 1px solid var(--slate-200);
-  border-radius: var(--radius);
-  padding: 26px;
-  transition: border-color .2s, box-shadow .2s, transform .2s;
-}
-.feature:hover { border-color: var(--slate-400); box-shadow: var(--shadow); transform: translateY(-2px); }
-.feature .ico {
-  width: 46px; height: 46px; border-radius: 12px;
-  display: grid; place-items: center;
-  background: var(--gold-soft); color: var(--gold);
-  margin-bottom: 16px;
-}
-.feature.accent { background: var(--navy); border-color: transparent; }
-.feature.accent h3 { color: #fff; }
-.feature.accent p { color: rgba(255,255,255,.72); }
-.feature.accent .ico { background: rgba(245,158,11,.16); color: var(--gold); }
-.feature.accent .badge {
-  position: absolute; top: 20px; right: 20px;
-  font-size: 10px; font-weight: 800; letter-spacing: .8px;
-  color: var(--navy); background: var(--gold);
-  padding: 4px 9px; border-radius: 999px;
-}
-.feature { position: relative; }
-.feature p { font-size: 14.5px; color: var(--slate-600); line-height: 1.55; }
-
-/* ============================================================
-   SHOWCASE (deviz image)
-   ============================================================ */
-.showcase {
-  display: grid; grid-template-columns: 1fr; gap: 32px;
-  align-items: center;
-  background: var(--navy);
-  border-radius: var(--radius-lg);
-  padding: 36px;
-  color: #fff;
-  overflow: hidden;
-}
-.showcase h2 { color: #fff; }
-.showcase h2 .accent { color: var(--gold); }
-.showcase p { color: rgba(255,255,255,.78); margin: 12px 0 20px; font-size: 1rem; }
-.showcase ul { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.showcase li { display: flex; gap: 10px; font-size: 14.5px; color: rgba(255,255,255,.86); }
-.showcase li svg { color: var(--gold); flex-shrink: 0; margin-top: 3px; }
-.showcase-img {
-  background: #fff; border-radius: 12px; padding: 10px;
-  box-shadow: 0 24px 50px -18px rgba(0,0,0,.6);
-}
-.showcase-img img { border-radius: 6px; width: 100%; }
-
-/* ============================================================
-   EFACTURA
-   ============================================================ */
-.efactura {
-  background: linear-gradient(180deg, var(--slate-50) 0%, #fff 100%);
-}
-.steps { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 40px; }
-.step {
-  display: flex; gap: 16px; align-items: flex-start;
-  background: #fff; border: 1px solid var(--slate-200);
-  border-radius: var(--radius); padding: 20px;
-}
-.step .n {
-  flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px;
-  background: var(--navy); color: var(--gold);
-  display: grid; place-items: center; font-weight: 800;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-}
-.step strong { display: block; color: var(--ink); margin-bottom: 3px; font-size: 15px; }
-.step span { font-size: 14px; color: var(--slate-500); }
-
-/* ============================================================
-   PRICING
-   ============================================================ */
-.pricing-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 40px; }
-.plan {
-  background: #fff; border: 1px solid var(--slate-200);
-  border-radius: var(--radius-lg); padding: 30px 26px;
-  position: relative; display: flex; flex-direction: column;
-}
-.plan.featured { background: var(--navy); border-color: transparent; box-shadow: 0 20px 44px -18px rgba(11,17,32,.5); }
-.plan.featured h3, .plan.featured .price { color: #fff; }
-.plan .plan-name { font-size: 13px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--slate-500); }
-.plan.featured .plan-name { color: var(--gold); }
-.plan h3 { margin: 4px 0 0; }
-.plan .price { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 2.2rem; font-weight: 800; color: var(--ink); display: flex; align-items: baseline; gap: 5px; margin: 14px 0 2px; }
-.plan .price .cur { font-size: 1.05rem; color: var(--slate-500); font-weight: 600; }
-.plan .price .per { font-size: .85rem; color: var(--slate-500); font-weight: 500; }
-.plan.featured .price .per { color: rgba(255,255,255,.6); }
-.plan .desc { font-size: 13.5px; color: var(--slate-500); margin-bottom: 20px; }
-.plan.featured .desc { color: rgba(255,255,255,.7); }
-.plan ul { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; flex: 1; }
-.plan li { display: flex; gap: 10px; font-size: 14px; line-height: 1.45; color: var(--slate-700); }
-.plan.featured li { color: rgba(255,255,255,.82); }
-.plan li svg { color: var(--gold); flex-shrink: 0; margin-top: 2px; }
-.plan .pop {
-  position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
-  background: var(--gold); color: var(--navy);
-  font-size: 11px; font-weight: 800; letter-spacing: .5px;
-  padding: 5px 14px; border-radius: 999px;
-}
-.pricing-note { text-align: center; margin-top: 28px; font-size: 13.5px; color: var(--slate-500); max-width: 640px; margin-left: auto; margin-right: auto; }
-
-/* ============================================================
-   FAQ
-   ============================================================ */
-.faq-list { max-width: 760px; margin: 36px auto 0; display: flex; flex-direction: column; gap: 10px; }
-.faq-item { background: #fff; border: 1px solid var(--slate-200); border-radius: var(--radius); overflow: hidden; }
-.faq-q {
-  width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding: 18px 20px; font-weight: 600; font-size: 15px; color: var(--ink); text-align: left;
-  transition: background .15s;
-}
-.faq-q:hover { background: var(--slate-50); }
-.faq-q .chev { flex-shrink: 0; transition: transform .25s; color: var(--slate-400); }
-.faq-item.open .faq-q .chev { transform: rotate(180deg); color: var(--gold); }
-.faq-a { max-height: 0; overflow: hidden; transition: max-height .3s ease; font-size: 14.5px; color: var(--slate-600); }
-.faq-item.open .faq-a { max-height: 320px; }
-.faq-a-inner { padding: 0 20px 18px; }
-
-/* ============================================================
-   FINAL CTA
-   ============================================================ */
-.cta-final { background: var(--navy); color: #fff; text-align: center; padding: 76px 0; }
-.cta-final h2 { color: #fff; max-width: 620px; margin: 0 auto 14px; }
-.cta-final p { color: rgba(255,255,255,.74); max-width: 540px; margin: 0 auto 28px; }
-.cta-final .hero-actions { justify-content: center; }
-.cta-contacts { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px 28px; margin-top: 28px; font-size: 14px; color: rgba(255,255,255,.66); }
-.cta-contacts a { display: inline-flex; align-items: center; gap: 8px; }
-.cta-contacts a:hover { color: #fff; }
-
-/* ============================================================
-   FOOTER
-   ============================================================ */
-.footer { background: #050810; color: rgba(255,255,255,.55); padding: 52px 0 24px; font-size: 14px; }
-.footer-grid { display: grid; grid-template-columns: 1fr; gap: 30px; margin-bottom: 34px; }
-.footer .brand { margin-bottom: 14px; }
-.footer p { max-width: 320px; line-height: 1.6; }
-.footer-col h4 { color: #fff; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
-.footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
-.footer-col a:hover { color: var(--gold); }
-.footer-bottom { border-top: 1px solid rgba(255,255,255,.08); padding-top: 20px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; font-size: 13px; color: rgba(255,255,255,.4); }
-.footer-bottom .made { display: flex; align-items: center; gap: 6px; }
-.flag-ro { display: inline-flex; height: 12px; border-radius: 2px; overflow: hidden; border: 1px solid rgba(255,255,255,.1); }
-.flag-ro span { display: block; width: 6px; height: 12px; }
-.flag-ro .b1 { background: #002B7F; } .flag-ro .b2 { background: #FCD116; } .flag-ro .b3 { background: #CE1126; }
-
-/* ============================================================
-   FLOATING WHATSAPP
-   ============================================================ */
-.fab {
-  position: fixed; bottom: 20px; right: 20px;
-  width: 56px; height: 56px; border-radius: 50%;
-  background: #25D366; color: #fff;
-  display: grid; place-items: center;
-  box-shadow: 0 10px 24px -6px rgba(37,211,102,.5);
-  z-index: 90; transition: transform .2s;
-}
-.fab:hover { transform: scale(1.06); }
-
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
-@media (min-width: 640px) {
-  .section { padding: 88px 0; }
-  .features-grid { grid-template-columns: repeat(2, 1fr); }
-  .steps { grid-template-columns: repeat(2, 1fr); }
-  .pricing-grid { grid-template-columns: repeat(3, 1fr); align-items: stretch; }
-}
-@media (min-width: 960px) {
-  .container { padding: 0 32px; }
-  .hero { padding: 150px 0 110px; min-height: 600px; display: flex; align-items: center; }
-  .features-grid { grid-template-columns: repeat(3, 1fr); }
-  .showcase { grid-template-columns: 1.05fr 1fr; padding: 48px; gap: 48px; }
-  .footer-grid { grid-template-columns: 1.5fr 1fr 1fr 1fr; }
-}
-
-/* Mobile nav */
-@media (max-width: 859px) {
-  .hamburger { display: inline-flex; }
-  .nav-links {
-    position: absolute; top: 100%; left: 0; right: 0;
-    background: rgba(11,17,32,.98);
-    backdrop-filter: blur(12px);
-    flex-direction: column; align-items: stretch;
-    padding: 0 22px; gap: 0;
-    border-bottom: 1px solid rgba(255,255,255,.08);
-    max-height: 0; overflow: hidden;
-    transition: max-height .28s ease, padding .28s ease;
-  }
-  .nav-links.open { max-height: 460px; padding: 12px 22px 22px; }
-  .nav-links a { padding: 13px 0; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  .nav-links a:last-of-type { border-bottom: 0; }
-  .nav-cta { margin: 14px 0 0; }
-
-  .hero {
-    padding: 104px 0 64px;
-    background:
-      linear-gradient(180deg, rgba(8,12,22,0.92) 0%, rgba(11,17,32,0.84) 50%, rgba(11,17,32,0.6) 100%),
-      url('images/produs.png') no-repeat center bottom / cover;
-  }
-  .hero-inner { max-width: 100%; }
-  .hero-actions { flex-direction: column; align-items: stretch; }
-  .hero-actions .btn { width: 100%; }
-}
-@media (min-width: 860px) { .nav-links { display: flex; } }
-
-@media (print) { .nav, .fab, .hero-actions, .cta-final { display: none !important; } }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
-}
-
-/* Scroll reveal */
-.reveal { opacity: 0; transform: translateY(16px); transition: opacity .5s ease, transform .5s ease; }
-.reveal.visible { opacity: 1; transform: translateY(0); }
-</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="site.css" />
 </head>
 <body>
-
-<!-- ===== NAV ===== -->
-<nav class="nav" id="nav">
+<nav class="nav">
   <div class="container nav-inner">
-    <a href="#top" class="brand" aria-label="Professor Prime - Acasă">
-      <span class="brand-logo"><img src="images/logo.png" alt="Professor Prime logo" /></span>
-      <span class="brand-text">
-        <span class="brand-name">Professor Prime</span>
-        <span class="brand-sub">Berlin Star</span>
-      </span>
-    </a>
+    <a href="index.html" class="brand"><img src="images/logo.png" alt="" width="28" height="28" />Berlin Star <small>de Professor Prime</small></a>
     <button class="hamburger" id="hamburger" aria-label="Meniu" aria-expanded="false"><span></span></button>
     <div class="nav-links" id="navLinks">
-      <a href="#features">Funcționalități</a>
-      <a href="#efactura">eFactura</a>
-      <a href="#pricing">Preț</a>
+      <a href="index.html#module">Module</a>
+      <a href="index.html#efactura">eFactura</a>
+      <a href="index.html#preturi">Prețuri</a>
       <a href="tutoriale.html">Tutoriale</a>
       <a href="support.html">Suport</a>
-      <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary nav-cta">Intră în sistem</a>
+      <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-dark btn-sm">Intră în sistem</a>
     </div>
   </div>
 </nav>
 
-<!-- ===== HERO ===== -->
 <header class="hero" id="top">
   <div class="container">
-    <div class="hero-inner">
-      <span class="tag"><span class="dot"></span> Software pentru vulcanizări &amp; service auto</span>
-      <h1>Tot atelierul tău, <span class="accent">într-un singur sistem.</span></h1>
-      <p class="lead">
-        Berlin Star ține hotelul de anvelope, programările, devizele și stocul la un loc — și trimite fiecare factură automat la ANAF prin eFactura.
-      </p>
-      <div class="hero-actions">
-        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary">
-          Creează cont gratuit
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </a>
-        <a href="#features" class="btn btn-ghost-light">Vezi funcționalitățile</a>
-      </div>
-      <p class="hero-note">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        Cont în 2 minute · fără card · suport în limba română
-      </p>
+    <span class="eyebrow">Software pentru vulcanizări și service auto</span>
+    <h1>Tot atelierul tău.<br />Într-un singur sistem.</h1>
+    <p class="lead">Hotel anvelope, programări, devize, stoc și eFactura ANAF. Simplu, pe orice ecran.</p>
+    <div class="actions">
+      <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-dark">Creează cont gratuit</a>
+      <a href="#module" class="btn btn-silver">Descoperă</a>
     </div>
+    <div class="hero-media"><img src="images/produs.png" alt="Berlin Star pe desktop, laptop, tabletă și telefon" width="1536" height="1024" fetchpriority="high" /></div>
   </div>
 </header>
 
-<!-- ===== TRUST STRIP ===== -->
-<section class="trust">
+<div class="container">
+  <div class="strip">
+    <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura ANAF</span>
+    <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Hosting în UE</span>
+    <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Desktop, tabletă, telefon</span>
+    <span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Suport în română</span>
+  </div>
+</div>
+
+<section class="section" id="module">
   <div class="container">
-    <div class="trust-row">
-      <span class="trust-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Conform OUG 120/2021</span>
-      <span class="trust-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg> Integrare ANAF SPV</span>
-      <span class="trust-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg> Hosting în UE (GDPR)</span>
-      <span class="trust-item"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/></svg> Desktop, tabletă &amp; telefon</span>
+    <div class="narrow center">
+      <h2>Module care lucrează împreună.</h2>
+      <p class="lead" style="margin-top:14px">De la programare la deviz, factură și ANAF. Fără pași în plus.</p>
+    </div>
+    <div class="grid">
+      <div class="tile dark reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div><h3>eFactura ANAF</h3><p>Fiecare factură pleacă singură la SPV și se arhivează 10 ani.</p></div>
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg></div><h3>Hotel anvelope</h3><p>Rând, raft, poziție. Găsești orice set în câteva secunde.</p></div>
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><h3>Programări</h3><p>Calendar partajat, legat de client și vehicul.</p></div>
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="3"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><h3>Devize și facturi</h3><p>Datele se completează din fișa de service. Emiți în câteva click-uri.</p></div>
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div><h3>Stocuri</h3><p>Actualizate în timp real, cu alertă la prag minim.</p></div>
+      <div class="tile reveal"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><h3>Rapoarte</h3><p>KPI zilnici și raport TVA gata pentru contabil.</p></div>
     </div>
   </div>
 </section>
 
-<!-- ===== FEATURES ===== -->
-<section class="section" id="features">
+<section class="section silver" id="efactura">
   <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">Funcționalități</span>
-      <h2>Modulele de care are nevoie un atelier auto</h2>
-      <p class="lead muted">Toate modulele comunică automat între ele — de la programare la deviz, factură și eFactura.</p>
+    <div class="narrow center">
+      <h2>Un deviz complet.<br />În 30 de secunde.</h2>
     </div>
-
-    <div class="features-grid">
-
-      <div class="feature accent reveal">
-        <span class="badge">EXCLUSIV</span>
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
-        <h3>eFactura ANAF automată</h3>
-        <p>Emiți factura normal, iar sistemul o convertește în UBL 2.1, o trimite la SPV, descarcă răspunsul semnat și o arhivează 10 ani. Zero amenzi, zero click-uri în plus.</p>
-      </div>
-
-      <div class="feature accent reveal">
-        <span class="badge">EXCLUSIV</span>
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
-        <h3>Hotel Anvelope</h3>
-        <p>Înregistrezi setul cu locația fizică (rând, raft, poziție) și sistemul ține istoricul complet per vehicul și client. Găsești orice set în câteva secunde.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
-        <h3>Facturare rapidă</h3>
-        <p>Alegi clientul și vehiculul, iar datele se completează automat din fișa de service. Emiți factura în câteva click-uri, conectată direct la eFactura.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 4.6V4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.83 1.06l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11H20a2 2 0 0 1 0 4z"/></svg></div>
-        <h3>Montaj roți</h3>
-        <p>Comandă de lucru digitală cu schema vehiculului (FS, FD, SS, SD), presiune, profil, cuplu și fotografii înainte/după. Dovadă vizuală pentru orice contestație.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
-        <h3>Programări</h3>
-        <p>Toate programările într-un calendar partajat, cu sloturi per resursă și asociere directă la client și vehicul. Zero dubluri de programare.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></div>
-        <h3>Gestiune stocuri</h3>
-        <p>Stocul se actualizează în timp real la fiecare vânzare, recepție sau transfer, cu alertă când scazi sub pragul minim setat de tine.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
-        <h3>Clienți &amp; vehicule</h3>
-        <p>Fișa clientului cu vehiculele, istoricul de servicii per VIN, facturile, anvelopele la hotel și programările viitoare — totul într-un singur ecran.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
-        <h3>Rapoarte &amp; analiză</h3>
-        <p>Dashboard cu KPI zilnici, raport TVA gata pentru contabil și top produse, clienți și angajați. Decizii pe cifre, nu pe presupuneri.</p>
-      </div>
-
-      <div class="feature reveal">
-        <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l8-4 8 4v14M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/></svg></div>
-        <h3>Multi-locații</h3>
-        <p>Toate punctele de lucru sub același cont, cu permisiuni per utilizator, transferuri între gestiuni și rapoarte consolidate la nivel de firmă.</p>
-      </div>
-
-    </div>
-  </div>
-</section>
-
-<!-- ===== SHOWCASE (DEVIZ) ===== -->
-<section class="section" style="padding-top:0;">
-  <div class="container">
-    <div class="showcase reveal">
+    <div class="feature-split reveal">
       <div>
-        <span class="eyebrow">Devize profesionale</span>
-        <h2>Un deviz complet în <span class="accent">30 de secunde</span></h2>
-        <p>Selectezi vehiculul, alegi articolele și sistemul generează automat un deviz cu antetul firmei tale, schema vizuală a vehiculului și toate detaliile tehnice — gata de printat sau trimis pe email.</p>
+        <span class="eyebrow">Devize și eFactura</span>
+        <h3 style="font-size:1.7rem">Emiți normal. Restul se întâmplă singur.</h3>
+        <p class="lead">Antet cu datele firmei, schema vehiculului, PDF instant. Factura se convertește în UBL 2.1 și ajunge la ANAF în background.</p>
         <ul>
-          <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Antet cu logo, CUI și datele firmei tale</li>
-          <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Schemă vizuală a vehiculului — cele 4 poziții</li>
-          <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Linii articol cu manoperă, piese, cantitate &amp; TVA</li>
-          <li><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Export PDF instant — print, salvare sau email</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Certificat USB conectat o singură dată</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Răspuns semnat ANAF, arhivat 10 ani</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Alertă înainte de termenul de 5 zile</li>
         </ul>
       </div>
-      <div class="showcase-img">
-        <img src="images/deviz.png" alt="Exemplu de deviz Berlin Star — comandă de lucru cu schema vehiculului" loading="lazy" decoding="async" width="603" height="854" />
-      </div>
+      <div class="device"><img src="images/deviz.png" alt="Deviz Berlin Star cu schema vehiculului" loading="lazy" width="603" height="854" /></div>
     </div>
   </div>
 </section>
 
-<!-- ===== EFACTURA ===== -->
-<section class="section efactura" id="efactura">
+<section class="section" id="preturi">
   <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">eFactura ANAF</span>
-      <h2>Termenul de 5 zile, rezolvat în background</h2>
-      <p class="lead muted">Conectezi certificatul USB o singură dată. De atunci, fiecare factură pleacă singură la SPV, primește răspuns semnat și se arhivează conform legii.</p>
+    <div class="narrow center">
+      <h2>Un preț. Toate modulele.</h2>
+      <p class="lead" style="margin-top:14px">Planurile diferă doar prin numărul de angajați. Fără limite la facturi, clienți sau vehicule.</p>
     </div>
-
-    <div class="steps">
-      <div class="step reveal"><span class="n">1</span><div><strong>Conectare cu certificat USB</strong><span>Selectezi certificatul calificat (DigiSign, CertSign, AlfaSign) o singură dată.</span></div></div>
-      <div class="step reveal"><span class="n">2</span><div><strong>Transmisie automată</strong><span>Emiți factura, sistemul o convertește în UBL 2.1 (CIUS-RO) și o trimite la ANAF.</span></div></div>
-      <div class="step reveal"><span class="n">3</span><div><strong>Răspuns semnat &amp; arhivare</strong><span>Verifică statusul, descarcă răspunsul semnat de ANAF și îl arhivează 10 ani.</span></div></div>
-      <div class="step reveal"><span class="n">4</span><div><strong>Alertă la termen</strong><span>Dacă o factură întârzie, primești notificare. Zero amenzi, zero stres.</span></div></div>
-    </div>
-  </div>
-</section>
-
-<!-- ===== PRICING ===== -->
-<section class="section" id="pricing">
-  <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">Prețuri</span>
-      <h2>Alege planul după mărimea echipei</h2>
-      <p class="lead muted">Toate planurile au exact aceleași funcționalități. Diferă doar numărul de angajați. Fără limite la facturi, clienți sau vehicule.</p>
-    </div>
-
-    <div class="pricing-grid">
+    <div class="plans">
       <div class="plan reveal">
-        <div class="plan-name">Starter</div>
-        <h3>Pentru ateliere mici</h3>
-        <div class="price"><span class="cur">€</span>350<span class="per">/ an · TVA inclus</span></div>
-        <p class="desc">Până la <strong>5 angajați</strong> · TVA 21% inclus</p>
-        <ul>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele incluse</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura ANAF nelimitat</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Acces desktop, tabletă &amp; telefon</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Suport WhatsApp &amp; telefon în română</li>
-        </ul>
-        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-outline btn-block">Începe cu Starter</a>
+        <div class="name">Starter</div>
+        <div class="price">350 €<small>/ an</small></div>
+        <div class="who">Până la 5 angajați</div>
+        <ul><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura nelimitat</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Suport în română</li></ul>
+        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-silver">Începe</a>
       </div>
-
       <div class="plan featured reveal">
-        <span class="pop">Cel mai ales</span>
-        <div class="plan-name">Standard</div>
-        <h3>Pentru service-uri active</h3>
-        <div class="price"><span class="cur">€</span>700<span class="per">/ an · TVA inclus</span></div>
-        <p class="desc">Până la <strong>20 angajați</strong> · TVA 21% inclus</p>
-        <ul>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele incluse</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura ANAF nelimitat</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Acces desktop, tabletă &amp; telefon</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Suport WhatsApp &amp; telefon în română</li>
-        </ul>
-        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary btn-block">Creează cont — Standard</a>
+        <div class="name">Standard</div>
+        <div class="price">700 €<small>/ an</small></div>
+        <div class="who">Până la 20 angajați</div>
+        <ul><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura nelimitat</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Suport în română</li></ul>
+        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-dark">Începe</a>
       </div>
-
       <div class="plan reveal">
-        <div class="plan-name">Pro</div>
-        <h3>Pentru lanțuri &amp; rețele</h3>
-        <div class="price"><span class="cur">€</span>1000<span class="per">/ an · TVA inclus</span></div>
-        <p class="desc">Până la <strong>40 angajați</strong> · TVA 21% inclus</p>
-        <ul>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele incluse</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> eFactura ANAF nelimitat</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Rapoarte consolidate multi-locații</li>
-          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> <strong>Bonus: video training dedicat</strong></li>
-        </ul>
-        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-outline btn-block">Începe cu Pro</a>
+        <div class="name">Pro</div>
+        <div class="price">1000 €<small>/ an</small></div>
+        <div class="who">Până la 40 angajați</div>
+        <ul><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Toate modulele</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Rapoarte multi-locații</li><li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Training video dedicat</li></ul>
+        <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-silver">Începe</a>
       </div>
     </div>
-
-    <p class="pricing-note">Toate prețurile includ TVA (21%). Facturare anuală, fără contract pe termen lung. Migrare din programul vechi și demo gratuit la cerere.</p>
+    <p class="note center">Prețuri fără TVA (se adaugă 21%). Facturare anuală, fără contract pe termen lung. Migrare din programul vechi inclusă.</p>
   </div>
 </section>
 
-<!-- ===== FAQ ===== -->
-<section class="section" style="background: var(--slate-50);" id="faq">
+<section class="cta" id="contact">
   <div class="container">
-    <div class="section-head">
-      <span class="eyebrow">Întrebări frecvente</span>
-      <h2>Răspunsuri clare, fără termeni vagi</h2>
+    <h2>Începe astăzi.</h2>
+    <p class="lead">Cont în 2 minute. Fără card, fără contract.</p>
+    <div class="actions">
+      <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-dark">Creează cont gratuit</a>
+      <a href="https://wa.me/40744138843?text=Salut!%20Vreau%20un%20demo%20Berlin%20Star." target="_blank" rel="noopener" class="btn btn-silver">Cere un demo pe WhatsApp</a>
     </div>
-
-    <div class="faq-list">
-      <div class="faq-item">
-        <button class="faq-q"><span>Aplicația merge pe tabletă și telefon?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Da. Berlin Star este o aplicație web optimizată pentru desktop, tabletă și telefon. Deschizi browser-ul (Chrome, Safari, Edge) și intri direct, fără să descarci nimic. Interfața se adaptează automat la dimensiunea ecranului.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Pot importa datele din programul vechi?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Da. Avem importer pentru cele mai folosite programe (inclusiv sisteme vechi gen BerlinV3, Saga, WMEgest) și pentru fișiere Excel / CSV. Migrăm clienții, produsele, stocurile și, la cerere, istoricul vânzărilor — fără cost suplimentar.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Cum funcționează autentificarea ANAF cu certificat USB?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Folosim OAuth 2.0 cu certificate calificate (DigiSign, CertSign, AlfaSign). Conectezi certificatul USB o singură dată în setup, primești un token de acces criptat și de atunci facturile se trimit automat.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Datele mele sunt în siguranță? Unde sunt stocate?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Datele sunt stocate criptat pe servere din Uniunea Europeană, conform GDPR. Pentru facturi păstrăm arhivă 10 ani, exact cât cere legea. Rămâi proprietarul datelor și le poți exporta oricând în Excel sau PDF.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Există contract pe termen lung?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Nu. Abonamentul este anual și se facturează o singură dată pe an. La sfârșitul perioadei decizi singur dacă reînnoiești — fără reînnoire automată ascunsă și fără clauze de penalizare.</div></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Cine îmi face training pentru angajați?</span><svg class="chev" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
-        <div class="faq-a"><div class="faq-a-inner">Noi. Online (cu partajare ecran) sau la sediu. Training-ul inițial este inclus în prețul abonamentului, iar interfața e suficient de simplă încât majoritatea operatorilor înțeleg fluxul în 30 de minute.</div></div>
-      </div>
+    <div class="contacts">
+      <a href="mailto:contact@professorprime.ro">contact@professorprime.ro</a>
+      <a href="tel:+40744138843">+40 744 138 843</a>
     </div>
   </div>
 </section>
 
-<!-- ===== FINAL CTA ===== -->
-<section class="cta-final" id="contact">
-  <div class="container">
-    <span class="eyebrow">Începe astăzi</span>
-    <h2>Deschide Berlin Star în 2 minute</h2>
-    <p>Te înregistrezi singur, primești acces imediat la toate modulele și începi să lucrezi cu date reale — fără telefoane, fără contracte, fără card.</p>
-    <div class="hero-actions">
-      <a href="/berlinstar/" target="_blank" rel="noopener" class="btn btn-primary">
-        Creează cont gratuit
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-      </a>
-      <a href="https://web.whatsapp.com/send?phone=40744138843&text=Salut!%20Vreau%20un%20demo%20Berlin%20Star." target="_blank" rel="noopener" class="btn btn-ghost-light">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.099-.471-.15-.67.15-.197.299-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884"/></svg>
-        Scrie-ne pe WhatsApp
-      </a>
-    </div>
-    <div class="cta-contacts">
-      <a href="mailto:contact@professorprime.ro"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> contact@professorprime.ro</a>
-      <a href="tel:+40744138843"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> +40 744 138 843</a>
-    </div>
-  </div>
-</section>
-
-<!-- ===== FOOTER ===== -->
 <footer class="footer">
-  <div class="container">
-    <div class="footer-grid">
-      <div class="footer-col">
-        <div class="brand">
-          <span class="brand-logo"><img src="images/logo.png" alt="Professor Prime logo" /></span>
-          <span class="brand-text">
-            <span class="brand-name">Professor Prime</span>
-            <span class="brand-sub">Berlin Star</span>
-          </span>
-        </div>
-        <p><strong style="color:#fff;">Professor Prime S.R.L.</strong> — dezvoltator de software pentru industria auto din România. Berlin Star este produsul nostru dedicat vulcanizărilor și service-urilor auto.</p>
-      </div>
-      <div class="footer-col">
-        <h4>Produs</h4>
-        <ul>
-          <li><a href="#features">Funcționalități</a></li>
-          <li><a href="#efactura">eFactura ANAF</a></li>
-          <li><a href="#pricing">Prețuri</a></li>
-          <li><a href="tutoriale.html">Tutoriale</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Companie</h4>
-        <ul>
-          <li><a href="support.html">Despre noi</a></li>
-          <li><a href="support.html">Contact</a></li>
-          <li><a href="#faq">Întrebări frecvente</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Contact</h4>
-        <ul>
-          <li><a href="mailto:contact@professorprime.ro">contact@professorprime.ro</a></li>
-          <li><a href="tel:+40744138843">+40 744 138 843</a></li>
-          <li><a href="https://web.whatsapp.com/send?phone=40744138843" target="_blank" rel="noopener">WhatsApp</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      <span>© <span id="year">2026</span> Professor Prime S.R.L. Toate drepturile rezervate.</span>
-      <span class="made"><span class="flag-ro"><span class="b1"></span><span class="b2"></span><span class="b3"></span></span> Made in Romania</span>
-    </div>
+  <div class="container footer-inner">
+    <span>© <span id="year">2026</span> Professor Prime S.R.L. · Berlin Star</span>
+    <nav>
+      <a href="index.html#module">Module</a>
+      <a href="index.html#preturi">Prețuri</a>
+      <a href="tutoriale.html">Tutoriale</a>
+      <a href="support.html">Suport</a>
+      <a href="mailto:contact@professorprime.ro">contact@professorprime.ro</a>
+    </nav>
   </div>
 </footer>
-
-<!-- ===== FLOATING WHATSAPP ===== -->
-<a class="fab" href="https://web.whatsapp.com/send?phone=40744138843&text=Salut!%20Vreau%20s%C4%83%20aflu%20mai%20multe%20despre%20Berlin%20Star." target="_blank" rel="noopener" aria-label="Scrie-ne pe WhatsApp">
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.099-.471-.15-.67.15-.197.299-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413"/></svg>
-</a>
-
-<script>
-// Mobile menu
-const hamburger = document.getElementById('hamburger');
-const navLinks = document.getElementById('navLinks');
-hamburger.addEventListener('click', () => {
-  const isOpen = navLinks.classList.toggle('open');
-  hamburger.classList.toggle('open', isOpen);
-  hamburger.setAttribute('aria-expanded', isOpen);
-});
-navLinks.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-  navLinks.classList.remove('open');
-  hamburger.classList.remove('open');
-  hamburger.setAttribute('aria-expanded', 'false');
-}));
-
-// FAQ accordion
-document.querySelectorAll('.faq-q').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const item = btn.parentElement;
-    const wasOpen = item.classList.contains('open');
-    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
-    if (!wasOpen) item.classList.add('open');
-  });
-});
-
-// Scroll reveal
-const io = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); } });
-}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.reveal').forEach(el => io.observe(el));
-
-// Year
-document.getElementById('year').textContent = new Date().getFullYear();
-</script>
+<a class="fab" href="https://wa.me/40744138843?text=Salut!%20Vreau%20s%C4%83%20aflu%20mai%20multe%20despre%20Berlin%20Star." target="_blank" rel="noopener" aria-label="Scrie-ne pe WhatsApp"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M17.498 14.382c-.301-.15-1.767-.867-2.04-.966-.273-.099-.471-.15-.67.15-.197.299-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413"/></svg></a>
+<script src="site.js"></script>
 </body>
 </html>
