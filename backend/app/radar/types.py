@@ -136,3 +136,4 @@ class AIResult:
     tokens_out: int
     cost_usd: float
     model: str
+    stop_reason: str = ""

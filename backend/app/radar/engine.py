@@ -204,31 +204,23 @@ async def _collect_company(source: RadarSource, ctx: RunCtx) -> list[Candidate]:
     company_dict = _as_dict(company)
     today = date.today()
 
-    out: list[Candidate] = [
+    bilants: list[dict] = []
+    for year in range(today.year - 1, today.year - 1 - BILANT_LOOKBACK_YEARS, -1):
+        if len(bilants) >= MAX_BILANT_YEARS:
+            break
+        bilant = await anaf.fetch_bilant(cui, year)
+        if bilant is not None:
+            bilants.append(_as_dict(bilant))
+
+    payload = {"type": "company", "company": company_dict, "bilant": bilants}
+    return [
         Candidate(
             external_id=f"company:{today.isoformat()}",
-            payload={"type": "company", "company": company_dict},
-            dedup_key=_sha1(_stable(company_dict)),
+            payload=payload,
+            dedup_key=_sha1(_stable(payload)),
             prefix="company:",
         )
     ]
-
-    found = 0
-    for year in range(today.year - 1, today.year - 1 - BILANT_LOOKBACK_YEARS, -1):
-        if found >= MAX_BILANT_YEARS:
-            break
-        bilant = await anaf.fetch_bilant(cui, year)
-        if bilant is None:
-            continue
-        found += 1
-        out.append(
-            Candidate(
-                external_id=f"bilant:{year}",
-                payload={"type": "bilant", "company": company_dict,
-                         "bilant": [_as_dict(bilant)]},
-            )
-        )
-    return out
 
 
 async def _collect_website(source: RadarSource, ctx: RunCtx) -> list[Candidate]:
@@ -360,6 +352,7 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
 
     # Why: un rollback pe mijloc expira toate obiectele sesiunii, asa ca reincarcam
     # sursa la fiecare pas in loc sa tinem instantele din lista initiala.
+    run_id = run.id
     for index, source_id in enumerate([s.id for s in sources], start=1):
         source = await db.get(RadarSource, source_id)
         if source is None:
@@ -380,10 +373,10 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
                 f"{label}: {new_count} element(e) noi",
             )
         except Exception as exc:  # noqa: BLE001
-            log.exception("Sursa Radar %s a esuat.", source.id)
+            log.exception("Sursa Radar %s a esuat.", source_id)
             await db.rollback()
-            source = await db.get(RadarSource, source.id)
-            run = await db.get(RadarRun, run.id)
+            source = await db.get(RadarSource, source_id)
+            run = await db.get(RadarRun, run_id)
             if source is not None:
                 source.last_error = _ro_message(exc)
             _progress(run, f"Sursa {label}", index, total, f"{label}: {_ro_message(exc)}")
@@ -492,7 +485,7 @@ def _dedup_key_of(snapshot: RadarSnapshot) -> str | None:
         )
         return _sha1("\n".join(texts))
     if snapshot.kind == "company":
-        return _sha1(_stable(payload.get("company") or {}))
+        return _sha1(_stable({k: payload.get(k) for k in ("type", "company", "bilant")}))
     return None
 
 
@@ -502,7 +495,10 @@ async def _digest(ctx: RunCtx, ai: AIClient, kind: str, payload: dict):
     result = await ai.complete(
         prompts.system_prompt(ctx.business),
         prompts.digest_prompt(kind, ctx.business, payload, ctx.focus),
+        max_tokens=8192,
     )
+    if result.stop_reason == "max_tokens":
+        raise AIError("Răspunsul AI a fost trunchiat (prea lung); sursa e prea bogată.")
     data = parse_json(result.text)
     return _fill_schema(getattr(prompts, "DIGEST_SCHEMAS", {}).get(kind), data), result
 

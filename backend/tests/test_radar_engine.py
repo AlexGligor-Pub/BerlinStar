@@ -371,6 +371,24 @@ async def test_source_error_does_not_fail_run():
     assert await _count(db, RadarSnapshot, account_id=account_id) == 1
 
 
+async def test_digest_failure_after_flush_isolates_source():
+    db = await _db()
+    account_id, run = await _fixture(db)
+    ai = FakeAI(fail_marker="DIGEST:youtube")
+    with Patch(db, ai, {"youtube": _yt_collector(), "website": _web_collector()}):
+        await run_radar(run.id)
+
+    await db.refresh(run)
+    assert run.status == "done", run.error
+    sources = (await db.execute(
+        select(RadarSource).where(RadarSource.account_id == account_id)
+    )).scalars().all()
+    broken = next(s for s in sources if s.kind == "youtube")
+    assert broken.last_error == "Sinteza a eșuat."
+    assert "greenlet" not in (run.error or "")
+    assert await _count(db, RadarSnapshot, account_id=account_id) == 1
+
+
 async def test_synthesis_failure_marks_run_error():
     db = await _db()
     account_id, run = await _fixture(db)

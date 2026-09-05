@@ -73,6 +73,7 @@ class AIClient:
             tokens_out=int(getattr(msg.usage, "output_tokens", 0) or 0),
             cost_usd=self.cost(_tokens_in(msg), int(getattr(msg.usage, "output_tokens", 0) or 0)),
             model=getattr(msg, "model", None) or self.model,
+            stop_reason=str(getattr(msg, "stop_reason", "") or ""),
         )
 
     async def record_usage(
