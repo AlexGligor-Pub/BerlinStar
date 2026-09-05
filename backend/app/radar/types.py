@@ -137,3 +137,21 @@ class AIResult:
     cost_usd: float
     model: str
     stop_reason: str = ""
+
+
+@dataclass
+class PlaceHit:
+    place_id: str
+    name: str
+    address: str = ""
+    lat: float | None = None
+    lng: float | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
+    website: str = ""
+    phone: str = ""
+    primary_type: str = ""
+    types: list[str] = field(default_factory=list)
+
+
+FEATURE_DISCOVERY = "radar.discovery"

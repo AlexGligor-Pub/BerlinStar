@@ -123,3 +123,60 @@ class AccountUsageOut(BaseModel):
     tokens_out: int
     cost_usd: float
     runs: int
+
+
+DiscoveryKind = Literal["gbusiness", "website", "youtube", "company"]
+
+
+class PrepareIn(BaseModel):
+    company_id: int
+
+
+class DiscoveryQuestion(BaseModel):
+    id: str
+    question: str
+    hint: str = ""
+    type: Literal["text", "number"] = "text"
+    suggested: Any = None
+
+
+class PrepareOut(BaseModel):
+    questions: list[DiscoveryQuestion]
+    profile_draft: dict[str, Any]
+    ai_used: bool
+
+
+class DiscoveryCreate(BaseModel):
+    company_id: int
+    answers: dict[str, Any] = Field(default_factory=dict)
+
+
+class DiscoveryOut(BaseModel):
+    id: int
+    company_id: int
+    company_name: str
+    status: str
+    created_at: datetime
+    finished_at: datetime | None
+    error: str | None
+    progress: dict[str, Any] | None
+    answers: dict[str, Any] | None
+    profile: dict[str, Any] | None
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    result: dict[str, Any] | None = None
+
+
+class ImportItem(BaseModel):
+    index: int
+    kinds: list[DiscoveryKind] = Field(default_factory=list)
+
+
+class ImportIn(BaseModel):
+    items: list[ImportItem] = Field(default_factory=list)
+
+
+class ImportOut(BaseModel):
+    created: int
+    skipped: int

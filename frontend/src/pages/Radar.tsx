@@ -2,6 +2,7 @@ import { For, Show, createResource } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { radarApi } from "../api/radar";
 import SurseTab from "./radar/SurseTab";
+import ConcurentiTab from "./radar/ConcurentiTab";
 import FocusTab from "./radar/FocusTab";
 import RapoarteTab from "./radar/RapoarteTab";
 import ConsumTab from "./radar/ConsumTab";
@@ -9,6 +10,7 @@ import "./radar/radar.css";
 
 const TABS = [
   { id: "surse", label: "Surse" },
+  { id: "concurenti", label: "Concurenți" },
   { id: "focus", label: "Focus" },
   { id: "rapoarte", label: "Rapoarte" },
   { id: "consum", label: "Consum AI" },
@@ -72,6 +74,13 @@ export default function Radar() {
 
       <Show when={tab() === "surse"}>
         <SurseTab placesConfigured={settings()?.places_configured === true} />
+      </Show>
+      <Show when={tab() === "concurenti"}>
+        <ConcurentiTab
+          aiConfigured={configured()}
+          placesConfigured={settings()?.places_configured === true}
+          onOpenTab={(t) => setParams({ tab: t }, { replace: true })}
+        />
       </Show>
       <Show when={tab() === "focus"}>
         <FocusTab settings={settings()} aiConfigured={configured()} onSaved={(s) => mutate(s)} />

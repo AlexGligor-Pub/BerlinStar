@@ -206,6 +206,109 @@ export interface ReportDoc {
   data_gaps?: string[];
 }
 
+export type Threat = "high" | "medium" | "low";
+export type DiscoveryFieldType = "text" | "number";
+
+export interface DiscoveryQuestion {
+  id: string;
+  question: string;
+  hint?: string;
+  type: DiscoveryFieldType;
+  suggested?: string | number | null;
+  optional?: boolean;
+}
+
+export interface DiscoveryProfile {
+  company_id?: number;
+  name?: string;
+  cui?: string | number | null;
+  address?: string | null;
+  city?: string | null;
+  county?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  activity?: string;
+  services?: string[];
+  keywords?: string[];
+  radius_km?: number;
+  known_competitors?: string[];
+  exclusions?: string[];
+}
+
+export interface DiscoveryCompetitor {
+  index: number;
+  name: string;
+  address?: string | null;
+  distance_km?: number | null;
+  place_id?: string | null;
+  rating?: number | null;
+  reviews_count?: number | null;
+  website?: string | null;
+  youtube_channel?: string | null;
+  facebook?: string | null;
+  phone?: string | null;
+  cui?: string | null;
+  cui_source?: "site" | "anaf" | null;
+  types?: string[];
+  positioning?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  threat?: Threat;
+  relevance?: number;
+  evidence?: string[];
+}
+
+export interface DiscoveryFinding {
+  title: string;
+  insight: string;
+  impact: Impact;
+  source_refs?: number[];
+}
+
+export interface DiscoveryResult {
+  version: number;
+  generated_at: string;
+  profile: DiscoveryProfile;
+  competitors?: DiscoveryCompetitor[];
+  market_summary: string;
+  findings?: DiscoveryFinding[];
+  suggested_focus?: string;
+  data_gaps?: string[];
+}
+
+export interface DiscoveryOut {
+  id: number;
+  company_id: number;
+  company_name: string;
+  status: RadarStatus;
+  created_at: string;
+  finished_at: string | null;
+  error: string | null;
+  progress: RadarProgress | null;
+  answers: Record<string, string | number> | null;
+  profile: DiscoveryProfile | null;
+  tokens_in: number;
+  tokens_out: number;
+  cost_usd: number;
+  result?: DiscoveryResult | null;
+}
+
+export interface DiscoveryPrepared {
+  questions: DiscoveryQuestion[];
+  profile_draft: DiscoveryProfile;
+  ai_used: boolean;
+}
+
+export interface DiscoveryImportItem {
+  index: number;
+  kinds: RadarKind[];
+}
+
+export interface DiscoveryImportResult {
+  created: number;
+  skipped: number;
+}
+
 export interface UsageBucket {
   month: string;
   tokens_in: number;
@@ -291,6 +394,29 @@ export const radarApi = {
   downloadRunPdf,
 
   usage: (months = 6) => http.get<RadarUsage>(`${BASE}/usage`, { query: { months } }),
+};
+
+export const discoveryApi = {
+  prepare: (companyId: number) =>
+    http.post<DiscoveryPrepared>(`${BASE}/discovery/prepare`, { company_id: companyId }, {
+      errorMessage: "Nu am putut pregăti căutarea.",
+    }),
+  create: (companyId: number, answers: Record<string, string | number>) =>
+    http.post<DiscoveryOut>(`${BASE}/discovery`, { company_id: companyId, answers }, {
+      errorMessage: "Nu am putut porni căutarea concurenților.",
+    }),
+  list: (limit = 20) => http.get<DiscoveryOut[]>(`${BASE}/discovery`, { query: { limit } }),
+  get: (id: number) => http.get<DiscoveryOut>(`${BASE}/discovery/${id}`),
+  importItems: (id: number, items: DiscoveryImportItem[]) =>
+    http.post<DiscoveryImportResult>(`${BASE}/discovery/${id}/import`, { items }, {
+      errorMessage: "Nu am putut importa selecția.",
+    }),
+  useFocus: (id: number) =>
+    http.post<RadarSettings>(`${BASE}/discovery/${id}/use-focus`, undefined, {
+      errorMessage: "Nu am putut folosi sugestia ca Focus.",
+    }),
+  remove: (id: number) =>
+    http.delete(`${BASE}/discovery/${id}`, { errorMessage: "Eroare la ștergerea căutării." }),
 };
 
 async function adminJson<T>(url: string, init: RequestInit = {}, fallback = "Eroare."): Promise<T> {

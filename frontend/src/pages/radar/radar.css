@@ -232,3 +232,10 @@
 .rv-fin th, .rv-fin td { padding: 5px 8px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; }
 .rv-fin th:first-child, .rv-fin td:first-child { text-align: left; }
 .rv-fin tr:last-child td { border-bottom: none; }
+
+.radar-chip--sm { padding: 3px 9px; font-size: 11.5px; text-decoration: none; }
+.radar-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+.radar-datachips { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.dv-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 34ch; }
+.dv-threat { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }

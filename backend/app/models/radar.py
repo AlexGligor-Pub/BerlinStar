@@ -149,3 +149,33 @@ class AiUsage(Base):
         Integer, ForeignKey("radar_runs.id", ondelete="SET NULL"), nullable=True
     )
     meta: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
+
+
+class RadarDiscovery(Base):
+    """O sesiune de descoperire de concurenti pentru o firma a contului."""
+
+    __tablename__ = "radar_discoveries"
+    __table_args__ = (
+        Index("ix_radar_discoveries_account_created", "account_id", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
+    )
+    company_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="queued")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    progress: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
+    answers: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
+    profile: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
+    result: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
+    tokens_in: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, server_default="0")

@@ -45,7 +45,7 @@ class AIClient:
         if self._client is None:
             import anthropic
 
-            self._client = anthropic.AsyncAnthropic(api_key=self.api_key)
+            self._client = anthropic.AsyncAnthropic(api_key=self.api_key, timeout=180.0, max_retries=2)
         return self._client
 
     def cost(self, tokens_in: int, tokens_out: int) -> float:

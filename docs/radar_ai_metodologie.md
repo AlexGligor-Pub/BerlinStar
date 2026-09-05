@@ -77,3 +77,25 @@ Reguli practice:
 > Mă interesează: ce game de preț practică distribuitorii și magazinele concurente, ce mărci noi apar,
 > dacă cresc termenele de livrare la furnizori și ce reclamă clienții la magazinele online de piese.
 > Nu mă interesează piesele pentru camioane. Constrângere: buget de stoc suplimentar sub 10.000 €.
+
+## Descoperire concurenți
+
+Tabul „Concurenți" caută firmele din jurul tău și le trece prin aceleași reguli de dovadă ca raportul Radar.
+
+**Cum funcționează.** Alegi firma din cont, iar AI-ul îți precompletează șase întrebări (zonă, rază, servicii,
+termeni de căutare, concurenți cunoscuți, excluderi). Cu termenii tăi se caută pe Google Maps în cercul de rază
+aleasă, se elimină duplicatele și firma ta, apoi pentru fiecare concurent se citește site-ul public (titlu, text,
+linkuri YouTube și Facebook, CUI confirmat la ANAF). Se păstrează maximum 15 firme, ordonate după notă, recenzii
+și distanță, iar un singur apel AI le evaluează pe toate. Rezultatul se importă ca surse Radar sau devine Focus.
+
+**Cum răspunzi bine la întrebări.** Termenii de căutare contează cel mai mult: scrie ce ar tasta un client
+(„vulcanizare", „hotel anvelope", „schimb ulei"), nu nume de firme. Raza o pui cât de departe vin clienții:
+10-15 km în oraș, 25-40 km în zonă rurală. La servicii enumeră doar ce vinzi efectiv, altfel apar comparații
+nerelevante. La excluderi spune explicit ce nu te interesează (francize naționale, magazine online, alt domeniu);
+firmele excluse rămân în listă, dar cu relevanță mică.
+
+**Cum citești rezultatul.** *Amenințarea* spune cât de mult îți ia clienți acum: `mare` = același serviciu,
+aproape, bine cotat; `medie` = suprapunere parțială sau mai departe; `mică` = alt profil sau prezență slabă.
+*Relevanța* (0-100) spune cât merită urmărit lunar în Radar: peste 80 e concurent direct, 40-60 secundar, sub 20
+înseamnă că iese din profilul tău. Fiecare evaluare are dovezi luate din datele găsite; ce nu s-a putut verifica
+apare la *Lipsuri de date* — o notă mare din 5 recenzii nu e o dovadă de calitate.

@@ -148,3 +148,74 @@ AdminV2: `AiSettingsSection.tsx` (chei + model + preturi) si `AiUsageSection.tsx
 Limitari cunoscute: Google Places intoarce max 5 recenzii per afacere; transcriptul YouTube lipseste la unele clipuri
 (se foloseste descrierea); PDF-ul are diacritice doar daca exista DejaVuSans (imaginea Docker instaleaza fonts-dejavu-core).
 Modelele Claude 5 nu accepta `temperature`, deci apelul nu il trimite.
+
+# Descoperire concurenți (Radar → tab „Concurenți")
+Scop: utilizatorul isi alege firma din lista contului; AI-ul ii pune intrebarile-prerechizite (zona, raza, servicii,
+cuvinte de cautare, concurenti cunoscuti, excluderi) cu sugestii precompletate; apoi un job asincron cauta concurentii
+din zona geografica (Google Places), le culege datele publice (site, YouTube, Facebook, CUI din site → ANAF), AI-ul le
+analizeaza si produce o lista de findings care se importa cu un click ca surse Radar (+ un draft de Focus).
+
+## Tabel `radar_discoveries` (migratie `rad02discovery`, down_revision `rad01radar`)
+id, account_id FK, company_id FK companies, status String(10) {queued,running,done,error}, created_at, finished_at null,
+error Text null, progress JSON ({step, done, total, log[]}), answers JSON, profile JSON, result JSON null,
+tokens_in int, tokens_out int, cost_usd Numeric(12,6). Index (account_id, created_at).
+
+## Profile (derivat din firma + raspunsuri)
+`{"company_id", "name", "cui", "address", "city", "county", "lat", "lng", "activity", "services": [], "keywords": [],
+"radius_km", "known_competitors": [], "exclusions": []}`
+
+## Intrebari-prerechizite (id-uri fixe; AI doar precompleteaza `suggested`)
+| id | tip | rol |
+|---|---|---|
+| location | text | localitatea/zona de referinta (precompletat din adresa firmei) |
+| radius_km | number | raza de cautare, sugerat 15 |
+| services | text | ce vinde/livreaza firma (precompletat din produse/servicii) |
+| keywords | text (virgule) | termeni de cautare Google (ex. „vulcanizare, service anvelope, hotel anvelope") |
+| known_competitors | text | concurenti stiuti deja (optional) |
+| exclusions | text | ce sa ignore: francize, magazine online etc. (optional) |
+Forma: `{"id","question","hint","type":"text|number","suggested"}`.
+
+## `backend/app/radar/discovery_prompts.py` (expertul)
+- `default_questions(profile_draft: dict, items: list[dict]) -> list[dict]` (fallback determinist, fara AI)
+- `prepare_prompt(profile_draft: dict, items: list[dict]) -> str` → JSON `{"questions":[...], "activity": str}`
+- `analysis_prompt(profile: dict, competitors: list[dict]) -> str` → JSON `DISCOVERY_SCHEMA` (competitors compact:
+  index,name,address,distance_km,rating,reviews_count,types,website,site_title,site_excerpt≤1500,youtube_channel,cui,anaf_name)
+- `DISCOVERY_SCHEMA: dict` (draft-07, additionalProperties false)
+
+## DiscoveryResult v1 (`result` JSON)
+```json
+{"version":1,"generated_at":"iso","profile":{...},
+ "competitors":[{"index":0,"name","address","distance_km","place_id","rating","reviews_count","website","youtube_channel",
+   "facebook","phone","cui","cui_source":"site|anaf|null","types":[],"positioning","strengths":[],"weaknesses":[],
+   "threat":"high|medium|low","relevance":0-100,"evidence":[]}],
+ "market_summary":"markdown","findings":[{"title","insight","impact":"high|medium|low","source_refs":[index]}],
+ "suggested_focus":"draft de Focus pentru Radar","data_gaps":[]}
+```
+Campurile determinist (place_id, rating, website, cui...) le pune engine-ul; AI-ul completeaza doar positioning/strengths/
+weaknesses/threat/relevance/evidence + market_summary/findings/suggested_focus/data_gaps.
+
+## Job (`backend/app/radar/discovery.py`, `async run_discovery(discovery_id)`, sesiune proprie, nu ridica)
+1. geocode adresa (Places searchText pe adresa → location) 2. pentru fiecare keyword (max 6) Places searchText cu
+`locationBias` cerc `radius_km` → dedupe place_id, exclude firma proprie (nume/adresa), aplica excluderi 3. scor =
+rating*ln(1+reviews) si distanta; pastreaza max 15 4. per concurent (Semaphore 4): fetch site (15s) → linkuri youtube
+(`youtube.com/@…|/channel/UC…|/c/…`), facebook, CUI (`(CUI|CIF|C\.U\.I\.|Cod fiscal|RO)\D{0,12}(\d{6,10})`) → ANAF
+confirmare 5. un singur apel AI (`radar.discovery`) cu `analysis_prompt` → merge 6. salveaza result/tokens/cost/status.
+`gplaces.py` primeste functii noi: `geocode(address, api_key) -> (lat, lng) | None`,
+`search_nearby(query, api_key, lat, lng, radius_m, limit=20) -> list[PlaceHit]` (FieldMask
+`places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.websiteUri,places.nationalPhoneNumber,places.primaryType,places.types`).
+
+## API `/api/radar/discovery` (get_settings_account_id)
+| POST | /prepare `{company_id}` | → `{questions:[...], profile_draft, ai_used: bool}` (AI daca e cheie; altfel `default_questions`) |
+| POST | / `{company_id, answers:{id:value}}` | → `DiscoveryOut` queued + `asyncio.create_task(run_discovery)`; 400 fara cheie Google Places / Anthropic; 409 daca ruleaza una |
+| GET | /?limit=20 | `DiscoveryOut[]` fara result |
+| GET | /{id} | cu result |
+| POST | /{id}/import `{items:[{index, kinds:["gbusiness","website","youtube","company"]}]}` | creeaza RadarSource (gbusiness value=`place:<place_id>`, website=url, youtube=channel url, company=cui), label=numele concurentului; sare peste duplicate (aceeasi valoare in cont) → `{created, skipped}` |
+| POST | /{id}/use-focus | seteaza `radar_settings.focus_prompt = result.suggested_focus` daca e gol, altfel il adauga la final → settings |
+| DELETE | /{id} | 204 (409 daca ruleaza) |
+`DiscoveryOut` = `{id, company_id, company_name, status, created_at, finished_at, error, progress, answers, profile, tokens_in, tokens_out, cost_usd, result?}`.
+
+## Frontend: tab „Concurenți" in `pages/Radar.tsx` (`pages/radar/ConcurentiTab.tsx`)
+Pas 1: select firma (companiile contului) + „Pregătește căutarea" → Pas 2: formular cu intrebarile (sugestii precompletate,
+editabile) + „Caută concurenți" → progres (poll 3s) → Rezultat: sumar piata (markdown), findings (badge impact), tabel
+TanStack concurenti (nume, distanta, rating/recenzii, amenintare, date gasite ca iconite: Google/Site/YouTube/CUI,
+checkbox per tip disponibil), butoane „Adaugă selecția în Radar" si „Folosește ca Focus"; istoric descoperiri (lista).
