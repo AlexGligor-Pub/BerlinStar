@@ -546,6 +546,30 @@ async def _previous_run(db: AsyncSession, run: RadarRun) -> RadarRun | None:
     )).scalars().first()
 
 
+
+async def _latest_state_snapshots(db: AsyncSession, account_id: int, covered: set[int]) -> list:
+    """Firmele, site-urile si recenziile neschimbate in perioada intra in raport cu ultima stare cunoscuta."""
+    sources = (await db.execute(
+        select(RadarSource).where(
+            RadarSource.account_id == account_id,
+            RadarSource.enabled == True,
+            RadarSource.kind != "youtube",
+        )
+    )).scalars().all()
+    out = []
+    for source in sources:
+        if source.id in covered:
+            continue
+        last = (await db.execute(
+            select(RadarSnapshot)
+            .where(RadarSnapshot.source_id == source.id, RadarSnapshot.digest.isnot(None))
+            .order_by(RadarSnapshot.id.desc()).limit(1)
+        )).scalars().first()
+        if last is not None:
+            out.append((last, source.label, source.value))
+    return out
+
+
 async def _synthesize(db: AsyncSession, run: RadarRun, ctx: RunCtx, ai: AIClient) -> None:
     from . import prompts
 
@@ -566,6 +590,10 @@ async def _synthesize(db: AsyncSession, run: RadarRun, ctx: RunCtx, ai: AIClient
         )
         .order_by(RadarSnapshot.id)
     )).all()
+
+    rows = list(rows) + await _latest_state_snapshots(db, run.account_id, {r[0].source_id for r in rows})
+    if not rows:
+        raise AIError("Nu există date de analizat: nicio sursă nu a putut fi citită.")
 
     digests: list[dict] = []
     sections: dict[str, list[dict]] = {v: [] for v in SECTION_BY_KIND.values()}
