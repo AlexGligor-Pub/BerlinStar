@@ -12,10 +12,9 @@ from typing import Any, Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import monolith
+from app.config import RADAR_MAX_RUN_COST_USD
 from app.database import AsyncSessionLocal
-from app.models.account import Account
-from app.models.company import Company
-from app.models.item import Item
 from app.models.radar import RadarRun, RadarSettings, RadarSnapshot, RadarSource
 
 from .ai import AIClient, AIError, parse_json
@@ -35,6 +34,10 @@ BILANT_LOOKBACK_YEARS = 5
 DEFAULT_PERIOD_DAYS = 30
 COLLECT_CONCURRENCY = 3
 NO_KEY_ERROR = "Cheia Anthropic nu este configurată (AdminV2)."
+BUDGET_MESSAGE = (
+    f"Bugetul maxim pe o rulare ({RADAR_MAX_RUN_COST_USD:g} USD) a fost atins; "
+    "raportul este parțial."
+)
 
 SECTION_BY_KIND = {
     "youtube": "youtube",
@@ -68,6 +71,10 @@ class Candidate:
     prefix: str = ""
 
 
+class BudgetExceeded(Exception):
+    """Bugetul rularii s-a epuizat inainte de un apel AI; run-ul se incheie parcial."""
+
+
 @dataclass
 class RunCtx:
     account_id: int
@@ -86,10 +93,14 @@ def _sha1(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8", "replace")).hexdigest()
 
 
-async def _load_ai_settings(db: AsyncSession):
-    from .settings import load_ai_settings
+async def _load_ai_settings():
+    """Cheile si tarifele AI vin din monolit (AdminV2), cu cache de 60 s."""
+    return await monolith.ai_config()
 
-    return await load_ai_settings(db)
+
+def _check_budget(run: RadarRun) -> None:
+    if float(run.cost_usd or 0) >= RADAR_MAX_RUN_COST_USD:
+        raise BudgetExceeded(BUDGET_MESSAGE)
 
 
 def _make_ai(ai_settings) -> AIClient:
@@ -103,65 +114,29 @@ def _make_ai(ai_settings) -> AIClient:
 
 # ─── Context de business ──────────────────────────────────────────────────────
 
-async def _account_snapshot(db: AsyncSession, account_id: int) -> tuple[str, list[dict], list[dict]]:
-    account = await db.get(Account, account_id)
-    account_name = account.name if account else f"Cont {account_id}"
-
-    companies = (await db.execute(
-        select(Company).where(Company.account_id == account_id, Company.is_deleted == False)
-    )).scalars().all()
-    comp_dicts = [
-        {
-            "cui": c.cui,
-            "name": c.name,
-            "address": c.address or "",
-            "website": c.website or "",
-            "description": c.description or "",
-        }
-        for c in companies
-    ]
-
-    items = (await db.execute(
-        select(Item)
-        .where(Item.account_id == account_id, Item.is_deleted == False)
-        .order_by(Item.id)
-        .limit(MAX_ITEMS_IN_CONTEXT)
-    )).scalars().all()
-    item_dicts = [
-        {
-            "name": i.name,
-            "type": i.type.value if hasattr(i.type, "value") else str(i.type),
-            "price": float(i.price) if i.price is not None else None,
-            "unit": i.unit,
-        }
-        for i in items
-    ]
-    return account_name, comp_dicts, item_dicts
-
-
-async def _build_context(db: AsyncSession, account_id: int, settings: Any) -> BusinessContext:
-    name, companies, items = await _account_snapshot(db, account_id)
+def _build_context(context: dict | None, settings: Any) -> BusinessContext:
+    """Contextul de business vine din payload-ul job-ului (tras din monolit), nu din ORM."""
+    data = context or {}
     return BusinessContext(
-        account_name=name,
-        companies=companies,
-        items=items,
+        account_name=str(data.get("account_name") or ""),
+        companies=list(data.get("companies") or []),
+        items=list(data.get("items") or [])[:MAX_ITEMS_IN_CONTEXT],
         business_context=(getattr(settings, "business_context", "") or ""),
     )
 
 
 async def build_business_context(
-    db: AsyncSession, account_id: int, ai: AIClient | None = None
+    db: AsyncSession, account_id: int, context: dict, ai: AIClient | None = None
 ) -> str:
     """Genereaza cu AI descrierea firmei din companiile si produsele contului."""
     from . import prompts
 
     if ai is None:
-        ai = _make_ai(await _load_ai_settings(db))
-    name, companies, items = await _account_snapshot(db, account_id)
-    ctx = BusinessContext(account_name=name, companies=companies, items=items)
+        ai = _make_ai(await _load_ai_settings())
+    ctx = _build_context(context, None)
     result = await ai.complete(
         prompts.system_prompt(ctx),
-        prompts.context_prompt(companies, items),
+        prompts.context_prompt(ctx.companies, ctx.items),
         max_tokens=2048,
     )
     await ai.record_usage(db, account_id, FEATURE_CONTEXT, result)
@@ -289,7 +264,7 @@ def _stable(data: Any) -> str:
 
 # ─── Rulare ───────────────────────────────────────────────────────────────────
 
-async def run_radar(run_id: int) -> None:
+async def run_radar(run_id: int, payload: dict | None = None) -> None:
     """Ruleaza complet un run Radar. Nu ridica niciodata — erorile ajung in `run.error`."""
     async with AsyncSessionLocal() as db:
         run = await db.get(RadarRun, run_id)
@@ -297,7 +272,7 @@ async def run_radar(run_id: int) -> None:
             log.warning("Run Radar %s inexistent.", run_id)
             return
         try:
-            await _execute(db, run)
+            await _execute(db, run, payload or {})
         except Exception as exc:  # noqa: BLE001
             log.exception("Run Radar %s a esuat.", run_id)
             try:
@@ -317,13 +292,13 @@ def _ro_message(exc: BaseException) -> str:
     return text or "Eroare necunoscută la generarea raportului Radar."
 
 
-async def _execute(db: AsyncSession, run: RadarRun) -> None:
+async def _execute(db: AsyncSession, run: RadarRun, payload: dict) -> None:
     run.status = "running"
     run.error = None
     run.progress = {"step": "Pornire", "done": 0, "total": 1, "log": []}
     await db.commit()
 
-    ai_settings = await _load_ai_settings(db)
+    ai_settings = await _load_ai_settings()
     if not (getattr(ai_settings, "api_key", "") or ""):
         raise AIError(NO_KEY_ERROR)
     ai = _make_ai(ai_settings)
@@ -335,7 +310,7 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
         .order_by(RadarSource.id)
     )).scalars().all()
 
-    business = await _build_context(db, run.account_id, settings)
+    business = _build_context(payload.get("context"), settings)
     ctx = RunCtx(
         account_id=run.account_id,
         business=business,
@@ -345,15 +320,30 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
     )
 
     total = len(sources) + 1
+    partial = False
+    run_id = run.id
+
+    pending = await _pending_digest_ids(db, run.id)
+    if pending:
+        _progress(run, "Reiau analizele neterminate", 0, total, None)
+        await db.commit()
+        try:
+            await _redigest(db, run, ctx, ai, pending)
+        except BudgetExceeded as exc:
+            partial = True
+            _mark_partial(run, str(exc))
+            await db.commit()
+
     _progress(run, "Colectez sursele", 0, total, None)
     await db.commit()
 
-    collected = await _collect_all(sources, ctx)
+    collected = {} if partial else await _collect_all(sources, ctx)
 
     # Why: un rollback pe mijloc expira toate obiectele sesiunii, asa ca reincarcam
     # sursa la fiecare pas in loc sa tinem instantele din lista initiala.
-    run_id = run.id
     for index, source_id in enumerate([s.id for s in sources], start=1):
+        if partial:
+            break
         source = await db.get(RadarSource, source_id)
         if source is None:
             continue
@@ -372,6 +362,13 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
                 run, f"Sursa {label}", index, total,
                 f"{label}: {new_count} element(e) noi",
             )
+        except BudgetExceeded as exc:
+            await db.rollback()
+            run = await db.get(RadarRun, run_id)
+            partial = True
+            _mark_partial(run, str(exc))
+            await db.commit()
+            break
         except Exception as exc:  # noqa: BLE001
             log.exception("Sursa Radar %s a esuat.", source_id)
             await db.rollback()
@@ -382,13 +379,25 @@ async def _execute(db: AsyncSession, run: RadarRun) -> None:
             _progress(run, f"Sursa {label}", index, total, f"{label}: {_ro_message(exc)}")
         await db.commit()
 
+    run = await db.get(RadarRun, run_id)
     _progress(run, "Sinteza raportului", total - 1, total, None)
     await db.commit()
 
-    await _synthesize(db, run, ctx, ai)
+    try:
+        await _synthesize(db, run, ctx, ai)
+    except BudgetExceeded as exc:
+        partial = True
+        _mark_partial(run, str(exc))
+    except AIError:
+        # Why: cand bugetul s-a epuizat inainte de orice analiza, lipsa datelor
+        # nu e o eroare de rulare — rularea se incheie parțiala, cu motivul in log.
+        if not partial:
+            raise
+    if partial and run.report:
+        run.report = {**run.report, "partial": True}
     run.status = "done"
     run.finished_at = _now()
-    _progress(run, "Gata", total, total, "Raport generat.")
+    _progress(run, "Gata", total, total, "Raport parțial." if partial else "Raport generat.")
     await db.commit()
 
 
@@ -397,7 +406,59 @@ def _progress(run: RadarRun, step: str, done: int, total: int, message: str | No
     entries = list(current.get("log") or [])
     if message:
         entries.append(message)
-    run.progress = {"step": step, "done": done, "total": total, "log": entries[-60:]}
+    progress = {"step": step, "done": done, "total": total, "log": entries[-60:]}
+    if current.get("partial"):
+        progress["partial"] = True
+    run.progress = progress
+
+
+def _mark_partial(run: RadarRun, message: str) -> None:
+    """Marcheaza rularea ca parțiala si scrie motivul in jurnalul de progres."""
+    current = dict(run.progress or {})
+    entries = list(current.get("log") or [])
+    entries.append(message)
+    current["log"] = entries[-60:]
+    current["partial"] = True
+    run.progress = current
+
+
+async def _pending_digest_ids(db: AsyncSession, run_id: int) -> list[int]:
+    """Snapshot-urile deja colectate de acest run, dar rămase fara digest (reincercare)."""
+    from sqlalchemy import JSON as _JSONTYPE
+
+    return list((await db.execute(
+        select(RadarSnapshot.id)
+        .where(RadarSnapshot.run_id == run_id)
+        .where(RadarSnapshot.digest.is_(None) | (RadarSnapshot.digest == _JSONTYPE.NULL))
+        .order_by(RadarSnapshot.id)
+    )).scalars().all())
+
+
+async def _redigest(
+    db: AsyncSession, run: RadarRun, ctx: RunCtx, ai: AIClient, snapshot_ids: list[int]
+) -> int:
+    done = 0
+    for snapshot_id in snapshot_ids:
+        _check_budget(run)
+        snapshot = await db.get(RadarSnapshot, snapshot_id)
+        if snapshot is None or snapshot.digest is not None:
+            continue
+        try:
+            digest, result = await _digest(ctx, ai, snapshot.kind, snapshot.payload or {})
+        except BudgetExceeded:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Re-digest snapshot %s a esuat: %s", snapshot_id, exc)
+            continue
+        snapshot.digest = digest
+        await ai.record_usage(
+            db, run.account_id, FEATURE_DIGEST, result, run.id,
+            {"snapshot_id": snapshot_id, "redigest": True},
+        )
+        _add_tokens(run, result)
+        await db.commit()
+        done += 1
+    return done
 
 
 async def _collect_all(sources: list[RadarSource], ctx: RunCtx) -> dict[int, Any]:
@@ -436,6 +497,7 @@ async def _process_source(
             continue
         if candidate.dedup_key and await _same_as_last(db, source.id, candidate):
             continue
+        _check_budget(run)
         if source.kind == "youtube":
             await _enrich_youtube(candidate)
 
@@ -604,6 +666,7 @@ async def _synthesize(db: AsyncSession, run: RadarRun, ctx: RunCtx, ai: AIClient
         digests.append({"kind": snapshot.kind, **entry})
         sections[SECTION_BY_KIND.get(snapshot.kind, "youtube")].append(entry)
 
+    _check_budget(run)
     result = await ai.complete(
         prompts.system_prompt(ctx.business),
         prompts.synthesis_prompt(

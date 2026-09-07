@@ -40,6 +40,7 @@ AUTH_DEPS = {
     "_require_super_admin",
     "_require_assistant_admin_from_query",
     "_dep",  # closure-ul intors de require_resource(...)
+    "require_service_token",  # X-Service-Token: serviciul Radar AI, nu un utilizator
 }
 
 # Dependintele care implica un ROL peste simpla autentificare.

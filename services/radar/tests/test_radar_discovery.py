@@ -7,15 +7,11 @@ from __future__ import annotations
 import json
 import sys
 import types
-from decimal import Decimal
 
-from cryptography.fernet import Fernet
 from sqlalchemy import func, select
 
-from app.efactura.crypto import encrypt, set_fernet_key
-from app.models.base import Base
-from app.models.company import Company
-from app.models.global_settings import GlobalSettings
+from app import monolith
+from app.models.jobs import RadarJob
 from app.models.radar import AiUsage, RadarDiscovery, RadarSource
 from app.radar import discovery as disc_mod
 from app.radar.ai import AIClient
@@ -23,16 +19,23 @@ from app.radar.discovery import (
     QUESTION_IDS,
     build_profile_draft,
     merge_answers,
+    prepare,
     rank_competitors,
     run_discovery,
 )
 from app.radar.types import AIResult, CollectorError, CompanyInfo, PlaceHit
-from app.routers import radar_discovery
-from app.schemas.radar import DiscoveryCreate, ImportIn, ImportItem, PrepareIn
-from tests._harness import make_account, make_item, make_session, raises_http, run
+from app.routers import discovery as discovery_router
+from app.schemas.radar import DiscoveryCreate, ImportIn, ImportItem, PrepareIn, PrepareOut
+from tests._harness import (
+    SessionFactory as _SessionFactory,
+    business_context,
+    make_session,
+    raises_http,
+    run,
+)
 
-TABLE_NAMES = ("radar_sources", "radar_settings", "radar_runs", "radar_snapshots",
-               "ai_usage", "radar_discoveries")
+ACCOUNT_ID = 6
+COMPANY_ID = 1
 
 ADDRESS_1 = "JUD. TIMIS, MUN. TIMISOARA, STR. GHEORGHE LAZAR NR. 5"
 ADDRESS_2 = "Timișoara, jud. Timiș"
@@ -64,21 +67,49 @@ AI_ANALYSIS = {
 
 
 async def _db():
-    """Sesiune de harness + tabelele Radar (nu sunt in subsetul implicit)."""
-    db = await make_session()
-    tables = [Base.metadata.tables[name] for name in TABLE_NAMES]
-    conn = await db.connection()
-    await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables, checkfirst=True))
-    await db.commit()
-    return db
+    """Sesiune de harness cu toate tabelele serviciului."""
+    return await make_session()
 
 
-async def _company(db, account, address=ADDRESS_1, name="Anvelope Mele SRL"):
-    company = Company(account_id=account.id, cui=111222, name=name, address=address,
-                      description="Vulcanizare si hotel de anvelope.")
-    db.add(company)
-    await db.flush()
-    return company
+def _company(address=ADDRESS_1, name="Anvelope Mele SRL") -> dict:
+    """Firma asa cum vine in contextul de business de la monolit."""
+    return {"id": COMPANY_ID, "cui": 111222, "name": name, "address": address,
+            "description": "Vulcanizare si hotel de anvelope."}
+
+
+ITEMS = [{"name": "Vulcanizare", "price": 50.0, "unit": "buc", "type": "serviciu"}]
+
+
+def _context(address=ADDRESS_1, name="Anvelope Mele SRL") -> dict:
+    return business_context(ACCOUNT_ID, companies=[_company(address, name)], items=ITEMS)
+
+
+class MonoPatch:
+    """Inlocuieste apelurile spre monolit (context de business + chei AI)."""
+
+    def __init__(self, context: dict | None = None, ai_settings=None):
+        self.context = context if context is not None else _context()
+        self.ai_settings = ai_settings or FakeAISettings()
+        self.saved: dict = {}
+
+    def __enter__(self):
+        for name in ("business_context", "ai_config"):
+            self.saved[name] = getattr(monolith, name)
+
+        async def _context_fn(account_id):
+            return self.context
+
+        async def _ai(force=False):
+            return self.ai_settings
+
+        monolith.business_context = _context_fn
+        monolith.ai_config = _ai
+        return self
+
+    def __exit__(self, *exc):
+        for name, value in self.saved.items():
+            setattr(monolith, name, value)
+        return False
 
 
 class FakeAISettings:
@@ -88,6 +119,14 @@ class FakeAISettings:
         self.model = "fake-model"
         self.price_in = 3.0
         self.price_out = 15.0
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def places_configured(self) -> bool:
+        return bool(self.places_key)
 
 
 class FakeAI(AIClient):
@@ -127,20 +166,6 @@ def _fake_prompts() -> types.ModuleType:
     return module
 
 
-class _SessionFactory:
-    def __init__(self, db):
-        self.db = db
-
-    def __call__(self):
-        return self
-
-    async def __aenter__(self):
-        return self.db
-
-    async def __aexit__(self, *exc):
-        return False
-
-
 class Patch:
     """Inlocuieste temporar sesiunea, setarile AI, colectorii si prompturile."""
 
@@ -176,7 +201,7 @@ class Patch:
             self.saved[name] = getattr(disc_mod, name)
         disc_mod.AsyncSessionLocal = _SessionFactory(self.db)
 
-        async def _settings(db):
+        async def _settings():
             return self.ai_settings
 
         disc_mod._load_ai_settings = _settings
@@ -226,25 +251,17 @@ class Patch:
 
 # ─── Profil si raspunsuri ─────────────────────────────────────────────────────
 
-async def test_profile_draft_parses_both_address_formats():
-    db = await _db()
-    account = await make_account(db, "descoperire", "desc")
-    await make_item(db, account, "Vulcanizare", "50.00")
-    await db.commit()
-
-    company = await _company(db, account, ADDRESS_1)
-    draft = await build_profile_draft(db, company)
+def test_profile_draft_parses_both_address_formats():
+    draft = build_profile_draft(_company(ADDRESS_1), ITEMS)
     assert (draft["city"], draft["county"]) == ("Timisoara", "Timis")
     assert draft["services"] == ["Vulcanizare"]
     assert draft["keywords"] == ["vulcanizare"]
     assert draft["radius_km"] == 15
     assert draft["activity"].startswith("Vulcanizare si hotel")
-    assert (draft["company_id"], draft["cui"]) == (company.id, 111222)
+    assert (draft["company_id"], draft["cui"]) == (COMPANY_ID, 111222)
     assert draft["lat"] is None and draft["lng"] is None
 
-    company.address = ADDRESS_2
-    await db.flush()
-    draft = await build_profile_draft(db, company)
+    draft = build_profile_draft(_company(ADDRESS_2), ITEMS)
     assert (draft["city"], draft["county"]) == ("Timișoara", "Timiș")
 
 
@@ -303,23 +320,20 @@ def test_scoring_drops_own_company_and_keeps_top_15():
 # ─── Rulare completa ──────────────────────────────────────────────────────────
 
 async def _run_fixture(db):
-    account = await make_account(db, "descoperire", "desc")
-    await make_item(db, account, "Vulcanizare", "50.00")
-    company = await _company(db, account)
-    await db.commit()
-    profile = merge_answers(await build_profile_draft(db, company),
+    company = _company()
+    profile = merge_answers(build_profile_draft(company, ITEMS),
                             {"keywords": "vulcanizare", "radius_km": "10"})
-    discovery = RadarDiscovery(account_id=account.id, company_id=company.id, status="queued",
+    discovery = RadarDiscovery(account_id=ACCOUNT_ID, company_id=COMPANY_ID, status="queued",
                                answers={"keywords": "vulcanizare"}, profile=profile,
                                progress={"step": "in asteptare", "done": 0, "total": 0, "log": []})
     db.add(discovery)
     await db.commit()
-    return account, company, discovery
+    return ACCOUNT_ID, company, discovery
 
 
 async def test_full_run_produces_result_and_usage():
     db = await _db()
-    account, _company_row, discovery = await _run_fixture(db)
+    account_id, _company_row, discovery = await _run_fixture(db)
     hits = [
         PlaceHit(place_id="own", name="Anvelope Mele SRL", address=ADDRESS_1, lat=45.75,
                  lng=21.22, rating=4.8, reviews_count=90),
@@ -339,7 +353,7 @@ async def test_full_run_produces_result_and_usage():
               87654321: CompanyInfo(cui=87654321, name="Web Design Total SRL")},
     )
     with patch:
-        await run_discovery(discovery.id)
+        await run_discovery(discovery.id, {"context": _context()})
 
     await db.refresh(discovery)
     assert discovery.status == "done", f"status={discovery.status} err={discovery.error}"
@@ -379,7 +393,9 @@ async def test_full_run_produces_result_and_usage():
     assert (discovery.tokens_in, discovery.tokens_out) == (120, 60)
     assert float(discovery.cost_usd) > 0
 
-    usage = (await db.execute(select(AiUsage).where(AiUsage.account_id == account.id))).scalars().all()
+    usage = (await db.execute(
+        select(AiUsage).where(AiUsage.account_id == account_id)
+    )).scalars().all()
     assert [u.feature for u in usage] == ["radar.discovery"]
     assert usage[0].meta["discovery_id"] == discovery.id
     assert ai.calls and ai.calls[0].startswith("ANALIZA")
@@ -387,9 +403,9 @@ async def test_full_run_produces_result_and_usage():
 
 async def test_run_without_places_key_ends_in_error():
     db = await _db()
-    _account, _company_row, discovery = await _run_fixture(db)
+    _account_id, _company_row, discovery = await _run_fixture(db)
     with Patch(db, ai=FakeAI(), ai_settings=FakeAISettings(places_key=None)):
-        await run_discovery(discovery.id)
+        await run_discovery(discovery.id, {"context": _context()})
     await db.refresh(discovery)
     assert discovery.status == "error"
     assert "Google Places" in discovery.error
@@ -398,38 +414,25 @@ async def test_run_without_places_key_ends_in_error():
 
 async def test_run_without_results_ends_in_error():
     db = await _db()
-    _account, _company_row, discovery = await _run_fixture(db)
+    _account_id, _company_row, discovery = await _run_fixture(db)
     with Patch(db, ai=FakeAI(), geocode=(45.75, 21.22), search={}):
-        await run_discovery(discovery.id)
+        await run_discovery(discovery.id, {"context": _context()})
     await db.refresh(discovery)
     assert discovery.status == "error" and "concurenți" in discovery.error
 
 
 # ─── API ──────────────────────────────────────────────────────────────────────
 
-async def _api_fixture(*, ai_key="sk-test", places_key="gp-test"):
-    set_fernet_key(Fernet.generate_key().decode())
-    db = await _db()
-    account = await make_account(db, "descoperire", "desc")
-    await make_item(db, account, "Vulcanizare", "50.00")
-    company = await _company(db, account)
-    db.add(GlobalSettings(
-        anthropic_api_key_enc=encrypt(ai_key) if ai_key else None,
-        google_places_api_key_enc=encrypt(places_key) if places_key else None,
-        ai_model="claude-test",
-        ai_price_in_usd_mtok=Decimal("3.0000"),
-        ai_price_out_usd_mtok=Decimal("15.0000"),
-    ))
-    await db.commit()
-    return db, account, company
+async def _prepare(db, ai=None, ai_settings=None, company_id=COMPANY_ID, real_prompts=False):
+    """`prepare` ruleaza in worker, nu in request; testam functia direct."""
+    with Patch(db, ai=ai, ai_settings=ai_settings, real_prompts=real_prompts):
+        data = await prepare(db, ACCOUNT_ID, {"context": _context(), "company_id": company_id})
+    return PrepareOut(**data)
 
 
 async def test_prepare_without_ai_key_uses_default_questions():
-    db, account, company = await _api_fixture(ai_key=None)
-    with Patch(db, ai_settings=FakeAISettings(api_key=None)):
-        out = await radar_discovery.prepare_discovery(
-            PrepareIn(company_id=company.id), account_id=account.id, db=db
-        )
+    db = await _db()
+    out = await _prepare(db, ai_settings=FakeAISettings(api_key=None))
     assert out.ai_used is False
     assert [q.id for q in out.questions] == [
         "location", "radius_km", "services", "keywords", "known_competitors", "exclusions"
@@ -442,19 +445,17 @@ async def test_prepare_without_ai_key_uses_default_questions():
     assert by_id["keywords"].question and by_id["keywords"].hint
     assert out.profile_draft["city"] == "Timisoara"
 
-    other = await make_account(db, "alta", "alta")
-    await raises_http(404, radar_discovery.prepare_discovery(
-        PrepareIn(company_id=company.id), account_id=other.id, db=db
-    ))
+    try:
+        await _prepare(db, ai_settings=FakeAISettings(api_key=None), company_id=999)
+    except CollectorError as exc:
+        assert "Firma" in str(exc)
+    else:
+        raise AssertionError("astept CollectorError pentru o firma din alt cont")
 
 
 async def test_prepare_with_ai_fills_suggestions_and_records_usage():
-    db, account, company = await _api_fixture()
-    ai = FakeAI()
-    with Patch(db, ai=ai):
-        out = await radar_discovery.prepare_discovery(
-            PrepareIn(company_id=company.id), account_id=account.id, db=db
-        )
+    db = await _db()
+    out = await _prepare(db, ai=FakeAI())
     assert out.ai_used is True
     by_id = {q.id: q for q in out.questions}
     assert by_id["keywords"].suggested == "vulcanizare, jante"
@@ -464,22 +465,58 @@ async def test_prepare_with_ai_fills_suggestions_and_records_usage():
 
 
 async def test_create_requires_places_key_and_rejects_parallel_runs():
-    db, account, company = await _api_fixture(places_key=None)
-    detail = await raises_http(400, radar_discovery.create_discovery(
-        DiscoveryCreate(company_id=company.id, answers={}), account_id=account.id, db=db
-    ))
+    db = await _db()
+    with MonoPatch(ai_settings=FakeAISettings(places_key=None)):
+        detail = await raises_http(400, discovery_router.create_discovery(
+            DiscoveryCreate(company_id=COMPANY_ID, answers={}), account_id=ACCOUNT_ID, db=db
+        ))
     assert "Google Places" in detail
 
-    db2, account2, company2 = await _api_fixture()
-    db2.add(RadarDiscovery(account_id=account2.id, company_id=company2.id, status="running"))
-    await db2.commit()
-    await raises_http(409, radar_discovery.create_discovery(
-        DiscoveryCreate(company_id=company2.id, answers={}), account_id=account2.id, db=db2
-    ))
+    with MonoPatch():
+        await raises_http(404, discovery_router.create_discovery(
+            DiscoveryCreate(company_id=999, answers={}), account_id=ACCOUNT_ID, db=db
+        ))
+        out = await discovery_router.create_discovery(
+            DiscoveryCreate(company_id=COMPANY_ID, answers={"keywords": "vulcanizare"}),
+            account_id=ACCOUNT_ID, db=db,
+        )
+        assert out.status == "queued" and out.company_name == "Anvelope Mele SRL"
+        assert out.profile["keywords"] == ["vulcanizare"]
+        job = (await db.execute(select(RadarJob).where(RadarJob.kind == "discovery"))).scalars().one()
+        assert (job.target_id, job.status) == (out.id, "queued")
+        assert job.payload["context"]["companies"][0]["id"] == COMPANY_ID
+
+        await raises_http(409, discovery_router.create_discovery(
+            DiscoveryCreate(company_id=COMPANY_ID, answers={}), account_id=ACCOUNT_ID, db=db
+        ))
+
+
+async def test_prepare_job_endpoint_returns_job_and_status():
+    db = await _db()
+    with MonoPatch():
+        job_out = await discovery_router.prepare_discovery(
+            PrepareIn(company_id=COMPANY_ID), account_id=ACCOUNT_ID, db=db
+        )
+        assert job_out.status == "queued"
+        status = await discovery_router.prepare_status(
+            job_out.job_id, account_id=ACCOUNT_ID, db=db
+        )
+        assert (status.status, status.result, status.error) == ("queued", None, None)
+
+        job = await db.get(RadarJob, job_out.job_id)
+        job.status, job.result = "done", {"questions": [], "profile_draft": {}, "ai_used": False}
+        await db.commit()
+        status = await discovery_router.prepare_status(
+            job_out.job_id, account_id=ACCOUNT_ID, db=db
+        )
+        assert status.status == "done" and status.result.ai_used is False
+        await raises_http(404, discovery_router.prepare_status(
+            job_out.job_id, account_id=99, db=db
+        ))
 
 
 async def test_import_creates_sources_and_skips_duplicates():
-    db, account, company = await _api_fixture()
+    db = await _db()
     competitors = [
         {"index": 0, "name": "Vulcanizare A", "place_id": "p1", "address": "Str. A 1",
          "rating": 4.7, "website": "https://a.ro", "site_title": "Vulcanizare A",
@@ -489,27 +526,27 @@ async def test_import_creates_sources_and_skips_duplicates():
          "youtube_channel": "", "cui": None},
     ]
     discovery = RadarDiscovery(
-        account_id=account.id, company_id=company.id, status="done",
+        account_id=ACCOUNT_ID, company_id=COMPANY_ID, status="done",
         result={"version": 1, "competitors": competitors,
                 "suggested_focus": "Urmarim preturile."},
     )
     db.add(discovery)
-    db.add(RadarSource(account_id=account.id, kind="website", value="https://a.ro", label="A"))
+    db.add(RadarSource(account_id=ACCOUNT_ID, kind="website", value="https://a.ro", label="A"))
     await db.commit()
 
-    out = await radar_discovery.import_discovery(
+    out = await discovery_router.import_discovery(
         discovery.id,
         ImportIn(items=[
             ImportItem(index=0, kinds=["gbusiness", "website", "youtube", "company"]),
             ImportItem(index=1, kinds=["gbusiness", "website"]),
             ImportItem(index=7, kinds=["gbusiness"]),
         ]),
-        account_id=account.id, db=db,
+        account_id=ACCOUNT_ID, db=db,
     )
     assert (out.created, out.skipped) == (4, 3)
 
     rows = (await db.execute(
-        select(RadarSource).where(RadarSource.account_id == account.id).order_by(RadarSource.id)
+        select(RadarSource).where(RadarSource.account_id == ACCOUNT_ID).order_by(RadarSource.id)
     )).scalars().all()
     by_kind = {r.kind: r for r in rows if r.label == "Vulcanizare A"}
     assert [r.value for r in rows if r.label == "Vulcanizare B"] == ["place:p2"]
@@ -522,38 +559,40 @@ async def test_import_creates_sources_and_skips_duplicates():
     assert by_kind["gbusiness"].label == "Vulcanizare A"
 
     # A doua rulare nu mai creeaza nimic.
-    again = await radar_discovery.import_discovery(
+    again = await discovery_router.import_discovery(
         discovery.id, ImportIn(items=[ImportItem(index=0, kinds=["gbusiness", "company"])]),
-        account_id=account.id, db=db,
+        account_id=ACCOUNT_ID, db=db,
     )
     assert (again.created, again.skipped) == (0, 2)
 
-    settings = await radar_discovery.use_suggested_focus(
-        discovery.id, account_id=account.id, db=db
-    )
-    assert settings.focus_prompt == "Urmarim preturile."
-    settings = await radar_discovery.use_suggested_focus(
-        discovery.id, account_id=account.id, db=db
-    )
-    assert settings.focus_prompt == "Urmarim preturile.\n\nUrmarim preturile."
+    with MonoPatch():
+        settings = await discovery_router.use_suggested_focus(
+            discovery.id, account_id=ACCOUNT_ID, db=db
+        )
+        assert settings.focus_prompt == "Urmarim preturile."
+        settings = await discovery_router.use_suggested_focus(
+            discovery.id, account_id=ACCOUNT_ID, db=db
+        )
+        assert settings.focus_prompt == "Urmarim preturile.\n\nUrmarim preturile."
 
-    other = await make_account(db, "alta", "alta")
-    await raises_http(404, radar_discovery.get_discovery(
-        discovery.id, account_id=other.id, db=db
-    ))
-    listed = await radar_discovery.list_discoveries(limit=20, account_id=account.id, db=db)
-    assert [d.id for d in listed] == [discovery.id] and listed[0].result is None
-    assert listed[0].company_name == company.name
-    full = await radar_discovery.get_discovery(discovery.id, account_id=account.id, db=db)
-    assert full.result["version"] == 1
+        await raises_http(404, discovery_router.get_discovery(
+            discovery.id, account_id=99, db=db
+        ))
+        listed = await discovery_router.list_discoveries(limit=20, account_id=ACCOUNT_ID, db=db)
+        assert [d.id for d in listed] == [discovery.id] and listed[0].result is None
+        assert listed[0].company_name == "Anvelope Mele SRL"
+        full = await discovery_router.get_discovery(discovery.id, account_id=ACCOUNT_ID, db=db)
+        assert full.result["version"] == 1
 
-    await radar_discovery.delete_discovery(discovery.id, account_id=account.id, db=db)
-    assert await radar_discovery.list_discoveries(limit=20, account_id=account.id, db=db) == []
+        await discovery_router.delete_discovery(discovery.id, account_id=ACCOUNT_ID, db=db)
+        assert await discovery_router.list_discoveries(
+            limit=20, account_id=ACCOUNT_ID, db=db
+        ) == []
 
 
 async def test_full_run_with_real_prompts():
     db = await _db()
-    _account, _company_row, discovery = await _run_fixture(db)
+    _account_id, _company_row, discovery = await _run_fixture(db)
     hits = [PlaceHit(place_id="p1", name="Vulcanizare A", address="Str. A 1", lat=45.75,
                      lng=21.22, rating=4.7, reviews_count=120, website="https://a.ro",
                      types=["tire_shop"])]
@@ -562,7 +601,7 @@ async def test_full_run_with_real_prompts():
                sites={"https://a.ro": SITE_A},
                anaf={12345678: CompanyInfo(cui=12345678, name="VULCANIZARE A SRL")},
                real_prompts=True):
-        await run_discovery(discovery.id)
+        await run_discovery(discovery.id, {"context": _context()})
     await db.refresh(discovery)
     assert discovery.status == "done", f"status={discovery.status} err={discovery.error}"
     assert discovery.result["competitors"][0]["threat"] == "high"
@@ -570,18 +609,15 @@ async def test_full_run_with_real_prompts():
 
 
 async def test_prepare_with_real_prompts_returns_all_questions():
-    db, account, company = await _api_fixture(ai_key=None)
-    with Patch(db, ai_settings=FakeAISettings(api_key=None), real_prompts=True):
-        out = await radar_discovery.prepare_discovery(
-            PrepareIn(company_id=company.id), account_id=account.id, db=db
-        )
+    db = await _db()
+    out = await _prepare(db, ai_settings=FakeAISettings(api_key=None), real_prompts=True)
     assert [q.id for q in out.questions] == list(QUESTION_IDS)
     assert all(q.question and q.hint for q in out.questions)
     assert out.ai_used is False
 
 
 def main() -> None:
-    run(test_profile_draft_parses_both_address_formats())
+    test_profile_draft_parses_both_address_formats()
     test_merge_answers_normalises_lists_and_radius()
     test_scoring_drops_own_company_and_keeps_top_15()
     run(test_full_run_produces_result_and_usage())
@@ -590,6 +626,7 @@ def main() -> None:
     run(test_prepare_without_ai_key_uses_default_questions())
     run(test_prepare_with_ai_fills_suggestions_and_records_usage())
     run(test_create_requires_places_key_and_rejects_parallel_runs())
+    run(test_prepare_job_endpoint_returns_job_and_status())
     run(test_import_creates_sources_and_skips_duplicates())
     run(test_full_run_with_real_prompts())
     run(test_prepare_with_real_prompts_returns_all_questions())

@@ -44,6 +44,8 @@ export default function ConcurentiTab(props: {
   const [questions, setQuestions] = createSignal<DiscoveryQuestion[] | null>(null);
   const [answers, setAnswers] = createSignal<Record<string, string>>({});
   const [preparing, setPreparing] = createSignal(false);
+  let prepareAbort: AbortController | null = null;
+  onCleanup(() => prepareAbort?.abort());
   const [starting, setStarting] = createSignal(false);
   const [formError, setFormError] = createSignal("");
 
@@ -102,18 +104,22 @@ export default function ConcurentiTab(props: {
   async function prepare() {
     const id = Number(companyId());
     if (!id) { setFormError("Alege firma pentru care căutăm concurenți."); return; }
+    prepareAbort?.abort();
+    const ctrl = new AbortController();
+    prepareAbort = ctrl;
     setPreparing(true);
     setFormError("");
     try {
-      const p = await discoveryApi.prepare(id);
+      const p = await discoveryApi.prepare(id, undefined, ctrl.signal);
       setQuestions(p.questions);
       setAnswers(
         Object.fromEntries(p.questions.map((q) => [q.id, q.suggested == null ? "" : String(q.suggested)])),
       );
       if (!p.ai_used) notify("Am precompletat întrebările din datele firmei (fără AI).", "info");
     } catch (e) {
-      setFormError(errMsg(e, "Nu am putut pregăti căutarea."));
+      if (!ctrl.signal.aborted) setFormError(errMsg(e, "Nu am putut pregăti căutarea."));
     } finally {
+      if (prepareAbort === ctrl) prepareAbort = null;
       setPreparing(false);
     }
   }
@@ -310,9 +316,16 @@ export default function ConcurentiTab(props: {
                   >
                     Pregătește căutarea
                   </Button>
-                  <span class="radar-muted">
-                    Pregătirea folosește AI-ul pentru a-ți precompleta întrebările, deci consumă câțiva tokeni.
-                  </span>
+                  <Show
+                    when={preparing()}
+                    fallback={
+                      <span class="radar-muted">
+                        Pregătirea folosește AI-ul pentru a-ți precompleta întrebările, deci consumă câțiva tokeni.
+                      </span>
+                    }
+                  >
+                    <span class="radar-muted">Pregătesc întrebările… (poate dura până la 3 minute)</span>
+                  </Show>
                   <Show when={formError()}><p class="radar-error">{formError()}</p></Show>
                 </div>
               </section>

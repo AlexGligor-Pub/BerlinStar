@@ -1,25 +1,31 @@
-"""Radar AI — descoperire concurenti pentru o firma a contului (admin + manager).
+"""Descoperirea de concurenti: pregatire (job), pornire (job), rezultate, import surse.
 
-Mount: /api/radar/discovery/*
+Mount: /v1/discovery
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
+import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import monolith
+from app.auth import require_account
 from app.database import get_db
-from app.dependencies import get_settings_account_id
-from app.models.company import Company
+from app.jobs import queue
 from app.models.radar import RadarDiscovery, RadarSource
-from app.radar.settings import load_ai_settings
-from app.radar.types import CollectorError
-from app.routers.radar import _get_or_create_settings, _settings_out
+from app.radar.discovery import (
+    build_profile_draft,
+    context_items,
+    find_company,
+    merge_answers,
+)
+from app.routers.settings import _get_or_create_settings, _settings_out
+from app.schemas.jobs import PrepareJobOut, PrepareStatusOut
 from app.schemas.radar import (
     DiscoveryCreate,
     DiscoveryOut,
@@ -30,7 +36,7 @@ from app.schemas.radar import (
     RadarSettingsOut,
 )
 
-log = logging.getLogger("berlinstar.radar.discovery")
+log = logging.getLogger("radar.discovery")
 
 router = APIRouter()
 
@@ -42,17 +48,12 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-async def _get_company(db: AsyncSession, account_id: int, company_id: int) -> Company:
-    company = (await db.execute(
-        select(Company).where(
-            Company.id == company_id,
-            Company.account_id == account_id,
-            Company.is_deleted == False,  # noqa: E712
-        )
-    )).scalar_one_or_none()
+async def _context_company(account_id: int, company_id: int) -> tuple[dict, dict, list[dict]]:
+    context = await monolith.business_context(account_id)
+    company = find_company(context, company_id)
     if company is None:
         raise HTTPException(404, "Firma nu a fost gasita.")
-    return company
+    return context, company, context_items(context)
 
 
 async def _get_discovery(db: AsyncSession, account_id: int, discovery_id: int) -> RadarDiscovery:
@@ -85,42 +86,73 @@ def _out(discovery: RadarDiscovery, company_name: str, with_result: bool = False
     )
 
 
-async def _company_names(db: AsyncSession, account_id: int) -> dict[int, str]:
-    rows = (await db.execute(
-        select(Company.id, Company.name).where(Company.account_id == account_id)
-    )).all()
-    return {cid: name for cid, name in rows}
+def _company_names(context: dict) -> dict[int, str]:
+    return {
+        int(c["id"]): c.get("name") or ""
+        for c in (context.get("companies") or [])
+        if isinstance(c, dict) and c.get("id") is not None
+    }
 
 
-@router.post("/prepare", response_model=PrepareOut)
+@router.post("/discovery/prepare", response_model=PrepareJobOut, status_code=202)
 async def prepare_discovery(
     body: PrepareIn,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
-    """Intrebarile-prerechizite, cu sugestii precompletate (AI daca e cheie)."""
-    company = await _get_company(db, account_id, body.company_id)
+    """Pune pregatirea in coada (apel AI); rezultatul se ia din `/prepare/{job_id}`."""
+    context, company, _ = await _context_company(account_id, body.company_id)
+    key = f"discovery_prepare:{account_id}:{body.company_id}:{uuid.uuid4()}"
     try:
-        from app.radar.discovery import prepare
-    except ImportError:
-        raise HTTPException(503, "Descoperirea de concurenti nu este disponibila pe acest server.")
-    data = await prepare(db, account_id, company)
-    return PrepareOut(**data)
+        job, _created = await queue.enqueue(
+            db,
+            kind="discovery_prepare",
+            account_id=account_id,
+            idempotency_key=key,
+            target_id=body.company_id,
+            payload={"context": context, "company_id": body.company_id},
+        )
+    except queue.ActiveJobExists as exc:
+        raise HTTPException(409, str(exc))
+    log.info("job_id=%s account_id=%s pregatire pentru firma %s", job.id, account_id, company.get("id"))
+    return PrepareJobOut(job_id=job.id, status=job.status)
 
 
-@router.post("", response_model=DiscoveryOut, status_code=201)
+@router.get("/discovery/prepare/{job_id}", response_model=PrepareStatusOut)
+async def prepare_status(
+    job_id: int,
+    account_id: int = Depends(require_account),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.models.jobs import RadarJob
+
+    job = (await db.execute(
+        select(RadarJob).where(
+            RadarJob.id == job_id,
+            RadarJob.account_id == account_id,
+            RadarJob.kind == "discovery_prepare",
+        )
+    )).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(404, "Pregatirea nu a fost gasita.")
+    result = PrepareOut(**job.result) if job.status == "done" and job.result else None
+    return PrepareStatusOut(job_id=job.id, status=job.status, error=job.error, result=result)
+
+
+@router.post("/discovery", response_model=DiscoveryOut, status_code=201)
 async def create_discovery(
     body: DiscoveryCreate,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
-    """Porneste o descoperire in fundal pentru firma aleasa."""
-    company = await _get_company(db, account_id, body.company_id)
-    ai = await load_ai_settings(db)
+    """Creeaza descoperirea in `queued` si pune job-ul in coada."""
+    ai = await monolith.ai_config()
     if not ai.configured:
         raise HTTPException(400, "Cheia Anthropic nu este configurata. Contacteaza administratorul platformei.")
     if not ai.places_configured:
         raise HTTPException(400, "Cheia Google Places nu este configurata. Contacteaza administratorul platformei.")
+
+    context, company, items = await _context_company(account_id, body.company_id)
     active = (await db.execute(
         select(RadarDiscovery.id).where(
             RadarDiscovery.account_id == account_id,
@@ -130,15 +162,10 @@ async def create_discovery(
     if active is not None:
         raise HTTPException(409, "Exista deja o descoperire in curs. Asteapta sa se termine.")
 
-    try:
-        from app.radar.discovery import build_profile_draft, merge_answers, run_discovery
-    except ImportError:
-        raise HTTPException(503, "Descoperirea de concurenti nu este disponibila pe acest server.")
-
-    profile = merge_answers(await build_profile_draft(db, company), body.answers)
+    profile = merge_answers(build_profile_draft(company, items), body.answers)
     discovery = RadarDiscovery(
         account_id=account_id,
-        company_id=company.id,
+        company_id=int(company["id"]),
         status="queued",
         created_at=_now(),
         progress={"step": "in asteptare", "done": 0, "total": 0, "log": []},
@@ -146,16 +173,30 @@ async def create_discovery(
         profile=profile,
     )
     db.add(discovery)
-    await db.commit()
+    await db.flush()
+    key = f"discovery:{account_id}:{discovery.id}"
+    try:
+        job, created = await queue.enqueue(
+            db,
+            kind="discovery",
+            account_id=account_id,
+            idempotency_key=key,
+            target_id=discovery.id,
+            payload={"context": context},
+        )
+    except queue.ActiveJobExists as exc:
+        raise HTTPException(409, str(exc))
+    if not created:
+        raise HTTPException(409, "Exista deja o descoperire in curs. Asteapta sa se termine.")
+    log.info("job_id=%s account_id=%s descoperire %s pusa in coada", job.id, account_id, discovery.id)
     await db.refresh(discovery)
-    asyncio.create_task(run_discovery(discovery.id))
-    return _out(discovery, company.name)
+    return _out(discovery, company.get("name") or "")
 
 
-@router.get("", response_model=list[DiscoveryOut])
+@router.get("/discovery", response_model=list[DiscoveryOut])
 async def list_discoveries(
     limit: int = Query(20, ge=1, le=100),
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
     rows = (await db.execute(
@@ -164,19 +205,27 @@ async def list_discoveries(
         .order_by(RadarDiscovery.created_at.desc(), RadarDiscovery.id.desc())
         .limit(limit)
     )).scalars().all()
-    names = await _company_names(db, account_id)
+    if not rows:
+        return []
+    try:
+        names = _company_names(await monolith.business_context(account_id))
+    except monolith.MonolithUnavailable:
+        names = {}
     return [_out(row, names.get(row.company_id, "")) for row in rows]
 
 
-@router.get("/{discovery_id}", response_model=DiscoveryOut)
+@router.get("/discovery/{discovery_id}", response_model=DiscoveryOut)
 async def get_discovery(
     discovery_id: int,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
     discovery = await _get_discovery(db, account_id, discovery_id)
-    company = await db.get(Company, discovery.company_id)
-    return _out(discovery, company.name if company else "", with_result=True)
+    try:
+        names = _company_names(await monolith.business_context(account_id))
+    except monolith.MonolithUnavailable:
+        names = {}
+    return _out(discovery, names.get(discovery.company_id, ""), with_result=True)
 
 
 def _source_payload(kind: str, competitor: dict) -> tuple[str, dict] | None:
@@ -212,11 +261,11 @@ def _source_payload(kind: str, competitor: dict) -> tuple[str, dict] | None:
     return str(cui), {"cui": int(cui), "name": name}
 
 
-@router.post("/{discovery_id}/import", response_model=ImportOut)
+@router.post("/discovery/{discovery_id}/import", response_model=ImportOut)
 async def import_discovery(
     discovery_id: int,
     body: ImportIn,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
     """Creeaza surse Radar din concurentii selectati; sare peste cele deja existente."""
@@ -266,10 +315,10 @@ async def import_discovery(
     return ImportOut(created=created, skipped=skipped)
 
 
-@router.post("/{discovery_id}/use-focus", response_model=RadarSettingsOut)
+@router.post("/discovery/{discovery_id}/use-focus", response_model=RadarSettingsOut)
 async def use_suggested_focus(
     discovery_id: int,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
     """Pune focusul sugerat de AI in setarile Radar (adaugat la final daca exista deja)."""
@@ -286,10 +335,10 @@ async def use_suggested_focus(
     return await _settings_out(db, row)
 
 
-@router.delete("/{discovery_id}", status_code=204)
+@router.delete("/discovery/{discovery_id}", status_code=204)
 async def delete_discovery(
     discovery_id: int,
-    account_id: int = Depends(get_settings_account_id),
+    account_id: int = Depends(require_account),
     db: AsyncSession = Depends(get_db),
 ):
     discovery = await _get_discovery(db, account_id, discovery_id)

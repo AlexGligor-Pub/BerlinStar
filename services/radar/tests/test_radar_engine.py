@@ -8,46 +8,28 @@ from datetime import date
 
 from sqlalchemy import func, select
 
-from app.models.base import Base
 from app.models.radar import AiUsage, RadarRun, RadarSettings, RadarSnapshot, RadarSource
 from app.radar import engine as engine_mod
 from app.radar.ai import AIClient, AIError, parse_json
 from app.radar.engine import Candidate, build_business_context, run_radar
 from app.radar.types import AIResult, CollectorError
 
-from tests._harness import make_account, make_item, make_session, raises_http  # noqa: F401
-
-RADAR_TABLE_NAMES = (
-    "radar_sources", "radar_settings", "radar_runs", "radar_snapshots", "ai_usage",
+from tests._harness import (  # noqa: F401
+    SessionFactory as _SessionFactory,
+    business_context,
+    make_session,
+    raises_http,
 )
+
+ACCOUNT_ID = 6
+CONTEXT = business_context(ACCOUNT_ID)
 
 
 # ─── Infrastructura de test ───────────────────────────────────────────────────
 
 async def _db():
-    """Sesiune de harness + tabelele Radar (nu sunt in subsetul implicit)."""
-    db = await make_session()
-    tables = [Base.metadata.tables[name] for name in RADAR_TABLE_NAMES]
-    conn = await db.connection()
-    await conn.run_sync(lambda c: Base.metadata.create_all(c, tables=tables, checkfirst=True))
-    await db.commit()
-    return db
-
-
-class _SessionFactory:
-    """Inlocuieste `AsyncSessionLocal` in engine cu sesiunea de test."""
-
-    def __init__(self, db):
-        self.db = db
-
-    def __call__(self):
-        return self
-
-    async def __aenter__(self):
-        return self.db
-
-    async def __aexit__(self, *exc):
-        return False
+    """Sesiune de harness cu toate tabelele serviciului."""
+    return await make_session()
 
 
 class FakeAISettings:
@@ -57,6 +39,14 @@ class FakeAISettings:
         self.model = "fake-model"
         self.price_in = 3.0
         self.price_out = 15.0
+
+    @property
+    def configured(self) -> bool:
+        return bool(self.api_key)
+
+    @property
+    def places_configured(self) -> bool:
+        return bool(self.places_key)
 
 
 DIGESTS = {
@@ -189,7 +179,7 @@ class Patch:
         engine_mod.AsyncSessionLocal = _SessionFactory(self.db)
         engine_mod._make_ai = lambda settings: self.ai
 
-        async def _settings(db):
+        async def _settings():
             return self.ai_settings
 
         engine_mod._load_ai_settings = _settings
@@ -246,9 +236,7 @@ def _failing_collector(message="Canalul nu răspunde."):
 
 
 async def _fixture(db, kinds=("youtube", "website")):
-    account = await make_account(db, "radarfirma", "radar")
-    await make_item(db, account, "Schimb ulei", "150.00")
-    account_id = account.id
+    account_id = ACCOUNT_ID
     db.add(RadarSettings(account_id=account_id, focus_prompt="Focus concurenți",
                          business_context="Service auto", schedule="weekly"))
     for kind in kinds:
@@ -276,7 +264,7 @@ async def test_full_run_produces_report():
     account_id, run = await _fixture(db)
     ai = FakeAI()
     with Patch(db, ai, {"youtube": _yt_collector(), "website": _web_collector()}):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "done", f"status={run.status} err={run.error}"
@@ -313,11 +301,11 @@ async def test_second_run_deduplicates():
     collectors = {"youtube": _yt_collector(), "website": _web_collector()}
     ai = FakeAI()
     with Patch(db, ai, collectors):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
         run2 = RadarRun(account_id=account_id, status="queued", trigger="manual")
         db.add(run2)
         await db.commit()
-        await run_radar(run2.id)
+        await run_radar(run2.id, {"context": CONTEXT})
 
     await db.refresh(run2)
     assert run2.status == "done", run2.error
@@ -332,7 +320,7 @@ async def test_website_same_hash_new_day_is_skipped():
     account_id, run = await _fixture(db, kinds=("website",))
     ai = FakeAI()
     with Patch(db, ai, {"website": _web_collector()}):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
         async def _tomorrow(source, ctx):
             return [Candidate(external_id="page:abc123456789:2999-01-01",
@@ -343,7 +331,7 @@ async def test_website_same_hash_new_day_is_skipped():
         run2 = RadarRun(account_id=account_id, status="queued", trigger="manual")
         db.add(run2)
         await db.commit()
-        await run_radar(run2.id)
+        await run_radar(run2.id, {"context": CONTEXT})
 
     assert await _count(db, RadarSnapshot, account_id=account_id) == 1
     assert await _count(db, AiUsage, feature="radar.digest") == 1
@@ -354,7 +342,7 @@ async def test_source_error_does_not_fail_run():
     account_id, run = await _fixture(db)
     ai = FakeAI()
     with Patch(db, ai, {"youtube": _failing_collector(), "website": _web_collector()}):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "done", run.error
@@ -376,7 +364,7 @@ async def test_digest_failure_after_flush_isolates_source():
     account_id, run = await _fixture(db)
     ai = FakeAI(fail_marker="DIGEST:youtube")
     with Patch(db, ai, {"youtube": _yt_collector(), "website": _web_collector()}):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "done", run.error
@@ -394,7 +382,7 @@ async def test_synthesis_failure_marks_run_error():
     account_id, run = await _fixture(db)
     ai = FakeAI(fail_marker="SYNTH")
     with Patch(db, ai, {"youtube": _yt_collector(), "website": _web_collector()}):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "error"
@@ -410,7 +398,7 @@ async def test_missing_api_key_is_reported_in_romanian():
     ai = FakeAI()
     with Patch(db, ai, {"youtube": _yt_collector(), "website": _web_collector()},
                ai_settings=FakeAISettings(api_key="")):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "error"
@@ -419,12 +407,9 @@ async def test_missing_api_key_is_reported_in_romanian():
 
 async def test_build_business_context_records_usage():
     db = await _db()
-    account = await make_account(db, "ctxfirma", "ctx")
-    await make_item(db, account, "Vulcanizare", "80.00")
-    await db.commit()
     ai = FakeAI()
     with Patch(db, ai, {}):
-        text = await build_business_context(db, account.id, ai)
+        text = await build_business_context(db, ACCOUNT_ID, CONTEXT, ai)
 
     assert text == "Firmă de service auto din Timișoara."
     usage = (await db.execute(
@@ -476,7 +461,7 @@ def test_cost_and_token_accounting():
 
 
 def test_scheduler_due_rules():
-    from app.radar.scheduler import _is_due
+    from app.jobs.scheduler import _is_due
 
     assert _is_due("weekly", date(2026, 9, 14))
     assert _is_due("monthly", date(2026, 9, 7))
@@ -515,7 +500,6 @@ def test_real_modules_integration():
     checks = {
         "app.radar.prompts": ("system_prompt", "context_prompt", "digest_prompt",
                               "synthesis_prompt", "DIGEST_SCHEMAS", "REPORT_SCHEMA"),
-        "app.radar.settings": ("load_ai_settings",),
         "app.radar.collectors.youtube": ("resolve_channel", "fetch_recent_videos",
                                          "fetch_transcript"),
         "app.radar.collectors.anaf": ("fetch_company", "fetch_bilant"),
@@ -562,7 +546,7 @@ class RealPromptAI(FakeAI):
 async def test_integration_with_real_prompts():
     """Rulare completa peste modulul real `prompts` (fara retea, AI simulat)."""
     try:
-        from app.radar import prompts, settings as radar_settings  # noqa: F401
+        from app.radar import prompts  # noqa: F401
     except ImportError as exc:
         print(f"  (sarit — modulele reale lipsesc: {exc})")
         return
@@ -588,7 +572,7 @@ async def test_integration_with_real_prompts():
     collectors = {"youtube": _yt_collector(), "website": _web_collector(),
                   "company": _company, "gbusiness": _reviews}
     with Patch(db, ai, collectors, real_prompts=True):
-        await run_radar(run.id)
+        await run_radar(run.id, {"context": CONTEXT})
 
     await db.refresh(run)
     assert run.status == "done", f"status={run.status} err={run.error}"
@@ -599,6 +583,3 @@ async def test_integration_with_real_prompts():
     assert [len(sections[k]) for k in ("youtube", "companies", "websites", "reviews")] == [1, 1, 1, 1]
     youtube_props = set(prompts.DIGEST_SCHEMAS["youtube"]["properties"])
     assert youtube_props <= set(sections["youtube"][0]), "digest-ul nu acopera schema reala"
-
-    fresh = await radar_settings.load_ai_settings(db)
-    assert fresh.model and fresh.price_in > 0

@@ -4,21 +4,18 @@ Mount: /api/admin/ai-settings, /api/admin/ai-usage
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_platform_admin_account
 from app.efactura.crypto import encrypt, is_configured as fernet_configured
 from app.models.account import Account
-from app.models.radar import AiUsage, RadarRun
-from app.radar.types import DEFAULT_MODEL, DEFAULT_PRICE_IN_USD_MTOK, DEFAULT_PRICE_OUT_USD_MTOK
-from app.routers.radar import window_start
-from app.schemas.radar import AccountUsageOut, AiSettingsOut, AiSettingsUpdate
+from app import radar_client
+from app.ai_settings import DEFAULT_MODEL, DEFAULT_PRICE_IN_USD_MTOK, DEFAULT_PRICE_OUT_USD_MTOK
+from app.schemas.admin_ai import AccountUsageOut, AiSettingsOut, AiSettingsUpdate
 from app.subscriptions.settings import get_or_create_global_settings
 
 router = APIRouter()
@@ -82,43 +79,25 @@ async def get_ai_usage(
     _admin: Account = Depends(get_platform_admin_account),
     db: AsyncSession = Depends(get_db),
 ):
-    """Consum agregat pe cont in ultimele `months` luni (agregare in Python, portabila)."""
-    start = datetime.combine(window_start(months), datetime.min.time(), tzinfo=timezone.utc)
-    rows = (
-        await db.execute(select(AiUsage).where(AiUsage.created_at >= start))
-    ).scalars().all()
-    runs = dict(
-        (
-            await db.execute(
-                select(RadarRun.account_id, func.count())
-                .where(RadarRun.started_at >= start)
-                .group_by(RadarRun.account_id)
-            )
-        ).all()
-    )
-    names = dict(
-        (await db.execute(select(Account.id, Account.name))).all()
-    )
+    """Consum agregat pe cont in ultimele `months` luni, calculat de serviciul Radar AI."""
+    return await usage_from_service(months, db)
 
-    agg: dict[int, list] = {}
-    for row in rows:
-        acc = agg.setdefault(row.account_id, [0, 0, Decimal(0)])
-        acc[0] += row.tokens_in or 0
-        acc[1] += row.tokens_out or 0
-        acc[2] += Decimal(str(row.cost_usd or 0))
-    for account_id in runs:
-        agg.setdefault(account_id, [0, 0, Decimal(0)])
 
+async def usage_from_service(months: int, db: AsyncSession) -> list[AccountUsageOut]:
+    """Consum pe cont din serviciu; forma asteptata de la `/v1/internal/usage`:
+    `[{account_id, tokens_in, tokens_out, cost_usd, runs}]` (agregat pe fereastra de `months` luni)."""
+    rows = await radar_client.get_json("/v1/internal/usage", params={"months": months})
+    names = dict((await db.execute(select(Account.id, Account.name))).all())
     out = [
         AccountUsageOut(
-            account_id=account_id,
-            account_name=names.get(account_id, str(account_id)),
-            tokens_in=v[0],
-            tokens_out=v[1],
-            cost_usd=float(v[2]),
-            runs=runs.get(account_id, 0),
+            account_id=row["account_id"],
+            account_name=names.get(row["account_id"], str(row["account_id"])),
+            tokens_in=int(row.get("tokens_in") or 0),
+            tokens_out=int(row.get("tokens_out") or 0),
+            cost_usd=float(row.get("cost_usd") or 0),
+            runs=int(row.get("runs") or 0),
         )
-        for account_id, v in agg.items()
+        for row in (rows or [])
     ]
     out.sort(key=lambda r: r.cost_usd, reverse=True)
     return out

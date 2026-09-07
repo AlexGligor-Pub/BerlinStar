@@ -20,7 +20,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from .base import Base
 
-_JSON = JSON().with_variant(JSONB, "postgresql")
+SCHEMA = "radar"
+
+# Why: `none_as_null` face din valoarea lipsa un NULL de SQL, nu un `null` JSON,
+# ca interogarile de tip „digest IS NULL" (reluarea unei rulari) sa functioneze.
+_JSON = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 
 
 def _now() -> datetime:
@@ -31,12 +35,13 @@ class RadarSource(Base):
     """O sursa urmarita de Radar AI (canal YouTube, CUI, site, business Google)."""
 
     __tablename__ = "radar_sources"
-    __table_args__ = (Index("ix_radar_sources_account_kind", "account_id", "kind"),)
+    __table_args__ = (
+        Index("ix_radar_sources_account_kind", "account_id", "kind"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
-    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False, server_default="")
     value: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -55,10 +60,9 @@ class RadarSettings(Base):
     """Configurarea Radar a unui cont: focus, context de business, frecventa."""
 
     __tablename__ = "radar_settings"
+    __table_args__ = ({"schema": SCHEMA},)
 
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True
-    )
+    account_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     focus_prompt: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     business_context: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
     schedule: Mapped[str] = mapped_column(String(10), nullable=False, server_default="off")
@@ -79,17 +83,16 @@ class RadarSnapshot(Base):
         UniqueConstraint("source_id", "external_id", name="uq_radar_snapshot_source_external"),
         Index("ix_radar_snapshots_account", "account_id"),
         Index("ix_radar_snapshots_run", "run_id"),
+        {"schema": SCHEMA},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
-    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     source_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("radar_sources.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey(f"{SCHEMA}.radar_sources.id", ondelete="CASCADE"), nullable=False
     )
     run_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("radar_runs.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey(f"{SCHEMA}.radar_runs.id", ondelete="SET NULL"), nullable=True
     )
     kind: Mapped[str] = mapped_column(String(20), nullable=False)
     external_id: Mapped[str] = mapped_column(String(300), nullable=False)
@@ -104,12 +107,13 @@ class RadarRun(Base):
     """O rulare Radar: colectare + digest-uri + sinteza, cu raportul rezultat."""
 
     __tablename__ = "radar_runs"
-    __table_args__ = (Index("ix_radar_runs_account_status", "account_id", "status"),)
+    __table_args__ = (
+        Index("ix_radar_runs_account_status", "account_id", "status"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
-    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="queued")
     trigger: Mapped[str] = mapped_column(String(10), nullable=False, server_default="manual")
     started_at: Mapped[datetime] = mapped_column(
@@ -131,12 +135,13 @@ class AiUsage(Base):
     """Consum de tokeni per cont, pentru facturare si rapoarte de platforma."""
 
     __tablename__ = "ai_usage"
-    __table_args__ = (Index("ix_ai_usage_account_created", "account_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_ai_usage_account_created", "account_id", "created_at"),
+        {"schema": SCHEMA},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
-    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
@@ -146,7 +151,7 @@ class AiUsage(Base):
     tokens_out: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     cost_usd: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, server_default="0")
     run_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("radar_runs.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey(f"{SCHEMA}.radar_runs.id", ondelete="SET NULL"), nullable=True
     )
     meta: Mapped[dict | None] = mapped_column(_JSON, nullable=True)
 
@@ -157,15 +162,12 @@ class RadarDiscovery(Base):
     __tablename__ = "radar_discoveries"
     __table_args__ = (
         Index("ix_radar_discoveries_account_created", "account_id", "created_at"),
+        {"schema": SCHEMA},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    account_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False
-    )
-    company_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("companies.id", ondelete="CASCADE"), nullable=False
-    )
+    account_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    company_id: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="queued")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now

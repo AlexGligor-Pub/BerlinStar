@@ -16,8 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
-from app.models.company import Company
-from app.models.item import Item
 from app.models.radar import RadarDiscovery
 
 from .ai import AIError, parse_json
@@ -41,6 +39,8 @@ MIN_ADDRESS_MATCH = 12
 
 NO_AI_KEY = "Cheia Anthropic nu este configurată (AdminV2)."
 NO_PLACES_KEY = "Cheia Google Places nu este configurată (AdminV2)."
+
+NO_COMPANY = "Firma selectată nu mai există."
 
 QUESTION_IDS = ("location", "radius_km", "services", "keywords", "known_competitors", "exclusions")
 
@@ -213,39 +213,33 @@ def _keywords_from(services: list[str], activity: str) -> list[str]:
     return out[:MAX_KEYWORDS]
 
 
-async def _account_items(db: AsyncSession, account_id: int) -> list[dict]:
-    rows = (await db.execute(
-        select(Item)
-        .where(Item.account_id == account_id, Item.is_deleted == False)  # noqa: E712
-        .order_by(Item.id)
-        .limit(MAX_ITEMS)
-    )).scalars().all()
-    return [
-        {
-            "name": item.name,
-            "type": item.type.value if hasattr(item.type, "value") else str(item.type),
-            "price": float(item.price) if item.price is not None else None,
-            "unit": item.unit,
-        }
-        for item in rows
-    ]
+def context_items(context: dict | None) -> list[dict]:
+    """Esantionul de nomenclator din contextul de business (payload-ul job-ului)."""
+    return list((context or {}).get("items") or [])[:MAX_ITEMS]
 
 
-async def build_profile_draft(db: AsyncSession, company: Company) -> dict:
+def find_company(context: dict | None, company_id: int) -> dict | None:
+    """Firma cerută, din contextul de business; None daca nu aparține contului."""
+    for company in (context or {}).get("companies") or []:
+        if int(company.get("id") or 0) == int(company_id):
+            return company
+    return None
+
+
+def build_profile_draft(company: dict, items: list[dict]) -> dict:
     """Draft de profil pentru firma aleasa: zona, activitate, servicii, cuvinte-cheie."""
-    address = _text(company.address) or " ".join(
-        p for p in (_text(company.street), _text(company.city)) if p
+    address = _text(company.get("address")) or " ".join(
+        p for p in (_text(company.get("street")), _text(company.get("city"))) if p
     )
     city, county = parse_address(address)
-    city = city or _text(company.city)
-    county = county or _text(company.county_code)
-    items = await _account_items(db, company.account_id)
-    services = _split_list([i["name"] for i in items])
-    activity = re.sub(r"\s+", " ", _text(company.description))[:600]
+    city = city or _text(company.get("city"))
+    county = county or _text(company.get("county_code"))
+    services = _split_list([_text(i.get("name")) for i in items])
+    activity = re.sub(r"\s+", " ", _text(company.get("description")))[:600]
     return {
-        "company_id": company.id,
-        "name": _text(company.name),
-        "cui": company.cui,
+        "company_id": company.get("id"),
+        "name": _text(company.get("name")),
+        "cui": company.get("cui"),
         "address": address,
         "city": city,
         "county": county,
@@ -355,14 +349,18 @@ def _merge_questions(draft: dict, items: list[dict], ai_questions: dict[str, dic
     return out
 
 
-async def prepare(db: AsyncSession, account_id: int, company: Company) -> dict:
+async def prepare(db: AsyncSession, account_id: int, payload: dict) -> dict:
     """Intrebarile-prerechizite + draftul de profil (AI daca exista cheie Anthropic)."""
-    draft = await build_profile_draft(db, company)
-    items = await _account_items(db, account_id)
+    context = payload.get("context") or {}
+    company = find_company(context, payload.get("company_id") or 0)
+    if company is None:
+        raise CollectorError(NO_COMPANY)
+    items = context_items(context)
+    draft = build_profile_draft(company, items)
     ai_questions: dict[str, dict] = {}
     ai_used = False
 
-    settings = await _load_ai_settings(db)
+    settings = await _load_ai_settings()
     if getattr(settings, "api_key", None):
         try:
             ai = _make_ai(settings)
@@ -430,7 +428,7 @@ async def _anaf_company(cui: int):
 
 # ─── Rulare ───────────────────────────────────────────────────────────────────
 
-async def run_discovery(discovery_id: int) -> None:
+async def run_discovery(discovery_id: int, payload: dict | None = None) -> None:
     """Ruleaza o descoperire de concurenti. Nu ridica — erorile ajung in `error`."""
     async with AsyncSessionLocal() as db:
         discovery = await db.get(RadarDiscovery, discovery_id)
@@ -438,7 +436,7 @@ async def run_discovery(discovery_id: int) -> None:
             log.warning("Descoperirea %s nu exista.", discovery_id)
             return
         try:
-            await _execute(db, discovery)
+            await _execute(db, discovery, payload or {})
         except Exception as exc:  # noqa: BLE001
             log.exception("Descoperirea %s a esuat.", discovery_id)
             try:
@@ -463,14 +461,14 @@ def _progress(
     discovery.progress = {"step": step, "done": done, "total": total, "log": entries[-60:]}
 
 
-async def _execute(db: AsyncSession, discovery: RadarDiscovery) -> None:
+async def _execute(db: AsyncSession, discovery: RadarDiscovery, payload: dict) -> None:
     total = 5
     discovery.status = "running"
     discovery.error = None
     _progress(discovery, "Pornire", 0, total, None)
     await db.commit()
 
-    settings = await _load_ai_settings(db)
+    settings = await _load_ai_settings()
     if not (getattr(settings, "api_key", "") or ""):
         raise AIError(NO_AI_KEY)
     places_key = getattr(settings, "places_key", "") or ""
@@ -478,13 +476,14 @@ async def _execute(db: AsyncSession, discovery: RadarDiscovery) -> None:
         raise CollectorError(NO_PLACES_KEY)
     ai = _make_ai(settings)
 
-    company = await db.get(Company, discovery.company_id)
-    if company is None:
-        raise CollectorError("Firma selectată nu mai există.")
     profile = dict(discovery.profile or {})
     if not profile:
+        context = payload.get("context") or {}
+        company = find_company(context, discovery.company_id)
+        if company is None:
+            raise CollectorError(NO_COMPANY)
         profile = merge_answers(
-            await build_profile_draft(db, company), discovery.answers or {}
+            build_profile_draft(company, context_items(context)), discovery.answers or {}
         )
 
     _progress(discovery, "Localizez firma", 1, total, None)

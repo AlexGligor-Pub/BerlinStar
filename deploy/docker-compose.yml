@@ -55,6 +55,10 @@ services:
       dockerfile: deploy/backend.Dockerfile
     env_file:
       - .env
+    environment:
+      # Monolitul face proxy pe /api/radar/* catre serviciul Radar.
+      # RADAR_SHARED_SECRET vine din .env, nu se dubleaza aici.
+      RADAR_SERVICE_URL: http://radar:8000
     # Asistent AI: backend-ul ajunge la agent-bridge de pe host via host-gateway.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -80,6 +84,73 @@ services:
       timeout: 5s
       retries: 6
       start_period: 45s
+
+  # Radar AI — API intern (nu e publicat catre Caddy/frontend; singura intrare
+  # e monolitul, care face proxy pe /api/radar/*). Vezi docs/radar_service_architecture.md.
+  radar:
+    build:
+      context: ..
+      dockerfile: deploy/radar.Dockerfile
+    env_file:
+      - .env
+    environment:
+      TZ: ${TZ:-Europe/Bucharest}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      autoheal: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=3).status==200 else 1)\""
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 45s
+
+  # Aceeasi imagine, rol `worker`: consuma coada radar_jobs + scheduler-ul.
+  # Fara container_name, ca sa poata fi scalat.
+  radar-worker:
+    build:
+      context: ..
+      dockerfile: deploy/radar.Dockerfile
+    env_file:
+      - .env
+    environment:
+      RADAR_ROLE: worker
+      TZ: ${TZ:-Europe/Bucharest}
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    # SIGTERM: worker-ul termina pasul curent si repune job-ul in coada.
+    stop_grace_period: 60s
+    labels:
+      autoheal: "true"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+    # Worker-ul nu are port; verificam ca procesul ruleaza. `[a]pp` evita
+    # ca pgrep sa se potriveasca pe propria linie de comanda a healthcheck-ului.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f '[a]pp\\.worker' >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   db:
     image: postgres:16-alpine

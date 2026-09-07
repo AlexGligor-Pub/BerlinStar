@@ -21,3 +21,26 @@ TOKEN_EXPIRE_DAYS: int = 30
 ASSISTANT_ENABLED: bool = os.getenv("ASSISTANT_ENABLED", "0") == "1"
 ASSISTANT_BRIDGE_URL: str = os.getenv("ASSISTANT_BRIDGE_URL", "http://host.docker.internal:8765")
 ASSISTANT_BRIDGE_SECRET: str | None = os.getenv("ASSISTANT_BRIDGE_SECRET")
+
+# === Radar AI (serviciu separat) ===
+# Secretul comun cu serviciul Radar; implicitul de dev e permis DOAR cand
+# serviciul e pe localhost, altfel pornirea se opreste (vezi ADR §4).
+RADAR_SERVICE_URL: str = os.getenv("RADAR_SERVICE_URL", "http://localhost:4100")
+
+
+def _radar_host_is_local(url: str) -> bool:
+    from urllib.parse import urlparse
+
+    return (urlparse(url).hostname or "").lower() in ("localhost", "127.0.0.1")
+
+
+RADAR_SHARED_SECRET: str = os.getenv("RADAR_SHARED_SECRET") or ""
+if not RADAR_SHARED_SECRET:
+    if _radar_host_is_local(RADAR_SERVICE_URL):
+        RADAR_SHARED_SECRET = "dev-secret"
+    else:
+        raise RuntimeError(
+            "RADAR_SHARED_SECRET lipseste, iar RADAR_SERVICE_URL nu indica localhost. "
+            "Genereaza secretul cu `python3 -c \"import secrets; print(secrets.token_urlsafe(48))\"` "
+            "si pune-l in deploy/.env, identic pe backend si pe serviciul radar."
+        )

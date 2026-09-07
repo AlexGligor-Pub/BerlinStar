@@ -10,9 +10,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.efactura.crypto import decrypt, is_configured as fernet_configured
 from app.models.global_settings import GlobalSettings
 
-from .types import DEFAULT_MODEL, DEFAULT_PRICE_IN_USD_MTOK, DEFAULT_PRICE_OUT_USD_MTOK
+DEFAULT_MODEL = "claude-sonnet-5"
+DEFAULT_PRICE_IN_USD_MTOK = 3.0
+DEFAULT_PRICE_OUT_USD_MTOK = 15.0
 
-log = logging.getLogger("berlinstar.radar.settings")
+log = logging.getLogger("berlinstar.ai_settings")
 
 
 @dataclass

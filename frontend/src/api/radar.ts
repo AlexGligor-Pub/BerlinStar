@@ -299,6 +299,20 @@ export interface DiscoveryPrepared {
   ai_used: boolean;
 }
 
+export type PrepareJobStatus = "queued" | "running" | "done" | "failed";
+
+export interface PrepareJobStart {
+  job_id: number;
+  status: string;
+}
+
+export interface PrepareJobState {
+  job_id: number;
+  status: PrepareJobStatus;
+  error: string | null;
+  result: DiscoveryPrepared | null;
+}
+
 export interface DiscoveryImportItem {
   index: number;
   kinds: RadarKind[];
@@ -396,11 +410,61 @@ export const radarApi = {
   usage: (months = 6) => http.get<RadarUsage>(`${BASE}/usage`, { query: { months } }),
 };
 
+const PREPARE_POLL_MS = 2000;
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    let timer = 0 as unknown as ReturnType<typeof setTimeout>;
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/**
+ * Porneste job-ul `discovery_prepare` si face poll la 2 s pana la done/failed.
+ * `signal` opreste poll-ul (unmount); `failed` arunca Error cu mesajul serverului.
+ */
+export async function preparePoll(
+  companyId: number,
+  onTick?: (state: PrepareJobState) => void,
+  signal?: AbortSignal,
+): Promise<DiscoveryPrepared> {
+  const job = await discoveryApi.prepareStart(companyId, signal);
+  for (;;) {
+    await wait(PREPARE_POLL_MS, signal);
+    const state = await discoveryApi.prepareStatus(job.job_id, signal);
+    onTick?.(state);
+    if (state.status === "failed") throw new Error(state.error || "Pregătirea căutării a eșuat.");
+    if (state.status === "done") {
+      if (!state.result) throw new Error("Pregătirea căutării nu a întors întrebările.");
+      return state.result;
+    }
+  }
+}
+
 export const discoveryApi = {
-  prepare: (companyId: number) =>
-    http.post<DiscoveryPrepared>(`${BASE}/discovery/prepare`, { company_id: companyId }, {
+  prepareStart: (companyId: number, signal?: AbortSignal) =>
+    http.post<PrepareJobStart>(`${BASE}/discovery/prepare`, { company_id: companyId }, {
       errorMessage: "Nu am putut pregăti căutarea.",
+      signal,
     }),
+  prepareStatus: (jobId: number, signal?: AbortSignal) =>
+    http.get<PrepareJobState>(`${BASE}/discovery/prepare/${jobId}`, {
+      errorMessage: "Nu am putut verifica pregătirea căutării.",
+      signal,
+    }),
+  prepare: preparePoll,
   create: (companyId: number, answers: Record<string, string | number>) =>
     http.post<DiscoveryOut>(`${BASE}/discovery`, { company_id: companyId, answers }, {
       errorMessage: "Nu am putut porni căutarea concurenților.",
