@@ -959,6 +959,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     clearPendingLoad();
     setLoadedReceiptId(d.id ?? null);
     setLoadedProgramareId(d.programareId ?? null);
+    if (d.employeeId !== undefined) selectEmployee(d.employeeId);
     setTitlu(d.titlu);
     setDescriere(d.descriere);
     setDateTehn(d.dateTehn);

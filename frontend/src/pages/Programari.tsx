@@ -1,7 +1,10 @@
-import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, onMount } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, on, onCleanup, onMount, type JSX } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { device } from "../store/deviceStore";
-import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
+import { catalogDepartments, loadCatalogDepartments, patchCatalogDepartment } from "../store/catalogThemesStore";
+import type { CatalogDepartment } from "../store/catalogThemesStore";
+import { employees, loadEmployees } from "../store/employeesStore";
+import { departmentsApi } from "../api/departments";
 import {
   programari, loading,
   loadProgramari, createProgramare, updateProgramare, deleteProgramare,
@@ -110,39 +113,32 @@ function timeInputToMin(val: string): number {
 
 interface ApptWithCol extends Programare { colIdx: number; colCount: number; }
 
+// Grupuri de suprapunere (cluster) cu numar nelimitat de coloane; colCount = coloanele clusterului.
 function calcColumns(appts: Programare[]): ApptWithCol[] {
   if (appts.length === 0) return [];
-  const sorted = [...appts].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  const colEnds: Array<number> = [0, 0, 0];
-  const assigned: ApptWithCol[] = [];
+  const sorted = appts
+    .map((a) => ({ a, s: new Date(a.startTime).getTime(), e: new Date(a.endTime).getTime() }))
+    .sort((x, y) => x.s - y.s || x.e - y.e);
+  const out: ApptWithCol[] = [];
+  let cluster: { a: Programare; col: number }[] = [];
+  let colEnds: number[] = [];
+  let clusterEnd = 0;
 
-  for (const appt of sorted) {
-    const startMs = new Date(appt.startTime).getTime();
-    let col = 0;
-    for (let i = 0; i < 3; i++) {
-      if (colEnds[i] <= startMs) { col = i; break; }
-      if (i === 2) col = 0;
-    }
-    colEnds[col] = new Date(appt.endTime).getTime();
-    assigned.push({ ...appt, colIdx: col, colCount: 1 });
-  }
+  const flush = () => {
+    for (const c of cluster) out.push({ ...c.a, colIdx: c.col, colCount: colEnds.length });
+    cluster = []; colEnds = []; clusterEnd = 0;
+  };
 
-  // Compute colCount per overlap group
-  for (let i = 0; i < assigned.length; i++) {
-    const a      = assigned[i];
-    const aStart = new Date(a.startTime).getTime();
-    const aEnd   = new Date(a.endTime).getTime();
-    let maxCol   = a.colIdx;
-    for (let j = 0; j < assigned.length; j++) {
-      if (i === j) continue;
-      const b = assigned[j];
-      if (new Date(b.startTime).getTime() < aEnd && new Date(b.endTime).getTime() > aStart) {
-        if (b.colIdx > maxCol) maxCol = b.colIdx;
-      }
-    }
-    assigned[i] = { ...assigned[i], colCount: maxCol + 1 };
+  for (const x of sorted) {
+    if (cluster.length > 0 && x.s >= clusterEnd) flush();
+    let col = colEnds.findIndex((end) => end <= x.s);
+    if (col === -1) { col = colEnds.length; colEnds.push(0); }
+    colEnds[col] = x.e;
+    clusterEnd = Math.max(clusterEnd, x.e);
+    cluster.push({ a: x.a, col });
   }
-  return assigned;
+  flush();
+  return out;
 }
 
 // ─── Time slot labels ────────────────────────────────────────────────────────
@@ -163,6 +159,75 @@ for (let min = CAL_START; min < CAL_END; min += 30) {
 
 interface ClientItem { id: number; nume: string; numar_masina: string | null; }
 
+// ─── Angajat: avatar, filtru persistat per dispozitiv, popover ───────────────
+
+type EmpFilterKey = number | "none";
+type EmpFilter = EmpFilterKey[];
+const EMP_FILTER_LS_KEY = "bs_prgm_filter_v1";
+
+function initials(name: string): string {
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "?";
+}
+
+function isEmpFilterKey(v: unknown): v is EmpFilterKey {
+  return typeof v === "number" || v === "none";
+}
+
+function loadEmpFilter(): EmpFilter {
+  try {
+    const raw = localStorage.getItem(EMP_FILTER_LS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { employeeId?: unknown; employeeIds?: unknown };
+    if (Array.isArray(parsed.employeeIds)) return parsed.employeeIds.filter(isEmpFilterKey);
+    return isEmpFilterKey(parsed.employeeId) ? [parsed.employeeId] : [];
+  } catch { return []; }
+}
+
+function saveEmpFilter(v: EmpFilter): void {
+  try { localStorage.setItem(EMP_FILTER_LS_KEY, JSON.stringify({ employeeIds: v })); } catch { /* storage disabled */ }
+}
+
+interface AvatarSource { name: string; imagePath?: string | null; }
+
+function EmpAvatar(props: { emp: AvatarSource | null | undefined; class?: string }) {
+  const cls = () => `prgm-emp-av${props.class ? ` ${props.class}` : ""}`;
+  return (
+    <Show when={props.emp?.imagePath} fallback={
+      <span class={`${cls()}${props.emp ? "" : " prgm-emp-av--dashed"}`} aria-hidden="true">
+        {props.emp ? initials(props.emp.name) : "?"}
+      </span>
+    }>
+      {(src) => <img class={cls()} src={src()} alt="" />}
+    </Show>
+  );
+}
+
+function Popover(props: {
+  open: boolean; onClose: () => void; label: string;
+  trigger: JSX.Element; children: JSX.Element; class?: string;
+}) {
+  let wrap!: HTMLDivElement;
+  function onOutside(e: PointerEvent) {
+    if (props.open && wrap && !wrap.contains(e.target as Node)) props.onClose();
+  }
+  function onKey(e: KeyboardEvent) {
+    if (e.key !== "Escape" || !props.open) return;
+    e.stopPropagation();
+    props.onClose();
+    wrap.querySelector<HTMLElement>("button")?.focus();
+  }
+  onMount(() => document.addEventListener("pointerdown", onOutside));
+  onCleanup(() => document.removeEventListener("pointerdown", onOutside));
+  return (
+    <div class={`prgm-pop-wrap${props.class ? ` ${props.class}` : ""}`} ref={wrap} on:keydown={onKey}>
+      {props.trigger}
+      <Show when={props.open}>
+        <div class="prgm-pop" role="group" aria-label={props.label}>{props.children}</div>
+      </Show>
+    </div>
+  );
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Programari() {
@@ -170,6 +235,11 @@ export default function Programari() {
 
   const [weekOffset,    setWeekOffset]    = createSignal(0);
   const [selectedDept,  setSelectedDept]  = createSignal<number | null>(null);
+  const [empFilter,     setEmpFilter]     = createSignal<EmpFilter>(loadEmpFilter());
+  const [empPopOpen,    setEmpPopOpen]    = createSignal(false);
+  const [visibPopOpen,  setVisibPopOpen]  = createSignal(false);
+  const [visibSaved,    setVisibSaved]    = createSignal(false);
+  const [detailAssigning, setDetailAssigning] = createSignal(false);
   const [q,             setQ]             = createSignal("");
   const [selectedAppt,  setSelectedAppt]  = createSignal<Programare | null>(null);
   const [showFormModal, setShowFormModal] = createSignal(false);
@@ -188,6 +258,7 @@ export default function Programari() {
     curStartMin:  number; curEndMin:  number; curDayIdx:  number;
   } | null = null;
   const [dragTick, setDragTick] = createSignal(0);
+  let lastMoveEndTs = 0;
 
   let calGridRef!: HTMLDivElement;
   let calWrapRef!: HTMLDivElement;
@@ -215,6 +286,53 @@ export default function Programari() {
     });
     return map;
   });
+
+  const visibleDepartments = createMemo(() => catalogDepartments().filter((d) => d.showInProgramari));
+  const hiddenDeptCount    = createMemo(() => catalogDepartments().length - visibleDepartments().length);
+  const empById            = createMemo(() => new Map(employees().map((e) => [e.id, e])));
+  const empFilterActive    = () => empFilter().length > 0;
+  const filterEmp          = createMemo(() => {
+    const f = empFilter();
+    return f.length === 1 && typeof f[0] === "number" ? empById().get(f[0]) ?? null : null;
+  });
+  const empFilterLabel = () => {
+    const f = empFilter();
+    if (f.length === 0) return "Toți angajații";
+    if (f.length === 1) return f[0] === "none" ? "Neasignate" : filterEmp()?.name ?? "Angajat";
+    return `${f.length} selectați`;
+  };
+  const empFilterHas = (k: EmpFilterKey) => empFilter().includes(k);
+
+  function clearEmpFilter() {
+    setEmpFilter([]); saveEmpFilter([]); setEmpPopOpen(false);
+  }
+  function toggleEmpFilter(k: EmpFilterKey, on: boolean) {
+    const next = on ? [...empFilter().filter((x) => x !== k), k] : empFilter().filter((x) => x !== k);
+    setEmpFilter(next); saveEmpFilter(next);
+  }
+
+  createEffect(on(visibleDepartments, (vis) => {
+    const sel = selectedDept();
+    if (sel != null && !vis.some((d) => d.id === sel)) setSelectedDept(null);
+  }));
+
+  async function toggleDeptVisible(dept: CatalogDepartment, show: boolean) {
+    patchCatalogDepartment(dept.id, { showInProgramari: show });
+    try {
+      await departmentsApi.update(dept.id, { show_in_programari: show });
+      setVisibSaved(false); setVisibSaved(true);
+      setTimeout(() => setVisibSaved(false), 1800);
+    } catch (err: unknown) {
+      patchCatalogDepartment(dept.id, { showInProgramari: !show });
+      setActionError(err instanceof Error ? err.message : "Nu s-a putut salva setarea diviziei.");
+    }
+  }
+
+  async function showAllDepts() {
+    for (const d of catalogDepartments()) {
+      if (!d.showInProgramari) await toggleDeptVisible(d, true);
+    }
+  }
 
   const miniCalDays = createMemo(() => {
     const { year, month } = miniMonth();
@@ -253,7 +371,10 @@ export default function Programari() {
   }
 
   onMount(async () => {
-    await loadCatalogDepartments(); // load all departments, not filtered by location
+    await Promise.all([
+      loadCatalogDepartments(), // toate departamentele, nu filtrate pe locatie
+      loadEmployees(locationId(), { force: true }),
+    ]);
     await reloadAppts();
     queueMicrotask(() => {
       if (!calWrapRef) return;
@@ -270,7 +391,7 @@ export default function Programari() {
     const days = weekDays();
     const from = new Date(days[0]); from.setHours(0, 0, 0, 0);
     const to   = new Date(days[6]); to.setHours(23, 59, 59, 999);
-    await loadProgramari(locId, from.toISOString(), to.toISOString());
+    await loadProgramari(locId, { dateFrom: from.toISOString(), dateTo: to.toISOString() });
   }
 
   // Tracking explicit pe weekOffset() pentru a evita refetch-uri din alte semnale.
@@ -284,6 +405,11 @@ export default function Programari() {
   const filteredProgramari = createMemo(() => {
     let list = programari();
     if (selectedDept() != null) list = list.filter((p) => p.departmentId === selectedDept());
+    const ef = empFilter();
+    if (ef.length > 0) {
+      const ids = new Set(ef);
+      list = list.filter((p) => (p.employeeId == null ? ids.has("none") : ids.has(p.employeeId)));
+    }
     if (q().trim()) {
       const ql = q().toLowerCase();
       list = list.filter((p) =>
@@ -388,6 +514,7 @@ export default function Programari() {
 
     const moved = d.curStartMin !== d.origStartMin || d.curEndMin !== d.origEndMin || d.curDayIdx !== d.origDayIdx;
     if (!moved) return;
+    lastMoveEndTs = Date.now();
 
     const days       = weekDays();
     const targetDay  = days[d.curDayIdx];
@@ -425,6 +552,7 @@ export default function Programari() {
     setFormTitlu(appt.titlu);
     setFormNotite(appt.notite ?? "");
     setFormDeptId(appt.departmentId);
+    setFormEmployeeId(appt.employeeId);
     setFormStatus(appt.status);
     if (appt.clientId != null) {
       setFormClient({ id: appt.clientId, nume: appt.clientNume ?? "", numar_masina: null });
@@ -450,6 +578,7 @@ export default function Programari() {
       clientNume: appt.clientNume ?? null,
       clientCui: null, clientTip: null,
       programareId: Number(appt.id),
+      employeeId: appt.employeeId ?? null,
     });
     setSelectedAppt(null);
     navigate("/");
@@ -464,6 +593,17 @@ export default function Programari() {
     }
   }
 
+  async function quickAssign(appt: Programare, employeeId: number | null) {
+    setDetailAssigning(true);
+    try {
+      setSelectedAppt(await updateProgramare(appt.id, { employeeId }));
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare la asignarea angajatului.", "error");
+    } finally {
+      setDetailAssigning(false);
+    }
+  }
+
   // ─── Form state ───────────────────────────────────────────────────────────
 
   const [formDay,      setFormDay]      = createSignal<Date>(new Date());
@@ -472,6 +612,7 @@ export default function Programari() {
   const [formTitlu,    setFormTitlu]    = createSignal("");
   const [formNotite,   setFormNotite]   = createSignal("");
   const [formDeptId,   setFormDeptId]   = createSignal<number | null>(null);
+  const [formEmployeeId, setFormEmployeeId] = createSignal<number | null>(null);
   const [formStatus,   setFormStatus]   = createSignal<ProgramareStatus>("Programat");
   const [formClient,   setFormClient]   = createSignal<ClientItem | null>(null);
   const [formSaving,   setFormSaving]   = createSignal(false);
@@ -493,7 +634,7 @@ export default function Programari() {
   function initForm(day: Date, startMin: number, endMin: number) {
     setFormDay(day); setFormStartMin(startMin); setFormEndMin(endMin);
     setFormTitlu(""); setFormNotite("");
-    setFormDeptId(selectedDept()); setFormStatus("Programat");
+    setFormDeptId(selectedDept()); setFormEmployeeId(null); setFormStatus("Programat");
     setFormClient(null); setClientQ(""); setClientRes([]); setClientOpen(false);
     setShowClientCreate(false); setClientCreateNume(""); setClientCreateTelefon(""); setClientCreateMasina(""); setClientCreateTip("fizic");
     setFormError(null);
@@ -573,6 +714,7 @@ export default function Programari() {
         clientId: formClient()?.id ?? null,
         locationId: locId,
         departmentId: formDeptId(),
+        employeeId: formEmployeeId(),
         startTime: dateLocalIso(formDay(), formStartMin()),
         endTime:   dateLocalIso(formDay(), formEndMin()),
         status: formStatus(),
@@ -643,12 +785,53 @@ export default function Programari() {
           <span class="prgm-week-label">{weekLabel()}</span>
           <button class="btn btn-ghost btn-sm" aria-label="Săptămâna următoare" onClick={() => setWeekOffset(weekOffset() + 1)}>›</button>
         </div>
+        <Popover
+          class="prgm-emp-filter"
+          open={empPopOpen()}
+          onClose={() => setEmpPopOpen(false)}
+          label="Filtru angajat"
+          trigger={
+            <button
+              type="button"
+              class={`btn btn-ghost btn-sm prgm-emp-trigger${empFilterActive() ? " prgm-emp-trigger--active" : ""}`}
+              aria-haspopup="true"
+              aria-expanded={empPopOpen()}
+              onClick={() => setEmpPopOpen((o) => !o)}
+            >
+              <Show when={empFilter().length === 1} fallback={<span aria-hidden="true">👥</span>}>
+                <EmpAvatar emp={filterEmp()} class="prgm-emp-av--sm" />
+              </Show>
+              <span class="prgm-emp-trigger-label">{empFilterLabel()}</span>
+              <span aria-hidden="true">▾</span>
+            </button>
+          }
+        >
+          <div class="prgm-pop-list">
+            <button type="button" class="prgm-pop-item" aria-selected={!empFilterActive()} onClick={clearEmpFilter}>
+              <span class="prgm-emp-av" aria-hidden="true">👥</span>Toți angajații
+            </button>
+            <label class="prgm-pop-item" aria-selected={empFilterHas("none")}>
+              <input type="checkbox" checked={empFilterHas("none")} onChange={(e) => toggleEmpFilter("none", e.currentTarget.checked)} />
+              <EmpAvatar emp={null} />Neasignate
+            </label>
+            <div class="prgm-pop-sep" />
+            <For each={employees()}>{(e) =>
+              <label class="prgm-pop-item" aria-selected={empFilterHas(e.id)}>
+                <input type="checkbox" checked={empFilterHas(e.id)} onChange={(ev) => toggleEmpFilter(e.id, ev.currentTarget.checked)} />
+                <EmpAvatar emp={e} />{e.name}
+              </label>
+            }</For>
+            <Show when={employees().length === 0}>
+              <div class="prgm-pop-empty">Niciun angajat pe această locație</div>
+            </Show>
+          </div>
+        </Popover>
         <div class="prgm-dept-chips">
           <button
             class={`prgm-chip${selectedDept() === null ? " prgm-chip-active" : ""}`}
             onClick={() => setSelectedDept(null)}
           >Toate</button>
-          <For each={catalogDepartments()}>{(dept) => {
+          <For each={visibleDepartments()}>{(dept) => {
             const color = () => deptColorMap().get(dept.id) ?? "#6b7280";
             return (
               <button
@@ -660,6 +843,50 @@ export default function Programari() {
               >{dept.name}</button>
             );
           }}</For>
+          <Show when={canManage()}>
+            <Popover
+              class="prgm-visib-wrap"
+              open={visibPopOpen()}
+              onClose={() => setVisibPopOpen(false)}
+              label="Divizii afișate"
+              trigger={
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  title="Divizii afișate în Programări (setare de cont)"
+                  aria-haspopup="true"
+                  aria-expanded={visibPopOpen()}
+                  onClick={() => setVisibPopOpen((o) => !o)}
+                >
+                  ⚙
+                  <Show when={hiddenDeptCount() > 0}>
+                    <span class="prgm-visib-count">{visibleDepartments().length}/{catalogDepartments().length}</span>
+                  </Show>
+                </button>
+              }
+            >
+              <div class="prgm-pop-head">
+                <div class="prgm-pop-title">Divizii afișate</div>
+                <div class="prgm-pop-hint">Se aplică pentru tot contul</div>
+              </div>
+              <div class="prgm-pop-list">
+                <For each={catalogDepartments()}>{(d) =>
+                  <label class="prgm-pop-item">
+                    <input type="checkbox" checked={d.showInProgramari} onChange={(e) => void toggleDeptVisible(d, e.currentTarget.checked)} />
+                    <span class="prgm-dept-swatch" style={`background:${deptColorMap().get(d.id) ?? "#6b7280"}`} />
+                    {d.name}
+                  </label>
+                }</For>
+                <Show when={catalogDepartments().length === 0}>
+                  <div class="prgm-pop-empty">Nu există divizii configurate</div>
+                </Show>
+              </div>
+              <div class="prgm-pop-foot">
+                <button type="button" class="btn btn-ghost btn-sm" disabled={hiddenDeptCount() === 0} onClick={() => void showAllDepts()}>Toate</button>
+                <Show when={visibSaved()}><span class="prgm-pop-saved">✓ Salvat</span></Show>
+              </div>
+            </Popover>
+          </Show>
         </div>
       </div>
 
@@ -707,7 +934,7 @@ export default function Programari() {
                     <div
                       class={`prgm-slot-line${t.isHour ? " prgm-slot-line-hour" : ""}`}
                       style={`top:${t.top}px;height:${PX_PER_HOUR / 2}px`}
-                      onClick={() => onSlotClick(day, t.min)}
+                      onDblClick={() => onSlotClick(day, t.min)}
                     />
                   }</For>
 
@@ -720,10 +947,24 @@ export default function Programari() {
                         if ((e.target as HTMLElement).classList.contains("prgm-resize-handle")) return;
                         onApptPointerDown(e, appt, "move");
                       }}
-                      onClick={(e) => { if (drag) return; e.stopPropagation(); setSelectedAppt(appt); }}
+                      onClick={(e) => e.stopPropagation()}
+                      onDblClick={(e) => { e.stopPropagation(); if (drag || Date.now() - lastMoveEndTs < 600) return; setSelectedAppt(appt); }}
+                      aria-label={`${appt.titlu}, ${formatTime(appt.startTime)}–${formatTime(appt.endTime)}, ${appt.employeeName ?? "neasignat"}`}
                     >
+                      {(() => {
+                        const long = dateToLocalMin(appt.endTime) - dateToLocalMin(appt.startTime) >= 45;
+                        return (
+                          <Show when={appt.employeeId != null || long}>
+                            <span
+                              class={`prgm-emp-dot${long ? "" : " prgm-emp-dot--xs"}${appt.employeeId == null ? " prgm-emp-dot--none" : ""}`}
+                              title={appt.employeeName ?? "Neasignat"}
+                              aria-hidden="true"
+                            >{appt.employeeName ? initials(appt.employeeName) : "?"}</span>
+                          </Show>
+                        );
+                      })()}
                       <div style="padding:2px 4px;overflow:hidden;height:calc(100% - 8px)">
-                        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px">{appt.titlu}</div>
+                        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding-right:18px">{appt.titlu}</div>
                         <div style="opacity:0.9;font-size:10px">{formatTime(appt.startTime)}–{formatTime(appt.endTime)}</div>
                         <Show when={appt.clientNume}>
                           <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">{appt.clientNume}</div>
@@ -787,6 +1028,25 @@ export default function Programari() {
               <Show when={appt().departmentName}>
                 <span style="color:var(--text-muted);font-size:12px">{appt().departmentName}</span>
               </Show>
+            </div>
+            <div class="prgm-detail-emp">
+              <EmpAvatar emp={appt().employeeId != null ? empById().get(appt().employeeId!) ?? { name: appt().employeeName ?? "?" } : null} class="prgm-emp-av--md" />
+              <div style="flex:1;min-width:0">
+                <div class="prgm-detail-emp-role">Angajat</div>
+                <select
+                  class="input input-sm"
+                  value={appt().employeeId ?? ""}
+                  disabled={detailAssigning()}
+                  aria-label="Asignează angajat"
+                  onChange={(e) => void quickAssign(appt(), e.currentTarget.value ? Number(e.currentTarget.value) : null)}
+                >
+                  <option value="">— Neasignat —</option>
+                  <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
+                  <Show when={appt().employeeId != null && !empById().has(appt().employeeId!)}>
+                    <option value={appt().employeeId!}>{appt().employeeName ?? "Angajat"} (indisponibil)</option>
+                  </Show>
+                </select>
+              </div>
             </div>
             <div>
               <span style="color:var(--text-muted);font-size:12px">Data</span><br />
@@ -1014,9 +1274,27 @@ export default function Programari() {
               <div class="prgm-form-label">Departament</div>
               <select class="input" style="font-size:13px" value={formDeptId() ?? ""} onChange={(e) => setFormDeptId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
                 <option value="">— niciun departament —</option>
-                <For each={catalogDepartments()}>{(d) =>
+                <For each={visibleDepartments()}>{(d) =>
                   <option value={d.id}>{d.name}</option>
                 }</For>
+                <For each={catalogDepartments().filter((d) => !d.showInProgramari && d.id === formAppt()?.departmentId)}>{(d) =>
+                  <option value={d.id}>{d.name} (ascunsă)</option>
+                }</For>
+              </select>
+            </div>
+          </div>
+
+          {/* Angajat */}
+          <div>
+            <div class="prgm-form-label">Angajat</div>
+            <div class="prgm-form-emp">
+              <EmpAvatar emp={formEmployeeId() != null ? empById().get(formEmployeeId()!) ?? { name: formAppt()?.employeeName ?? "?" } : null} class="prgm-emp-av--md" />
+              <select class="input" style="font-size:13px" value={formEmployeeId() ?? ""} onChange={(e) => setFormEmployeeId(e.currentTarget.value ? Number(e.currentTarget.value) : null)}>
+                <option value="">— Neasignat —</option>
+                <For each={employees()}>{(e) => <option value={e.id}>{e.name}</option>}</For>
+                <Show when={formAppt()?.employeeId != null && !empById().has(formAppt()!.employeeId!)}>
+                  <option value={formAppt()!.employeeId!}>{formAppt()!.employeeName ?? "Angajat"} (indisponibil)</option>
+                </Show>
               </select>
             </div>
           </div>

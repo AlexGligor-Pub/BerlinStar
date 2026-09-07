@@ -13,6 +13,7 @@ interface ResumeData {
   clientCui?: string | null;
   clientTip?: string | null;
   programareId?: number | null;
+  employeeId?: number | null;
   vehicol?: VehicolData | null;
   // Pentru editare FDL din Recepție: păstrăm flag-ul + câmpurile FDL la reîncărcarea în POS
   source?: string;

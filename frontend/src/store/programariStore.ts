@@ -13,6 +13,8 @@ export interface Programare {
   locationId: number;
   departmentId: number | null;
   departmentName: string | null;
+  employeeId: number | null;
+  employeeName: string | null;
   startTime: string; // ISO UTC
   endTime: string;   // ISO UTC
   status: ProgramareStatus;
@@ -27,6 +29,7 @@ export interface ProgramareInput {
   clientId?: number | null;
   locationId: number;
   departmentId?: number | null;
+  employeeId?: number | null;
   startTime: string;
   endTime: string;
   status?: ProgramareStatus;
@@ -42,6 +45,8 @@ interface RawProgramare {
   location_id: number;
   department_id?: number | null;
   department_name?: string | null;
+  employee_id?: number | null;
+  employee_name?: string | null;
   start_time: string;
   end_time: string;
   status: string;
@@ -61,6 +66,8 @@ function mapFromApi(r: RawProgramare): Programare {
     locationId: r.location_id,
     departmentId: r.department_id ?? null,
     departmentName: r.department_name ?? null,
+    employeeId: r.employee_id ?? null,
+    employeeName: r.employee_name ?? null,
     startTime: r.start_time,
     endTime: r.end_time,
     status: r.status as ProgramareStatus, // server enum mirrored by ProgramareStatus union
@@ -75,22 +82,25 @@ const [loading, setLoading] = createSignal(false);
 
 export { programari, loading };
 
-export async function loadProgramari(
-  locationId: number,
-  dateFrom?: string,
-  dateTo?: string,
-  q?: string,
-  departmentId?: number | null,
-  status?: string,
-): Promise<void> {
+export interface ProgramariQuery {
+  dateFrom?: string;
+  dateTo?: string;
+  q?: string;
+  departmentId?: number | null;
+  employeeId?: number | null;
+  status?: string;
+}
+
+export async function loadProgramari(locationId: number, opts: ProgramariQuery = {}): Promise<void> {
   setLoading(true);
   try {
     let qs = `/api/programari?location_id=${locationId}`;
-    if (dateFrom) qs += `&date_from=${encodeURIComponent(dateFrom)}`;
-    if (dateTo) qs += `&date_to=${encodeURIComponent(dateTo)}`;
-    if (q) qs += `&q=${encodeURIComponent(q)}`;
-    if (departmentId != null) qs += `&department_id=${departmentId}`;
-    if (status) qs += `&status=${encodeURIComponent(status)}`;
+    if (opts.dateFrom) qs += `&date_from=${encodeURIComponent(opts.dateFrom)}`;
+    if (opts.dateTo) qs += `&date_to=${encodeURIComponent(opts.dateTo)}`;
+    if (opts.q) qs += `&q=${encodeURIComponent(opts.q)}`;
+    if (opts.departmentId != null) qs += `&department_id=${opts.departmentId}`;
+    if (opts.employeeId != null) qs += `&employee_id=${opts.employeeId}`;
+    if (opts.status) qs += `&status=${encodeURIComponent(opts.status)}`;
     const res = await apiFetch(qs);
     if (!res.ok) return;
     const data = (await res.json()) as RawProgramare[];
@@ -109,6 +119,7 @@ export async function createProgramare(input: ProgramareInput): Promise<Programa
     client_id: input.clientId ?? null,
     location_id: input.locationId,
     department_id: input.departmentId ?? null,
+    employee_id: input.employeeId ?? null,
     start_time: input.startTime,
     end_time: input.endTime,
     status: input.status ?? "Programat",
@@ -138,6 +149,7 @@ export async function updateProgramare(id: string, input: Partial<ProgramareInpu
   if (input.notite !== undefined) body.notite = input.notite;
   if (input.clientId !== undefined) body.client_id = input.clientId;
   if (input.departmentId !== undefined) body.department_id = input.departmentId;
+  if (input.employeeId !== undefined) body.employee_id = input.employeeId;
   if (input.startTime !== undefined) body.start_time = input.startTime;
   if (input.endTime !== undefined) body.end_time = input.endTime;
   if (input.status !== undefined) body.status = input.status;

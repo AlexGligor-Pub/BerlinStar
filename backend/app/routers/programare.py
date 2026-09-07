@@ -1,13 +1,14 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.client import Client
+from app.models.employee import Employee
 from app.models.programare import Programare, ProgramareStatus
 from app.schemas.programare import ProgramareCreate, ProgramarePatch, ProgramareRead
 from app.utils.soft_delete import soft_delete
@@ -16,7 +17,7 @@ router = APIRouter()
 
 
 def _with_relations():
-    return [selectinload(Programare.client), selectinload(Programare.department)]
+    return [selectinload(Programare.client), selectinload(Programare.department), selectinload(Programare.employee)]
 
 
 def _serialize(p: Programare) -> ProgramareRead:
@@ -30,6 +31,8 @@ def _serialize(p: Programare) -> ProgramareRead:
         location_id=p.location_id,
         department_id=p.department_id,
         department_name=p.department.name if p.department else None,
+        employee_id=p.employee_id,
+        employee_name=p.employee.name if p.employee else None,
         start_time=p.start_time,
         end_time=p.end_time,
         status=p.status,
@@ -49,26 +52,16 @@ async def _load(db: AsyncSession, programare_id: int) -> Programare | None:
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
-async def _check_overlap(
-    db: AsyncSession,
-    account_id: int,
-    location_id: int,
-    start_time: datetime,
-    end_time: datetime,
-    exclude_id: int | None = None,
-) -> None:
-    stmt = select(func.count()).where(
-        Programare.account_id == account_id,
-        Programare.location_id == location_id,
-        Programare.is_deleted == False,
-        Programare.start_time < end_time,
-        Programare.end_time > start_time,
+async def _validate_employee(db: AsyncSession, account_id: int, employee_id: int | None) -> None:
+    if employee_id is None:
+        return
+    stmt = select(Employee.id).where(
+        Employee.id == employee_id,
+        Employee.account_id == account_id,
+        Employee.is_deleted == False,
     )
-    if exclude_id is not None:
-        stmt = stmt.where(Programare.id != exclude_id)
-    count = await db.scalar(stmt)
-    if count is not None and count >= 3:
-        raise HTTPException(400, "Maxim 3 programari simultane permise la aceeasi locatie.")
+    if (await db.scalar(stmt)) is None:
+        raise HTTPException(400, "Angajatul nu exista.")
 
 
 @router.get("")
@@ -78,6 +71,7 @@ async def list_programari(
     date_to: datetime | None = None,
     q: str | None = None,
     department_id: int | None = None,
+    employee_id: int | None = None,
     status: str | None = None,
     include_deleted: bool = False,
     limit: int = Query(200, ge=1, le=500),
@@ -100,6 +94,8 @@ async def list_programari(
         stmt = stmt.where(Programare.start_time <= date_to)
     if department_id is not None:
         stmt = stmt.where(Programare.department_id == department_id)
+    if employee_id is not None:
+        stmt = stmt.where(Programare.employee_id == employee_id)
     if status:
         stmt = stmt.where(Programare.status == status)
     if q:
@@ -124,7 +120,7 @@ async def create_programare(
 ) -> ProgramareRead:
     if body.end_time <= body.start_time:
         raise HTTPException(400, "end_time trebuie sa fie dupa start_time.")
-    await _check_overlap(db, account_id, body.location_id, body.start_time, body.end_time)
+    await _validate_employee(db, account_id, body.employee_id)
 
     p = Programare(**body.model_dump(), account_id=account_id)
     db.add(p)
@@ -160,14 +156,12 @@ async def update_programare(
         raise HTTPException(404, "Programarea nu a fost gasita.")
 
     data = body.model_dump(exclude_unset=True)
+    await _validate_employee(db, account_id, data.get("employee_id"))
     for k, v in data.items():
         setattr(p, k, v)
 
     if p.end_time <= p.start_time:
         raise HTTPException(400, "end_time trebuie sa fie dupa start_time.")
-
-    if "start_time" in data or "end_time" in data:
-        await _check_overlap(db, account_id, p.location_id, p.start_time, p.end_time, exclude_id=programare_id)
 
     p.updated_at = datetime.now(timezone.utc)
     await db.commit()

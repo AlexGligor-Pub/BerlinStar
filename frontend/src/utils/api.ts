@@ -73,7 +73,10 @@ export function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Re
       // Am primit un raspuns de la server -> conexiunea functioneaza.
       reportServerReachable();
       if (handleUnauthorized && res.status === 401 && auth.token) {
-        logout();
+        // Hard reload-ul din logout() pierde ruta curenta; o pasam prin `from`
+        // ca re-loginul sa readuca utilizatorul unde era (fara base-ul Vite).
+        const here = window.location.pathname.slice(API_BASE.length) + window.location.search;
+        logout(`/login?from=${encodeURIComponent(here || "/")}`);
         emitUnauthorized();
       }
       return res;

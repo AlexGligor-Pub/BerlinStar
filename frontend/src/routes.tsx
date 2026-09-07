@@ -9,6 +9,8 @@ export interface NavEntry {
   /** Tinta de navigare cand difera de `path` (ex. /efactura -> /efactura/primite). */
   href?: string;
   hidden?: () => boolean;
+  /** Grupul din meniu; `demo` = functionalitati in perioada de proba. */
+  section?: "demo";
 }
 
 export interface AppRoute {
@@ -85,7 +87,7 @@ export const APP_ROUTES: AppRoute[] = [
     path: "/radar",
     component: lazy(() => import("./pages/Radar")),
     requires: "settings",
-    nav: { label: "Radar AI", icon: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>') },
+    nav: { label: "Radar AI", section: "demo", icon: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>') },
   },
   {
     path: "/efactura",

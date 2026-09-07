@@ -116,6 +116,8 @@ export default function NavBar() {
   const visibleNav = createMemo(() =>
     NAV_ITEMS.filter((i) => (!i.requires || can(i.requires)) && !i.hidden?.()),
   );
+  const mainNav = createMemo(() => visibleNav().filter((i) => !i.section));
+  const demoNav = createMemo(() => visibleNav().filter((i) => i.section === "demo"));
 
   const displayLabel = createMemo(() => auth.displayName?.trim() || auth.user || "");
   const usernameLabel = createMemo(() => {
@@ -158,7 +160,7 @@ export default function NavBar() {
           <Show when={open()}>
             <div class="logo-dropdown">
               <div class="logo-nav-grid">
-                <For each={visibleNav()}>
+                <For each={mainNav()}>
                   {(item) => (
                     <button class="logo-nav-tile" onClick={() => handleNavigate(item.href)}>
                       {item.icon()}
@@ -167,6 +169,24 @@ export default function NavBar() {
                   )}
                 </For>
               </div>
+              <Show when={demoNav().length > 0}>
+                <div class="logo-dropdown-divider" />
+                <div class="logo-nav-section-title">
+                  <span>Demo</span>
+                  <span class="logo-nav-section-hint">în perioada de probă</span>
+                </div>
+                <div class="logo-nav-grid logo-nav-grid--demo">
+                  <For each={demoNav()}>
+                    {(item) => (
+                      <button class="logo-nav-tile logo-nav-tile--demo" onClick={() => handleNavigate(item.href)}>
+                        <span class="logo-nav-tile-badge">Demo</span>
+                        {item.icon()}
+                        <span>{item.label}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </Show>
               <div class="logo-dropdown-divider" />
               <button class="logo-dropdown-item" onClick={() => { toggleTheme(); }} aria-label="Schimba tema">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>

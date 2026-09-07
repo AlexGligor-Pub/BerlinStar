@@ -10,6 +10,7 @@ class ProgramareCreate(BaseModel):
     client_id:     int | None = None
     location_id:   int
     department_id: int | None = None
+    employee_id:   int | None = None
     start_time:    datetime
     end_time:      datetime
     status:        ProgramareStatus = ProgramareStatus.PROGRAMAT
@@ -20,6 +21,7 @@ class ProgramarePatch(BaseModel):
     notite:        str | None = None
     client_id:     int | None = None
     department_id: int | None = None
+    employee_id:   int | None = None
     start_time:    datetime | None = None
     end_time:      datetime | None = None
     status:        ProgramareStatus | None = None
@@ -37,6 +39,8 @@ class ProgramareRead(BaseModel):
     location_id:     int
     department_id:   int | None
     department_name: str | None = None
+    employee_id:     int | None = None
+    employee_name:   str | None = None
     start_time:      datetime
     end_time:        datetime
     status:          ProgramareStatus

@@ -5065,6 +5065,11 @@ export interface components {
             /** Image Path */
             image_path: string | null;
             /**
+             * Show In Programari
+             * @default true
+             */
+            show_in_programari: boolean;
+            /**
              * Created At
              * Format: date-time
              */
@@ -5093,6 +5098,8 @@ export interface components {
             description?: string | null;
             /** Image Path */
             image_path?: string | null;
+            /** Show In Programari */
+            show_in_programari?: boolean | null;
         };
         /** DeviceCreate */
         DeviceCreate: {
@@ -7184,6 +7191,8 @@ export interface components {
             location_id: number;
             /** Department Id */
             department_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
             /**
              * Start Time
              * Format: date-time
@@ -7207,6 +7216,8 @@ export interface components {
             client_id?: number | null;
             /** Department Id */
             department_id?: number | null;
+            /** Employee Id */
+            employee_id?: number | null;
             /** Start Time */
             start_time?: string | null;
             /** End Time */
@@ -7233,6 +7244,10 @@ export interface components {
             department_id: number | null;
             /** Department Name */
             department_name?: string | null;
+            /** Employee Id */
+            employee_id?: number | null;
+            /** Employee Name */
+            employee_name?: string | null;
             /**
              * Start Time
              * Format: date-time

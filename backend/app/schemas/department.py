@@ -13,6 +13,7 @@ class DepartmentUpdate(BaseModel):
     name: str | None = Field(None, max_length=100)
     description: str | None = None
     image_path: str | None = Field(None, max_length=500)
+    show_in_programari: bool | None = None
 
 
 class DepartmentRead(BaseModel):
@@ -23,6 +24,7 @@ class DepartmentRead(BaseModel):
     name: str
     description: str | None
     image_path: str | None
+    show_in_programari: bool = True
     created_at: datetime
     updated_at: datetime | None
     is_deleted: bool
