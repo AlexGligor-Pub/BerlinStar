@@ -28,7 +28,7 @@ COPY --from=builder /app/dist /usr/share/nginx/html/berlinstar
 # IMPORTANT: copiem DOAR continutul web (allowlist), nu tot folderul Site/.
 # Site/ contine si fisiere care NU trebuie expuse public (ex. dump-uri DB .sql,
 # documente interne .md, htaccess RockHost). Un `COPY Site/` le-ar publica.
-COPY Site/index.html Site/support.html Site/tutoriale.html /usr/share/nginx/html/
+COPY Site/index.html Site/support.html Site/tutoriale.html Site/site.css Site/site.js /usr/share/nginx/html/
 COPY Site/images/ /usr/share/nginx/html/images/
 RUN rm -f /usr/share/nginx/html/images/README.md
 
