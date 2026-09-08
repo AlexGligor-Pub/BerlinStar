@@ -1,8 +1,10 @@
 # BerlinStar log agent (Telegram)
 
 A Telegram bot (**@BerlinStarProd_bot**) that acts as a log-monitoring agent.
-Every message triggers a real log check with Claude (`claude-opus-4-8`), which
-then replies with a short report formatted for a phone screen:
+Every message triggers a real log check with Claude, which then replies with a
+short report formatted for a phone screen. Routine checks run on
+**Sonnet 4.6** (`effort=medium`); deep `/investigate` dives run on **Opus 4.8**
+(`effort=high`). Both are set in `.env`.
 
 ```
 🩺 Log check · 07:30
@@ -70,6 +72,7 @@ The agent pushes an automatic report on a schedule to every subscriber.
 ## Chat commands
 - `/start` — intro + subscribe to auto-reports
 - `/report` — run a report right now
+- `/investigate <topic>` — deep root-cause dive on Opus 4.8
 - `/subscribe` / `/unsubscribe` — toggle auto-reports
 - `/status` — schedule, next run, subscriber count
 - `/reset` — clear the conversation

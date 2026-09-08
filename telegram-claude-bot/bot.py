@@ -47,7 +47,10 @@ def load_dotenv(path: Path) -> None:
 load_dotenv(Path(__file__).with_name(".env"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-MODEL = os.environ.get("CLAUDE_MODEL", "claude-opus-4-8").strip()
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6").strip()
+EFFORT = os.environ.get("CLAUDE_EFFORT", "medium").strip()
+INVESTIGATE_MODEL = os.environ.get("INVESTIGATE_MODEL", "claude-opus-4-8").strip()
+INVESTIGATE_EFFORT = os.environ.get("INVESTIGATE_EFFORT", "high").strip()
 SYSTEM_PROMPT = os.environ.get(
     "CLAUDE_SYSTEM_PROMPT",
     (
@@ -234,16 +237,19 @@ def trim_history(history: list) -> None:
         history.pop(0)
 
 
-def run_agent(messages: list) -> str:
+def run_agent(messages: list, model: str = None, effort: str = None) -> str:
     """Run the tool-use loop over `messages` (mutated in place); return reply text.
     Raises anthropic.APIError on API failure."""
+    model = model or MODEL
+    effort = effort or EFFORT
     last = None
     for _ in range(MAX_TOOL_ITERS):
         last = claude.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=MAX_TOKENS,
             system=SYSTEM_PROMPT,
             thinking={"type": "adaptive"},
+            output_config={"effort": effort},
             tools=logtools.TOOLS,
             messages=messages,
         )
@@ -295,6 +301,26 @@ def generate_report() -> str:
     except anthropic.APIError as e:
         log.exception("Scheduled report failed")
         return f"⚠️ Scheduled log check failed: {getattr(e, 'message', str(e))}"
+
+
+def investigate(focus: str) -> str:
+    """Deep, on-demand investigation on the stronger model + higher effort."""
+    target = focus.strip() or "overall system health and any anomalies"
+    prompt = (
+        f"{now_note()}\n"
+        f"DEEP INVESTIGATION. Focus: {target}. Use the log tools as much as needed "
+        "to root-cause — pull wider time windows, cross-check related units/containers, "
+        "and correlate signals. Then reply for a phone: start with the standard "
+        "<b>title</b> and <b>Status</b> line, then a short <b>Findings</b> list, a "
+        "one-line <b>Root cause</b> (or best hypothesis), and <b>Next</b> steps. You "
+        "may run a bit longer than a routine check if it's warranted."
+    )
+    try:
+        return run_agent([{"role": "user", "content": prompt}],
+                         model=INVESTIGATE_MODEL, effort=INVESTIGATE_EFFORT)
+    except anthropic.APIError as e:
+        log.exception("Investigation failed")
+        return f"⚠️ Investigation failed: {getattr(e, 'message', str(e))}"
 
 
 # --------------------------------------------------------------------------- #
@@ -387,7 +413,9 @@ def handle_message(msg: dict) -> None:
                          "• <i>quick health check</i>\n"
                          "• <i>errors in deploy-backend-1 last hour</i>\n"
                          "• <i>any failed SSH logins today?</i>\n\n"
-                         "/report — run one now · /status · /unsubscribe · /help")
+                         "/report — run one now\n"
+                         "/investigate &lt;topic&gt; — deep dive (Opus)\n"
+                         "/status · /unsubscribe · /help")
             return
         if cmd == "/help":
             send_message(chat_id,
@@ -395,6 +423,7 @@ def handle_message(msg: dict) -> None:
                          "and reply with a short report.\n"
                          "Sources: systemd journal, Docker containers, /var/log, app log.\n\n"
                          "/report — report now\n"
+                         "/investigate &lt;topic&gt; — deep root-cause dive (Opus)\n"
                          "/subscribe · /unsubscribe — auto-reports\n"
                          "/status — schedule & subscription\n"
                          "/reset — clear context")
@@ -402,6 +431,13 @@ def handle_message(msg: dict) -> None:
         if cmd == "/report":
             send_typing(chat_id)
             send_message(chat_id, telegram_html(generate_report()))
+            return
+        if cmd == "/investigate":
+            parts = text.split(maxsplit=1)
+            focus = parts[1] if len(parts) > 1 else ""
+            send_message(chat_id, f"🔎 Investigating on {INVESTIGATE_MODEL}… (deeper, slower)")
+            send_typing(chat_id)
+            send_message(chat_id, telegram_html(investigate(focus)))
             return
         if cmd == "/subscribe":
             subscribers.add(chat_id)
@@ -450,7 +486,8 @@ def main() -> None:
     me = tg("getMe")
     if not me:
         sys.exit("Could not reach Telegram — check the bot token.")
-    log.info("Bot @%s is up. Model=%s. Waiting for messages…", me.get("username"), MODEL)
+    log.info("Bot @%s is up. Model=%s effort=%s (investigate=%s/%s). Waiting for messages…",
+             me.get("username"), MODEL, EFFORT, INVESTIGATE_MODEL, INVESTIGATE_EFFORT)
 
     threading.Thread(target=scheduler_loop, name="scheduler", daemon=True).start()
 
