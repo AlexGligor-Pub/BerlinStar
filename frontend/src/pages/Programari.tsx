@@ -76,6 +76,12 @@ function isSameDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate();
 }
 
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
 function dateToLocalMin(iso: string): number {
   const d = new Date(iso);
   return d.getHours() * 60 + d.getMinutes();
@@ -83,6 +89,11 @@ function dateToLocalMin(iso: string): number {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatRange(startIso: string, endIso: string): string {
+  const day = new Date(startIso).toLocaleDateString("ro-RO", { weekday: "short", day: "numeric", month: "short" });
+  return `${day}, ${formatTime(startIso)}–${formatTime(endIso)}`;
 }
 
 function dateLocalIso(date: Date, hourMin: number): string {
@@ -249,6 +260,17 @@ export default function Programari() {
   const [calendarOpen,  setCalendarOpen]  = createSignal(false);
   const [miniMonth,     setMiniMonth]     = createSignal({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [nowMin,        setNowMin]        = createSignal(new Date().getHours() * 60 + new Date().getMinutes());
+  const [todayStart,    setTodayStart]    = createSignal(startOfDay(new Date()).getTime());
+
+  // Mutare/redimensionare in asteptarea confirmarii utilizatorului
+  const [pendingMove, setPendingMove] = createSignal<
+    { appt: Programare; type: "move" | "resize"; startIso: string; endIso: string } | null
+  >(null);
+  const [moveSaving, setMoveSaving] = createSignal(false);
+
+  // Zilele trecute sunt read-only; ziua curenta ramane editabila.
+  const isPastDay = (d: Date) => startOfDay(d).getTime() < todayStart();
+  const isLocked  = (a: Programare) => isPastDay(new Date(a.startTime));
 
   // Drag state — plain object for perf, dragTick triggers re-renders
   let drag: {
@@ -381,7 +403,11 @@ export default function Programari() {
       const headerH = 48;
       calWrapRef.scrollTop = Math.max(0, minToTop(nowMin()) - 80) + headerH;
     });
-    const timer = setInterval(() => setNowMin(new Date().getHours() * 60 + new Date().getMinutes()), 30_000);
+    const timer = setInterval(() => {
+      const now = new Date();
+      setNowMin(now.getHours() * 60 + now.getMinutes());
+      setTodayStart(startOfDay(now).getTime()); // trecerea peste miezul noptii blocheaza ziua incheiata
+    }, 30_000);
     onCleanup(() => clearInterval(timer));
   });
 
@@ -436,16 +462,16 @@ export default function Programari() {
                      ?? STATUS_COLORS[appt.status]
                      ?? "#3b82f6";
 
-    let height    = Math.max(28, (endMin - startMin) / 60 * PX_PER_HOUR);
+    let height    = Math.max(34, (endMin - startMin) / 60 * PX_PER_HOUR);
     let transform = "";
     let zIndex    = 1;
-    let opacity   = 1;
+    let opacity   = isLocked(appt) ? 0.85 : 1;
 
     if (drag?.apptId === appt.id) {
       zIndex  = 10;
       opacity = 0.88;
       if (drag.type === "resize") {
-        height = Math.max(28, (drag.curEndMin - startMin) / 60 * PX_PER_HOUR);
+        height = Math.max(34, (drag.curEndMin - startMin) / 60 * PX_PER_HOUR);
       } else {
         const dy       = (drag.curStartMin - startMin) / 60 * PX_PER_HOUR;
         const gridW    = calGridRef?.offsetWidth ?? 822;
@@ -460,14 +486,27 @@ export default function Programari() {
       `top:${top}px`, `height:${height}px`,
       `left:calc(${left}% + 2px)`, `width:calc(${colW}% - 4px)`,
       `background:${color}`, "border-radius:4px",
-      "cursor:grab", "user-select:none", "touch-action:none",
+      isLocked(appt) ? "cursor:default" : "cursor:grab", "user-select:none", "touch-action:none",
       "font-size:11px", "color:#fff", "box-shadow:0 1px 3px rgba(0,0,0,.2)",
       `z-index:${zIndex}`, `opacity:${opacity}`,
       transform ? `transform:${transform}` : "",
     ].filter(Boolean).join(";");
   }
 
+  // Clasa e separata de stil ca sa citeasca si ea dragTick() (obiectul `drag` nu e reactiv).
+  function apptClass(appt: ApptWithCol): string {
+    void dragTick();
+    const durMin = dateToLocalMin(appt.endTime) - dateToLocalMin(appt.startTime);
+    return [
+      "prgm-appt",
+      durMin < 45 ? "prgm-appt--short" : "",
+      drag?.apptId === appt.id ? "prgm-appt-dragging" : "",
+      isLocked(appt) ? "prgm-appt-locked" : "",
+    ].filter(Boolean).join(" ");
+  }
+
   function onApptPointerDown(e: PointerEvent, appt: Programare, type: "move" | "resize") {
+    if (isLocked(appt)) return;
     e.stopPropagation(); e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     const days        = weekDays();
@@ -498,7 +537,9 @@ export default function Programari() {
       const newStart = Math.max(CAL_START, Math.min(drag.origStartMin + deltaMins, CAL_END - dur));
       drag.curStartMin = newStart;
       drag.curEndMin   = newStart + dur;
-      drag.curDayIdx   = Math.max(0, Math.min(6, drag.origDayIdx + dayDelta));
+      // Nu se poate muta intr-o zi trecuta.
+      const minIdx     = Math.max(0, weekDays().findIndex((d) => !isPastDay(d)));
+      drag.curDayIdx   = Math.max(minIdx, Math.min(6, drag.origDayIdx + dayDelta));
     } else {
       const rawEnd     = drag.origEndMin + deltaMins;
       drag.curEndMin   = Math.round(Math.max(drag.origStartMin + 30, Math.min(rawEnd, CAL_END)) / 30) * 30;
@@ -506,7 +547,7 @@ export default function Programari() {
     setDragTick((v) => v + 1);
   }
 
-  async function onCalPointerUp(_e: PointerEvent) {
+  function onCalPointerUp(_e: PointerEvent) {
     if (!drag) return;
     const d = { ...drag };
     drag = null;
@@ -520,18 +561,40 @@ export default function Programari() {
     const targetDay  = days[d.curDayIdx];
     if (!targetDay) return;
 
-    const newStartIso = dateLocalIso(targetDay, d.curStartMin);
-    const newEndIso   = dateLocalIso(targetDay, d.curEndMin);
+    const appt = programari().find((p) => p.id === d.apptId);
+    if (!appt || isLocked(appt) || isPastDay(targetDay)) return;
+
+    // Nu salvam direct: utilizatorul confirma mai intai schimbarea.
+    setPendingMove({
+      appt,
+      type: d.type,
+      startIso: dateLocalIso(targetDay, d.curStartMin),
+      endIso:   dateLocalIso(targetDay, d.curEndMin),
+    });
+  }
+
+  async function confirmPendingMove() {
+    const pm = pendingMove();
+    if (!pm) return;
+    setMoveSaving(true);
     try {
-      await updateProgramare(d.apptId, { startTime: newStartIso, endTime: newEndIso });
+      await updateProgramare(pm.appt.id, { startTime: pm.startIso, endTime: pm.endIso });
+      setPendingMove(null);
     } catch (err: any) {
       setActionError(err?.message ?? "Eroare la salvare.");
+      setPendingMove(null);
+    } finally {
+      setMoveSaving(false);
     }
   }
 
   function onSlotClick(day: Date, startMin: number) {
     if (drag) return;
     if (!locationId()) return;
+    if (isPastDay(day)) {
+      notify("Zi trecută — nu se mai pot adăuga sau modifica programări.", "error");
+      return;
+    }
     setFormAppt(null);
     initForm(day, startMin, startMin + 60);
     setShowFormModal(true);
@@ -540,12 +603,17 @@ export default function Programari() {
 
   function openCreateModal() {
     setFormAppt(null);
-    initForm(weekDays()[0], 9 * 60, 10 * 60);
+    // Prima zi editabila din saptamana afisata (saptamana integral trecuta → azi).
+    initForm(weekDays().find((d) => !isPastDay(d)) ?? new Date(), 9 * 60, 10 * 60);
     setShowFormModal(true);
     setSelectedAppt(null);
   }
 
   function openEditModal(appt: Programare) {
+    if (isLocked(appt)) {
+      notify("Programările din zilele trecute nu mai pot fi editate.", "error");
+      return;
+    }
     setFormAppt(appt);
     const sd = new Date(appt.startTime);
     initForm(sd, dateToLocalMin(appt.startTime), dateToLocalMin(appt.endTime));
@@ -566,6 +634,10 @@ export default function Programari() {
   }
 
   async function handleStartWork(appt: Programare): Promise<void> {
+    if (isLocked(appt)) {
+      notify("Programările din zilele trecute nu mai pot fi editate.", "error");
+      return;
+    }
     try {
       await updateProgramare(appt.id, { status: "In lucru" });
     } catch (e: unknown) {
@@ -594,6 +666,7 @@ export default function Programari() {
   }
 
   async function quickAssign(appt: Programare, employeeId: number | null) {
+    if (isLocked(appt)) return;
     setDetailAssigning(true);
     try {
       setSelectedAppt(await updateProgramare(appt.id, { employeeId }));
@@ -706,6 +779,9 @@ export default function Programari() {
     const locId = locationId();
     if (!locId) { setFormError("Dispozitiv fara locatie configurata."); return; }
     if (formEndMin() <= formStartMin()) { setFormError("Ora de sfarsit trebuie sa fie dupa ora de inceput."); return; }
+    if (isPastDay(formDay())) { setFormError("Data este în trecut — se poate lucra doar de la ziua curentă înainte."); return; }
+    const editing = formAppt();
+    if (editing && isLocked(editing)) { setFormError("Programare din trecut — nu mai poate fi editată."); return; }
     setFormSaving(true); setFormError(null);
     try {
       const input: ProgramareInput = {
@@ -921,7 +997,7 @@ export default function Programari() {
                   <span class="prgm-col-dow">{DAY_NAMES[i()]}</span>
                   <span class="prgm-col-date">{day.getDate()}</span>
                 </div>
-                <div class="prgm-day-body" style={`height:${TOTAL_H}px`}>
+                <div class={`prgm-day-body${isPastDay(day) ? " prgm-day-past" : ""}`} style={`height:${TOTAL_H}px`}>
                   {/* Off-peak zones (7–8 și 17–19) */}
                   <div class="prgm-off-peak" style={`top:0;height:${OFF_TOP_H}px`} />
                   <div class="prgm-off-peak" style={`top:${OFF_BOT_TOP}px;height:${OFF_BOT_H}px`} />
@@ -942,38 +1018,54 @@ export default function Programari() {
                   <For each={getDayAppts(day)}>{(appt) =>
                     <div
                       style={apptStyle(appt)}
-                      class={drag?.apptId === appt.id ? "prgm-appt-dragging" : ""}
+                      class={apptClass(appt)}
                       onPointerDown={(e) => {
                         if ((e.target as HTMLElement).classList.contains("prgm-resize-handle")) return;
                         onApptPointerDown(e, appt, "move");
                       }}
                       onClick={(e) => e.stopPropagation()}
                       onDblClick={(e) => { e.stopPropagation(); if (drag || Date.now() - lastMoveEndTs < 600) return; setSelectedAppt(appt); }}
-                      aria-label={`${appt.titlu}, ${formatTime(appt.startTime)}–${formatTime(appt.endTime)}, ${appt.employeeName ?? "neasignat"}`}
+                      aria-label={`${appt.titlu}, ${formatTime(appt.startTime)}–${formatTime(appt.endTime)}, ${appt.employeeName ?? "neasignat"}, ${appt.status}${isLocked(appt) ? ", needitabilă" : ""}`}
                     >
-                      {(() => {
-                        const long = dateToLocalMin(appt.endTime) - dateToLocalMin(appt.startTime) >= 45;
-                        return (
-                          <Show when={appt.employeeId != null || long}>
-                            <span
-                              class={`prgm-emp-dot${long ? "" : " prgm-emp-dot--xs"}${appt.employeeId == null ? " prgm-emp-dot--none" : ""}`}
-                              title={appt.employeeName ?? "Neasignat"}
-                              aria-hidden="true"
-                            >{appt.employeeName ? initials(appt.employeeName) : "?"}</span>
-                          </Show>
-                        );
-                      })()}
-                      <div style="padding:2px 4px;overflow:hidden;height:calc(100% - 8px)">
-                        <div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding-right:18px">{appt.titlu}</div>
-                        <div style="opacity:0.9;font-size:10px">{formatTime(appt.startTime)}–{formatTime(appt.endTime)}</div>
+                      <div class="prgm-appt-main">
+                        <div class="prgm-appt-title">{appt.titlu}</div>
+                        <div class="prgm-appt-time">{formatTime(appt.startTime)}–{formatTime(appt.endTime)}</div>
                         <Show when={appt.clientNume}>
-                          <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px">{appt.clientNume}</div>
+                          <div class="prgm-appt-client">{appt.clientNume}</div>
                         </Show>
                       </div>
-                      <div
-                        class="prgm-resize-handle"
-                        onPointerDown={(e) => { e.stopPropagation(); onApptPointerDown(e, appt, "resize"); }}
-                      />
+
+                      {/* Angajat: poza + nume complet, in partea de jos a programarii */}
+                      <div class="prgm-appt-emp" title={appt.employeeName ?? "Neasignat"}>
+                        <EmpAvatar
+                          emp={appt.employeeId != null
+                            ? empById().get(appt.employeeId!) ?? { name: appt.employeeName ?? "?" }
+                            : null}
+                          class="prgm-emp-av--appt"
+                        />
+                        <span class="prgm-appt-emp-name">{appt.employeeName ?? "Neasignat"}</span>
+                      </div>
+
+                      {/* Marcaje de status peste culoarea diviziei */}
+                      <Show when={appt.status === "In lucru"}>
+                        <div class="prgm-appt-wip" aria-hidden="true" />
+                      </Show>
+                      <Show when={appt.status === "Anulat"}>
+                        <div class="prgm-appt-cx" aria-hidden="true" />
+                      </Show>
+                      <Show when={appt.status === "Executat"}>
+                        <span class="prgm-appt-done" aria-hidden="true">✓</span>
+                      </Show>
+                      <Show when={isLocked(appt)}>
+                        <span class="prgm-appt-lock" title="Programare din trecut — needitabilă" aria-hidden="true">🔒</span>
+                      </Show>
+
+                      <Show when={!isLocked(appt)}>
+                        <div
+                          class="prgm-resize-handle"
+                          onPointerDown={(e) => { e.stopPropagation(); onApptPointerDown(e, appt, "resize"); }}
+                        />
+                      </Show>
                     </div>
                   }</For>
                 </div>
@@ -1016,13 +1108,18 @@ export default function Programari() {
                   <button class="btn btn-ghost btn-sm" style="color:var(--danger,#ef4444)" onClick={() => setDeleteConfirm(appt().id)}>Șterge</button>
                 </Show>
                 <div style="flex:1" />
-                <button class="btn btn-ghost btn-sm" onClick={() => openEditModal(appt())}>Editează</button>
-                <Show when={appt().status === "Programat" || appt().status === "In lucru"}>
-                  <button class="btn btn-primary btn-sm" onClick={() => handleStartWork(appt())}>Începe lucru</button>
+                <Show when={!isLocked(appt())}>
+                  <button class="btn btn-ghost btn-sm" onClick={() => openEditModal(appt())}>Editează</button>
+                  <Show when={appt().status === "Programat" || appt().status === "In lucru"}>
+                    <button class="btn btn-primary btn-sm" onClick={() => handleStartWork(appt())}>Începe lucru</button>
+                  </Show>
                 </Show>
               </Show>
             </>}
           >
+            <Show when={isLocked(appt())}>
+              <div class="prgm-locked-note">🔒 Programare din trecut — nu mai poate fi editată.</div>
+            </Show>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
               <span style={`display:inline-block;padding:3px 10px;border-radius:12px;background:${STATUS_COLORS[appt().status]};color:#fff;font-size:12px;font-weight:600`}>{appt().status}</span>
               <Show when={appt().departmentName}>
@@ -1036,7 +1133,7 @@ export default function Programari() {
                 <select
                   class="input input-sm"
                   value={appt().employeeId ?? ""}
-                  disabled={detailAssigning()}
+                  disabled={detailAssigning() || isLocked(appt())}
                   aria-label="Asignează angajat"
                   onChange={(e) => void quickAssign(appt(), e.currentTarget.value ? Number(e.currentTarget.value) : null)}
                 >
@@ -1068,6 +1165,36 @@ export default function Programari() {
                 <span style="white-space:pre-wrap">{appt().notite}</span>
               </div>
             </Show>
+          </Modal>
+        )}
+      </Show>
+
+      {/* ── Confirmare mutare / redimensionare prin drag ─────────────── */}
+      <Show when={pendingMove()}>
+        {(pm) => (
+          <Modal
+            open
+            title={pm().type === "resize" ? "Confirmi noua durată?" : "Confirmi mutarea programării?"}
+            onClose={() => { if (!moveSaving()) setPendingMove(null); }}
+            style="max-width:420px;width:100%"
+            bodyStyle="padding:16px 20px;display:grid;gap:8px;font-size:14px"
+            closeDisabled={moveSaving()}
+            footer={<>
+              <button class="btn btn-ghost btn-sm" disabled={moveSaving()} onClick={() => setPendingMove(null)}>Anulează</button>
+              <button class="btn btn-primary btn-sm" disabled={moveSaving()} onClick={() => void confirmPendingMove()}>
+                {moveSaving() ? "Se salvează..." : "Confirmă"}
+              </button>
+            </>}
+          >
+            <div style="font-weight:600">{pm().appt.titlu}</div>
+            <div class="prgm-move-row">
+              <span class="prgm-move-label">Din</span>
+              <span class="prgm-move-old">{formatRange(pm().appt.startTime, pm().appt.endTime)}</span>
+            </div>
+            <div class="prgm-move-row">
+              <span class="prgm-move-label">În</span>
+              <span class="prgm-move-new">{formatRange(pm().startIso, pm().endIso)}</span>
+            </div>
           </Modal>
         )}
       </Show>

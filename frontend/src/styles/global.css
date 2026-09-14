@@ -4433,16 +4433,11 @@ img.pos-theme-preview {
 .prgm-emp-av--md { width: 28px; height: 28px; font-size: 11px; }
 .prgm-emp-av--dashed { border-style: dashed; }
 
-.prgm-emp-dot {
-  position: absolute; top: 2px; right: 3px; z-index: 1;
-  width: 16px; height: 16px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 8px; font-weight: 700; line-height: 1; letter-spacing: -0.02em;
-  background: rgba(255,255,255,.22); color: #fff; border: 1px solid rgba(255,255,255,.5);
-  pointer-events: none; user-select: none;
+/* Avatarul angajatului asezat peste culoarea diviziei, in cardul programarii */
+.prgm-emp-av--appt {
+  width: 15px; height: 15px; font-size: 7px;
+  background: rgba(255,255,255,.28); color: #fff; border-color: rgba(255,255,255,.6);
 }
-.prgm-emp-dot--xs { width: 14px; height: 14px; font-size: 7px; }
-.prgm-emp-dot--none { border-style: dashed; opacity: .75; }
 
 .prgm-pop-wrap { position: relative; flex: 0 0 auto; }
 .prgm-emp-trigger { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; }
@@ -4493,6 +4488,96 @@ img.pos-theme-preview {
 .prgm-detail-emp-role { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
 .prgm-form-emp { display: flex; align-items: center; gap: 8px; }
 .prgm-form-emp select { flex: 1; }
+
+/* ── Programari: cardul unei programari ──
+   Culoarea de fundal ramane a diviziei; statusul se citeste din marcajele de deasupra. */
+.prgm-appt { display: flex; flex-direction: column; overflow: hidden; }
+
+.prgm-appt-main { flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 2px 4px 0; }
+.prgm-appt-title {
+  font-weight: 600; font-size: 11px; line-height: 1.25; padding-right: 17px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.prgm-appt-time { font-size: 10px; line-height: 1.25; opacity: .9; }
+.prgm-appt-client {
+  font-size: 10px; line-height: 1.25; opacity: .85;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Angajat: poza + nume complet, fixate in partea de jos (deasupra manerului de redimensionare) */
+.prgm-appt-emp {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 4px;
+  margin: 1px 3px 9px; padding: 1px 5px 1px 1px;
+  border-radius: 10px; background: rgba(0,0,0,.24);
+  pointer-events: none; min-width: 0;
+}
+.prgm-appt-emp-name {
+  font-size: 10px; font-weight: 600; line-height: 1.2; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Programari scurte (sub 45 min): ramane titlul + randul cu angajatul */
+.prgm-appt--short .prgm-appt-time,
+.prgm-appt--short .prgm-appt-client { display: none; }
+.prgm-appt--short .prgm-appt-title { font-size: 10px; line-height: 1.2; }
+.prgm-appt--short .prgm-appt-emp { margin: 0 3px 8px; padding: 0 4px 0 0; }
+.prgm-appt--short .prgm-appt-emp-name { font-size: 9px; }
+.prgm-appt--short .prgm-emp-av--appt { width: 13px; height: 13px; font-size: 6px; }
+
+/* Status „In lucru" — dungi portocalii peste programare */
+.prgm-appt-wip {
+  position: absolute; inset: 0; border-radius: 4px; pointer-events: none;
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(249,115,22,.62) 0 5px,
+    rgba(249,115,22,0) 5px 15px
+  );
+}
+
+/* Status „Anulat" — doua dungi rosii din colt in colt */
+.prgm-appt-cx {
+  position: absolute; inset: 0; border-radius: 4px; pointer-events: none;
+  background:
+    linear-gradient(to bottom right,
+      rgba(239,68,68,0) calc(50% - 1.5px), #ef4444 calc(50% - 1.5px),
+      #ef4444 calc(50% + 1.5px), rgba(239,68,68,0) calc(50% + 1.5px)),
+    linear-gradient(to bottom left,
+      rgba(239,68,68,0) calc(50% - 1.5px), #ef4444 calc(50% - 1.5px),
+      #ef4444 calc(50% + 1.5px), rgba(239,68,68,0) calc(50% + 1.5px));
+}
+
+/* Status „Executat" — bifa */
+.prgm-appt-done {
+  position: absolute; top: 2px; right: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #16a34a; color: #fff; border: 1px solid rgba(255,255,255,.9);
+  font-size: 10px; font-weight: 800; line-height: 1;
+  pointer-events: none; user-select: none;
+}
+
+/* Programare din trecut — read-only */
+.prgm-appt-lock {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 9px; line-height: 1; pointer-events: none; user-select: none;
+}
+.prgm-appt-locked .prgm-appt-title { padding-left: 12px; }
+
+.prgm-day-past { background: rgba(128,128,128,.06); }
+.prgm-day-past .prgm-slot-line { cursor: default; }
+.prgm-day-past .prgm-slot-line:hover { background: transparent; }
+
+.prgm-locked-note {
+  padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--surface2); border: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted);
+}
+
+/* Confirmare mutare programare */
+.prgm-move-row { display: flex; align-items: center; gap: 8px; }
+.prgm-move-label { flex: 0 0 auto; width: 26px; font-size: 12px; color: var(--text-muted); }
+.prgm-move-old { color: var(--text-muted); text-decoration: line-through; }
+.prgm-move-new { font-weight: 600; color: var(--accent, #3b82f6); }
 
 @media (prefers-reduced-motion: reduce) { .prgm-pop { animation: none; } }
 
