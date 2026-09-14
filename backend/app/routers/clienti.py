@@ -66,6 +66,38 @@ async def list_clienti(
     return await paginate(db, stmt, limit)
 
 
+async def _sync_client_plate_to_garage(db: AsyncSession, account_id: int, client: Client) -> None:
+    """Placuta scrisa pe fisa clientului (`clienti.numar_masina`) trebuie sa existe
+    si ca rand in `client_vehicole`.
+
+    POS-ul si Receptia caută masina DOAR in garaj (`/vehicole-by-plate`), asa ca un
+    client creat din formular cu numar_masina completat nu era gasit la tastarea
+    plăcuței: exista in Clienti, dar nu in garaj. Cream rândul lipsa la creare si la
+    editare, deci decalajul nu se mai formeaza.
+
+    Doar adaugam, niciodata nu redenumim si nu stergem: daca operatorul schimba
+    plăcuța de pe fisa, nu putem deosebi o corectie de tastare de „clientul are alta
+    masina", iar un rand in plus il poate sterge el din garaj — km, VIN si
+    observatiile suprascrise pe rândul vechi nu s-ar mai putea recupera.
+    """
+    plate = (client.numar_masina or "").strip()
+    if not plate:
+        return
+    existing = await db.scalar(
+        select(ClientVehicol.id)
+        .where(
+            ClientVehicol.account_id == account_id,
+            ClientVehicol.client_id == client.id,
+            ClientVehicol.is_deleted == False,
+            normalized_plate_column(ClientVehicol.numar_masina) == normalize_plate(plate),
+        )
+        .limit(1)
+    )
+    if existing is not None:
+        return
+    db.add(ClientVehicol(account_id=account_id, client_id=client.id, numar_masina=plate))
+
+
 @router.post("", response_model=ClientRead, status_code=201)
 async def create_client(
     body: ClientCreate,
@@ -74,6 +106,8 @@ async def create_client(
 ):
     client = Client(**body.model_dump(), account_id=account_id)
     db.add(client)
+    await db.flush()  # avem nevoie de client.id pentru rândul din garaj
+    await _sync_client_plate_to_garage(db, account_id, client)
     await db.commit()
     await db.refresh(client)
     return client
@@ -88,6 +122,14 @@ async def search_vehicole_by_plate(
     # Acelasi normalizator ca la legarea masinii de client (app/utils/plate.py).
     # Cand cele doua difereau, cautarea considera „TM-01-ABC" si „TM01ABC" masini
     # diferite, iar salvarea le unifica — sau invers, dupa caz.
+    plate = normalize_plate(q_masina)
+    if not plate:
+        return []
+
+    def _short(c: Client) -> ClientShort:
+        return ClientShort(id=c.id, nume=c.nume, tip=c.tip, cui=c.cui, numar_masina=c.numar_masina)
+
+    # 1) Masinile din garajul clientului (`client_vehicole`).
     stmt = (
         select(ClientVehicol, Client)
         .join(Client, Client.id == ClientVehicol.client_id)
@@ -95,24 +137,55 @@ async def search_vehicole_by_plate(
             ClientVehicol.account_id == account_id,
             ClientVehicol.is_deleted == False,
             Client.is_deleted == False,
-            normalized_plate_column(ClientVehicol.numar_masina) == normalize_plate(q_masina),
+            normalized_plate_column(ClientVehicol.numar_masina) == plate,
         )
         .order_by(ClientVehicol.id)
     )
     rows = (await db.execute(stmt)).all()
-    return [
-        ClientVehicolWithClientRead(
-            vehicol=ClientVehicolRead.model_validate(v),
-            client=ClientShort(
-                id=c.id,
-                nume=c.nume,
-                tip=c.tip,
-                cui=c.cui,
-                numar_masina=c.numar_masina,
-            ),
-        )
+    out = [
+        ClientVehicolWithClientRead(vehicol=ClientVehicolRead.model_validate(v), client=_short(c))
         for v, c in rows
     ]
+
+    # 2) Clientii care au placuta doar pe fisa lor, in coloana veche
+    #    `clienti.numar_masina`, fara rand in garaj. Asa arata orice client creat
+    #    din formular inainte de `_sync_client_plate_to_garage` — pe Cont Demo,
+    #    661 de clienti cu placuta si 14 randuri in garaj, deci POS-ul nu gasea
+    #    aproape niciunul. Fara pasul asta, datele vechi rămân negasibile.
+    matched = {c.id for _, c in rows}
+    legacy_stmt = select(Client).where(
+        Client.account_id == account_id,
+        Client.is_deleted == False,
+        normalized_plate_column(Client.numar_masina) == plate,
+    ).order_by(Client.id)
+    for c in (await db.execute(legacy_stmt)).scalars().all():
+        if c.id in matched:
+            continue
+        out.append(
+            ClientVehicolWithClientRead(
+                # Rand sintetic: nu exista in `client_vehicole`, deci `id=0`.
+                # Nu-l folosi la /clienti/{id}/vehicole/{v_id} — nu are ce sa
+                # actualizeze. Consumatorul (POS) citeste doar placuta si clientul.
+                vehicol=ClientVehicolRead(
+                    id=0,
+                    client_id=c.id,
+                    account_id=account_id,
+                    numar_masina=c.numar_masina or "",
+                    marca=None,
+                    model=None,
+                    numar_kilometrii=None,
+                    an_fabricatie=None,
+                    vin=None,
+                    observatii=None,
+                    created_at=c.created_at,
+                    updated_at=None,
+                    is_deleted=False,
+                ),
+                client=_short(c),
+            )
+        )
+
+    return out
 
 
 @router.get("/{client_id}", response_model=ClientRead)
@@ -140,6 +213,8 @@ async def update_client(
     for k, v in body.model_dump().items():
         setattr(client, k, v)
     client.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    await _sync_client_plate_to_garage(db, account_id, client)
     await db.commit()
     await db.refresh(client)
     return client
