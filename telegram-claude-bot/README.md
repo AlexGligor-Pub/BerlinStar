@@ -23,7 +23,11 @@ Bold title + status emoji + short bullets, no tables or wide code blocks
 ## How it works
 - Long-polls Telegram (`getUpdates`) — no public URL / webhook needed.
 - Keeps a short per-chat history so follow-ups have context.
-- Answers with the Anthropic SDK using adaptive thinking.
+- Answers through the Claude Agent SDK (the `claude` CLI bundled in the SDK), so
+  it runs on the **Claude subscription** login (`~/.claude/.credentials.json`)
+  by default. Set `USE_API_KEY=1` to bill `ANTHROPIC_API_KEY` instead.
+- Built-in Claude Code tools (Bash/Read/Edit…) are disabled — the model only
+  gets the log tools below, served as an in-process MCP server.
 - Can inspect the server's logs via read-only tools (see below).
 
 ## Log tools (read-only)
@@ -44,11 +48,26 @@ file reads are restricted to allow-listed dirs (`/var/log`, `backend/logs`,
 ## Setup
 Secrets live in `.env` (git-ignored):
 - `TELEGRAM_BOT_TOKEN` — from @BotFather
-- `ANTHROPIC_API_KEY` — inherited from the shell if not set in `.env`
+- `USE_API_KEY` — `0` (default) = Claude subscription via the CLI login
+  (run `claude` → `/login` once as the service user); `1` = use `ANTHROPIC_API_KEY`.
+  With `0`, any `ANTHROPIC_API_KEY` in the environment is ignored.
+- `ANTHROPIC_API_KEY` — only with `USE_API_KEY=1`
 - `CLAUDE_MODEL`, `CLAUDE_SYSTEM_PROMPT` — optional overrides
 - `ALLOWED_USER_IDS` — optional comma-separated allow-list (blank = everyone)
 
-Dependencies are installed in `.venv/`.
+Dependencies are installed in `.venv/` from `requirements.txt`
+(`mcp<2` is pinned — the SDK's in-process MCP server breaks on mcp 2.x).
+
+Each Telegram bot token can only be polled from one server: QA must use a
+different bot than prod (@BerlinStarProd_bot), or both get `409 Conflict`.
+
+### QA server (user berlinqa, no root)
+Runs as a **systemd user service**:
+`~/.config/systemd/user/berlinstar-logbot.service`
+```bash
+systemctl --user enable --now berlinstar-logbot
+journalctl --user -u berlinstar-logbot -f
+```
 
 ## Run (systemd service)
 Installed as `berlinstar-logbot.service` (auto-starts on boot, restarts on crash):
@@ -76,6 +95,14 @@ The agent pushes an automatic report on a schedule to every subscriber.
 - `/subscribe` / `/unsubscribe` — toggle auto-reports
 - `/status` — schedule, next run, subscriber count
 - `/reset` — clear the conversation
+- `/login` — get a fresh Claude subscription login link
+
+If a run fails because the subscription login is missing/expired, the bot
+starts `claude auth login` and sends the authorize URL to the chat (scheduled
+reports send it to all subscribers). Open it, authorize, and send the bot the
+code shown at the end. The login is shared with `telegram-code-bot` via
+`~/.claude`. Code: `../telegram-common/claude_login.py`. Since anyone allowed
+to use the bot can complete the login, set `ALLOWED_USER_IDS`.
 - `/help` — usage
 
 ## Notes

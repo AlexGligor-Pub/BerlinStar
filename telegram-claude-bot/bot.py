@@ -2,12 +2,17 @@
 """Telegram <-> Claude bridge.
 
 Long-polls Telegram for messages and answers each one with Claude, keeping a
-short per-chat conversation history so follow-up questions have context.
+per-chat Claude session so follow-up questions have context.
+
+Claude runs through the Claude Agent SDK (the `claude` CLI), so it uses the
+CLI's Claude subscription login by default; set USE_API_KEY=1 to bill an
+ANTHROPIC_API_KEY instead.
 
 Run:  ./.venv/bin/python bot.py
 """
 from __future__ import annotations
 
+import asyncio
 import html
 import json
 import logging
@@ -21,10 +26,22 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import anthropic
+import claude_agent_sdk
 import requests
+from claude_agent_sdk import (
+    AssistantMessage,
+    ClaudeAgentOptions,
+    ResultMessage,
+    TextBlock,
+    create_sdk_mcp_server,
+    query,
+    tool,
+)
 
 import logtools
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "telegram-common"))
+import claude_login  # noqa: E402
 
 # --------------------------------------------------------------------------- #
 # Config
@@ -86,8 +103,6 @@ ALLOWED_USER_IDS = {
     uid.strip() for uid in os.environ.get("ALLOWED_USER_IDS", "").split(",") if uid.strip()
 }
 
-MAX_TURNS = 20          # user+assistant messages kept per chat (history trim)
-MAX_TOKENS = 4096       # Claude max output tokens per reply
 TELEGRAM_MSG_LIMIT = 4096  # Telegram hard limit per message
 
 # --- Scheduled reports ---
@@ -114,8 +129,17 @@ SCHEDULED_PROMPT = (
 
 if not TELEGRAM_BOT_TOKEN:
     sys.exit("TELEGRAM_BOT_TOKEN is not set (put it in .env or the environment).")
-if not os.environ.get("ANTHROPIC_API_KEY"):
-    sys.exit("ANTHROPIC_API_KEY is not set (export it or add it to .env).")
+# Subscription (CLI OAuth login) by default; the API key only when explicitly opted in.
+USE_API_KEY = os.environ.get("USE_API_KEY", "0").strip().lower() in {"1", "true", "yes"}
+if USE_API_KEY:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("USE_API_KEY=1 but ANTHROPIC_API_KEY is not set.")
+else:
+    # An API key in the env overrides the subscription login in the CLI — drop it.
+    # Without a login the bot still starts: the first failed run sends the
+    # login link over Telegram (see telegram-common/claude_login.py).
+    for _var in claude_login.API_KEY_VARS:
+        os.environ.pop(_var, None)
 
 API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 
@@ -125,8 +149,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("tg-claude")
 
-claude = anthropic.Anthropic()
-histories: dict[int, list[dict]] = {}  # chat_id -> list of {role, content}
+sessions: dict[int, str] = {}  # chat_id -> Claude session id (conversation context)
 _running = True
 
 
@@ -219,62 +242,77 @@ def send_typing(chat_id: int) -> None:
 # Claude
 # --------------------------------------------------------------------------- #
 
-def _is_tool_result_msg(msg) -> bool:
-    content = msg.get("content")
-    if isinstance(content, list) and content:
-        first = content[0]
-        return isinstance(first, dict) and first.get("type") == "tool_result"
-    return False
+MCP_SERVER = "logs"
+# The CLI the SDK runs (bundled in the wheel) also performs the re-login.
+CLAUDE_BIN = str(Path(claude_agent_sdk.__file__).parent / "_bundled/claude")
 
 
-def trim_history(history: list) -> None:
-    """Keep the last MAX_TURNS messages, but never start on an assistant turn
-    or an orphaned tool_result (both would make the API 400)."""
-    while len(history) > MAX_TURNS:
-        history.pop(0)
-    while history and (history[0].get("role") != "user"
-                       or _is_tool_result_msg(history[0])):
-        history.pop(0)
+class ClaudeAuthError(RuntimeError):
+    """The subscription login is missing or expired."""
 
 
-def run_agent(messages: list, model: str = None, effort: str = None) -> str:
-    """Run the tool-use loop over `messages` (mutated in place); return reply text.
-    Raises anthropic.APIError on API failure."""
-    model = model or MODEL
-    effort = effort or EFFORT
-    last = None
-    for _ in range(MAX_TOOL_ITERS):
-        last = claude.messages.create(
-            model=model,
-            max_tokens=MAX_TOKENS,
-            system=SYSTEM_PROMPT,
-            thinking={"type": "adaptive"},
-            output_config={"effort": effort},
-            tools=logtools.TOOLS,
-            messages=messages,
-        )
-        messages.append({"role": "assistant", "content": last.content})
+LOGIN = claude_login.LoginFlow(CLAUDE_BIN, send_message)
 
-        if last.stop_reason != "tool_use":
-            break
 
-        results = []
-        for block in last.content:
-            if block.type != "tool_use":
-                continue
-            log.info("tool_use %s %s", block.name, block.input)
-            output = logtools.run_tool(block.name, block.input)
-            results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": output,
-            })
-        messages.append({"role": "user", "content": results})
-    else:
-        return "⚠️ Stopped after too many tool calls. Try narrowing the request."
+def _make_tool(spec: dict):
+    """Wrap a logtools tool as an in-process MCP tool for the Agent SDK."""
+    name = spec["name"]
 
-    reply = "".join(b.text for b in last.content if b.type == "text").strip()
-    return reply or "(Claude returned an empty response.)"
+    async def handler(args: dict) -> dict:
+        log.info("tool_use %s %s", name, args)
+        # Tools shell out (journalctl/docker) — keep them off the event loop.
+        output = await asyncio.to_thread(logtools.run_tool, name, args)
+        return {"content": [{"type": "text", "text": output}]}
+
+    return tool(name, spec["description"], spec["input_schema"])(handler)
+
+
+def _options(model: str, effort: str, resume: str | None) -> ClaudeAgentOptions:
+    return ClaudeAgentOptions(
+        model=model,
+        effort=effort,
+        system_prompt=SYSTEM_PROMPT,
+        tools=[],  # no built-in Claude Code tools (Bash/Read/Edit…) — logs only
+        mcp_servers={MCP_SERVER: create_sdk_mcp_server(
+            MCP_SERVER, tools=[_make_tool(t) for t in logtools.TOOLS])},
+        strict_mcp_config=True,
+        allowed_tools=[f"mcp__{MCP_SERVER}__{t['name']}" for t in logtools.TOOLS],
+        permission_mode="dontAsk",
+        max_turns=MAX_TOOL_ITERS,
+        cwd=str(Path(__file__).resolve().parent),
+        resume=resume,
+    )
+
+
+async def _run_agent_async(prompt: str, model: str, effort: str,
+                           resume: str | None) -> tuple[str, str | None]:
+    texts: list[str] = []
+    session_id = resume
+    error = None
+    async for message in query(prompt=prompt, options=_options(model, effort, resume)):
+        if isinstance(message, AssistantMessage):
+            error = message.error or error
+            parts = [b.text for b in message.content if isinstance(b, TextBlock)]
+            if parts:
+                texts = parts  # keep only the last assistant text (the final reply)
+        elif isinstance(message, ResultMessage):
+            session_id = message.session_id or session_id
+            if message.subtype == "error_max_turns":
+                return "⚠️ Stopped after too many tool calls. Try narrowing the request.", session_id
+            if message.is_error:
+                if not USE_API_KEY and claude_login.is_auth_error(error, message.result):
+                    raise ClaudeAuthError(message.result or error)
+                raise RuntimeError(message.result or message.subtype)
+            if message.result:
+                texts = [message.result]
+    reply = "".join(texts).strip()
+    return reply or "(Claude returned an empty response.)", session_id
+
+
+def run_agent(prompt: str, model: str = None, effort: str = None,
+              resume: str | None = None) -> tuple[str, str | None]:
+    """Run one agent turn; return (reply text, session id). Raises on failure."""
+    return asyncio.run(_run_agent_async(prompt, model or MODEL, effort or EFFORT, resume))
 
 
 def now_note() -> str:
@@ -284,23 +322,33 @@ def now_note() -> str:
 
 
 def ask_claude(chat_id: int, user_text: str) -> str:
-    history = histories.setdefault(chat_id, [])
-    history.append({"role": "user", "content": f"{now_note()}\n{user_text}"})
-    trim_history(history)
+    prompt = f"{now_note()}\n{user_text}"
     try:
-        return run_agent(history)
-    except anthropic.APIError as e:
-        log.exception("Claude API error")
-        return f"⚠️ Claude error: {getattr(e, 'message', str(e))}"
+        reply, sid = run_agent(prompt, resume=sessions.get(chat_id))
+    except ClaudeAuthError:
+        raise
+    except Exception as e:
+        if chat_id not in sessions:
+            log.exception("Claude error")
+            return f"⚠️ Claude error: {e}"
+        # The stored session may be gone (e.g. CLI cleanup) — retry fresh once.
+        log.warning("Resume failed for chat %s (%s), starting a new session", chat_id, e)
+        sessions.pop(chat_id, None)
+        return ask_claude(chat_id, user_text)
+    if sid:
+        sessions[chat_id] = sid
+    return reply
 
 
 def generate_report() -> str:
     """One-off health report with its own ephemeral context (no chat history)."""
     try:
-        return run_agent([{"role": "user", "content": f"{now_note()}\n{SCHEDULED_PROMPT}"}])
-    except anthropic.APIError as e:
+        return run_agent(f"{now_note()}\n{SCHEDULED_PROMPT}")[0]
+    except ClaudeAuthError:
+        raise
+    except Exception as e:
         log.exception("Scheduled report failed")
-        return f"⚠️ Scheduled log check failed: {getattr(e, 'message', str(e))}"
+        return f"⚠️ Scheduled log check failed: {e}"
 
 
 def investigate(focus: str) -> str:
@@ -316,11 +364,12 @@ def investigate(focus: str) -> str:
         "may run a bit longer than a routine check if it's warranted."
     )
     try:
-        return run_agent([{"role": "user", "content": prompt}],
-                         model=INVESTIGATE_MODEL, effort=INVESTIGATE_EFFORT)
-    except anthropic.APIError as e:
+        return run_agent(prompt, model=INVESTIGATE_MODEL, effort=INVESTIGATE_EFFORT)[0]
+    except ClaudeAuthError:
+        raise
+    except Exception as e:
         log.exception("Investigation failed")
-        return f"⚠️ Investigation failed: {getattr(e, 'message', str(e))}"
+        return f"⚠️ Investigation failed: {e}"
 
 
 # --------------------------------------------------------------------------- #
@@ -351,7 +400,13 @@ def broadcast_report() -> None:
         log.info("Scheduled tick: no subscribers, skipping report")
         return
     log.info("Generating scheduled report for %d subscriber(s)", len(subscribers))
-    text = telegram_html(generate_report())
+    try:
+        text = telegram_html(generate_report())
+    except ClaudeAuthError as e:
+        log.warning("Scheduled report: Claude login needed (%s)", e)
+        for chat_id in list(subscribers):
+            LOGIN.begin(chat_id)
+        return
     for chat_id in list(subscribers):
         send_message(chat_id, text)
 
@@ -399,6 +454,9 @@ def handle_message(msg: dict) -> None:
         send_message(chat_id, "Sorry, you're not authorized to use this bot.")
         return
 
+    if not USE_API_KEY and LOGIN.handle_text(chat_id, text):
+        return
+
     # Commands
     if text.startswith("/"):
         cmd = text.split()[0].lower().split("@")[0]
@@ -426,7 +484,14 @@ def handle_message(msg: dict) -> None:
                          "/investigate &lt;topic&gt; — deep root-cause dive (Opus)\n"
                          "/subscribe · /unsubscribe — auto-reports\n"
                          "/status — schedule & subscription\n"
-                         "/reset — clear context")
+                         "/reset — clear context\n"
+                         "/login — reconnect the Claude subscription")
+            return
+        if cmd == "/login":
+            if USE_API_KEY:
+                send_message(chat_id, "This bot uses ANTHROPIC_API_KEY (USE_API_KEY=1), not the subscription.")
+            else:
+                LOGIN.begin(chat_id, force_new=True)
             return
         if cmd == "/report":
             send_typing(chat_id)
@@ -460,7 +525,7 @@ def handle_message(msg: dict) -> None:
                          f"• Subscribers: {len(subscribers)}")
             return
         if cmd == "/reset":
-            histories.pop(chat_id, None)
+            sessions.pop(chat_id, None)
             send_message(chat_id, "🧹 Conversation cleared.")
             return
         # Unknown command → fall through and treat as a normal message.
@@ -503,6 +568,9 @@ def main() -> None:
             if msg:
                 try:
                     handle_message(msg)
+                except ClaudeAuthError as e:
+                    log.warning("Claude login needed: %s", e)
+                    LOGIN.begin(msg["chat"]["id"])
                 except Exception:
                     log.exception("Error handling message")
                     try:

@@ -28,6 +28,9 @@ from zoneinfo import ZoneInfo
 import requests
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "telegram-common"))
+
+import claude_login  # noqa: E402
 
 
 # --------------------------------------------------------------------------- #
@@ -78,8 +81,14 @@ except Exception:
 
 if not TOKEN:
     sys.exit("TELEGRAM_BOT_TOKEN is not set (put it in .env).")
-if not os.environ.get("ANTHROPIC_API_KEY") and not (Path.home() / ".claude/.credentials.json").exists():
-    sys.exit("No Anthropic credentials: set ANTHROPIC_API_KEY in .env or log the CLI in.")
+# Subscription (CLI OAuth login) by default; the API key only when explicitly opted in.
+USE_API_KEY = os.environ.get("USE_API_KEY", "0").strip().lower() in {"1", "true", "yes"}
+API_KEY_VARS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
+if USE_API_KEY:
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        sys.exit("USE_API_KEY=1 but ANTHROPIC_API_KEY is not set.")
+# Without a subscription login the bot still starts: the first failed run
+# sends the login link over Telegram (see telegram-common/claude_login.py).
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("berlinqa-bot")
@@ -232,6 +241,16 @@ def typing(chat_id: int) -> None:
     tg("sendChatAction", chat_id=chat_id, action="typing")
 
 
+def send_html(chat_id: int, body: str) -> None:
+    if tg("sendMessage", chat_id=chat_id, text=body, parse_mode="HTML",
+          disable_web_page_preview=True) is None:
+        tg("sendMessage", chat_id=chat_id, text=re.sub(r"<[^>]+>", "", body)[:TG_LIMIT],
+           disable_web_page_preview=True)
+
+
+LOGIN = claude_login.LoginFlow(CLAUDE_BIN, send_html)
+
+
 # --------------------------------------------------------------------------- #
 # Claude Code runner
 # --------------------------------------------------------------------------- #
@@ -286,6 +305,7 @@ class Run:
         self.lines: list[str] = []
         self.tools = 0
         self.errors = 0
+        self.auth_error: str | None = None
         self.thinking = False
         self.started = time.time()
         self.msg_id: int | None = None
@@ -361,6 +381,10 @@ class Run:
         env = os.environ.copy()
         env.setdefault("HOME", str(Path.home()))
         env["CLAUDE_CODE_ENTRYPOINT"] = "telegram-bot"
+        if not USE_API_KEY:
+            # An API key in the env overrides the subscription login — drop it.
+            for var in API_KEY_VARS:
+                env.pop(var, None)
         texts: list[str] = []
         final: dict | None = None
         stderr_buf: list[str] = []
@@ -396,6 +420,8 @@ class Run:
                         cs["session_id"] = ev["session_id"]
 
                 elif kind == "assistant":
+                    if ev.get("error"):
+                        self.auth_error = ev["error"]
                     for block in ev.get("message", {}).get("content", []):
                         btype = block.get("type")
                         if btype == "thinking":
@@ -451,6 +477,15 @@ class Run:
             reason = getattr(self, "error_text", "eroare necunoscută")
             self._replace(f"❌ <b>A eșuat</b> · {elapsed}\n<code>"
                           f"{html.escape(reason, quote=False)}</code>")
+            if not USE_API_KEY and claude_login.is_auth_error(text=reason):
+                LOGIN.begin(self.chat_id)
+            return
+
+        if not USE_API_KEY and final.get("is_error") and claude_login.is_auth_error(
+                self.auth_error, final.get("result")):
+            self._replace(f"🔑 <b>Neautentificat</b> · "
+                          f"<code>{html.escape(short(final.get('result') or '', 200))}</code>")
+            LOGIN.begin(self.chat_id)
             return
 
         bits = [elapsed, f"{self.tools} unelte"]
@@ -531,6 +566,7 @@ HELP = (
     "/effort &lt;low|medium|high|xhigh|max&gt; — cât de adânc gândește\n"
     "/sh &lt;comandă&gt; — shell direct, fără agent\n"
     "/cost — cât a costat sesiunea\n"
+    "/login — reconectează abonamentul Claude (link de login)\n"
     "/ping — sunt viu?\n"
     "/id — ID-ul tău Telegram\n"
     "/help — asta"
@@ -664,6 +700,13 @@ def handle_command(chat_id: int, user_id: int, text: str) -> bool:
         send(chat_id, f"⚡ Effort setat pe `{cs['effort']}`")
         return True
 
+    if cmd == "/login":
+        if USE_API_KEY:
+            send(chat_id, "Botul folosește `ANTHROPIC_API_KEY` (USE_API_KEY=1), nu abonamentul.")
+        else:
+            threading.Thread(target=LOGIN.begin, args=(chat_id, True), daemon=True).start()
+        return True
+
     if cmd == "/sh":
         if not arg:
             send(chat_id, "Folosire: `/sh docker ps`")
@@ -704,6 +747,9 @@ def handle_message(msg: dict) -> None:
 
     if not text:
         send(chat_id, "Deocamdată înțeleg doar text.")
+        return
+
+    if not USE_API_KEY and LOGIN.handle_text(chat_id, text):
         return
 
     if text.startswith("/") and handle_command(chat_id, user_id, text):

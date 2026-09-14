@@ -49,12 +49,23 @@ la comenzi) sau `plan` (doar analizează).
 | `/effort <low…max>` | cât de adânc gândește |
 | `/sh <comandă>` | shell direct, fără agent — rapid pentru `docker ps`, `git log` |
 | `/cost` | costul sesiunii curente |
+| `/login` | link nou de login pentru abonamentul Claude |
 | `/ping` | uptime bot + uptime server |
 | `/id` | ID-ul tău Telegram |
 | `/help` | lista de comenzi |
 
 Mesajele primite cât timp agentul lucrează intră într-o coadă per chat și se
 execută în ordine.
+
+## Abonament deconectat → link de login pe Telegram
+Dacă o rulare pică pe autentificare (login lipsă/expirat), botul pornește
+`claude auth login --claudeai` și trimite URL-ul de autorizare în chat — exact
+fluxul manual de pe un server fără browser. Deschizi linkul, autorizezi contul,
+apoi trimiți botului **codul** afișat la final; botul îl dă CLI-ului și confirmă.
+Linkul e valabil 15 minute; `/login` cere oricând unul nou.
+Credențialele ajung în `~/.claude`, deci un login făcut prin oricare bot
+(acesta sau `telegram-claude-bot`) îi repară pe amândoi.
+Codul e în `../telegram-common/claude_login.py`.
 
 ## Anunț la pornire
 La fiecare start, botul trimite un mesaj tuturor chat-urilor cunoscute:
@@ -68,7 +79,8 @@ sunt ignorate, ca să nu execute la boot comenzi vechi.
 | Cheie | Implicit | Ce face |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | — | de la @BotFather |
-| `ANTHROPIC_API_KEY` | — | folosită de CLI-ul claude |
+| `USE_API_KEY` | `0` | `0` = abonamentul Claude (login CLI); `1` = facturare pe `ANTHROPIC_API_KEY` |
+| `ANTHROPIC_API_KEY` | — | folosită doar cu `USE_API_KEY=1` (altfel e scoasă din mediul CLI-ului) |
 | `WORKDIR` | `/home/berlinqa/berlinstar` | folderul implicit |
 | `CLAUDE_MODEL` | `opus` | model implicit |
 | `PERMISSION_MODE` | `bypassPermissions` | vezi mai sus |

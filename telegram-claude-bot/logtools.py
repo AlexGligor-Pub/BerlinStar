@@ -11,11 +11,13 @@ import os
 import subprocess
 from pathlib import Path
 
-# Directories the bot is allowed to read log files from.
+# Directories the bot is allowed to read log files from (project dirs are
+# resolved relative to this checkout, so it works on prod and QA alike).
+_REPO = Path(__file__).resolve().parent.parent
 ALLOWED_LOG_DIRS = [
     "/var/log",
-    "/root/BerlinStar/backend/logs",
-    "/root/BerlinStar/telegram-claude-bot",
+    str(_REPO / "backend/logs"),
+    str(_REPO / "telegram-claude-bot"),
 ]
 
 CMD_TIMEOUT = 30          # seconds per subprocess call
