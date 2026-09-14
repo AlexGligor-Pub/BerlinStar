@@ -57,5 +57,12 @@ QA_ENV/
 # Env QA cu secrete (SECRET_KEY, chei S3) — nu intra in git
 deploy/.env.qa
 
+# Backup-uri de .env facute pe server (POSTGRES_PASSWORD, SECRET_KEY, ...)
+deploy/.env.bak*
+
+# Setari Claude Code locale per-masina: contin reguli de permisiuni cu
+# credentiale de test si cai absolute de pe alt calculator.
+.claude/settings.local.json
+
 # Lock-uri temporare Claude Code
 .claude/*.lock
