@@ -64,10 +64,13 @@ def load_dotenv(path: Path) -> None:
 load_dotenv(Path(__file__).with_name(".env"))
 
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-MODEL = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6").strip()
-EFFORT = os.environ.get("CLAUDE_EFFORT", "medium").strip()
-INVESTIGATE_MODEL = os.environ.get("INVESTIGATE_MODEL", "claude-opus-4-8").strip()
-INVESTIGATE_EFFORT = os.environ.get("INVESTIGATE_EFFORT", "high").strip()
+# Routine log checks (chat + scheduled reports) run on the cheapest model.
+MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5").strip()
+EFFORT = os.environ.get("CLAUDE_EFFORT", "").strip()
+# /adminask, /investigate and Opus mode run on the strong model.
+ADMIN_MODEL = os.environ.get("ADMIN_MODEL", os.environ.get("INVESTIGATE_MODEL", "claude-opus-4-8")).strip()
+ADMIN_EFFORT = os.environ.get("ADMIN_EFFORT", os.environ.get("INVESTIGATE_EFFORT", "high")).strip()
+OPUS_MODE_MINUTES = int(os.environ.get("OPUS_MODE_MINUTES", "30"))  # auto-off for Opus mode
 SYSTEM_PROMPT = os.environ.get(
     "CLAUDE_SYSTEM_PROMPT",
     (
@@ -102,6 +105,18 @@ MAX_TOOL_ITERS = 8  # safety cap on the tool-use loop per message
 ALLOWED_USER_IDS = {
     uid.strip() for uid in os.environ.get("ALLOWED_USER_IDS", "").split(",") if uid.strip()
 }
+ALLOWED_USERNAMES = {
+    u.strip().lstrip("@").lower()
+    for u in os.environ.get("ALLOWED_USERNAMES", "").split(",") if u.strip()
+}
+# Who may use the Opus commands; defaults to the allow-lists above.
+ADMIN_USER_IDS = {
+    u.strip() for u in os.environ.get("ADMIN_USER_IDS", "").split(",") if u.strip()
+} or ALLOWED_USER_IDS
+ADMIN_USERNAMES = {
+    u.strip().lstrip("@").lower()
+    for u in os.environ.get("ADMIN_USERNAMES", "").split(",") if u.strip()
+} or ALLOWED_USERNAMES
 
 TELEGRAM_MSG_LIMIT = 4096  # Telegram hard limit per message
 
@@ -150,6 +165,7 @@ logging.basicConfig(
 log = logging.getLogger("tg-claude")
 
 sessions: dict[int, str] = {}  # chat_id -> Claude session id (conversation context)
+opus_mode: dict[int, float] = {}  # chat_id -> monotonic deadline while Opus mode is on
 _running = True
 
 
@@ -267,10 +283,23 @@ def _make_tool(spec: dict):
     return tool(name, spec["description"], spec["input_schema"])(handler)
 
 
+def _effort_for(model: str, effort: str) -> str | None:
+    # Haiku 4.5 rejects the effort parameter — leave it unset there.
+    return None if not effort or "haiku" in model else effort
+
+
+def short_model(model: str) -> str:
+    """claude-opus-4-8 -> Opus 4.8 (for reply footers and /status)."""
+    m = re.match(r"claude-([a-z]+)-(\d+)(?:-(\d+))?", model)
+    if not m:
+        return model
+    return f"{m[1].capitalize()} {m[2]}" + (f".{m[3]}" if m[3] else "")
+
+
 def _options(model: str, effort: str, resume: str | None) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         model=model,
-        effort=effort,
+        effort=_effort_for(model, effort),
         system_prompt=SYSTEM_PROMPT,
         tools=[],  # no built-in Claude Code tools (Bash/Read/Edit…) — logs only
         mcp_servers={MCP_SERVER: create_sdk_mcp_server(
@@ -321,10 +350,10 @@ def now_note() -> str:
             f"Use this for the report title. Server log timestamps are UTC.]")
 
 
-def ask_claude(chat_id: int, user_text: str) -> str:
+def ask_claude(chat_id: int, user_text: str, model: str = None, effort: str = None) -> str:
     prompt = f"{now_note()}\n{user_text}"
     try:
-        reply, sid = run_agent(prompt, resume=sessions.get(chat_id))
+        reply, sid = run_agent(prompt, model=model, effort=effort, resume=sessions.get(chat_id))
     except ClaudeAuthError:
         raise
     except Exception as e:
@@ -334,7 +363,7 @@ def ask_claude(chat_id: int, user_text: str) -> str:
         # The stored session may be gone (e.g. CLI cleanup) — retry fresh once.
         log.warning("Resume failed for chat %s (%s), starting a new session", chat_id, e)
         sessions.pop(chat_id, None)
-        return ask_claude(chat_id, user_text)
+        return ask_claude(chat_id, user_text, model, effort)
     if sid:
         sessions[chat_id] = sid
     return reply
@@ -364,7 +393,7 @@ def investigate(focus: str) -> str:
         "may run a bit longer than a routine check if it's warranted."
     )
     try:
-        return run_agent(prompt, model=INVESTIGATE_MODEL, effort=INVESTIGATE_EFFORT)[0]
+        return run_agent(prompt, model=ADMIN_MODEL, effort=ADMIN_EFFORT)[0]
     except ClaudeAuthError:
         raise
     except Exception as e:
@@ -435,8 +464,63 @@ def scheduler_loop() -> None:
 # Message handling
 # --------------------------------------------------------------------------- #
 
-def authorized(user_id: int) -> bool:
-    return not ALLOWED_USER_IDS or str(user_id) in ALLOWED_USER_IDS
+def authorized(user: dict) -> bool:
+    if not ALLOWED_USER_IDS and not ALLOWED_USERNAMES:
+        return True
+    return (str(user.get("id")) in ALLOWED_USER_IDS
+            or (user.get("username") or "").lower() in ALLOWED_USERNAMES)
+
+
+def is_admin(user: dict) -> bool:
+    if not ADMIN_USER_IDS and not ADMIN_USERNAMES:
+        return True  # no allow-list configured at all — same as authorized()
+    return (str(user.get("id")) in ADMIN_USER_IDS
+            or (user.get("username") or "").lower() in ADMIN_USERNAMES)
+
+
+def opus_mode_on(chat_id: int) -> bool:
+    deadline = opus_mode.get(chat_id)
+    if deadline and time.monotonic() < deadline:
+        return True
+    opus_mode.pop(chat_id, None)
+    return False
+
+
+# Shown as the Telegram "Menu" button (registered with setMyCommands at startup).
+BOT_COMMANDS = [
+    ("report", "Raport de sănătate acum"),
+    ("adminask", "Întrebare pe Opus 4.8 (fără text = mod Opus)"),
+    ("investigate", "Investigație detaliată pe Opus 4.8"),
+    ("normal", "Înapoi la modelul ieftin"),
+    ("status", "Model, program rapoarte, abonare"),
+    ("subscribe", "Pornește rapoartele automate"),
+    ("unsubscribe", "Oprește rapoartele automate"),
+    ("reset", "Șterge contextul conversației"),
+    ("login", "Reconectează abonamentul Claude"),
+    ("help", "Ajutor"),
+]
+
+
+def help_text() -> str:
+    return (
+        "Scrie-mi în limbaj natural ce vrei să verific în loguri.\n"
+        f"Verificările obișnuite rulează pe <b>{short_model(MODEL)}</b> (ieftin).\n"
+        "Surse: journal systemd, containere Docker, /var/log, logul aplicației.\n\n"
+        "/report — raport acum\n"
+        f"/adminask &lt;întrebare&gt; — răspuns pe {short_model(ADMIN_MODEL)}\n"
+        f"/adminask — mod {short_model(ADMIN_MODEL)} pentru toate mesajele "
+        f"({OPUS_MODE_MINUTES} min)\n"
+        "/normal — înapoi la modelul ieftin\n"
+        f"/investigate &lt;subiect&gt; — root-cause detaliat ({short_model(ADMIN_MODEL)})\n"
+        "/subscribe · /unsubscribe — rapoarte automate\n"
+        "/status — model, program, abonare\n"
+        "/reset — șterge contextul\n"
+        "/login — reconectează abonamentul Claude"
+    )
+
+
+def with_footer(reply: str, model: str) -> str:
+    return f"{telegram_html(reply)}\n\n<i>· {short_model(model)}</i>"
 
 
 def handle_message(msg: dict) -> None:
@@ -445,13 +529,13 @@ def handle_message(msg: dict) -> None:
     user_id = user.get("id")
     text = (msg.get("text") or "").strip()
 
-    if not text:
-        send_message(chat_id, "I can only handle text messages right now.")
+    if not authorized(user):
+        log.info("Blocked unauthorized user %s (@%s)", user_id, user.get("username"))
+        send_message(chat_id, "Sorry, you're not authorized to use this bot.")
         return
 
-    if not authorized(user_id):
-        log.info("Blocked unauthorized user %s", user_id)
-        send_message(chat_id, "Sorry, you're not authorized to use this bot.")
+    if not text:
+        send_message(chat_id, "Deocamdată pot procesa doar mesaje text.")
         return
 
     if not USE_API_KEY and LOGIN.handle_text(chat_id, text):
@@ -460,32 +544,22 @@ def handle_message(msg: dict) -> None:
     # Commands
     if text.startswith("/"):
         cmd = text.split()[0].lower().split("@")[0]
+        parts = text.split(maxsplit=1)
+        arg = parts[1].strip() if len(parts) > 1 else ""
         if cmd == "/start":
             subscribers.add(chat_id)
             save_subscribers()
             send_message(chat_id,
                          "🩺 <b>BerlinStar log agent</b>\n"
-                         "I check the server's logs and send a short report.\n\n"
-                         f"✅ You're subscribed to auto-reports ({schedule_str()}).\n\n"
-                         "Try:\n"
+                         "Verific logurile serverului și trimit un raport scurt.\n\n"
+                         f"✅ Abonat la rapoarte automate ({schedule_str()}).\n\n"
+                         "Exemple:\n"
                          "• <i>quick health check</i>\n"
-                         "• <i>errors in deploy-backend-1 last hour</i>\n"
-                         "• <i>any failed SSH logins today?</i>\n\n"
-                         "/report — run one now\n"
-                         "/investigate &lt;topic&gt; — deep dive (Opus)\n"
-                         "/status · /unsubscribe · /help")
+                         "• <i>erori în deploy-backend-1 în ultima oră</i>\n"
+                         "• <i>login-uri SSH eșuate azi?</i>\n\n" + help_text())
             return
         if cmd == "/help":
-            send_message(chat_id,
-                         "Ask me about the logs in plain language and I'll check "
-                         "and reply with a short report.\n"
-                         "Sources: systemd journal, Docker containers, /var/log, app log.\n\n"
-                         "/report — report now\n"
-                         "/investigate &lt;topic&gt; — deep root-cause dive (Opus)\n"
-                         "/subscribe · /unsubscribe — auto-reports\n"
-                         "/status — schedule & subscription\n"
-                         "/reset — clear context\n"
-                         "/login — reconnect the Claude subscription")
+            send_message(chat_id, help_text())
             return
         if cmd == "/login":
             if USE_API_KEY:
@@ -495,44 +569,76 @@ def handle_message(msg: dict) -> None:
             return
         if cmd == "/report":
             send_typing(chat_id)
-            send_message(chat_id, telegram_html(generate_report()))
+            send_message(chat_id, with_footer(generate_report(), MODEL))
+            return
+        if cmd in ("/adminask", "/investigate") and not is_admin(user):
+            send_message(chat_id, "⛔ Comanda asta e doar pentru admini.")
+            return
+        if cmd == "/adminask":
+            if not arg:
+                opus_mode[chat_id] = time.monotonic() + OPUS_MODE_MINUTES * 60
+                send_message(chat_id,
+                             f"🧠 Mod <b>{short_model(ADMIN_MODEL)}</b> activ pentru "
+                             f"{OPUS_MODE_MINUTES} min. Toate mesajele merg pe "
+                             f"{short_model(ADMIN_MODEL)}.\n/normal — înapoi la "
+                             f"{short_model(MODEL)}")
+                return
+            send_message(chat_id, f"🧠 Întreb {short_model(ADMIN_MODEL)}…")
+            send_typing(chat_id)
+            reply = ask_claude(chat_id, arg, ADMIN_MODEL, ADMIN_EFFORT)
+            send_message(chat_id, with_footer(reply, ADMIN_MODEL))
+            return
+        if cmd == "/normal":
+            was_on = opus_mode_on(chat_id)
+            opus_mode.pop(chat_id, None)
+            send_message(chat_id, f"💸 Înapoi pe {short_model(MODEL)}." if was_on
+                         else f"Deja pe {short_model(MODEL)}.")
             return
         if cmd == "/investigate":
-            parts = text.split(maxsplit=1)
-            focus = parts[1] if len(parts) > 1 else ""
-            send_message(chat_id, f"🔎 Investigating on {INVESTIGATE_MODEL}… (deeper, slower)")
+            send_message(chat_id, f"🔎 Investighez pe {short_model(ADMIN_MODEL)}… (mai lent)")
             send_typing(chat_id)
-            send_message(chat_id, telegram_html(investigate(focus)))
+            send_message(chat_id, with_footer(investigate(arg), ADMIN_MODEL))
             return
         if cmd == "/subscribe":
             subscribers.add(chat_id)
             save_subscribers()
-            send_message(chat_id, f"✅ Subscribed. Auto-reports {schedule_str()}.")
+            send_message(chat_id, f"✅ Abonat. Rapoarte automate {schedule_str()}.")
             return
         if cmd == "/unsubscribe":
             subscribers.discard(chat_id)
             save_subscribers()
-            send_message(chat_id, "🔕 Unsubscribed from auto-reports.")
+            send_message(chat_id, "🔕 Dezabonat de la rapoartele automate.")
             return
         if cmd == "/status":
             sub = "on" if chat_id in subscribers else "off"
             nxt = next_run(datetime.now(TZ)).strftime("%a %H:%M")
+            if opus_mode_on(chat_id):
+                left = int((opus_mode[chat_id] - time.monotonic()) / 60) + 1
+                mode = f"{short_model(ADMIN_MODEL)} (încă ~{left} min)"
+            else:
+                mode = short_model(MODEL)
             send_message(chat_id,
                          f"<b>Status</b>\n"
-                         f"• Auto-reports: {sub}\n"
-                         f"• Schedule: {schedule_str()}\n"
-                         f"• Next: {nxt}\n"
-                         f"• Subscribers: {len(subscribers)}")
+                         f"• Model curent: {mode}\n"
+                         f"• Rapoarte automate: {sub} ({short_model(MODEL)})\n"
+                         f"• Program: {schedule_str()}\n"
+                         f"• Următorul: {nxt}\n"
+                         f"• Abonați: {len(subscribers)}")
             return
         if cmd == "/reset":
             sessions.pop(chat_id, None)
-            send_message(chat_id, "🧹 Conversation cleared.")
+            opus_mode.pop(chat_id, None)
+            send_message(chat_id, "🧹 Conversație ștearsă.")
             return
         # Unknown command → fall through and treat as a normal message.
 
     send_typing(chat_id)
-    reply = ask_claude(chat_id, text)
-    send_message(chat_id, telegram_html(reply))
+    if opus_mode_on(chat_id) and is_admin(user):
+        model, effort = ADMIN_MODEL, ADMIN_EFFORT
+    else:
+        model, effort = MODEL, EFFORT
+    reply = ask_claude(chat_id, text, model, effort)
+    send_message(chat_id, with_footer(reply, model))
 
 
 # --------------------------------------------------------------------------- #
@@ -551,8 +657,14 @@ def main() -> None:
     me = tg("getMe")
     if not me:
         sys.exit("Could not reach Telegram — check the bot token.")
-    log.info("Bot @%s is up. Model=%s effort=%s (investigate=%s/%s). Waiting for messages…",
-             me.get("username"), MODEL, EFFORT, INVESTIGATE_MODEL, INVESTIGATE_EFFORT)
+    log.info("Bot @%s is up. Model=%s effort=%s (admin=%s/%s). Waiting for messages…",
+             me.get("username"), MODEL, EFFORT or "-", ADMIN_MODEL, ADMIN_EFFORT)
+    if not ALLOWED_USER_IDS and not ALLOWED_USERNAMES:
+        log.warning("No ALLOWED_USER_IDS/ALLOWED_USERNAMES set — the bot answers anyone!")
+
+    # Telegram "Menu" button with all commands.
+    tg("setMyCommands", commands=[{"command": c, "description": d} for c, d in BOT_COMMANDS])
+    tg("setChatMenuButton", menu_button={"type": "commands"})
 
     threading.Thread(target=scheduler_loop, name="scheduler", daemon=True).start()
 

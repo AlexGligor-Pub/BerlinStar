@@ -2,9 +2,11 @@
 
 A Telegram bot (**@BerlinStarProd_bot**) that acts as a log-monitoring agent.
 Every message triggers a real log check with Claude, which then replies with a
-short report formatted for a phone screen. Routine checks run on
-**Sonnet 4.6** (`effort=medium`); deep `/investigate` dives run on **Opus 4.8**
-(`effort=high`). Both are set in `.env`.
+short report formatted for a phone screen. Routine checks (chat + scheduled
+reports) run on the cheapest model, **Haiku 4.5** (`CLAUDE_MODEL`; Haiku takes no
+`effort`). `/adminask`, `/investigate` and Opus mode run on **Opus 4.8**
+(`ADMIN_MODEL`, `ADMIN_EFFORT=high`). Every reply ends with the model that
+produced it.
 
 ```
 🩺 Log check · 07:30
@@ -89,13 +91,25 @@ The agent pushes an automatic report on a schedule to every subscriber.
 - Subscribers persist in `subscribers.json`.
 
 ## Chat commands
+All commands are registered with Telegram (`setMyCommands`) at startup, so they
+show up under the chat's **Menu** button.
 - `/start` — intro + subscribe to auto-reports
-- `/report` — run a report right now
+- `/report` — run a report right now (Haiku)
+- `/adminask <question>` — answer one question on Opus 4.8 (keeps chat context)
+- `/adminask` (no text) — Opus mode: every message goes to Opus 4.8 for
+  `OPUS_MODE_MINUTES` (default 30), then falls back automatically
+- `/normal` — leave Opus mode, back to Haiku
 - `/investigate <topic>` — deep root-cause dive on Opus 4.8
 - `/subscribe` / `/unsubscribe` — toggle auto-reports
-- `/status` — schedule, next run, subscriber count
-- `/reset` — clear the conversation
+- `/status` — current model, schedule, next run, subscriber count
+- `/reset` — clear the conversation (also exits Opus mode)
 - `/login` — get a fresh Claude subscription login link
+- `/help` — usage
+
+## Access
+Only users in `ALLOWED_USER_IDS` or `ALLOWED_USERNAMES` may use the bot (if both
+are empty it answers anyone and logs a warning). The Opus commands are limited
+to `ADMIN_USER_IDS` / `ADMIN_USERNAMES`, which default to the allow-lists.
 
 If a run fails because the subscription login is missing/expired, the bot
 starts `claude auth login` and sends the authorize URL to the chat (scheduled
@@ -103,7 +117,6 @@ reports send it to all subscribers). Open it, authorize, and send the bot the
 code shown at the end. The login is shared with `telegram-code-bot` via
 `~/.claude`. Code: `../telegram-common/claude_login.py`. Since anyone allowed
 to use the bot can complete the login, set `ALLOWED_USER_IDS`.
-- `/help` — usage
 
 ## Notes
 - Text messages only (no images/voice yet).
