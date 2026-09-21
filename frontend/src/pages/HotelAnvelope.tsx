@@ -2,6 +2,7 @@ import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, 
 import { useSearchParams, useNavigate } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
 import { createDebouncedSearch } from "../utils/debounce";
+import { createFitToViewport } from "../hooks/createFitToViewport";
 import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
@@ -12,8 +13,8 @@ import {
   loadCazari, loadMoreCazari, loadMarci, loadDimensiuni, loadProfil, loadCoduriDot, loadLocuriCazare,
   invalidateLocuriCache, invalidateMarciCache, invalidateDimensiuniCache, invalidateProfilCache, invalidateCoduriDotCache,
   hotelImages, loadHotelImages, getCazareById, getVehiculForCazare, loadActiveCazariByPlate,
-  INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
-  type Cazare, type Anvelopa, type TipAnvelopa, type VehiculInfo,
+  loadCazariSummary, INDICE_VITEZA_SHORTCUTS, INDICE_SARCINA_SHORTCUTS,
+  type Cazare, type Anvelopa, type CazariQuery, type CazariSummary, type TipAnvelopa, type VehiculInfo,
 } from "../store/hotelAnvelopeStore";
 import { loadLatestMontajByPlate, POZITIE_LABELS, type MontajSuggestion } from "../store/montajRotiStore";
 
@@ -49,16 +50,58 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Indicii de sarcină și viteză, scriși cum apar pe flanc: „91V". */
+function fmtIndici(a: Anvelopa): string | null {
+  const s = [a.indiceSarcina, a.indiceViteza].filter((v) => v !== null && v !== undefined && v !== "").join("");
+  return s === "" ? null : s;
+}
+
+/** Anvelopa pe un singur rând, cu TOT ce s-a introdus.
+ *
+ *  Listele de previzualizare (cazare nouă, editare) sunt locul unde omul verifică
+ *  ce a scris înainte să salveze: dacă profilul sau indicii lipsesc de aici, nu
+ *  are unde să vadă că i-a greșit. */
+function AnvelopaLine(props: { a: Anvelopa }) {
+  const a = () => props.a;
+  return (
+    <>
+      <strong>{a().marcaNume ?? "—"}</strong>
+      <Show when={a().profilValoare}>{" "}{a().profilValoare}</Show>
+      <Show when={a().dimensiuneValoare}>{" · "}{a().dimensiuneValoare}</Show>
+      <Show when={fmtIndici(a())}>{" · "}{fmtIndici(a())}</Show>
+      <Show when={a().dotValoare}>{" · DOT "}{a().dotValoare}</Show>
+      {" · "}{TIP_LABELS[a().tip]}
+      <Show when={a().adancime != null}>{" · "}{a().adancime} mm</Show>
+      <Show when={a().comments}>{" · "}<span style="font-style:italic;color:var(--text-muted)">{a().comments}</span></Show>
+    </>
+  );
+}
+
 function daysBetween(from: string, to: string) {
   const d1 = new Date(from);
   const d2 = new Date(to);
   return Math.round((d2.getTime() - d1.getTime()) / 86_400_000);
 }
 
+function zile(n: number): string {
+  return `${n} ${n === 1 ? "zi" : "zile"}`;
+}
+
+/** Cat a trecut de la o data pana azi, in cuvinte. */
+function deCand(data: string): string {
+  const n = daysBetween(data, todayStr());
+  if (n === 0) return "astăzi";
+  if (n < 0) return `peste ${zile(-n)}`;
+  return `acum ${zile(n)}`;
+}
+
 // O cazare ramane editabila cat e activa (fara checkout) iar, dupa checkout,
 // inca EDIT_GRACE_DAYS zile — fereastra de corectare a greselilor. Trebuie sa
 // reflecte regula din backend (cazare_anvelope.py: EDIT_GRACE_DAYS).
 const EDIT_GRACE_DAYS = 7;
+
+/** Cate cazari se aduc odata (prima pagina si fiecare pas de derulare). */
+const PAGE_SIZE = 100;
 
 function canEditCazare(c: Cazare): boolean {
   if (!c.dataCheckout) return true;
@@ -530,6 +573,8 @@ function AnvelopaForm(props: {
 
 function CazareCard(props: {
   cazare: Cazare;
+  /** Pozitia in lista afisata (1, 2, 3...), asa cum o vede utilizatorul. */
+  index: number;
   companyData: CompanyData | null;
   onCheckout: (c: Cazare) => void;
   onCheckoutNew: (c: Cazare) => void;
@@ -538,8 +583,85 @@ function CazareCard(props: {
 }) {
   const c = () => props.cazare;
   const [pdfLoading, setPdfLoading] = createSignal<"checkin" | "checkout" | "combined" | null>(null);
+  // Actiunile stau intr-un meniu in dreapta: lista are mii de randuri, iar sase
+  // butoane pe fiecare card fac imposibila citirea in fuga a placutei.
+  const [menuOpen, setMenuOpen] = createSignal(false);
+  // Cardul are `overflow:hidden` si sta intr-o zona derulabila: un meniu
+  // `absolute` ar fi taiat de amandoua. Il asezam `fixed`, cu coordonatele
+  // butonului, si il inchidem la derulare (pozitia nu mai are cum sa-l urmeze).
+  const [menuPos, setMenuPos] = createSignal<{ top: number; right: number } | null>(null);
+  let menuRef: HTMLDivElement | undefined;
+
+  const actiuni = () =>
+    (c().dataCheckout ? 0 : 2)
+    + (canEditCazare(c()) ? 1 : 0)
+    + 1
+    + (c().dataCheckout ? 1 : 0)
+    + (c().dataCheckout && c().successorCazareId != null ? 1 : 0);
+
+  function toggleMenu(e: MouseEvent) {
+    e.stopPropagation();
+    if (menuOpen()) { setMenuOpen(false); return; }
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const h = actiuni() * 34 + 8;
+    // Langa marginea de jos meniul se deschide in sus, ca sa se vada intreg.
+    const top = r.bottom + h > window.innerHeight - 8 ? Math.max(8, r.top - h - 4) : r.bottom + 4;
+    setMenuPos({ top, right: Math.max(8, window.innerWidth - r.right) });
+    setMenuOpen(true);
+  }
+
+  const closeOnOutside = (e: MouseEvent) => {
+    if (menuRef && !menuRef.contains(e.target as Node)) setMenuOpen(false);
+  };
+  const closeMenu = () => setMenuOpen(false);
+  const closeOnEscape = (e: KeyboardEvent) => {
+    if (e.key !== "Escape") return;
+    e.preventDefault();
+    setMenuOpen(false);
+    menuRef?.querySelector<HTMLButtonElement>(".hotel-menu-toggle")?.focus();
+  };
+  createEffect(() => {
+    if (!menuOpen()) return;
+    document.addEventListener("mousedown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    // `capture`: prinde si derularea listei, nu doar pe a ferestrei.
+    document.addEventListener("scroll", closeMenu, true);
+    window.addEventListener("resize", closeMenu);
+    // Cine a deschis meniul cu tastatura continua in el.
+    requestAnimationFrame(() => menuRef?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus());
+    onCleanup(() => {
+      document.removeEventListener("mousedown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("scroll", closeMenu, true);
+      window.removeEventListener("resize", closeMenu);
+    });
+  });
+
+  /** Actiunile inchid meniul; cardul nu trebuie sa deschida si vizualizarea. */
+  const run = (fn: () => void) => (e: MouseEvent) => { e.stopPropagation(); setMenuOpen(false); fn(); };
+
+  /** „4 anvelope · 4 iarnă" — cât să știi ce e în cazare, fără să înalți cardul.
+   *  Lista completă a anvelopelor e în fereastra care se deschide la click. */
+  const anvelopeRezumat = createMemo(() => {
+    const peTip = new Map<TipAnvelopa, number>();
+    let n = 0;
+    for (const item of c().items) {
+      if (!item.anvelopa) continue;
+      n += 1;
+      peTip.set(item.anvelopa.tip, (peTip.get(item.anvelopa.tip) ?? 0) + 1);
+    }
+    if (n === 0) return null;
+    const tipuri = [...peTip.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([tip, k]) => `${k} ${TIP_LABELS[tip].toLowerCase()}`)
+      .join(", ");
+    return `${n} ${n === 1 ? "anvelopă" : "anvelope"} · ${tipuri}`;
+  });
 
   async function handlePdf(type: "checkin" | "checkout") {
+    // Meniul se inchide la click, deci „Se pregateste..." nu se mai vede acolo:
+    // fara garda asta, al doilea click ar genera inca un PDF.
+    if (pdfLoading()) return;
     setPdfLoading(type);
     try {
       await loadHotelImages();
@@ -555,7 +677,7 @@ function CazareCard(props: {
 
   async function handleCombinedPdf() {
     const sucId = c().successorCazareId;
-    if (sucId == null || !c().dataCheckout) return;
+    if (sucId == null || !c().dataCheckout || pdfLoading()) return;
     setPdfLoading("combined");
     try {
       const [successor] = await Promise.all([getCazareById(sucId), loadHotelImages()]);
@@ -575,78 +697,96 @@ function CazareCard(props: {
 
   return (
     <div
-      class="rcard"
-      style="padding:7px 12px;cursor:pointer"
+      class="rcard hotel-row"
       role="button"
       tabIndex={0}
       onClick={() => props.onView(c())}
-      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), props.onView(c()))}
+      onKeyDown={(e) => {
+        // Doar tastele apasate pe rand; cele de pe butonul ⋮, telefon sau
+        // optiunile meniului isi fac treaba lor.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); props.onView(c()); }
+      }}
     >
-      {/* Header card */}
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0">
-          <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{c().clientNume ?? "—"}</div>
-          <Show when={c().clientTelefon}><div style="font-size:11px;color:var(--text-muted);white-space:nowrap">{c().clientTelefon}</div></Show>
-        </div>
+      {/* Un rand de tabel: coloanele sunt aceleasi ca in antet (HOTEL_COLS).
+          Detaliile — anvelopele una cate una, comentariile, angajatul — sunt in
+          fereastra care se deschide la click, ca randul sa ramana de o linie. */}
+      <span class="hotel-card-index">{props.index}.</span>
+      <span class="hotel-card-plate">{c().numarMasina ?? "—"}</span>
+      <span class="hotel-card-name">{c().clientNume ?? "—"}</span>
+      <span>
+        <Show when={c().clientTelefon} fallback={<span class="hotel-card-meta">—</span>}>
+          <a
+            class="hotel-card-phone"
+            href={"tel:" + c().clientTelefon!.replace(/[^\d+]/g, "")}
+            onClick={(e) => e.stopPropagation()}
+          >{c().clientTelefon}</a>
+        </Show>
+      </span>
+      <span class="hotel-card-meta">
+        {fmtDate(c().dataCheckin)}
+        <Show when={c().dataCheckout}>
+          {" → "}{fmtDate(c().dataCheckout)}
+          {" ("}{daysBetween(c().dataCheckin, c().dataCheckout!)} z{")"}
+        </Show>
+      </span>
+      <span class="hotel-card-meta">{c().locCazareNume ?? "—"}</span>
+      <span class="hotel-card-meta">{anvelopeRezumat() ?? "—"}</span>
+      <span>
         <Show
           when={c().dataCheckout}
           fallback={<span style="background:#d1fae5;color:#065f46;padding:1px 7px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap">În cazare</span>}
         >
           <span style="background:var(--bg);color:var(--text-muted);padding:1px 7px;border-radius:12px;font-size:11px;white-space:nowrap">Ieșit</span>
         </Show>
-      </div>
-
-      {/* Info row */}
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:3px;font-size:11px;color:var(--text-muted)">
-        <span><strong>Cazare:</strong> {fmtDate(c().dataCheckin)}</span>
-        <Show when={c().dataCheckout}><span><strong>Check-out:</strong> {fmtDate(c().dataCheckout)}</span></Show>
-        <Show when={c().numarMasina}><span><strong>Mașină:</strong> {c().numarMasina}</span></Show>
-        <Show when={c().locCazareNume}><span><strong>Loc:</strong> {c().locCazareNume}</span></Show>
-        <Show when={c().employeeName}><span><strong>Angajat:</strong> {c().employeeName}</span></Show>
-        <Show when={c().dataCheckout}>
-          <span style="font-weight:600;color:var(--primary)">{daysBetween(c().dataCheckin, c().dataCheckout!)} zile</span>
-        </Show>
-      </div>
-
-      {/* Anvelope + comentarii pe același rând */}
-      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:3px">
-        <For each={c().items}>
-          {(item) => (
-            <Show when={item.anvelopa}>
-              <span style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:10px">
-                {item.anvelopa!.marcaNume ?? "—"} {item.anvelopa!.dimensiuneValoare ?? ""}<Show when={item.anvelopa!.profilValoare}> /{item.anvelopa!.profilValoare}</Show> · {TIP_LABELS[item.anvelopa!.tip]}
-                <Show when={item.anvelopa!.adancime != null}> · {item.anvelopa!.adancime}mm</Show>
-              </span>
-            </Show>
+      </span>
+      <div class="hotel-menu" ref={menuRef}>
+        <button
+          class="btn btn-ghost btn-sm hotel-menu-toggle"
+          aria-label={pdfLoading() ? "Acțiuni (se pregătește PDF-ul)" : "Acțiuni"}
+          aria-haspopup="menu" aria-expanded={menuOpen()} aria-busy={pdfLoading() !== null}
+          title={pdfLoading() ? "Se pregătește PDF-ul..." : undefined}
+          onClick={toggleMenu}
+        >{pdfLoading() ? "…" : "⋮"}</button>
+        <Show when={menuOpen() && menuPos()}>
+          {(pos) => (
+              <div
+                class="hotel-menu-list" role="menu"
+                style={{ top: `${pos().top}px`, right: `${pos().right}px` }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Show when={!c().dataCheckout}>
+                  <button role="menuitem" onClick={run(() => props.onCheckout(c()))}>
+                    <span class="hotel-menu-icon" aria-hidden="true">⏏</span>Scoatere
+                  </button>
+                  <button role="menuitem" onClick={run(() => props.onCheckoutNew(c()))}>
+                    <span class="hotel-menu-icon" aria-hidden="true">⇄</span>Scoatere și introducere nouă
+                  </button>
+                </Show>
+                {/* Editabil cat e activa, plus inca EDIT_GRACE_DAYS zile dupa checkout. */}
+                <Show when={canEditCazare(c())}>
+                  <button role="menuitem" onClick={run(() => props.onEdit(c()))}>
+                    <span class="hotel-menu-icon" aria-hidden="true">✎</span>Editează
+                  </button>
+                </Show>
+                <button role="menuitem" onClick={run(() => void handlePdf("checkin"))} disabled={pdfLoading() === "checkin"}>
+                  <span class="hotel-menu-icon" aria-hidden="true">🗎</span>
+                  {pdfLoading() === "checkin" ? "Se pregătește..." : "PDF Intrare"}
+                </button>
+                <Show when={c().dataCheckout}>
+                  <button role="menuitem" onClick={run(() => void handlePdf("checkout"))} disabled={pdfLoading() === "checkout"}>
+                    <span class="hotel-menu-icon" aria-hidden="true">🗎</span>
+                    {pdfLoading() === "checkout" ? "Se pregătește..." : "PDF Ieșire"}
+                  </button>
+                </Show>
+                <Show when={c().dataCheckout && c().successorCazareId != null}>
+                  <button role="menuitem" onClick={run(() => void handleCombinedPdf())} disabled={pdfLoading() === "combined"}>
+                    <span class="hotel-menu-icon" aria-hidden="true">🗎</span>
+                    {pdfLoading() === "combined" ? "Se pregătește..." : "PDF Scoatere + Introducere"}
+                  </button>
+                </Show>
+              </div>
           )}
-        </For>
-        <Show when={c().comments}>
-          <span style="font-size:11px;color:var(--text-muted);font-style:italic">{c().comments}</span>
-        </Show>
-      </div>
-
-      {/* Acțiuni */}
-      <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap" onClick={(e) => e.stopPropagation()}>
-        <Show when={!c().dataCheckout}>
-          <button class="btn btn-primary btn-sm" onClick={() => props.onCheckout(c())}>Scoatere</button>
-          <button class="btn btn-ghost btn-sm" onClick={() => props.onCheckoutNew(c())}>Scoatere și introducere nouă</button>
-        </Show>
-        {/* Editabil cat e activa, plus inca EDIT_GRACE_DAYS zile dupa checkout. */}
-        <Show when={canEditCazare(c())}>
-          <button class="btn btn-ghost btn-sm" onClick={() => props.onEdit(c())}>Editează</button>
-        </Show>
-        <button class="btn btn-ghost btn-sm" onClick={() => handlePdf("checkin")} disabled={pdfLoading() === "checkin"}>
-          {pdfLoading() === "checkin" ? "..." : "PDF Intrare"}
-        </button>
-        <Show when={c().dataCheckout}>
-          <button class="btn btn-ghost btn-sm" onClick={() => handlePdf("checkout")} disabled={pdfLoading() === "checkout"}>
-            {pdfLoading() === "checkout" ? "..." : "PDF Ieșire"}
-          </button>
-        </Show>
-        <Show when={c().dataCheckout && c().successorCazareId != null}>
-          <button class="btn btn-ghost btn-sm" onClick={handleCombinedPdf} disabled={pdfLoading() === "combined"}>
-            {pdfLoading() === "combined" ? "..." : "PDF Scoatere + Introducere"}
-          </button>
         </Show>
       </div>
     </div>
@@ -767,6 +907,15 @@ export default function HotelAnvelope() {
   // ── Mod "Căutare istoric" — afișează toate cazările active pentru scoatere
   const [historySearchMode, setHistorySearchMode] = createSignal(false);
 
+  // Zona derulabila a listei: si containerul de derulare, si `root`-ul pentru
+  // sentinela de incarcare progresiva.
+  let scrollRef: HTMLDivElement | undefined;
+  let pageRef: HTMLDivElement | undefined;
+
+  // Antetul ramane pe loc, doar lista se deruleaza (vezi hook-ul). Dupa fiecare
+  // redimensionare poate sa fi ramas loc liber sub ultima cazare.
+  createFitToViewport({ scroll: () => scrollRef, page: () => pageRef, onFit: () => topUpCazari() });
+
   async function checkPastMounting(plate: string | null | undefined, target: "new" | "combined") {
     const p = (plate ?? "").trim();
     if (!p) return;
@@ -782,21 +931,24 @@ export default function HotelAnvelope() {
     setEntryChoicePrompt(false);
     setShowNewModal(false);
     setHistorySearchMode(true);
-    setSearchName("");
+    resetSearch();
     setFilterDim("");
     setFilterTip("");
+    // Toate cazările active, din toate locațiile și de la toți clienții, ca să
+    // poată căuta global (scoatere de la alt client). Domeniul se pune înaintea
+    // tab-ului: schimbarea tab-ului reîncarcă lista pe loc.
+    setScope({ allLocations: true });
     setView("active");
-    // Încarcă toate cazările active (fără filtru de client) ca să poată căuta global
-    await loadCazari({ activa: true, limit: 200 });
+    await fetchCazari();
   }
 
   function exitHistorySearchMode() {
     setHistorySearchMode(false);
-    setSearchName("");
+    resetSearch();
     // Revine la cazările clientului curent dacă există context POS
     const ctx = posHotelCtx();
-    if (ctx) void loadCazari({ clientId: ctx.clientId, activa: true, limit: 200 });
-    else void fetchCazari();
+    setScope(ctx ? { clientId: ctx.clientId } : {});
+    void fetchCazari();
   }
 
   function applySuggestion() {
@@ -863,9 +1015,53 @@ export default function HotelAnvelope() {
   const [editErr, setEditErr] = createSignal("");
 
   // ── Filtre ─────────────────────────────────────────────────────────────────
+  // `searchName` e ce se vede in caseta; `searchTerm` e ce s-a trimis la server.
+  // Cautarea pleaca dupa ce omul se opreste din tastat, nu la fiecare tasta.
   const [searchName, setSearchName] = createSignal("");
+  const [searchTerm, setSearchTerm] = createSignal("");
+  // Din ce cazari arata pagina lista, inainte de cautare si filtre (vezi `query`).
+  const [scope, setScope] = createSignal<{ clientId?: number; allLocations?: boolean }>({});
+  const [totalSummary, setTotalSummary] = createSignal<CazariSummary | null>(null);
+  const [searchSummary, setSearchSummary] = createSignal<CazariSummary | null>(null);
+  let searchTimer: ReturnType<typeof setTimeout> | undefined;
+  function typeSearch(value: string) {
+    setSearchName(value);
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      const term = value.trim();
+      if (term === searchTerm()) return;
+      setSearchTerm(term);
+      void refetchForFilter();
+    }, 350);
+  }
+  onCleanup(() => clearTimeout(searchTimer));
   const [filterDim, setFilterDim] = createSignal("");
   const [filterTip, setFilterTip] = createSignal<TipAnvelopa | "">("");
+  // Locul din depozit se filtrează pe server, ca și căutarea: altfel „câte sunt
+  // în C1 DR" s-ar răspunde doar din pagina încărcată.
+  const [filterLoc, setFilterLoc] = createSignal<number | "">("");
+  function pickLoc(value: string) {
+    setFilterLoc(value === "" ? "" : Number(value));
+    void refetchForFilter();
+  }
+
+  /** Uita cautarea si filtrul de loc (si o cautare inca netrimisa). */
+  function resetSearch() {
+    clearTimeout(searchTimer);
+    setSearchName("");
+    setSearchTerm("");
+    setFilterLoc("");
+    setSearchSummary(null);
+  }
+  /** Adevărat cât timp lista nu e cea întreagă — atunci arătăm sumarul de jos. */
+  const hasServerFilter = () => searchTerm() !== "" || filterLoc() !== "";
+  const filterLabel = () => {
+    const parts: string[] = [];
+    if (searchTerm()) parts.push(`pentru „${searchTerm()}”`);
+    const loc = locuriCazare().find((l) => l.id === filterLoc());
+    if (loc) parts.push(`în locul „${loc.nume}”`);
+    return parts.join(", ");
+  };
 
   // ── Admin section ──────────────────────────────────────────────────────────
   // Mărcile sunt acum globale (gestionate exclusiv din AdminV2 — secțiunea
@@ -901,6 +1097,45 @@ export default function HotelAnvelope() {
 
   let sentinelRef: HTMLDivElement | undefined;
 
+  /** Mai aduce o pagină cât timp sentinela e aproape de capătul listei.
+   *
+   *  `IntersectionObserver` singur nu ajunge: el anunță doar *trecerile* în
+   *  vizibil. Dacă după încărcare sentinela rămâne unde era (pagina abia umple
+   *  zona, sau derularea a sărit peste prag), nu mai vine niciun eveniment și
+   *  lista se oprește. Aici verificăm starea, nu tranziția. */
+  function topUpCazari() {
+    const el = scrollRef;
+    if (!el) return;
+    if (!cazariHasMore() || cazariLoadingMore()) return;
+    // Dimensiunea si tipul filtreaza doar ce e deja adus: daca potrivesc putine
+    // randuri, lista nu umple ecranul niciodata si am aduce pagina dupa pagina,
+    // toata baza. Acolo se incarca la cerere, cu butonul de sub lista.
+    if (filterDim() || filterTip()) return;
+    // Plasa de siguranta: daca lista n-a apucat sa fie masurata si e mai inalta
+    // decat ecranul, „mai e de derulat?" ar raspunde mereu nu si am aduce toate
+    // paginile deodata.
+    if (el.clientHeight > window.innerHeight) return;
+    // Cat timp a mai ramas de derulat, nu cerem nimic. Masuram pe containerul
+    // listei, nu fata de fereastra: asa nu conteaza unde e pagina pe ecran.
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 400) return;
+    void loadMoreCazari();
+  }
+
+  // După fiecare pagină primită, reverificăm: așa se leagă paginile una după
+  // alta cât timp mai e loc pe ecran.
+  createEffect(() => {
+    cazari().length;
+    requestAnimationFrame(topUpCazari);
+  });
+
+  // Derularea listei e verificată la fiecare cadru, nu la fiecare eveniment.
+  let scrollPending = false;
+  function onListScroll() {
+    if (scrollPending) return;
+    scrollPending = true;
+    requestAnimationFrame(() => { scrollPending = false; topUpCazari(); });
+  }
+
   onMount(async () => {
     setLoading(true);
     try {
@@ -934,11 +1169,16 @@ export default function HotelAnvelope() {
           };
           setPageSelectedClient(clientItem);
           if (searchPlateParam) {
+            // Toate cazarile active cu placuta, posibil la alti clienti: cautarea
+            // merge prin caseta, deci golirea ei arata toate cazarile active.
+            setScope({ allLocations: true });
             setSearchName(searchPlateParam);
-            await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
+            setSearchTerm(searchPlateParam.trim());
           } else {
-            await loadCazari({ clientId: c.id, activa: true, limit: 200 });
+            // Doar cazarile clientului venit din POS — si cautarea ramane in ele.
+            setScope({ clientId: c.id });
           }
+          await fetchCazari();
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare client.", "error");
@@ -970,15 +1210,22 @@ export default function HotelAnvelope() {
         setEntryChoicePrompt(true);
       }
     } else if (searchPlateParam) {
+      // Căutarea după plăcuță trece prin aceeași casetă: utilizatorul vede în ea
+      // ce s-a căutat și poate continua de acolo.
       setSearchName(searchPlateParam);
+      setSearchTerm(searchPlateParam.trim());
       try {
-        await loadCazari({ activa: true, numarMasina: searchPlateParam, limit: 200 });
+        await fetchCazari();
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare cazări.", "error");
       }
     } else {
       await fetchCazari();
     }
+
+    // Daca incarcarea clientului din POS a esuat, lista n-a pornit deloc; antetul
+    // are totusi nevoie de total.
+    if (summarySeq === 0) void refreshSummaries();
 
     // Dacă vine cu param viewCazare → deschide modal view-only
     const viewId = searchParams.viewCazare;
@@ -995,8 +1242,9 @@ export default function HotelAnvelope() {
     }
 
     const observer = new IntersectionObserver(
+      // `root`: sentinela e in zona derulabila a listei, nu in fereastra.
       (entries) => { if (entries[0].isIntersecting) loadMoreCazari(); },
-      { threshold: 0.1 }
+      { root: scrollRef ?? null, threshold: 0.1 }
     );
     if (sentinelRef) observer.observe(sentinelRef);
     onCleanup(() => observer.disconnect());
@@ -1086,17 +1334,59 @@ export default function HotelAnvelope() {
     }
   }
 
+  /** Filtrul trimis la server — acelasi pentru lista si pentru numaratori.
+   *  Domeniul (`scope`) spune din ce cazari se cauta: ale clientului venit din
+   *  POS (toate locatiile lui), toate locatiile (modul de cautare in istoric),
+   *  sau — implicit — cele ale punctului de lucru al statiei. */
+  const query = (withSearch: boolean): CazariQuery => {
+    const s = scope();
+    return {
+      activa: view() === "active",
+      // O suta pe pagina: se afiseaza repede, iar derularea aduce urmatoarele.
+      limit: PAGE_SIZE,
+      clientId: s.clientId,
+      locationId: s.clientId !== undefined || s.allLocations ? undefined : (device()?.locationId ?? undefined),
+      locCazareId: filterLoc() === "" ? undefined : (filterLoc() as number),
+      q: withSearch ? (searchTerm() || undefined) : undefined,
+    };
+  };
+
   async function fetchCazari() {
-    const locId = device()?.locationId ?? undefined;
-    if (view() === "active") {
-      await loadCazari({ activa: true, limit: 200, locationId: locId });
-    } else {
-      await loadCazari({ activa: false, limit: 200, locationId: locId });
-    }
+    // Sumarul porneste in paralel cu lista, nu dupa ea.
+    void refreshSummaries();
+    await loadCazari(query(true));
+  }
+
+  /** Dupa o schimbare de cautare/filtru: sumarul vechi nu mai are voie sa stea
+   *  pe ecran cu eticheta noua cat timp vine raspunsul. */
+  async function refetchForFilter() {
+    setSearchSummary(null);
+    await fetchCazari();
+  }
+
+  /** Totalul din antet (fara cautare) si sumarul cautarii curente.
+   *
+   *  Lista se incarca pe pagini, cu derulare infinita, deci nici totalul din
+   *  antet, nici „cate s-au gasit" nu se pot calcula din `cazari()`. Fiecare
+   *  apel primeste un numar de ordine: raspunsul unui apel depasit (alt tab,
+   *  alt loc, alta cautare intre timp) se arunca, altfel ar aparea cu eticheta
+   *  filtrului nou. */
+  let summarySeq = 0;
+  async function refreshSummaries() {
+    const seq = ++summarySeq;
+    // Totalul din antet nu tine cont nici de cautare, nici de loc: e cate cazari
+    // are punctul de lucru, pe tab-ul curent.
+    const [all, found] = await Promise.all([
+      loadCazariSummary({ activa: view() === "active", locationId: device()?.locationId ?? undefined }),
+      hasServerFilter() ? loadCazariSummary(query(true)) : Promise.resolve(null),
+    ]);
+    if (seq !== summarySeq) return;
+    setTotalSummary(all);
+    setSearchSummary(found);
   }
 
   // defer: true → sare prima rulare (onMount gestionează încărcarea inițială)
-  createEffect(on(view, () => { fetchCazari(); }, { defer: true }));
+  createEffect(on(view, () => { void refetchForFilter(); }, { defer: true }));
 
   createEffect(() => {
     if (canManage()) {
@@ -1106,16 +1396,13 @@ export default function HotelAnvelope() {
     }
   });
 
+  // Numele si placuta se filtreaza pe server (`q`), ca sa caute in toate
+  // cazarile, nu doar in pagina incarcata. Dimensiunea si tipul raman aici:
+  // tin de anvelopele deja aduse odata cu cazarea.
   const filtered = createMemo(() => {
-    const name = searchName().toLowerCase().trim();
     const dim = filterDim().toLowerCase().trim();
     const tip = filterTip();
     return cazari().filter((c) => {
-      if (name) {
-        const matchClient = (c.clientNume ?? "").toLowerCase().includes(name);
-        const matchPlate = (c.numarMasina ?? "").toLowerCase().includes(name);
-        if (!matchClient && !matchPlate) return false;
-      }
       if (dim) {
         const hasDim = c.items.some((item) =>
           (item.anvelopa?.dimensiuneValoare ?? "").toLowerCase().includes(dim)
@@ -1760,7 +2047,7 @@ export default function HotelAnvelope() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div class="page-content">
+    <div class="page-content reception-page hotel-page" ref={pageRef}>
 
       {/* ── Banner mod căutare istoric ── */}
       <Show when={historySearchMode()}>
@@ -1779,16 +2066,34 @@ export default function HotelAnvelope() {
 
       {/* ── Header ── */}
       <div class="page-header">
-        <h1 class="page-title">Hotel Anvelope</h1>
+        <h1 class="page-title">
+          Hotel Anvelope
+          <Show when={totalSummary()}>
+            {(s) => (
+              <span class="hotel-total" title="Numărate în baza de date, nu doar cele încărcate în pagină">
+                {s().cazari.toLocaleString("ro-RO")} {s().cazari === 1 ? "cazare" : "cazări"}
+                {" "}{view() === "active" ? "active" : "în istoric"}
+              </span>
+            )}
+          </Show>
+        </h1>
         <div class="reception-header-right">
           <input
-            class="input reception-search"
+            class="input reception-search hotel-search"
             type="search"
-            placeholder={historySearchMode() ? "Caută plăcuță sau client..." : "Caută client..."}
+            placeholder="Caută după nume client sau număr de mașină..."
             value={searchName()}
-            onInput={(e) => setSearchName(e.currentTarget.value)}
+            onInput={(e) => typeSearch(e.currentTarget.value)}
             autofocus={historySearchMode()}
           />
+          <select
+            class="input hotel-header-select"
+            value={String(filterLoc())}
+            onChange={(e) => pickLoc(e.currentTarget.value)}
+          >
+            <option value="">— Loc în depozit —</option>
+            <For each={locuriCazare()}>{(l) => <option value={l.id}>{l.nume}</option>}</For>
+          </select>
           <select
             class="input hotel-header-select"
             value={filterDim()}
@@ -1808,20 +2113,41 @@ export default function HotelAnvelope() {
             <option value="ms">M+S</option>
             <option value="altele">Altele</option>
           </select>
-          <span class="reception-count">{filtered().length} / {cazari().length} cazări</span>
+          <span class="reception-count">{filtered().length} afișate</span>
           <button class="btn btn-primary btn-sm" onClick={openNewModal}>+ Cazare Nouă</button>
           <button class="btn btn-ghost btn-sm" title="Administrare" aria-label="Administrare" onClick={() => setAdminOpen(true)}>⚙</button>
         </div>
       </div>
 
-      {/* ── Listă Cazări ── */}
-      <div>
-        {/* Tab Active / Istoric */}
-        <div style="display:flex;gap:8px;margin-bottom:12px">
-          <button class={`btn btn-sm ${view() === "active" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("active")}>Active</button>
-          <button class={`btn btn-sm ${view() === "istoric" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("istoric")}>Istoric</button>
-        </div>
+      {/* Sumarul filtrului, chiar sub caseta de căutare — numărat pe server,
+          peste toate cazările, nu doar peste pagina încărcată. */}
+      <Show when={hasServerFilter() && searchSummary()}>
+        {(s) => (
+          <div class="hotel-search-summary">
+            <strong>
+              {s().cazari.toLocaleString("ro-RO")} {s().cazari === 1 ? "cazare găsită" : "cazări găsite"}
+            </strong>
+            <Show when={filterLabel()}>{" "}{filterLabel()}</Show>
+            {" · "}{s().anvelope.toLocaleString("ro-RO")} {s().anvelope === 1 ? "anvelopă" : "anvelope"}
+            {" · "}{s().clienti.toLocaleString("ro-RO")} {s().clienti === 1 ? "client" : "clienți"}
+            {" · "}{view() === "active" ? "în cazare" : "în istoric"}
+            <Show when={filtered().length !== cazari().length}>
+              <span class="hotel-search-summary-note">
+                {" "}(afișate {filtered().length}, după filtrele de dimensiune/tip)
+              </span>
+            </Show>
+          </div>
+        )}
+      </Show>
 
+      {/* ── Tab Active / Istoric (rămâne fix deasupra listei) ── */}
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex:0 0 auto">
+        <button class={`btn btn-sm ${view() === "active" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("active")}>Active</button>
+        <button class={`btn btn-sm ${view() === "istoric" ? "btn-primary" : "btn-ghost"}`} onClick={() => setView("istoric")}>Istoric</button>
+      </div>
+
+      {/* ── Listă Cazări — singura parte care se derulează ── */}
+      <div class="reception-scroll" ref={scrollRef} onScroll={onListScroll}>
         <Show when={loading()}>
           <p style="color:var(--text-muted)">Se încarcă...</p>
         </Show>
@@ -1829,18 +2155,34 @@ export default function HotelAnvelope() {
         <Show when={!loading() && filtered().length === 0}>
           <div class="rcard" style="text-align:center;padding:40px 16px">
             <div style="color:var(--text-muted)">
-              {cazari().length === 0
+              {cazari().length === 0 && !hasServerFilter()
                 ? `Nicio cazare ${view() === "active" ? "activă" : "în istoric"}.`
                 : "Niciun rezultat pentru filtrul selectat."}
             </div>
           </div>
         </Show>
 
+        {/* Antetul coloanelor rămâne lipit sus cât derulezi lista. */}
+        <Show when={filtered().length > 0}>
+          <div class="hotel-head">
+            <span>#</span>
+            <span>Nr. mașină</span>
+            <span>Nume</span>
+            <span>Telefon</span>
+            <span>Cazare</span>
+            <span>Loc</span>
+            <span>Anvelope</span>
+            <span>Stare</span>
+            <span />
+          </div>
+        </Show>
+
         <div class="rcard-list">
           <For each={filtered()}>
-            {(c) => (
+            {(c, i) => (
               <CazareCard
                 cazare={c}
+                index={i() + 1}
                 companyData={companyData()}
                 onCheckout={openCheckout}
                 onCheckoutNew={(c) => openCombined(c)}
@@ -1858,6 +2200,11 @@ export default function HotelAnvelope() {
           </Show>
           <Show when={!cazariHasMore() && !cazariLoadingMore() && cazari().length > 0}>
             <span style="color:var(--text-muted);font-size:12px">— toate cazările încărcate —</span>
+          </Show>
+          <Show when={cazariHasMore() && !cazariLoadingMore() && (filterDim() || filterTip())}>
+            <button class="btn btn-ghost btn-sm" onClick={() => void loadMoreCazari()}>
+              Caută și în următoarele {PAGE_SIZE} cazări
+            </button>
           </Show>
         </div>
       </div>
@@ -2065,11 +2412,7 @@ export default function HotelAnvelope() {
                           style="flex-shrink:0"
                         />
                         <span style="flex:1;min-width:0">
-                          <strong>{a.marcaNume ?? "—"}</strong>
-                          <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                          <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                          {" · "}{TIP_LABELS[a.tip]}
-                          <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                          <AnvelopaLine a={a} />
                           <Show when={a.id < 0}>
                             <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
                           </Show>
@@ -2339,11 +2682,7 @@ export default function HotelAnvelope() {
                           />
                           <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
                           <span style="flex:1;min-width:0">
-                            <strong>{a.marcaNume ?? "—"}</strong>
-                            <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                            <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                            {" · "}{TIP_LABELS[a.tip]}
-                            <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                            <AnvelopaLine a={a} />
                             <Show when={a.id < 0}>
                               <span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span>
                             </Show>
@@ -2781,11 +3120,7 @@ export default function HotelAnvelope() {
                                 <input type="checkbox" checked={selectedAnvIds().has(a.id)} onChange={() => toggleAnv(a.id)} style="flex-shrink:0" />
                                 <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;min-width:18px;text-align:right">{idx() + 1}.</span>
                                 <span style="flex:1;min-width:0">
-                                  <strong>{a.marcaNume ?? "—"}</strong>
-                                  <Show when={a.dimensiuneValoare}> {a.dimensiuneValoare}</Show>
-                                  <Show when={a.dotValoare}>{" · DOT "}{a.dotValoare}</Show>
-                                  {" · "}{TIP_LABELS[a.tip]}
-                                  <Show when={a.adancime != null}>{" · "}{a.adancime}mm</Show>
+                                  <AnvelopaLine a={a} />
                                   <Show when={a.id < 0}><span style="color:var(--primary);font-size:11px;margin-left:4px">(nou)</span></Show>
                                 </span>
                                 <button
@@ -3018,6 +3353,15 @@ export default function HotelAnvelope() {
             footerStyle="display:flex;gap:6px;flex-wrap:wrap"
             bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:14px"
             footer={<>
+              {/* Aceleași acțiuni ca în meniul din listă: cine a deschis cazarea
+                  ca să se uite la ea nu trebuie să închidă ca să poată lucra. */}
+              <Show when={!c().dataCheckout}>
+                <button class="btn btn-primary btn-sm" onClick={() => { const x = c(); setViewOnlyCazare(null); openCheckout(x); }}>Scoatere</button>
+                <button class="btn btn-ghost btn-sm" onClick={() => { const x = c(); setViewOnlyCazare(null); openCombined(x); }}>Scoatere și introducere nouă</button>
+              </Show>
+              <Show when={canEditCazare(c())}>
+                <button class="btn btn-ghost btn-sm" onClick={() => { const x = c(); setViewOnlyCazare(null); openEdit(x); }}>Editează</button>
+              </Show>
               <button class="btn btn-ghost btn-sm" onClick={() => viewModalPdf("checkin", c())} disabled={viewPdfLoading() === "checkin"}>
                 {viewPdfLoading() === "checkin" ? "..." : "PDF Cazare"}
               </button>
@@ -3043,7 +3387,22 @@ export default function HotelAnvelope() {
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Client</div>
                 <div style="display:grid;gap:5px;font-size:13px">
                   <Show when={c().clientNume}>
-                    <div><span style="color:var(--text-muted)">Nume:</span> <strong>{c().clientNume}</strong></div>
+                    <div>
+                      <span style="color:var(--text-muted)">Nume:</span>{" "}
+                      {/* Spre fisa clientului, in tab nou: cazarea ramane
+                          deschisa in spate. Link obisnuit, fara `preventDefault`
+                          — asa browserul trece singur pe tab-ul nou; deschis din
+                          cod (`window.open`) l-ar putea lasa in fundal. */}
+                      <Show when={c().clientId} fallback={<strong>{c().clientNume}</strong>}>
+                        <a
+                          class="hotel-client-link"
+                          href={`${API_BASE}/clienti/${c().clientId}`}
+                          target="_blank"
+                          rel="noopener"
+                          title="Deschide fișa clientului într-o filă nouă"
+                        >{c().clientNume} ↗</a>
+                      </Show>
+                    </div>
                   </Show>
                   <Show when={c().clientCui}>
                     <div><span style="color:var(--text-muted)">CUI:</span> {c().clientCui}</div>
@@ -3095,9 +3454,20 @@ export default function HotelAnvelope() {
                 <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px">Date Cazare</div>
                 <div style="display:grid;gap:5px;font-size:13px">
                   <div><span style="color:var(--text-muted)">Check-in:</span> <strong>{fmtDate(c().dataCheckin)}</strong></div>
+                  {/* Cat a trecut de la cazare pana azi — la cele active e chiar
+                      de cat timp stau anvelopele in depozit. */}
+                  <div style="font-size:12px;color:var(--text-muted);margin-top:-3px">
+                    <Show
+                      when={c().dataCheckout}
+                      fallback={<>În depozit de {zile(daysBetween(c().dataCheckin, todayStr()))} ({deCand(c().dataCheckin)})</>}
+                    >
+                      {deCand(c().dataCheckin)}
+                    </Show>
+                  </div>
                   <Show when={c().dataCheckout}>
                     <div><span style="color:var(--text-muted)">Check-out:</span> <strong>{fmtDate(c().dataCheckout)}</strong></div>
-                    <div style="font-weight:600;color:var(--primary)">Durată: {daysBetween(c().dataCheckin, c().dataCheckout!)} zile</div>
+                    <div style="font-size:12px;color:var(--text-muted);margin-top:-3px">{deCand(c().dataCheckout!)}</div>
+                    <div style="font-weight:600;color:var(--primary)">Durată: {zile(daysBetween(c().dataCheckin, c().dataCheckout!))}</div>
                   </Show>
                   <Show when={c().locCazareNume}>
                     <div><span style="color:var(--text-muted)">Loc:</span> {c().locCazareNume}</div>

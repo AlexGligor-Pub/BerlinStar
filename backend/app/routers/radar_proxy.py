@@ -5,9 +5,13 @@
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database import get_db
 from app.dependencies import get_settings_account_id
+from app.models.global_settings import GlobalSettings
 from app.radar_client import proxy
 
 _METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
@@ -16,8 +20,29 @@ _METHODS = ["GET", "POST", "PUT", "DELETE", "PATCH"]
 _SLOW_PATH = "settings/suggest-context"
 _SLOW_READ_TIMEOUT = 200.0
 
-router = APIRouter()
-discovery_router = APIRouter()
+async def require_radar_enabled(
+    _account_id: int = Depends(get_settings_account_id),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Radar oprit din AdminV2 => ruta nu exista.
+
+    Ascunderea din meniu nu ajunge: pagina ar ramane accesibila scriind adresa.
+    404, nu 403: cand o functionalitate e stinsa, nu exista — nu e o chestiune
+    de drepturi.
+
+    Depinde de autentificare, ca aceasta sa ruleze prima: altfel un apel
+    neautentificat ar afla din 404-vs-401 daca Radar e pornit. FastAPI
+    memoreaza dependinta pe request, deci contul nu se rezolva de doua ori.
+    """
+    enabled = await db.scalar(select(GlobalSettings.radar_enabled).limit(1))
+    # Fara rand in tabela, platforma e proaspat instalata: implicit pornit.
+    if enabled is False:
+        raise HTTPException(404, "Radar AI este dezactivat.")
+
+
+# Garda sta pe routere, nu pe rute: o ruta adaugata mai tarziu nu o poate uita.
+router = APIRouter(dependencies=[Depends(require_radar_enabled)])
+discovery_router = APIRouter(dependencies=[Depends(require_radar_enabled)])
 
 
 @router.api_route("", methods=_METHODS)

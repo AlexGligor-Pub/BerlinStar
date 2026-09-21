@@ -1,7 +1,9 @@
-import { For, Show, Suspense, createMemo, createSignal, lazy, type Component } from "solid-js";
+import { For, Show, Suspense, createMemo, createSignal, lazy, onMount, type Component } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
 import { can, type Resource } from "../store/permissions";
 import { Dynamic } from "solid-js/web";
+import { importPending, refreshImportPending } from "../store/importPending";
+import type { ImportKind } from "../api/imports";
 
 const WelcomePanel = lazy(() => import("./configurari/WelcomePanel"));
 
@@ -32,6 +34,15 @@ const TOPIC_GROUPS = [
     ],
   },
   {
+    // Importuri in masa din fisiere. Clientii doar adminul contului; hotelul de
+    // anvelope si managerul (serverul verifica rolul pe tip, /api/import/*).
+    label: "Import",
+    items: [
+      { id: "import-clienti", label: "Clienți", requires: "users" },
+      { id: "import-hotel",   label: "Hotel anvelope" },
+    ],
+  },
+  {
     label: "Cont",
     items: [
       // `requires` = resursa ceruta; lipsa ei inseamna „vizibil tuturor
@@ -56,10 +67,15 @@ const PANELS: Record<TopicId, Component> = {
   "setari-generale": lazy(() => import("./configurari/SetariGeneralePanel")),
   dispozitiv: lazy(() => import("./configurari/DispozitivulMeuPanel")),
   efactura: lazy(() => import("./configurari/EFacturaPanel")),
+  "import-clienti": lazy(() => import("./configurari/ImportClientiPanel")),
+  "import-hotel": lazy(() => import("./configurari/ImportHotelPanel")),
   utilizatori: lazy(() => import("./configurari/UtilizatoriPanel")),
   "contul-meu": lazy(() => import("./configurari/ContulMeuPanel")),
   abonament: lazy(() => import("./configurari/AbonamentPanel")),
 };
+
+// Intrarile de import din meniu -> tipul importului (pentru indicatorul de actiuni).
+const IMPORT_TOPICS: Partial<Record<string, ImportKind>> = { "import-clienti": "clienti", "import-hotel": "hotel" };
 
 const TOPIC_IDS = new Set<string>(TOPIC_GROUPS.flatMap((g) => g.items.map((t) => t.id)));
 
@@ -70,6 +86,10 @@ export default function Configurari() {
   const [active, setActive] = createSignal<TopicId | null>(
     initial && TOPIC_IDS.has(initial) ? (initial as TopicId) : null,
   );
+
+  // Randurile de import care asteapta o decizie apar ca indicator in meniu,
+  // ca adminul sa vada ca are ceva de facut fara sa deschida sectiunea.
+  onMount(() => void refreshImportPending());
 
   // Ascundem intrarile pe care rolul curent nu le poate deschide (serverul le
   // respinge oricum cu 403) si grupurile ramase goale.
@@ -96,7 +116,14 @@ export default function Configurari() {
                     class="cfg-sidebar-item"
                     classList={{ "cfg-sidebar-item--active": active() === t.id }}
                     onClick={() => setActive(t.id)}
-                  >{t.label}</button>
+                  >
+                    {t.label}
+                    <Show when={IMPORT_TOPICS[t.id] && importPending(IMPORT_TOPICS[t.id]!).rows > 0}>
+                      <span class="cfg-sidebar-badge" title="Rânduri de import de rezolvat">
+                        {importPending(IMPORT_TOPICS[t.id]!).rows}
+                      </span>
+                    </Show>
+                  </button>
                 )}
               </For>
             </div>

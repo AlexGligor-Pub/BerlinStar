@@ -236,27 +236,70 @@ function buildCazariQs(params: Parameters<typeof loadCazari>[0], lastId?: number
   if (params?.activa !== undefined) qs.set("activa", String(params.activa));
   if (params?.clientId !== undefined) qs.set("client_id", String(params.clientId));
   if (params?.locationId !== undefined) qs.set("location_id", String(params.locationId));
+  if (params?.locCazareId !== undefined) qs.set("loc_cazare_id", String(params.locCazareId));
   if (params?.numarMasina) qs.set("numar_masina", params.numarMasina);
+  if (params?.q?.trim()) qs.set("q", params.q.trim());
   if (params?.dateFrom) qs.set("date_from", params.dateFrom);
   if (params?.dateTo) qs.set("date_to", params.dateTo);
   if (lastId !== undefined) qs.set("last_id", String(lastId));
   return qs;
 }
 
-export async function loadCazari(params?: {
+export interface CazariQuery {
   activa?: boolean;
   clientId?: number;
   locationId?: number;
+  /** Locul din depozit (raft, poziție), nu punctul de lucru. */
+  locCazareId?: number;
   numarMasina?: string;
+  /** Cautare libera: nume de client SAU numar de masina. */
+  q?: string;
   dateFrom?: string;
   dateTo?: string;
   limit?: number;
-}) {
+}
+
+export interface CazariSummary {
+  cazari: number;
+  anvelope: number;
+  clienti: number;
+}
+
+/** Totalurile filtrului curent, numarate in baza de date.
+ *
+ *  Lista vine pe pagini (de cate 100), cu derulare infinita, deci nu se pot numara
+ *  din `cazari()`: la mii de cazari ar arata doar ce s-a apucat sa se incarce. */
+export async function loadCazariSummary(
+  params?: CazariQuery, signal?: AbortSignal,
+): Promise<CazariSummary | null> {
+  const qs = buildCazariQs(params);
+  qs.delete("limit");
+  try {
+    const res = await apiFetch(`/api/cazare-anvelope/summary?${qs}`, { signal });
+    if (!res.ok) return null;
+    return await res.json() as CazariSummary;
+  } catch {
+    return null;
+  }
+}
+
+/** Numarul de ordine al listei curente. Fiecare `loadCazari` incepe o lista
+ *  noua; orice raspuns — prima pagina sau o pagina urmatoare — care vine pentru
+ *  o lista mai veche se arunca. Altfel, o pagina ceruta pentru filtrul vechi (sau
+ *  cautarea „ab" sosita dupa „abc") s-ar amesteca in rezultatele noi. */
+let _cazariGeneration = 0;
+
+export async function loadCazari(params?: CazariQuery) {
+  const gen = ++_cazariGeneration;
   _setLastCazariParams(params);
+  // O pagina urmatoare inca in zbor apartine listei vechi: nu mai tine ocupat
+  // incarcatorul (raspunsul ei oricum se arunca).
+  setCazariLoadingMore(false);
   try {
     const res = await apiFetch(`/api/cazare-anvelope?${buildCazariQs(params)}`);
-    if (!res.ok) return;
+    if (!res.ok || gen !== _cazariGeneration) return;
     const data = await res.json();
+    if (gen !== _cazariGeneration) return;
     setCazari(data.items.map(mapCazare));
     setCazariHasMore(data.next_cursor != null);
     setCazariNextCursor(data.next_cursor ?? null);
@@ -267,16 +310,21 @@ export async function loadMoreCazari() {
   if (!cazariHasMore() || cazariLoadingMore()) return;
   const cursor = cazariNextCursor();
   if (cursor == null) return;
+  const gen = _cazariGeneration;
   setCazariLoadingMore(true);
   try {
     const qs = buildCazariQs(_lastCazariParams(), cursor);
     const res = await apiFetch(`/api/cazare-anvelope?${qs}`);
-    if (!res.ok) return;
+    if (!res.ok || gen !== _cazariGeneration) return;
     const data = await res.json();
+    if (gen !== _cazariGeneration) return;
     setCazari((prev) => [...prev, ...data.items.map(mapCazare)]);
     setCazariHasMore(data.next_cursor != null);
     setCazariNextCursor(data.next_cursor ?? null);
-  } catch {} finally { setCazariLoadingMore(false); }
+  } catch {} finally {
+    // Doar lista curenta isi elibereaza incarcatorul.
+    if (gen === _cazariGeneration) setCazariLoadingMore(false);
+  }
 }
 
 export async function getCazareById(id: number): Promise<Cazare | null> {

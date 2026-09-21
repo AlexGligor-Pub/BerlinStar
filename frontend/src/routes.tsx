@@ -2,6 +2,7 @@ import { lazy, type Component, type JSX } from "solid-js";
 import type { RouteSectionProps } from "@solidjs/router";
 import type { Resource } from "./store/permissions";
 import { generalSettings } from "./store/generalSettingsStore";
+import { radarEnabled } from "./store/featuresStore";
 
 export interface NavEntry {
   label: string;
@@ -17,6 +18,9 @@ export interface AppRoute {
   path: string;
   component: Component<RouteSectionProps>;
   requires?: Resource;
+  /** Functionalitate stinsa: ruta nu exista, iar cine scrie adresa ajunge pe
+   *  prima pagina. (Doar ascunderea din meniu e `nav.hidden`.) */
+  disabled?: () => boolean;
   nav?: NavEntry;
 }
 
@@ -87,7 +91,8 @@ export const APP_ROUTES: AppRoute[] = [
     path: "/radar",
     component: lazy(() => import("./pages/Radar")),
     requires: "settings",
-    nav: { label: "Radar AI", section: "demo", icon: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>') },
+    disabled: () => !radarEnabled(),
+    nav: { label: "Radar AI", section: "demo", hidden: () => !radarEnabled(), icon: svg('<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>') },
   },
   {
     path: "/efactura",

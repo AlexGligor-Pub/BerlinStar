@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone, date, timedelta
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, and_, delete as sql_delete, func
+from sqlalchemy import select, and_, delete as sql_delete, func, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,7 +9,10 @@ from app.database import get_db
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from app.models.anvelopa import Anvelopa
-from app.schemas.cazare_anvelope import CazareCreate, CazareRead, CazareCheckoutBody, CazareUpdateBody
+from app.models.client import Client
+from app.schemas.cazare_anvelope import (
+    CazareCreate, CazareRead, CazareCheckoutBody, CazareUpdateBody, CazariSummary,
+)
 from app.schemas.common import Page
 from app.utils.soft_delete import soft_delete
 
@@ -148,22 +151,27 @@ def _load_stmt(account_id: int):
     )
 
 
-@router.get("", response_model=Page[CazareRead])
-async def list_cazari(
-    activa: bool | None = None,
-    client_id: int | None = None,
-    receipt_id: int | None = None,
-    location_id: int | None = None,
-    numar_masina: str | None = None,
-    date_from: str | None = None,
-    date_to: str | None = None,
-    last_id: int | None = None,
-    limit: int = 50,
-    db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+# Numarul de masina se scrie in fel si chip („B 12 ABC", „B-12-ABC"): comparam
+# mereu forma fara spatii si fara liniute, pe ambele parti.
+def _plate_sql():
+    return func.upper(func.replace(func.replace(CazareAnvelope.numar_masina, " ", ""), "-", ""))
+
+
+def _plate_key(raw: str) -> str:
+    return (raw or "").strip().upper().replace(" ", "").replace("-", "")
+
+
+def _like(term: str) -> str:
+    """`%` si `_` scrise de utilizator sunt text cautat, nu jokeri."""
+    return "%" + term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def _filtered(
+    stmt, *, activa=None, client_id=None, receipt_id=None, location_id=None,
+    loc_cazare_id=None, numar_masina=None, q=None, date_from=None, date_to=None,
 ):
-    limit = min(limit, 200)
-    stmt = _load_stmt(account_id)
+    """Filtrele comune listei si sumarului — ca numaratoarea de jos sa nu poata
+    ajunge sa spuna altceva decat arata lista."""
     if activa is True:
         stmt = stmt.where(CazareAnvelope.data_checkout.is_(None))
     elif activa is False:
@@ -174,15 +182,53 @@ async def list_cazari(
         stmt = stmt.where(CazareAnvelope.receipt_id == receipt_id)
     if location_id is not None:
         stmt = stmt.where(CazareAnvelope.location_id == location_id)
+    if loc_cazare_id is not None:
+        stmt = stmt.where(CazareAnvelope.loc_cazare_id == loc_cazare_id)
     if numar_masina is not None:
-        plate = (numar_masina or "").strip().upper().replace(" ", "")
+        plate = _plate_key(numar_masina)
         if plate:
-            normalized = func.upper(func.replace(CazareAnvelope.numar_masina, " ", ""))
-            stmt = stmt.where(normalized == plate)
+            stmt = stmt.where(_plate_sql() == plate)
+    if q and q.strip():
+        # O singura caseta de cautare: numele clientului SAU numarul de masina.
+        term = q.strip()
+        conditions = [Client.nume.ilike(_like(term), escape="\\")]
+        # „-" sau „ - " nu lasa nimic din numar dupa normalizare; un LIKE '%%'
+        # ar potrivi toate cazarile cu numar de masina.
+        plate = _plate_key(term)
+        if plate:
+            conditions.append(_plate_sql().like(_like(plate), escape="\\"))
+        stmt = stmt.outerjoin(Client, Client.id == CazareAnvelope.client_id).where(or_(*conditions))
     if date_from:
         stmt = stmt.where(CazareAnvelope.data_checkin >= date_from)
     if date_to:
         stmt = stmt.where(CazareAnvelope.data_checkin <= date_to)
+    return stmt
+
+
+@router.get("", response_model=Page[CazareRead])
+async def list_cazari(
+    activa: bool | None = None,
+    client_id: int | None = None,
+    receipt_id: int | None = None,
+    location_id: int | None = None,
+    loc_cazare_id: int | None = None,
+    numar_masina: str | None = None,
+    q: str | None = None,
+    # `date`, nu `str`: comparat cu o coloana DATE, un text dadea eroare 500 in
+    # asyncpg; asa FastAPI il valideaza si raspunde 422 la o data gresita.
+    date_from: date | None = None,
+    date_to: date | None = None,
+    last_id: int | None = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    limit = min(limit, 200)
+    stmt = _filtered(
+        _load_stmt(account_id), activa=activa, client_id=client_id, receipt_id=receipt_id,
+        location_id=location_id, loc_cazare_id=loc_cazare_id, numar_masina=numar_masina, q=q,
+        date_from=date_from, date_to=date_to,
+    )
     if last_id is not None:
         stmt = stmt.where(CazareAnvelope.id < last_id)
     stmt = stmt.order_by(CazareAnvelope.id.desc()).limit(limit + 1)
@@ -194,6 +240,44 @@ async def list_cazari(
         items=[_serialize(r, succ_map.get(r.id)) for r in page],
         next_cursor=page[-1].id if has_more else None,
     )
+
+
+@router.get("/summary", response_model=CazariSummary)
+async def cazari_summary(
+    activa: bool | None = None,
+    client_id: int | None = None,
+    receipt_id: int | None = None,
+    location_id: int | None = None,
+    loc_cazare_id: int | None = None,
+    numar_masina: str | None = None,
+    q: str | None = None,
+    # `date`, nu `str`: comparat cu o coloana DATE, un text dadea eroare 500 in
+    # asyncpg; asa FastAPI il valideaza si raspunde 422 la o data gresita.
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: AsyncSession = Depends(get_db),
+    account_id: int = Depends(get_account_id),
+):
+    """Cate cazari (si cate anvelope, si cati clienti) intra in filtrul curent.
+
+    Lista vine pe pagini de cate 200, cu derulare infinita, deci numaratoarea nu
+    se poate face pe ce e incarcat in pagina: la 1.500 de cazari ar minti. Aici
+    sunt doua COUNT-uri pe aceleasi conditii ca lista.
+    """
+    base = _filtered(
+        select(CazareAnvelope.id, CazareAnvelope.client_id).where(
+            CazareAnvelope.account_id == account_id, CazareAnvelope.is_deleted == False,
+        ),
+        activa=activa, client_id=client_id, receipt_id=receipt_id, location_id=location_id,
+        loc_cazare_id=loc_cazare_id, numar_masina=numar_masina, q=q, date_from=date_from, date_to=date_to,
+    ).subquery()
+    cazari, clienti = (await db.execute(
+        select(func.count(), func.count(func.distinct(base.c.client_id))).select_from(base)
+    )).one()
+    anvelope = await db.scalar(
+        select(func.count(CazareAnvelopaItem.id)).where(CazareAnvelopaItem.cazare_id.in_(select(base.c.id)))
+    )
+    return CazariSummary(cazari=cazari, anvelope=anvelope or 0, clienti=clienti)
 
 
 @router.post("", response_model=CazareRead, status_code=201)

@@ -91,3 +91,14 @@ class CazareRead(BaseModel):
     referinta_cazare_data_checkin: str | None = None
     referinta_cazare_items: list[CazareItemRead] = []
     items: list[CazareItemRead] = []
+
+
+class CazariSummary(BaseModel):
+    """Totalurile filtrului curent, pentru antetul paginii si sumarul cautarii.
+
+    Lista se incarca pe pagini, deci numerele astea nu pot fi calculate din ce e
+    afisat: vin din aceleasi conditii ca lista, numarate in baza de date.
+    """
+    cazari: int
+    anvelope: int
+    clienti: int

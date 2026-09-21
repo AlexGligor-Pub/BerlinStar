@@ -33,6 +33,7 @@ def _out(gs) -> AiSettingsOut:
         ai_model=gs.ai_model or DEFAULT_MODEL,
         ai_price_in_usd_mtok=float(gs.ai_price_in_usd_mtok) if gs.ai_price_in_usd_mtok is not None else DEFAULT_PRICE_IN_USD_MTOK,
         ai_price_out_usd_mtok=float(gs.ai_price_out_usd_mtok) if gs.ai_price_out_usd_mtok is not None else DEFAULT_PRICE_OUT_USD_MTOK,
+        radar_enabled=bool(gs.radar_enabled),
     )
 
 
@@ -66,6 +67,8 @@ async def update_ai_settings(
             )
         setattr(gs, enc_field, encrypt(new))
     for field, value in data.items():
+        # `radar_enabled=False` e o valoare, nu o omisiune — de-aia se compara cu
+        # None, nu se testeaza adevarul.
         if value is not None:
             setattr(gs, field, value)
     await db.commit()

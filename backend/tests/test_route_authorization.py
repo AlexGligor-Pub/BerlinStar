@@ -88,6 +88,7 @@ ROLE_REQUIRED_PREFIXES = (
     "/api/stocuri",
     "/api/users",
     "/api/admin",
+    "/api/import",
 )
 
 # Scrieri operationale, permise tuturor rolurilor, in prefixe care altfel cer rol.

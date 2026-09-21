@@ -5,9 +5,11 @@ import { createPagination } from "../hooks/createPagination";
 import { createListResource } from "../hooks";
 import Pagination from "../components/data/Pagination";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
-import { CNP_PLACEHOLDER, cnpError, cnpForSave, type Client, type ClientVehicol } from "../types/client";
+import { CNP_PLACEHOLDER, type Client, type ClientVehicol } from "../types/client";
 import { clientiApi } from "../api/clienti";
-import { companiesApi, type AnafCompany } from "../api/companies";
+import ClientForm, {
+  clientFormError, clientFormPayload, clientToForm, emptyClientForm,
+} from "../components/clienti/ClientForm";
 
 function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: () => void; saving: boolean }) {
   return (
@@ -24,9 +26,7 @@ function DeleteModal(props: { label: string; onConfirm: () => void; onCancel: ()
   );
 }
 
-function emptyForm() {
-  return { tip: "fizic" as "fizic" | "juridic", nume: "", description: "", cui: CNP_PLACEHOLDER, reprezentant: "", telefon: "", email: "", adresa: "", numar_masina: "", comments: "" };
-}
+const emptyForm = emptyClientForm;
 
 function emptyVForm() {
   return { numar_masina: "", marca: "", model: "", an_fabricatie: "", numar_kilometrii: "", vin: "", observatii: "" };
@@ -63,8 +63,6 @@ export default function Clienti() {
   const [formError, setFormError] = createSignal<string | null>(null);
   const error = () => list.error() ?? formError();
 
-  const [anafLoading, setAnafLoading] = createSignal(false);
-  const [anafError, setAnafError] = createSignal<string | null>(null);
 
   // Vehicole state
   const [vehicoleMap, setVehicoleMap] = createSignal<Record<number, ClientVehicol[]>>({});
@@ -75,29 +73,6 @@ export default function Clienti() {
   const [vDeleteTarget, setVDeleteTarget] = createSignal<{ v: ClientVehicol; clientId: number } | null>(null);
   const [vSaving, setVSaving] = createSignal(false);
   const [vError, setVError] = createSignal<string | null>(null);
-
-  async function searchAnaf(cui: string, setF: (f: ReturnType<typeof emptyForm>) => void, f: ReturnType<typeof emptyForm>) {
-    const cuiNum = parseInt(cui.replace(/\D/g, ""));
-    if (!cuiNum) return;
-    setAnafLoading(true);
-    setAnafError(null);
-    try {
-      const res = await companiesApi.anafRaw(cuiNum);
-      if (res.status === 404) { setAnafError("CUI-ul nu a fost găsit în ANAF."); return; }
-      if (!res.ok) throw new Error();
-      const data = (await res.json()) as AnafCompany;
-      setF({
-        ...f,
-        nume: data.name ?? f.nume,
-        adresa: data.address ?? f.adresa,
-        reprezentant: data.representative ?? f.reprezentant,
-      });
-    } catch {
-      setAnafError("Eroare la interogarea ANAF.");
-    } finally {
-      setAnafLoading(false);
-    }
-  }
 
   let _searchDebounce: ReturnType<typeof setTimeout> | null = null;
   function debouncedLoad(): void {
@@ -126,7 +101,7 @@ export default function Clienti() {
   function startEdit(c: Client) {
     setEditId(c.id);
     setViewId(null);
-    setForm({ tip: c.tip, nume: c.nume, description: c.description ?? "", cui: c.cui ?? CNP_PLACEHOLDER, reprezentant: c.reprezentant ?? "", telefon: c.telefon ?? "", email: c.email ?? "", adresa: c.adresa ?? "", numar_masina: c.numar_masina ?? "", comments: c.comments ?? "" });
+    setForm(clientToForm(c));
     setAddMode(false);
     setFormError(null);
   }
@@ -135,19 +110,11 @@ export default function Clienti() {
 
   async function saveEdit() {
     const f = form();
-    if (!f.nume.trim()) { setFormError("Numele este obligatoriu."); return; }
-    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setFormError(e); return; } }
+    const err = clientFormError(f);
+    if (err) { setFormError(err); return; }
     setSaving(true); setFormError(null);
     try {
-      const updated = await clientiApi.update(editId()!, {
-        tip: f.tip, nume: f.nume.trim(),
-        description: f.description.trim() || null,
-        cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
-        reprezentant: f.reprezentant.trim() || null,
-        telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-        adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
-        comments: f.comments.trim() || null,
-      });
+      const updated = await clientiApi.update(editId()!, clientFormPayload(f));
       list.mutate((items) => items.map((c) => (c.id === updated.id ? updated : c)));
       setEditId(null);
     } catch (e: unknown) {
@@ -171,19 +138,11 @@ export default function Clienti() {
 
   async function saveAdd() {
     const f = newForm();
-    if (!f.nume.trim()) { setFormError("Numele este obligatoriu."); return; }
-    if (f.tip === "fizic") { const e = cnpError(f.cui); if (e) { setFormError(e); return; } }
+    const err = clientFormError(f);
+    if (err) { setFormError(err); return; }
     setSaving(true); setFormError(null);
     try {
-      const created = await clientiApi.create({
-        tip: f.tip, nume: f.nume.trim(),
-        description: f.description.trim() || null,
-        cui: f.tip === "fizic" ? cnpForSave(f.cui) : (f.cui.trim() || null),
-        reprezentant: f.reprezentant.trim() || null,
-        telefon: f.telefon.trim() || null, email: f.email.trim() || null,
-        adresa: f.adresa.trim() || null, numar_masina: f.numar_masina.trim() || null,
-        comments: f.comments.trim() || null,
-      }, { errorMessage: "Eroare la salvare." });
+      const created = await clientiApi.create(clientFormPayload(f), { errorMessage: "Eroare la salvare." });
       list.mutate((items) => [created, ...items]);
       setAddMode(false);
     } catch (e: unknown) {
@@ -313,59 +272,6 @@ export default function Clienti() {
           <input class="input" placeholder="VIN" aria-label="VIN" style="flex:2" value={props.f.vin} onInput={(e) => props.setF({ ...props.f, vin: e.currentTarget.value.toUpperCase() })} />
         </div>
         <input class="input" placeholder="Observații" aria-label="Observații" value={props.f.observatii} onInput={(e) => props.setF({ ...props.f, observatii: e.currentTarget.value })} />
-      </div>
-    );
-  }
-
-  function ClientForm(props: { f: ReturnType<typeof emptyForm>; setF: (f: ReturnType<typeof emptyForm>) => void }) {
-    return (
-      <div class="cfg-location-fields">
-        <div style="display:flex;gap:8px">
-          <button
-            class={`btn btn-sm ${props.f.tip === "fizic" ? "btn-primary" : "btn-ghost"}`}
-            onClick={() => props.setF({ ...props.f, tip: "fizic" })}
-          >Persoană fizică</button>
-          <button
-            class={`btn btn-sm ${props.f.tip === "juridic" ? "btn-primary" : "btn-ghost"}`}
-            onClick={() => props.setF({ ...props.f, tip: "juridic" })}
-          >Persoană juridică</button>
-        </div>
-        <Show when={props.f.tip === "fizic"}>
-          <input class="input" placeholder="CNP" aria-label="CNP" inputmode="numeric" maxlength="13" value={props.f.cui} onFocus={(e) => e.currentTarget.select()} onInput={(e) => props.setF({ ...props.f, cui: e.currentTarget.value })} />
-          <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
-        </Show>
-        <Show when={props.f.tip === "juridic"}>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="display:flex;gap:6px">
-              <input
-                class="input"
-                style="flex:1"
-                placeholder="CUI"
-                value={props.f.cui}
-                onInput={(e) => { props.setF({ ...props.f, cui: e.currentTarget.value }); setAnafError(null); }}
-                onKeyDown={(e) => e.key === "Enter" && searchAnaf(props.f.cui, props.setF, props.f)}
-              />
-              <button
-                class="btn btn-sm btn-ghost"
-                onClick={() => searchAnaf(props.f.cui, props.setF, props.f)}
-                disabled={anafLoading() || !props.f.cui.trim()}
-              >{anafLoading() ? "..." : "ANAF"}</button>
-            </div>
-            <Show when={anafError()}>
-              <span style="color:var(--danger,#ef4444);font-size:12px">{anafError()}</span>
-            </Show>
-          </div>
-          <input class="input" placeholder="Număr mașină" aria-label="Număr mașină" value={props.f.numar_masina} onInput={(e) => props.setF({ ...props.f, numar_masina: e.currentTarget.value.toUpperCase() })} />
-        </Show>
-        <input class="input" placeholder="Nume *" aria-label="Nume" value={props.f.nume} onInput={(e) => props.setF({ ...props.f, nume: e.currentTarget.value })} />
-        <input class="input" placeholder="Descriere" aria-label="Descriere" value={props.f.description} onInput={(e) => props.setF({ ...props.f, description: e.currentTarget.value })} />
-        <Show when={props.f.tip === "juridic"}>
-          <input class="input" placeholder="Reprezentant" aria-label="Reprezentant" value={props.f.reprezentant} onInput={(e) => props.setF({ ...props.f, reprezentant: e.currentTarget.value })} />
-        </Show>
-        <input class="input" placeholder="Telefon" aria-label="Telefon" value={props.f.telefon} onInput={(e) => props.setF({ ...props.f, telefon: e.currentTarget.value })} />
-        <input class="input" placeholder="Email" aria-label="Email" value={props.f.email} onInput={(e) => props.setF({ ...props.f, email: e.currentTarget.value })} />
-        <input class="input" placeholder="Adresă" aria-label="Adresă" value={props.f.adresa} onInput={(e) => props.setF({ ...props.f, adresa: e.currentTarget.value })} />
-        <textarea class="input" placeholder="Comentarii" aria-label="Comentarii" rows={3} style="resize:vertical" value={props.f.comments} onInput={(e) => props.setF({ ...props.f, comments: e.currentTarget.value })} />
       </div>
     );
   }
