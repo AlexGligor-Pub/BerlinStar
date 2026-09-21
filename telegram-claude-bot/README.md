@@ -106,6 +106,35 @@ show up under the chat's **Menu** button.
 - `/login` — get a fresh Claude subscription login link
 - `/help` — usage
 
+## Auto-update din MainProd (`updater.py`)
+La fiecare `UPDATE_CHECK_MINUTES` (implicit 15) botul face `git fetch`; dacă
+`origin/MainProd` are commit-uri noi:
+1. `git pull` (ff sau merge; la conflict anulează și anunță)
+2. backup DB: `deploy/backup_Productie_<ts>.sqlplus` + `/root/db_backups/auto_update_<ts>.dump`
+   (format custom, pentru restore; se păstrează ultimele `UPDATE_KEEP_DUMPS`=10)
+3. din `deploy/`: `git add .`, `git commit -m "backup <zi> <lună> (auto-update <sha>)"`,
+   `git push` cu `GIT_PUSH_TOKEN`
+4. agent **Opus 5** (`UPDATE_MODEL`), **auto mode** (`UPDATE_PERMISSION_MODE`), cu
+   tool-urile Claude Code read/write: citește instrucțiunile (commit-uri, `.md`,
+   `.env.example`), face `docker compose build --no-cache && up -d`, verifică alembic,
+   loguri, health. N-are voie la git push/reset/checkout, `down -v`, ștergere volume,
+   repornirea botului.
+5. verificări proprii: containere running/healthy, alembic la head, HTTP 200 pe
+   `UPDATE_HEALTH_URLS`
+
+Dacă pașii 1–3 eșuează, codul revine imediat (aplicația n-a fost atinsă). Dacă
+update-ul eșuează, botul trimite situația abonaților (+ `UPDATE_NOTIFY_CHAT_IDS`) și
+cere sfat: orice mesaj text de la un admin ajunge la agent (aceeași sesiune).
+`/rollback` sau `UPDATE_ADVICE_TIMEOUT_MIN` (60) fără răspuns → rollback: cod la
+commit-ul inițial, `deploy/.env` restaurat, DB restaurat **doar dacă alembic s-a
+schimbat** (DB-ul migrat rămâne ca `berlinstar_failed_<ts>`), rebuild, verificări.
+Commit-ul eșuat nu se reîncearcă până nu apare altul nou (`/update force` = acum).
+Dacă s-a schimbat codul botului, botul se repornește singur la final.
+
+Starea e în `update_state.json` (o repornire a botului reia așteptarea sfatului).
+Comenzi (admini): `/update`, `/update force`, `/updatestatus`, `/rollback`.
+Repo-ul trebuie să fie pe `MainProd` fără modificări necomise, altfel updater-ul doar anunță.
+
 ## Access
 Only users in `ALLOWED_USER_IDS` or `ALLOWED_USERNAMES` may use the bot (if both
 are empty it answers anyone and logs a warning). The Opus commands are limited

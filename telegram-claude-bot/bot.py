@@ -63,6 +63,8 @@ def load_dotenv(path: Path) -> None:
 
 load_dotenv(Path(__file__).with_name(".env"))
 
+import updater  # noqa: E402  (citeste config din env, deci dupa load_dotenv)
+
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 # Routine log checks (chat + scheduled reports) run on the cheapest model.
 MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-4-5").strip()
@@ -185,6 +187,11 @@ def save_subscribers() -> None:
 
 subscribers: set[int] = load_subscribers()
 
+# Chat-uri notificate de auto-update (pe langa abonati).
+UPDATE_NOTIFY_CHAT_IDS = {
+    int(c) for c in os.environ.get("UPDATE_NOTIFY_CHAT_IDS", "").split(",") if c.strip().lstrip("-").isdigit()
+}
+
 # --------------------------------------------------------------------------- #
 # Telegram helpers
 # --------------------------------------------------------------------------- #
@@ -268,6 +275,10 @@ class ClaudeAuthError(RuntimeError):
 
 
 LOGIN = claude_login.LoginFlow(CLAUDE_BIN, send_message)
+
+# Auto-update din MainProd (vezi updater.py); pornit din main().
+UPDATER = updater.Updater(send_message, telegram_html,
+                          lambda: sorted(subscribers | UPDATE_NOTIFY_CHAT_IDS))
 
 
 def _make_tool(spec: dict):
@@ -496,6 +507,9 @@ BOT_COMMANDS = [
     ("subscribe", "Pornește rapoartele automate"),
     ("unsubscribe", "Oprește rapoartele automate"),
     ("reset", "Șterge contextul conversației"),
+    ("update", "Verifică MainProd și fă update acum"),
+    ("updatestatus", "Starea auto-update-ului"),
+    ("rollback", "Anulează update-ul eșuat (revine la starea inițială)"),
     ("login", "Reconectează abonamentul Claude"),
     ("help", "Ajutor"),
 ]
@@ -515,7 +529,11 @@ def help_text() -> str:
         "/subscribe · /unsubscribe — rapoarte automate\n"
         "/status — model, program, abonare\n"
         "/reset — șterge contextul\n"
-        "/login — reconectează abonamentul Claude"
+        "/login — reconectează abonamentul Claude\n\n"
+        f"<b>Auto-update</b> ({updater.BRANCH}, {short_model(updater.MODEL)}, admini):\n"
+        "/update — verifică și aplică acum (/update force = și un commit eșuat)\n"
+        "/updatestatus — starea update-ului\n"
+        "/rollback — când aștept un sfat: revin la starea inițială"
     )
 
 
@@ -539,6 +557,14 @@ def handle_message(msg: dict) -> None:
         return
 
     if not USE_API_KEY and LOGIN.handle_text(chat_id, text):
+        return
+
+    # Un update a esuat si asteapta sfat: orice mesaj text (nu comanda) de la un admin
+    # merge la agentul de update.
+    if UPDATER.waiting_for_advice and not text.startswith("/") and is_admin(user):
+        who = user.get("username") or user.get("first_name") or str(user_id)
+        UPDATER.provide_advice(text, who)
+        send_message(chat_id, "📨 Am trimis sfatul agentului de update. Revin cu rezultatul.")
         return
 
     # Commands
@@ -571,7 +597,7 @@ def handle_message(msg: dict) -> None:
             send_typing(chat_id)
             send_message(chat_id, with_footer(generate_report(), MODEL))
             return
-        if cmd in ("/adminask", "/investigate") and not is_admin(user):
+        if cmd in ("/adminask", "/investigate", "/update", "/rollback") and not is_admin(user):
             send_message(chat_id, "⛔ Comanda asta e doar pentru admini.")
             return
         if cmd == "/adminask":
@@ -598,6 +624,16 @@ def handle_message(msg: dict) -> None:
             send_message(chat_id, f"🔎 Investighez pe {short_model(ADMIN_MODEL)}… (mai lent)")
             send_typing(chat_id)
             send_message(chat_id, with_footer(investigate(arg), ADMIN_MODEL))
+            return
+        if cmd == "/update":
+            send_message(chat_id, UPDATER.trigger(force=arg.lower() == "force"))
+            return
+        if cmd == "/updatestatus":
+            send_message(chat_id, UPDATER.status_text())
+            return
+        if cmd == "/rollback":
+            send_message(chat_id, "⏪ Pornesc rollback-ul…" if UPDATER.request_rollback()
+                         else "Nu e niciun update eșuat care să aștepte un rollback.")
             return
         if cmd == "/subscribe":
             subscribers.add(chat_id)
@@ -667,6 +703,7 @@ def main() -> None:
     tg("setChatMenuButton", menu_button={"type": "commands"})
 
     threading.Thread(target=scheduler_loop, name="scheduler", daemon=True).start()
+    UPDATER.start()
 
     offset = None
     while _running:

@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 bot.log
 subscribers.json
+update_state.json
+update_state.tmp
