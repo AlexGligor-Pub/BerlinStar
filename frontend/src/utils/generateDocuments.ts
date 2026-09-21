@@ -853,10 +853,11 @@ function buildAnvelopaTable(
 
   const cols: Array<{ head: string; cell: (a: AnvelopaForTable, idx: number) => string; style: Record<string, unknown> }> = [];
   cols.push({ head: "#", cell: (_a, idx) => String(idx + 1), style: { halign: "center", cellWidth: 8 } });
+  // Marcă și profil stau lipite: împreună spun ce anvelopă e („Michelin Primacy 4").
   if (hasMarca)    cols.push({ head: "Marcă",      cell: (a) => t(a.marcaNume ?? "—"),                             style: { cellWidth: "auto" } });
+  if (hasProfil)   cols.push({ head: "Profil",     cell: (a) => t(a.profilValoare ?? "—"),                         style: { halign: "center", cellWidth: widths.profil } });
   if (hasDim)      cols.push({ head: "Dimensiune", cell: (a) => t(a.dimensiuneValoare ?? "—"),                     style: { cellWidth: widths.dim } });
   if (hasDot)      cols.push({ head: "DOT",        cell: (a) => t(a.dotValoare ?? "—"),                            style: { halign: "center", cellWidth: widths.dot } });
-  if (hasProfil)   cols.push({ head: "Profil",     cell: (a) => t(a.profilValoare ?? "—"),                         style: { halign: "center", cellWidth: widths.profil } });
   if (hasTip)      cols.push({ head: "Tip",        cell: (a) => TIP_PDF_LABELS[a.tip] ?? a.tip,                    style: { halign: "center", cellWidth: widths.tip } });
   if (hasAdancime) cols.push({ head: "Adâncime",   cell: (a) => a.adancime != null ? `${a.adancime} mm` : "—",     style: { halign: "center", cellWidth: widths.adancime } });
   if (hasIndice)   cols.push({ head: "Ind. V/S",   cell: (a) => fmtIndiceVitezaSarcina(a.indiceViteza, a.indiceSarcina) ?? "—", style: { halign: "center", cellWidth: widths.indice ?? 16 } });

@@ -27,6 +27,11 @@ class GlobalSettings(Base):
     smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
     smtp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
 
+    # Radar AI pornit/oprit pentru toata platforma. Oprit: nu mai apare in meniu
+    # si rutele /api/radar/* raspund 404 — altfel pagina ar ramane accesibila
+    # scriind adresa direct.
+    radar_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
+
     # ── Abonament BerlinStar ───────────────────────────────────────────────
     # Pretul anual brut (TVA inclus), TVA-ul aplicabil si moneda in care
     # Stripe incaseaza efectiv (RON cu conversie EUR->RON la momentul platii).

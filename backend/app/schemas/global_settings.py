@@ -43,3 +43,8 @@ class SmtpSettingsPatch(BaseModel):
     smtp_from_address: str | None = None
     smtp_use_tls: bool | None = None
     smtp_enabled: bool | None = None
+
+
+class FeaturesRead(BaseModel):
+    """Comutatoarele de functionalitati optionale, citite de meniul aplicatiei."""
+    radar: bool

@@ -2,6 +2,12 @@ import { For, Show, createSignal, createMemo, onMount } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
 import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
+import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
+import Modal from "../components/ui/Modal";
+import ClientForm, {
+  clientFormError, clientFormPayload, clientToForm, emptyClientForm, type ClientFormValues,
+} from "../components/clienti/ClientForm";
+import { clientiApi } from "../api/clienti";
 import type { Client } from "../types";
 import { CNP_PLACEHOLDER } from "../types/client";
 
@@ -14,6 +20,37 @@ interface ClientReceiptsSummary {
 
 // Filtru pe stânga: toate, o anumită placă, fără mașină.
 type PlateFilter = { kind: "all" } | { kind: "plate"; numar: string } | { kind: "none" };
+
+/** O cazare din hotelul de anvelope, cât să încapă pe un rând în fișa clientului. */
+interface CazareScurt {
+  id: number;
+  numarMasina: string | null;
+  dataCheckin: string;
+  dataCheckout: string | null;
+  loc: string | null;
+  anvelope: number;
+  peTip: Map<string, number>;
+}
+
+const TIP_ANVELOPA: Record<string, string> = {
+  iarna: "iarnă", vara: "vară", ms: "M+S", altele: "alt tip",
+};
+
+function fmtZi(iso: string | null): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return d && m && y ? `${d}.${m}.${y}` : iso;
+}
+
+/** „4 anvelope · 4 iarnă" — la fel ca în lista din Hotel anvelope. */
+function rezumatAnvelope(c: CazareScurt): string {
+  if (c.anvelope === 0) return "fără anvelope";
+  const tipuri = [...c.peTip.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([tip, n]) => `${n} ${TIP_ANVELOPA[tip] ?? tip}`)
+    .join(", ");
+  return `${c.anvelope} ${c.anvelope === 1 ? "anvelopă" : "anvelope"} · ${tipuri}`;
+}
 
 const RO_DATE_FMT: Intl.DateTimeFormatOptions = {
   day: "2-digit",
@@ -108,6 +145,42 @@ export default function ClientDetail() {
   const [receipts, setReceipts] = createSignal<NormalizedReceipt[]>([]);
   const [loading, setLoading] = createSignal(true);
   const [filter, setFilter] = createSignal<PlateFilter>({ kind: "all" });
+  // Editarea datelor clientului, cu același formular ca în lista Clienți.
+  const [editOpen, setEditOpen] = createSignal(false);
+  const [form, setForm] = createSignal<ClientFormValues>(emptyClientForm());
+  const [saving, setSaving] = createSignal(false);
+  const [formError, setFormError] = createSignal<string | null>(null);
+
+  function startEdit() {
+    const c = client();
+    if (!c) return;
+    setForm(clientToForm(c));
+    setFormError(null);
+    setEditOpen(true);
+  }
+
+  async function saveEdit() {
+    const err = clientFormError(form());
+    if (err) { setFormError(err); return; }
+    setSaving(true);
+    setFormError(null);
+    try {
+      setClient(await clientiApi.update(clientId(), clientFormPayload(form())));
+      setEditOpen(false);
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : "Eroare la salvare.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Cazările din hotelul de anvelope: secțiunea apare doar dacă există.
+  const [cazari, setCazari] = createSignal<CazareScurt[]>([]);
+  // Mai sunt cazari dupa primele 200 aduse: numerele din titlu sunt „cel putin".
+  const [cazariMaiMulte, setCazariMaiMulte] = createSignal(false);
+  // Firma care a dezactivat Hotel anvelope nu vede sectiunea (ca in meniu).
+  const hotelActiv = () => !generalSettings()?.dezactiveazaHotelAnvelope;
+  const cazariActive = createMemo(() => cazari().filter((c) => !c.dataCheckout).length);
 
   /** Placeholder-ul de e-Factura nu e o identificare reala — nu se afiseaza. */
   const fiscalCod = createMemo(() => {
@@ -161,9 +234,46 @@ export default function ClientDetail() {
     }
   }
 
+  /** Cazările clientului, cele active primele (API-ul le dă descrescător după id). */
+  async function loadCazariHotel(): Promise<void> {
+    try {
+      const res = await apiFetch(`/api/cazare-anvelope?client_id=${clientId()}&limit=200`);
+      if (!res.ok) return;
+      const data = await res.json() as { items: Array<Record<string, unknown>>; next_cursor?: number | null };
+      setCazariMaiMulte(data.next_cursor != null);
+      const items: CazareScurt[] = (data.items ?? []).map((raw) => {
+        const list = (raw.items ?? []) as Array<{ anvelopa?: { tip?: string } | null }>;
+        const peTip = new Map<string, number>();
+        let n = 0;
+        for (const it of list) {
+          if (!it.anvelopa) continue;
+          n += 1;
+          const tip = it.anvelopa.tip ?? "altele";
+          peTip.set(tip, (peTip.get(tip) ?? 0) + 1);
+        }
+        return {
+          id: raw.id as number,
+          numarMasina: (raw.numar_masina as string | null) ?? null,
+          dataCheckin: raw.data_checkin as string,
+          dataCheckout: (raw.data_checkout as string | null) ?? null,
+          loc: (raw.loc_cazare_nume as string | null) ?? null,
+          anvelope: n,
+          peTip,
+        };
+      });
+      // Întâi cele aflate în depozit, apoi istoricul, de la cea mai recentă.
+      items.sort((a, b) =>
+        (a.dataCheckout ? 1 : 0) - (b.dataCheckout ? 1 : 0)
+        || b.dataCheckin.localeCompare(a.dataCheckin));
+      setCazari(items);
+    } catch {
+      // Fișa clientului rămâne utilizabilă și fără secțiunea de hotel.
+    }
+  }
+
   onMount(async () => {
     setLoading(true);
-    await Promise.all([loadClient(), loadSummary(), loadAllReceipts()]);
+    await Promise.all([loadClient(), loadSummary(), loadAllReceipts(), loadCazariHotel(), loadGeneralSettings()]);
     setLoading(false);
   });
 
@@ -221,7 +331,35 @@ export default function ClientDetail() {
             </Show>
           </Show>
         </div>
+        {/* Oricine poate edita un client, ca în lista Clienți. */}
+        <Show when={client()}>
+          <button type="button" class="btn btn-primary btn-sm client-detail-edit" onClick={startEdit}>
+            Editează clientul
+          </button>
+        </Show>
       </div>
+
+      {/* Modal: datele clientului */}
+      <Show when={editOpen()}>
+        <Modal
+          open
+          title="Editează clientul"
+          onClose={() => setEditOpen(false)}
+          style="max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column"
+          bodyStyle="padding:16px 20px;overflow-y:auto"
+          footer={<>
+            <button class="btn btn-ghost btn-sm" onClick={() => setEditOpen(false)} disabled={saving()}>Anulează</button>
+            <button class="btn btn-primary btn-sm" onClick={() => void saveEdit()} disabled={saving()}>
+              {saving() ? "Se salvează..." : "Salvează"}
+            </button>
+          </>}
+        >
+          <ClientForm f={form()} setF={setForm} />
+          <Show when={formError()}>
+            <p class="cfg-error" style="margin-top:10px">{formError()}</p>
+          </Show>
+        </Modal>
+      </Show>
 
       {/* Stats sus */}
       <div class="client-detail-stats">
@@ -336,6 +474,56 @@ export default function ClientDetail() {
           </ul>
         </section>
       </div>
+
+      {/* Hotel de anvelope — numai dacă clientul a lăsat ceva în depozit */}
+      <Show when={cazari().length > 0 && hotelActiv()}>
+        <section class="client-receipts-panel client-hotel-panel">
+          <h2 class="client-panel-title">
+            Hotel de anvelope
+            <span class="client-hotel-count">
+              {cazariActive()} {cazariActive() === 1 ? "cazare activă" : "cazări active"}
+              <Show when={cazari().length !== cazariActive()}>
+                {" · "}{cazari().length - cazariActive()} în istoric
+              </Show>
+              <Show when={cazariMaiMulte()}>
+                {" · "}se văd primele {cazari().length}, mai sunt și altele în Hotel anvelope
+              </Show>
+            </span>
+          </h2>
+          <ul class="client-receipt-list">
+            <For each={cazari()}>
+              {(c) => (
+                <li
+                  class="client-receipt-row client-hotel-row"
+                  role="button"
+                  tabIndex={0}
+                  title="Deschide cazarea în Hotel anvelope"
+                  onClick={() => navigate(`/hotel-anvelope?viewCazare=${c.id}`)}
+                  onKeyDown={(e) => (e.key === "Enter" || e.key === " ")
+                    && (e.preventDefault(), navigate(`/hotel-anvelope?viewCazare=${c.id}`))}
+                >
+                  <div class="client-receipt-main">
+                    <span class="client-receipt-titlu">{c.numarMasina ?? "fără număr"}</span>
+                    <span class="client-receipt-date">
+                      {fmtZi(c.dataCheckin)}
+                      <Show when={c.dataCheckout}>{" → "}{fmtZi(c.dataCheckout)}</Show>
+                    </span>
+                  </div>
+                  <div class="client-receipt-meta">
+                    <Show when={c.loc}><span class="badge badge--neutral">{c.loc}</span></Show>
+                    <span class="client-receipt-items">{rezumatAnvelope(c)}</span>
+                  </div>
+                  <div class="client-receipt-side">
+                    <span class={`badge ${c.dataCheckout ? "badge--neutral" : "badge--success"}`}>
+                      {c.dataCheckout ? "Ieșit" : "În cazare"}
+                    </span>
+                  </div>
+                </li>
+              )}
+            </For>
+          </ul>
+        </section>
+      </Show>
     </div>
   );
 }

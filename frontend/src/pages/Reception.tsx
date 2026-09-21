@@ -20,6 +20,7 @@ import { apiFetch, API_BASE, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 import Modal from "../components/ui/Modal";
+import { createFitToViewport } from "../hooks/createFitToViewport";
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
 const RO_MONTHS_SHORT = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Nov","Dec"];
@@ -1780,6 +1781,7 @@ export default function Reception() {
 
   let sentinelRef: HTMLDivElement | undefined;
   let scrollRef: HTMLDivElement | undefined;
+  let pageRef: HTMLDivElement | undefined;
   onMount(() => {
     const observer = new IntersectionObserver(
       (entries) => { if (entries[0].isIntersecting) loadMoreReceipts(); },
@@ -1789,8 +1791,40 @@ export default function Reception() {
     onCleanup(() => observer.disconnect());
   });
 
+  /** Mai aduce o pagină cât timp a rămas puțin de derulat în listă.
+   *
+   *  Observatorul anunță doar *trecerile* sentinelei în vizibil: dacă o pagină nu
+   *  umple zona, sentinela rămâne vizibilă, nu mai vine niciun eveniment și
+   *  lista se oprește. Aici se verifică starea. */
+  function topUpReceipts() {
+    const el = scrollRef;
+    if (!el || !hasMore() || loadingMore()) return;
+    // Un filtru local (metodă de plată, căutare în pagină) ascunde rânduri deja
+    // aduse: dacă potrivește puține, lista nu umple zona niciodată și am aduce
+    // toate paginile din interval. Acolo rămâne doar observatorul, ca înainte.
+    if (filtered().length < receipts().length) return;
+    // Plasă de siguranță: nemăsurată încă, lista ar părea mereu „la capăt".
+    if (el.clientHeight > window.innerHeight) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 400) return;
+    void loadMoreReceipts();
+  }
+  createEffect(() => {
+    receipts().length;
+    requestAnimationFrame(topUpReceipts);
+  });
+  // Derularea e verificată cel mult o dată pe cadru, nu la fiecare eveniment.
+  let scrollPending = false;
+  function onListScroll() {
+    if (scrollPending) return;
+    scrollPending = true;
+    requestAnimationFrame(() => { scrollPending = false; topUpReceipts(); });
+  }
+
+  // Antetul (titlu, căutare, filtre) rămâne pe loc; se derulează doar lista.
+  createFitToViewport({ scroll: () => scrollRef, page: () => pageRef, onFit: topUpReceipts });
+
   return (
-    <div class="page-content reception-page">
+    <div class="page-content reception-page" ref={pageRef}>
       <div class="page-header">
         <h1 class="page-title">
           Recepție
@@ -1877,7 +1911,7 @@ export default function Reception() {
         </div>
       </div>
 
-      <div class="reception-scroll" ref={scrollRef}>
+      <div class="reception-scroll" ref={scrollRef} onScroll={onListScroll}>
         <Show
           when={filtered().length > 0}
           fallback={

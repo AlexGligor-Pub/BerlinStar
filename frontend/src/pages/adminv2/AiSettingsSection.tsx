@@ -2,6 +2,7 @@ import { Show, createResource, createSignal } from "solid-js";
 import { Button } from "../../components/ui";
 import { notify } from "../../store/notificationsStore";
 import { aiAdminApi, type AiSettings, type AiSettingsUpdate } from "../../api/radar";
+import { setFeature } from "../../store/featuresStore";
 import { errMsg } from "../radar/shared";
 import "../radar/radar.css";
 
@@ -13,6 +14,23 @@ export default function AiSettingsSection() {
   const [priceIn, setPriceIn] = createSignal<string | null>(null);
   const [priceOut, setPriceOut] = createSignal<string | null>(null);
   const [saving, setSaving] = createSignal(false);
+  const [togglingRadar, setTogglingRadar] = createSignal(false);
+
+  /** Stinge sau aprinde Radar AI pentru toata platforma. */
+  async function toggleRadar(enabled: boolean) {
+    setTogglingRadar(true);
+    try {
+      const s = await aiAdminApi.saveSettings({ radar_enabled: enabled });
+      mutate(s);
+      // Meniul se actualizeaza pe loc, fara reincarcarea paginii.
+      setFeature("radar", s.radar_enabled);
+      notify(enabled ? "Radar AI activat." : "Radar AI dezactivat.", "success");
+    } catch (e) {
+      notify(errMsg(e, "Eroare la schimbarea stării Radar AI."), "error");
+    } finally {
+      setTogglingRadar(false);
+    }
+  }
 
   const modelValue = () => model() ?? settings()?.ai_model ?? "";
   const priceInValue = () => priceIn() ?? String(settings()?.ai_price_in_usd_mtok ?? "");
@@ -58,6 +76,32 @@ export default function AiSettingsSection() {
           </p>
         </div>
       </header>
+
+      <section class="radar-card">
+        <h2>Radar AI</h2>
+        <p class="radar-lead">
+          Dezactivat, Radar AI dispare din meniul aplicației pentru toate conturile, iar paginile
+          lui nu mai răspund. Setările și datele rămân neatinse — se pot reactiva oricând.
+        </p>
+        <Show when={settings()} fallback={<p class="radar-lead">Se încarcă…</p>}>
+          {(s) => (
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+              <span class={s().radar_enabled ? "badge badge--success" : "badge badge--danger"}>
+                {s().radar_enabled ? "Activ" : "Dezactivat"}
+              </span>
+              <Button
+                variant={s().radar_enabled ? "ghost" : "primary"}
+                disabled={togglingRadar()}
+                onClick={() => void toggleRadar(!s().radar_enabled)}
+              >
+                {togglingRadar()
+                  ? "Se salvează…"
+                  : s().radar_enabled ? "Dezactivează Radar AI" : "Activează Radar AI"}
+              </Button>
+            </div>
+          )}
+        </Show>
+      </section>
 
       <Show when={settings()} fallback={<p class="radar-center">{settings.error ? "Indisponibil." : "Se încarcă…"}</p>}>
         {(s) => (

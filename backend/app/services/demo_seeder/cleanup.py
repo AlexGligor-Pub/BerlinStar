@@ -52,6 +52,9 @@ _DELETE_ORDER = [
     "user_sessions",
     "users",
     "employees",            # employee_locations are ON DELETE CASCADE
+    # Sesiunile de import: randurile au FK pe clienti, deci inaintea lor.
+    "import_rows",
+    "import_sessions",
     "client_vehicole",
     "clienti",
     "devices",

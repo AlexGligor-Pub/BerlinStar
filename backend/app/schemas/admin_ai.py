@@ -10,6 +10,7 @@ class AiSettingsOut(BaseModel):
     ai_model: str
     ai_price_in_usd_mtok: float
     ai_price_out_usd_mtok: float
+    radar_enabled: bool
 
 
 class AiSettingsUpdate(BaseModel):
@@ -18,6 +19,7 @@ class AiSettingsUpdate(BaseModel):
     ai_model: str | None = Field(None, max_length=80)
     ai_price_in_usd_mtok: float | None = Field(None, ge=0)
     ai_price_out_usd_mtok: float | None = Field(None, ge=0)
+    radar_enabled: bool | None = None
 
 
 class AccountUsageOut(BaseModel):

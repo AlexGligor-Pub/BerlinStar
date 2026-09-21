@@ -351,6 +351,8 @@ export interface AiSettings {
   ai_model: string;
   ai_price_in_usd_mtok: number;
   ai_price_out_usd_mtok: number;
+  /** Radar AI pornit pentru toata platforma. */
+  radar_enabled: boolean;
 }
 
 export interface AiSettingsUpdate {
@@ -359,6 +361,7 @@ export interface AiSettingsUpdate {
   ai_model?: string;
   ai_price_in_usd_mtok?: number;
   ai_price_out_usd_mtok?: number;
+  radar_enabled?: boolean;
 }
 
 export interface AccountUsage {
