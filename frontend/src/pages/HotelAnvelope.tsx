@@ -1452,6 +1452,25 @@ export default function HotelAnvelope() {
     if (wasCombo && posHotelCtx()) returnToPos("scoatere");
   }
 
+  /** Masina pusa pe cazarea noua, in ordine: placuta de pe devizul POS
+   *  (potrivita cu garajul daca se afla acolo — altfel chiar asa cum vine, ca
+   *  garajul e adesea gol si placuta s-ar pierde), apoi o rezerva (masina
+   *  cazarii scoase, la acelasi client), apoi prima masina din garaj. */
+  function alegeMasina(
+    vehicule: ClientVehicol[],
+    placutaPos: string | null | undefined,
+    rezerva?: string | null,
+  ): string | null {
+    const cheie = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[\s-]/g, "");
+    const pos = (placutaPos ?? "").trim();
+    if (cheie(pos)) {
+      const dinGaraj = vehicule.find((v) => cheie(v.numar_masina) === cheie(pos));
+      return dinGaraj ? dinGaraj.numar_masina : pos;
+    }
+    if (rezerva) return rezerva;
+    return vehicule.length > 0 ? vehicule[0].numar_masina : null;
+  }
+
   function openNewModal() {
     setScoatereFollowedByCazare(false);
     const ctx = posHotelCtx();
@@ -1508,16 +1527,7 @@ export default function HotelAnvelope() {
         if (vRes.ok) {
           const vData: ClientVehicol[] = await vRes.json();
           setNewClientVehicole(vData);
-          if (vData.length > 0) {
-            // Preferam placuta din contextul POS (cea pe care s-a deschis devizul),
-            // altfel ar selecta mereu primul vehicol din lista clientului — care
-            // de obicei NU e cel pe care lucreaza utilizatorul.
-            const ctxPlate = (posHotelCtx()?.titlu ?? "").trim().toUpperCase().replace(/\s+/g, "");
-            const matched = ctxPlate
-              ? vData.find((v) => (v.numar_masina ?? "").trim().toUpperCase().replace(/\s+/g, "") === ctxPlate)
-              : null;
-            setNewSelectedVehicol((matched ?? vData[0]).numar_masina);
-          }
+          setNewSelectedVehicol(alegeMasina(vData, posHotelCtx()?.titlu));
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la încărcare vehicule client.", "error");
@@ -1651,16 +1661,10 @@ export default function HotelAnvelope() {
           await handleClientSelect(clientItem);
           setNewReferintaCazareId(c.id); // handleClientSelect resets it, restore
           setNewMontatePeMasina(true);   // handleClientSelect resets it, restore
-          // Fereastra combinata nu are selector de masina, iar handleClientSelect
-          // ia prima masina din garaj cand titlul din POS nu se potriveste exact.
-          // Ordinea aici: masina din POS, masina cazarii vechi (acelasi client),
-          // abia apoi prima din garaj.
-          const cheie = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[\s-]/g, "");
-          const dinPos = cheie(ctx?.titlu)
-            ? newClientVehicole().find((v) => cheie(v.numar_masina) === cheie(ctx?.titlu))
-            : undefined;
-          if (dinPos) setNewSelectedVehicol(dinPos.numar_masina);
-          else if (clientItem.id === c.clientId && c.numarMasina) setNewSelectedVehicol(c.numarMasina);
+          // Fereastra combinata nu are selector de masina: alegerea se face aici.
+          setNewSelectedVehicol(alegeMasina(
+            newClientVehicole(), ctx?.titlu, clientItem.id === c.clientId ? c.numarMasina : null,
+          ));
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la pregătire cazare combinată.", "error");
@@ -1940,9 +1944,7 @@ export default function HotelAnvelope() {
           if (vRes.ok) {
             const vData: ClientVehicol[] = await vRes.json();
             setNewClientVehicole(vData);
-            // pre-select the vehicle from the old cazare if it still exists
-            const existing = c.numarMasina ? vData.find((v) => v.numar_masina === c.numarMasina) : null;
-            setNewSelectedVehicol(existing ? c.numarMasina! : (vData.length === 1 ? vData[0].numar_masina : null));
+            setNewSelectedVehicol(alegeMasina(vData, posHotelCtx()?.titlu, c.numarMasina));
           }
         } catch { setNewClientVehicole([]); setNewSelectedVehicol(null); }
         setNewVehicolLocked(true);
@@ -2658,6 +2660,20 @@ export default function HotelAnvelope() {
                         </label>
                       )}
                     </For>
+                  </div>
+                </div>
+              </Show>
+              {/* Placuta de pe deviz, cand masina nu e (inca) in garajul clientului:
+                  altfel utilizatorul n-ar vedea pe ce masina se salveaza cazarea. */}
+              <Show when={newClient() && newSelectedVehicol()
+                && !newClientVehicole().some((v) => v.numar_masina === newSelectedVehicol())}>
+                <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+                  <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Mașina cazării</div>
+                  <div style="font-size:13px;padding:4px 8px;background:var(--bg);border-radius:6px">
+                    <strong>{newSelectedVehicol()}</strong>
+                    <span style="color:var(--text-muted);font-size:11px;margin-left:8px">
+                      {newClientVehicole().length > 0 ? "nu e în garajul clientului" : "de pe deviz"}
+                    </span>
                   </div>
                 </div>
               </Show>
