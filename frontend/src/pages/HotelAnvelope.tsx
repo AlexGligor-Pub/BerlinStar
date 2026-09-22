@@ -158,7 +158,12 @@ function ClientSearch(props: {
         if (!res.ok) return null;
         return ((await res.json()).items ?? []) as ClientItem[];
       };
-      const [dupaNume, dupaMasina] = await Promise.all([get("q"), get("q_masina")]);
+      // O cerere cazuta (retea) nu ascunde rezultatele celeilalte; cad amandoua
+      // — inclusiv la anulare — eroarea merge mai departe, ca inainte.
+      const [a, b] = await Promise.allSettled([get("q"), get("q_masina")]);
+      if (a.status === "rejected" && b.status === "rejected") throw a.reason;
+      const dupaNume = a.status === "fulfilled" ? a.value : null;
+      const dupaMasina = b.status === "fulfilled" ? b.value : null;
       if (dupaNume === null && dupaMasina === null) return null;
       // Un client gasit pe ambele cai apare o singura data.
       const vazut = new Set<number>();
@@ -1646,6 +1651,16 @@ export default function HotelAnvelope() {
           await handleClientSelect(clientItem);
           setNewReferintaCazareId(c.id); // handleClientSelect resets it, restore
           setNewMontatePeMasina(true);   // handleClientSelect resets it, restore
+          // Fereastra combinata nu are selector de masina, iar handleClientSelect
+          // ia prima masina din garaj cand titlul din POS nu se potriveste exact.
+          // Ordinea aici: masina din POS, masina cazarii vechi (acelasi client),
+          // abia apoi prima din garaj.
+          const cheie = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[\s-]/g, "");
+          const dinPos = cheie(ctx?.titlu)
+            ? newClientVehicole().find((v) => cheie(v.numar_masina) === cheie(ctx?.titlu))
+            : undefined;
+          if (dinPos) setNewSelectedVehicol(dinPos.numar_masina);
+          else if (clientItem.id === c.clientId && c.numarMasina) setNewSelectedVehicol(c.numarMasina);
         }
       } catch (e: unknown) {
         notify(e instanceof Error ? e.message : "Eroare la pregătire cazare combinată.", "error");
@@ -1730,9 +1745,9 @@ export default function HotelAnvelope() {
         dep_prezoane: newDepPrezoane(),
         referinta_cazare_id: c.id,
         montate_pe_masina: newMontatePeMasina(),
-        // Masina aleasa in fereastra (preselectata din garajul clientului). Fara
-        // ea — daca noua cazare e tot pe clientul celei vechi — masina acesteia.
-        // Inainte se trimitea mereu null, iar cazarea noua ramanea fara numar.
+        // Masina aleasa in openCombined (POS, apoi cazarea veche, apoi garajul).
+        // Fara ea — daca noua cazare e tot pe clientul celei vechi — masina
+        // acesteia. Inainte se trimitea mereu null si cazarea ramanea fara numar.
         numar_masina: newSelectedVehicol()
           || (newClient()!.id === c.clientId ? c.numarMasina : null)
           || null,

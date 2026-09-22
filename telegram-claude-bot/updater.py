@@ -88,7 +88,7 @@ ROLLBACK = object()  # sentinel: rollback cerut explicit
 AGENT_SYSTEM_APPEND = f"""
 Esti agentul de deploy al productiei BerlinStar (server Hetzner, rulezi ca root).
 Repo: {REPO} (branch {BRANCH}); stack-ul Docker Compose e in {DEPLOY}
-(servicii: caddy, frontend, backend, radar, radar-worker, db, autoheal).
+(servicii: caddy, frontend, backend, db, autoheal).
 Codul nou e DEJA tras cu git, iar baza de date e DEJA salvata — nu le repeta.
 
 Reguli stricte:
@@ -568,7 +568,7 @@ class Updater:
         # containere pe codul vechi
         rc, out = dc("build", "--no-cache", timeout=3600)
         if rc == 0:
-            rc, out = dc("up", "-d", timeout=900)
+            rc, out = dc("up", "-d", "--remove-orphans", timeout=900)
         notes.append("• rebuild + up: " + ("OK" if rc == 0 else f"❌ <code>{esc(tail(out, 300))}</code>"))
 
         ok, checks = self.verify()
@@ -587,7 +587,7 @@ class Updater:
         """Pastreaza DB-ul migrat sub alt nume si restaureaza backup-ul intr-un DB nou."""
         user, name = db_user(), db_name()
         failed_name = f"{name}_failed_{ts}"
-        dc("stop", "backend", "radar", "radar-worker", timeout=300)
+        dc("stop", "backend", timeout=300)
         steps = [
             f"SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
             f"WHERE datname='{name}' AND pid <> pg_backend_pid()",
@@ -619,6 +619,12 @@ class Updater:
             if rc == 0 and states and not any(h == "starting" for _, _, h in states):
                 break
             time.sleep(5)
+        # Un container al unui serviciu scos din compose (ex. radar, dupa un `up`
+        # fara --remove-orphans) nu conteaza la sanatate, dar se semnaleaza.
+        _, cfg = dc("config", "--services", timeout=60)
+        known = {ln.strip() for ln in cfg.splitlines() if ln.strip()}
+        orphans = sorted({svc for svc, _, _ in states if known and svc not in known})
+        states = [s for s in states if not known or s[0] in known]
         bad = [f"{svc} ({st}{'/' + h if h else ''})" for svc, st, h in states
                if st != "running" or h not in ("", "healthy")]
         if not states:
@@ -629,6 +635,9 @@ class Updater:
             lines.append(f"• containere: ❌ {esc(', '.join(bad))}")
         else:
             lines.append(f"• containere: ✅ {len(states)} running/healthy")
+        if orphans:
+            lines.append(f"• ⚠️ containere în afara compose-ului: {esc(', '.join(orphans))} "
+                         "(<code>docker compose up -d --remove-orphans</code>)")
         # alembic la head
         rev = alembic_revision()
         _, heads = dc("exec", "-T", "backend", "alembic", "heads", timeout=120)
@@ -678,7 +687,7 @@ Ce ai de facut:
    din deploy/ si deploy-prod.sh (acolo REPO={REPO}; nu-l rula, face git pull — ai deja codul).
 2. Aplica pasii necesari (chei noi in .env, pasi manuali ceruti, backfill-uri etc.).
 3. Update-ul standard al sistemului (cum se face pe server):
-   cd {DEPLOY} && docker compose build --no-cache && docker compose up -d
+   cd {DEPLOY} && docker compose build --no-cache && docker compose up -d --remove-orphans
    Alembic ruleaza automat la pornirea backend-ului (entrypoint.sh: alembic upgrade head);
    verifica `docker compose exec -T backend alembic current` si `alembic heads`, iar daca
    nu e la head ruleaza `docker compose exec -T backend alembic upgrade head` si investigheaza.
@@ -686,8 +695,8 @@ Ce ai de facut:
    /root/agent-bridge-venv si `systemctl --user restart berlinstar-agent-bridge`.
    Daca s-a schimbat telegram-claude-bot/requirements.txt: instaleaza in .venv-ul botului
    (NU reporni botul — updater-ul il reporneste singur la final).
-4. Asigura-te ca totul e functional: toate containerele running/healthy, logurile backend/
-   radar fara erori noi dupa pornire, HTTP 200 pe {', '.join(HEALTH_URLS)}, plus orice
+4. Asigura-te ca totul e functional: toate containerele running/healthy, logurile backend
+   fara erori noi dupa pornire, HTTP 200 pe {', '.join(HEALTH_URLS)}, plus orice
    verificare ceruta de instructiuni.
 5. Raport final scurt (ce instructiuni ai gasit, ce ai facut, rezultatul verificarilor),
    ultima linie `REZULTAT: OK` sau `REZULTAT: ESEC`."""

@@ -6,13 +6,13 @@ Bot Telegram (**@BerlinQA_bot**) care leagă un chat de pe telefon la CLI-ul
 deploy, iar activitatea lui apare live într-un mesaj „Lucrez…".
 
 ```
-Tu:  de ce e down radar-ul?
+Tu:  de ce e down backend-ul?
 Bot: ⚙️ Lucrez… 12s
-     $ docker ps -a | grep radar
+     $ docker ps -a | grep backend
      📖 deploy/docker-compose.yml
      ✅ 34s · 4 unelte · $0.18
 
-     Containerul deploy-radar-1 a ieșit cu cod 1 acum 20 min...
+     Containerul deploy-backend-1 a ieșit cu cod 1 acum 20 min...
 ```
 
 ## Cum funcționează

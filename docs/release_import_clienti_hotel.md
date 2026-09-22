@@ -180,8 +180,16 @@ reparat acum în cod. Cazările deja create așa se pot recupera: numărul lor e
 al cazării scoase, dacă e **același client**. La un client diferit nu se copiază
 nimic, ca să nu ajungă o cazare pe mașina altcuiva.
 
-Pe QA: 21 de cazări afectate, 14 recuperate, 7 fără sursă (nici cazarea veche nu
-avea număr).
+Cazările din fluxul combinat se recunosc după cazarea de referință scoasă în
+aceeași zi în care s-a făcut cea nouă, cu același bon (sau amândouă fără bon), și
+create înainte de reparație (2026-09-22). E o potrivire aproximativă: referința se
+completează și la „Cazare nouă” obișnuită, unde lipsa numărului poate fi voită, iar
+fără aceste condiții scriptul ar pune pe cazare numărul altei mașini a clientului.
+Rămâne prinsă și „Scoatere → Cazare nouă” din aceeași zi fără mașină aleasă — acolo
+mașina e aproape sigur aceeași.
+
+Pe QA (cu varianta inițială, mai largă, a scriptului): 21 de cazări fără număr,
+14 recuperate, 7 fără sursă (nici cazarea veche nu avea număr).
 
 1. **Câte sunt:**
    ```bash
@@ -192,6 +200,8 @@ avea număr).
           count(*) filter (where v.numar_masina is not null) as recuperabile
      from cazari_anvelope n join cazari_anvelope v on v.id = n.referinta_cazare_id
     where n.is_deleted = false and n.numar_masina is null and n.client_id = v.client_id
+      and n.data_checkin = v.data_checkout and n.receipt_id is not distinct from v.receipt_id
+      and n.created_at < '2026-09-23'
     group by 1 order by 1;"
    ```
 2. **Recuperarea.** Rulează în mai multe treceri, pentru că o cazare combinată
@@ -211,6 +221,8 @@ avea număr).
          UPDATE cazari_anvelope c SET numar_masina = v.numar_masina
            FROM cazari_anvelope v
           WHERE v.id = c.referinta_cazare_id AND c.client_id = v.client_id
+            AND c.data_checkin = v.data_checkout AND c.receipt_id IS NOT DISTINCT FROM v.receipt_id
+            AND c.created_at < '2026-09-23'
             AND c.is_deleted = false AND c.numar_masina IS NULL AND v.numar_masina IS NOT NULL
          RETURNING c.id, c.numar_masina)
        INSERT INTO _fix_numar_masina_combinata (id, numar_masina, trecere)
@@ -230,8 +242,10 @@ avea număr).
 4. **Anulare, dacă e nevoie:**
    ```sql
    UPDATE cazari_anvelope c SET numar_masina = NULL
-     FROM _fix_numar_masina_combinata f WHERE c.id = f.id;
+     FROM _fix_numar_masina_combinata f
+    WHERE c.id = f.id AND c.numar_masina = f.numar_masina;
    ```
+   (Un număr corectat de mână între timp rămâne neatins.)
    Când nu mai e nevoie de ea: `DROP TABLE _fix_numar_masina_combinata;`.
 
 Cazările rămase fără număr se pot completa manual din Hotel anvelope ›

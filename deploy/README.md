@@ -91,15 +91,13 @@ Internet (80/443)
    Frontend (nginx) ──/api/*──▶ Backend ──┬── PostgreSQL
                                 :8000     │   (rețea internă)
                                           │        :5432
-                                Radar AI ─┘  (API + worker, doar internal)
 ```
 
 - Rețeaua `web`: Caddy + Frontend + Backend
-- Rețeaua `internal`: Backend + Radar + PostgreSQL (izolată, neaccesibilă din exterior)
+- Rețeaua `internal`: Backend + PostgreSQL (izolată, neaccesibilă din exterior)
 - Caddy este singurul serviciu care publică porturi către host (80, 443)
 - PostgreSQL NU expune portul 5432 în afară
 - Backend NU expune portul 8000 direct — doar prin Caddy → nginx
-- Serviciul `radar` nu e accesibil din Caddy/frontend: singura intrare e monolitul
 
 **Rutare:**
 - Caddy termină TLS pentru `professorprime.ro` și face reverse-proxy la `frontend:80`
@@ -154,54 +152,3 @@ cat backup.sql | docker compose exec -T db psql -U berlinstar berlinstar
 
 ---
 
-## Serviciul Radar AI
-
-Radar AI rulează în containere proprii (`radar` = API intern, `radar-worker` =
-coadă `radar_jobs` + scheduler), din imaginea `deploy/radar.Dockerfile`. Detalii:
-`docs/radar_service_architecture.md`.
-
-**Variabile de mediu** (în `deploy/.env`, vezi `.env.example`):
-
-| Variabilă | Valoare | Cine o folosește |
-|---|---|---|
-| `RADAR_SHARED_SECRET` | `python3 -c "import secrets; print(secrets.token_urlsafe(48))"` | backend + radar |
-| `RADAR_DATABASE_URL` | același DSN ca `DATABASE_URL` | radar |
-| `MONOLITH_URL` | `http://backend:8000` | radar |
-| `RADAR_MAX_RUN_COST_USD` | `3.0` | radar |
-
-`RADAR_SERVICE_URL=http://radar:8000` e setat direct în `docker-compose.yml` la
-serviciul `backend`. Cheile AI (Anthropic, Google Places) rămân în AdminV2 —
-serviciul le trage prin `GET /api/internal/ai-config`.
-
-**Rollout pe producție** (nu există încă tabele radar în prod):
-
-```bash
-# 1. completează cele 4 variabile în deploy/.env
-docker compose up -d --build radar radar-worker
-# 2. verifică din backend că serviciul răspunde
-docker compose exec backend python -c "import urllib.request; print(urllib.request.urlopen('http://radar:8000/health',timeout=5).status)"
-# 3. abia apoi monolitul + frontend
-docker compose up -d --build backend frontend
-```
-
-Entrypoint-ul serviciului face `CREATE SCHEMA IF NOT EXISTS radar` +
-`alembic upgrade head` (migrații proprii, `version_table_schema="radar"`).
-Worker-ul așteaptă 10s înainte de a migra, ca să nu se calce cu API-ul la primul boot.
-
-**Rollback:** revii la imaginea anterioară de `backend` (proxy-ul `/api/radar/*`
-dispare); schema `radar` rămâne în bază, invizibilă codului vechi. Opțional
-`docker compose stop radar radar-worker`.
-
-**Baza de dev** (are tabelele radar în `public`, la revizia `rad02discovery`):
-`DROP TABLE` pe cele 6 tabele radar + `UPDATE alembic_version SET
-version_num='sub02checkout'`; serviciul le recreează în schema `radar`.
-
-**Backup doar Radar** (backup-ul complet îl include oricum, aceeași bază):
-
-```bash
-docker compose exec db pg_dump -U berlinstar -n radar berlinstar > radar_$(date +%Y%m%d).sql
-```
-
-**Dev local, fără Docker:** `scripts/dev-radar.sh` pornește uvicorn pe :4100 și
-worker-ul din `services/radar/` (loguri în `/tmp/claude-logs/radar-*.log`);
-monolitul folosește implicit `http://localhost:4100`.

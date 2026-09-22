@@ -13,7 +13,6 @@ import Notifications from "./components/layout/Notifications";
 import SubscriptionBanner from "./components/layout/SubscriptionBanner";
 import ConnectivityBanner from "./components/layout/ConnectivityBanner";
 import { initConnectivity } from "./store/connectivityStore";
-import { featuresLoaded, loadFeatures } from "./store/featuresStore";
 import { APP_ROUTES, EFACTURA_CHILDREN, PUBLIC_ROUTES, type AppRoute } from "./routes";
 
 function PageSuspense(props: { children: JSX.Element }) {
@@ -31,20 +30,10 @@ function PageSuspense(props: { children: JSX.Element }) {
   );
 }
 
-/** O funcționalitate stinsă din AdminV2 (`disabled`) nu e accesibilă nici
- *  scriind adresa direct — ascunderea din meniu singură nu ar ajunge. */
-function Guarded(props: { requires?: Resource; disabled?: () => boolean; children: JSX.Element }) {
-  // O rută stingibilă așteaptă comutatoarele: altfel pagina ar porni și ar cere
-  // date înainte să afle că e oprită.
-  const ready = () => !props.disabled || featuresLoaded();
+function Guarded(props: { requires?: Resource; children: JSX.Element }) {
   return (
-    <Show when={ready()}>
-      <Show
-        when={(!props.requires || can(props.requires)) && !props.disabled?.()}
-        fallback={<Navigate href="/" />}
-      >
-        {props.children}
-      </Show>
+    <Show when={!props.requires || can(props.requires)} fallback={<Navigate href="/" />}>
+      {props.children}
     </Show>
   );
 }
@@ -62,8 +51,6 @@ function Shell(props: RouteSectionProps) {
   });
 
   onMount(() => { void refreshProfile(); });
-  // Comutatoarele de functionalitati (AdminV2) decid ce intra in meniu.
-  onMount(() => { void loadFeatures(); });
 
   onMount(() => {
     const handler = () => {
@@ -90,7 +77,7 @@ function Shell(props: RouteSectionProps) {
 
 function routeComponent(r: AppRoute) {
   return (p: RouteSectionProps) => (
-    <Guarded requires={r.requires} disabled={r.disabled}>
+    <Guarded requires={r.requires}>
       <Dynamic component={r.component} {...p} />
     </Guarded>
   );
@@ -116,6 +103,8 @@ export default function App() {
             <Route path="/primite" component={EFACTURA_CHILDREN.received} />
             <Route path="/trimise" component={EFACTURA_CHILDREN.sent} />
           </Route>
+          {/* Adrese vechi sau gresite (ex. /radar, scos) -> prima pagina, nu un ecran gol. */}
+          <Route path="*" component={() => <Navigate href="/" />} />
         </Route>
       </Router>
     </AppErrorBoundary>

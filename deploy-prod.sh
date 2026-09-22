@@ -123,7 +123,7 @@ fi
 cd "$REPO/deploy"
 
 echo "==> rebuild + restart containere"
-$DC up -d --build
+$DC up -d --build --remove-orphans
 
 echo "==> astept backend healthy"
 for i in $(seq 1 60); do

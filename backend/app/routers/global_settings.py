@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.global_settings import GlobalSettings
-from app.schemas.global_settings import FeaturesRead, GlobalSettingsRead, MontareRotiImagesRead
+from app.schemas.global_settings import GlobalSettingsRead, MontareRotiImagesRead
 from app.utils.storage import validate_image, upload_global_image
 
 
@@ -26,20 +26,6 @@ async def _get_or_create(db: AsyncSession) -> GlobalSettings:
         await db.commit()
         await db.refresh(settings)
     return settings
-
-
-@router.get("/features", response_model=FeaturesRead)
-async def get_features(
-    db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
-):
-    """Ce functionalitati optionale sunt pornite pe platforma.
-
-    Meniul aplicatiei se deseneaza din raspunsul asta, deci e citibil de orice
-    utilizator autentificat — sunt doar niste comutatoare, nu setari.
-    """
-    gs = await _get_or_create(db)
-    return FeaturesRead(radar=bool(gs.radar_enabled))
 
 
 @router.get("/hotel-anvelope", response_model=GlobalSettingsRead)
