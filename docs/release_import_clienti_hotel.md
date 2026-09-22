@@ -46,6 +46,12 @@ frecvente) vezi `docs/deploy_productie.md`. Aici e doar ce e specific acestui re
 - La cazare nouă, previzualizarea anvelopei arată toate detaliile (profil, indici,
   DOT, observații).
 - În PDF, tabelul de anvelope are profilul imediat după marcă.
+- **Reparat:** la *Cazare nouă*, căutarea clientului găsește acum și după numărul
+  de mașină, ca pagina Clienți (înainte căuta doar în nume și CUI). Lista de
+  rezultate arată și numărul de mașină al clientului.
+- **Reparat:** *Scoatere și introducere nouă* salvează numărul de mașină pe
+  cazarea nouă. Înainte îl pierdea mereu; pentru cazările deja afectate vezi
+  secțiunea 2.5.
 
 **Fișa clientului**
 - Buton **Editează clientul** (fizică/juridică, CNP/CUI cu completare din ANAF,
@@ -165,6 +171,71 @@ update cazari_anvelope set location_id = <LOCATION_ID>
 ```
 
 La conturile cu mai multe puncte de lucru, decizia e a firmei.
+
+### 2.5. O singură dată: numărul de mașină pierdut la „Scoatere și introducere nouă”
+
+Până la acest release, cazarea nouă făcută prin **Scoatere și introducere nouă**
+se salva mereu **fără număr de mașină**. Bug-ul era prezent din mai 2026 și e
+reparat acum în cod. Cazările deja create așa se pot recupera: numărul lor e cel
+al cazării scoase, dacă e **același client**. La un client diferit nu se copiază
+nimic, ca să nu ajungă o cazare pe mașina altcuiva.
+
+Pe QA: 21 de cazări afectate, 14 recuperate, 7 fără sursă (nici cazarea veche nu
+avea număr).
+
+1. **Câte sunt:**
+   ```bash
+   cd ~/berlinstar/deploy
+   docker compose exec -T db psql -U berlinstar -d berlinstar -c "
+   select n.account_id,
+          count(*) as fara_numar,
+          count(*) filter (where v.numar_masina is not null) as recuperabile
+     from cazari_anvelope n join cazari_anvelope v on v.id = n.referinta_cazare_id
+    where n.is_deleted = false and n.numar_masina is null and n.client_id = v.client_id
+    group by 1 order by 1;"
+   ```
+2. **Recuperarea.** Rulează în mai multe treceri, pentru că o cazare combinată
+   poate porni dintr-o altă cazare combinată fără număr. Id-urile schimbate rămân
+   în tabela `_fix_numar_masina_combinata`, ca modificarea să poată fi anulată:
+   ```bash
+   docker compose exec -T db psql -U berlinstar -d berlinstar -v ON_ERROR_STOP=1 <<'SQL'
+   BEGIN;
+   CREATE TABLE _fix_numar_masina_combinata (id int PRIMARY KEY, numar_masina text, trecere int,
+                                             reparat_la timestamptz DEFAULT now());
+   DO $$
+   DECLARE n int; t int := 0;
+   BEGIN
+     LOOP
+       t := t + 1;
+       WITH upd AS (
+         UPDATE cazari_anvelope c SET numar_masina = v.numar_masina
+           FROM cazari_anvelope v
+          WHERE v.id = c.referinta_cazare_id AND c.client_id = v.client_id
+            AND c.is_deleted = false AND c.numar_masina IS NULL AND v.numar_masina IS NOT NULL
+         RETURNING c.id, c.numar_masina)
+       INSERT INTO _fix_numar_masina_combinata (id, numar_masina, trecere)
+         SELECT id, numar_masina, t FROM upd;
+       GET DIAGNOSTICS n = ROW_COUNT;
+       EXIT WHEN n = 0 OR t >= 20;
+     END LOOP;
+   END $$;
+   SELECT trecere, count(*) FROM _fix_numar_masina_combinata GROUP BY 1 ORDER BY 1;
+   COMMIT;
+   SQL
+   ```
+   Numărul total trebuie să fie cel puțin cât `recuperabile` de la pasul 1. Poate
+   ieși puțin mai mare, din cauza lanțurilor reparate în trecerea a doua.
+3. **Verificare:** rulează din nou pasul 1. În coloana `recuperabile` trebuie să
+   iasă 0; în `fara_numar` rămân doar cazările fără sursă.
+4. **Anulare, dacă e nevoie:**
+   ```sql
+   UPDATE cazari_anvelope c SET numar_masina = NULL
+     FROM _fix_numar_masina_combinata f WHERE c.id = f.id;
+   ```
+   Când nu mai e nevoie de ea: `DROP TABLE _fix_numar_masina_combinata;`.
+
+Cazările rămase fără număr se pot completa manual din Hotel anvelope ›
+Editează.
 
 ---
 

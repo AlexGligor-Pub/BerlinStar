@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from "@solidjs/router";
 import { apiFetch, API_BASE } from "../utils/api";
 import { createDebouncedSearch } from "../utils/debounce";
 import { createFitToViewport } from "../hooks/createFitToViewport";
+import { CNP_PLACEHOLDER } from "../types/client";
 import { canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees } from "../store/employeesStore";
@@ -147,11 +148,21 @@ function ClientSearch(props: {
   const [searched, setSearched] = createSignal(false);
 
   const clientSearch = createDebouncedSearch<ClientItem[] | null>({
+    // Aceeasi cautare ca pagina Clienti, dar dintr-o singura caseta: textul
+    // merge si ca nume/CUI (`q`), si ca numar de masina (`q_masina` — garajul
+    // clientului si fisa lui). Doar cu `q`, un numar de masina nu gasea nimic.
     fetch: async (val, signal) => {
-      const res = await apiFetch(`/api/clienti?q=${encodeURIComponent(val)}&limit=20`, { signal });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.items ?? [];
+      const term = encodeURIComponent(val.trim());
+      const get = async (param: "q" | "q_masina"): Promise<ClientItem[] | null> => {
+        const res = await apiFetch(`/api/clienti?${param}=${term}&limit=20`, { signal });
+        if (!res.ok) return null;
+        return ((await res.json()).items ?? []) as ClientItem[];
+      };
+      const [dupaNume, dupaMasina] = await Promise.all([get("q"), get("q_masina")]);
+      if (dupaNume === null && dupaMasina === null) return null;
+      // Un client gasit pe ambele cai apare o singura data.
+      const vazut = new Set<number>();
+      return [...(dupaNume ?? []), ...(dupaMasina ?? [])].filter((c) => !vazut.has(c.id) && vazut.add(c.id));
     },
     onResult: (items) => {
       if (!items) return;
@@ -205,7 +216,10 @@ function ClientSearch(props: {
                 onMouseDown={() => pick(c)}
               >
                 <span style="font-weight:600">{c.nume}</span>
-                <Show when={c.cui}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
+                {/* Masina ajuta la ales intre doi clienti cu acelasi nume. */}
+                <Show when={c.numar_masina}><span style="margin-left:8px;font-size:12px;font-weight:600;letter-spacing:.3px">{c.numar_masina}</span></Show>
+                {/* CNP-ul placeholder (13 zerouri) nu e o identificare reala. */}
+                <Show when={c.cui && c.cui !== CNP_PLACEHOLDER}><span style="color:var(--text-muted);margin-left:8px;font-size:11px">CUI: {c.cui}</span></Show>
               </button>
             )}
           </For>
@@ -1716,7 +1730,12 @@ export default function HotelAnvelope() {
         dep_prezoane: newDepPrezoane(),
         referinta_cazare_id: c.id,
         montate_pe_masina: newMontatePeMasina(),
-        numar_masina: null,
+        // Masina aleasa in fereastra (preselectata din garajul clientului). Fara
+        // ea — daca noua cazare e tot pe clientul celei vechi — masina acesteia.
+        // Inainte se trimitea mereu null, iar cazarea noua ramanea fara numar.
+        numar_masina: newSelectedVehicol()
+          || (newClient()!.id === c.clientId ? c.numarMasina : null)
+          || null,
         location_id: device()?.locationId ?? null,
       };
       if (receiptId != null) newBody.receipt_id = receiptId;
