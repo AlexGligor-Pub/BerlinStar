@@ -27,11 +27,6 @@ class GlobalSettings(Base):
     smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
     smtp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0")
 
-    # Radar AI pornit/oprit pentru toata platforma. Oprit: nu mai apare in meniu
-    # si rutele /api/radar/* raspund 404 — altfel pagina ar ramane accesibila
-    # scriind adresa direct.
-    radar_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="1")
-
     # ── Abonament BerlinStar ───────────────────────────────────────────────
     # Pretul anual brut (TVA inclus), TVA-ul aplicabil si moneda in care
     # Stripe incaseaza efectiv (RON cu conversie EUR->RON la momentul platii).
@@ -93,10 +88,3 @@ class GlobalSettings(Base):
     platform_anaf_auto_upload: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="1"
     )
-
-    # ── Radar AI (chei criptate cu Fernet-ul global din efactura) ──────────
-    anthropic_api_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    google_places_api_key_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ai_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    ai_price_in_usd_mtok: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
-    ai_price_out_usd_mtok: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)

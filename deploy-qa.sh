@@ -17,7 +17,7 @@ cd "$REPO/deploy"
 cp .env.qa .env
 
 echo "==> rebuild + restart"
-$DC up -d --build
+$DC up -d --build --remove-orphans
 
 echo "==> astept backend healthy"
 for i in $(seq 1 45); do

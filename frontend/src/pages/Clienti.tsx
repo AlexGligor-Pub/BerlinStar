@@ -1,8 +1,9 @@
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createEffect, createSignal, on } from "solid-js";
 import { useNavigate } from "@solidjs/router";
 import { canManage } from "../store/permissions";
 import { createPagination } from "../hooks/createPagination";
 import { createListResource } from "../hooks";
+import { createFitToViewport } from "../hooks/createFitToViewport";
 import Pagination from "../components/data/Pagination";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
 import { CNP_PLACEHOLDER, type Client, type ClientVehicol } from "../types/client";
@@ -276,8 +277,16 @@ export default function Clienti() {
     );
   }
 
+  // Antetul (titlu, cautare, formularul de adaugare) ramane pe loc; se
+  // deruleaza doar lista, cu paginarea la capatul ei.
+  let pageRef: HTMLDivElement | undefined;
+  let scrollRef: HTMLDivElement | undefined;
+  createFitToViewport({ scroll: () => scrollRef, page: () => pageRef });
+  // La alta pagina sau alta cautare, lista porneste de sus.
+  createEffect(on(() => pagination.params(), () => scrollRef?.scrollTo({ top: 0 }), { defer: true }));
+
   return (
-    <div class="page-content">
+    <div class="page-content reception-page" ref={pageRef}>
       <div class="page-header">
         <h1 class="page-title">Clienți</h1>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -321,6 +330,7 @@ export default function Clienti() {
         </div>
       </Show>
 
+      <div class="reception-scroll" ref={scrollRef}>
       <Show when={loading()}>
         <p class="cfg-hint">Se încarcă...</p>
       </Show>
@@ -512,6 +522,7 @@ export default function Clienti() {
       <Show when={!loading() && clienti().length > 0}>
         <Pagination api={pagination} total={total()} pageSizeOptions={[10, 25, 50, 100]} />
       </Show>
+      </div>
 
       <Show when={deleteTarget()}>
         <DeleteModal
