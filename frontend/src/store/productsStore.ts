@@ -37,6 +37,10 @@ function getCached(): Product[] | null {
 
 const [products, setProducts] = createSignal<Product[]>(getCached() ?? []);
 const [isOffline, setIsOffline] = createSignal(false);
+// `products()` e o singura pagina de 300. Cat timp mai sunt pagini (sau cat timp
+// nu s-a incarcat nimic de la server), absenta unui produs din lista NU inseamna
+// ca nu exista — vezi mesajul „departament fara produse" din POS.
+const [productsComplete, setProductsComplete] = createSignal(false);
 
 export async function loadProducts(): Promise<void> {
   try {
@@ -44,7 +48,7 @@ export async function loadProducts(): Promise<void> {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) throw new Error("API error");
-    const data = (await res.json()) as { items: RawItem[] };
+    const data = (await res.json()) as { items: RawItem[]; next_cursor: number | null };
     const mapped: Product[] = data.items.map((item) => ({
       id: item.id,
       name: item.name,
@@ -56,6 +60,7 @@ export async function loadProducts(): Promise<void> {
       imagePath: item.image_path ?? null,
     }));
     setProducts(mapped);
+    setProductsComplete(data.next_cursor == null);
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(mapped)); } catch {
       // quota or storage disabled — keep in-memory cache regardless
     }
@@ -67,7 +72,8 @@ export async function loadProducts(): Promise<void> {
 
 export function clearProducts(): void {
   setProducts([]);
+  setProductsComplete(false);
   try { localStorage.removeItem(CACHE_KEY); } catch { /* noop */ }
 }
 
-export { products, isOffline };
+export { products, isOffline, productsComplete };

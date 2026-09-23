@@ -43,9 +43,27 @@ export default function Login() {
 
   // success modal
   const [showSuccessModal, setShowSuccessModal] = createSignal(false);
+  const [successName, setSuccessName] = createSignal("");
+  const [successCode, setSuccessCode] = createSignal<string | null>(null);
   const [successUsername, setSuccessUsername] = createSignal("");
   const [successPassword, setSuccessPassword] = createSignal("");
   const [showSuccessPassword, setShowSuccessPassword] = createSignal(false);
+  const [credPdfErr, setCredPdfErr] = createSignal("");
+
+  async function descarcaCredentiale() {
+    setCredPdfErr("");
+    try {
+      const { generateAccountCredentialsPdf } = await import("../utils/accountCredentialsPdf");
+      await generateAccountCredentialsPdf({
+        name: successName() || successUsername(),
+        code: successCode(),
+        username: successUsername(),
+        password: successPassword(),
+      });
+    } catch {
+      setCredPdfErr("Nu am putut genera PDF-ul. Noteaza datele inainte de a inchide fereastra.");
+    }
+  }
 
   function switchMode(m: "login" | "register") {
     setError("");
@@ -157,9 +175,16 @@ export default function Login() {
         phone: regPhone().trim(),
       });
       if (res.ok) {
+        // `code` vine doar cand contul s-a creat acum. Lipsa lui inseamna ca
+        // username-ul era deja folosit: atunci nu se afiseaza credentiale, ca
+        // sa nu para ca un cont nou a fost creat.
+        const data = await res.json().catch(() => ({} as { code?: string | null }));
+        setSuccessName(regName().trim());
+        setSuccessCode(data.code ?? null);
         setSuccessUsername(regUsername().trim());
         setSuccessPassword(regPassword());
         setShowSuccessPassword(false);
+        setCredPdfErr("");
         setShowSuccessModal(true);
         setRegName(""); setRegUsername(""); setRegEmail(""); setRegCui(""); setRegPhone(""); setRegPassword(""); setRegPassword2("");
       } else if (res.status === 429) {
@@ -353,10 +378,15 @@ export default function Login() {
           <div style="font-size:2.4rem;line-height:1">🎉</div>
           <div style="font-weight:600;font-size:1.1rem">Felicitari, contul a fost creat!</div>
           <div style="font-size:0.9rem;color:var(--text-muted)">
-            Te poti autentifica folosind credentialele de mai jos. Pastreaza-le intr-un loc sigur.
+            Te poti autentifica folosind datele de mai jos. La login se cer toate trei:
+            codul firmei, utilizatorul si parola.
           </div>
 
           <div style="display:flex;flex-direction:column;gap:10px;text-align:left;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px">
+            <div>
+              <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Cod firma</div>
+              <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.95rem;word-break:break-all">{successCode() ?? "—"}</div>
+            </div>
             <div>
               <div style="font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px">Utilizator</div>
               <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:0.95rem;word-break:break-all">{successUsername()}</div>
@@ -378,6 +408,19 @@ export default function Login() {
               </div>
             </div>
           </div>
+
+          <div style="font-size:0.8rem;color:var(--danger);font-weight:600">
+            Date strict confidentiale: dau acces de administrator in cont. Pastreaza-le intr-un loc
+            sigur si nu le trimite pe canale nesecurizate.
+          </div>
+
+          <Show when={credPdfErr()}>
+            <div style="font-size:0.8rem;color:var(--danger)">{credPdfErr()}</div>
+          </Show>
+
+          <button class="btn btn-ghost w-full" type="button" onClick={descarcaCredentiale}>
+            Descarca datele (PDF)
+          </button>
 
           <button class="btn btn-primary w-full mt-4" type="button" onClick={goToLoginFromSuccess}>
             Mergi la autentificare

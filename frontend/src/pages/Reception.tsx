@@ -680,6 +680,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
   async function handleFactureazaConfirm() {
     setFactureazaError(null);
+    // Un deviz gol (ex. salvat doar ca sa poarte o cazare) nu are ce factura.
+    if (live().items.length === 0) { setFactureazaError("Devizul nu are niciun produs sau serviciu."); return; }
     const locationId = device()?.locationId;
     if (!locationId) { setFactureazaError("Dispozitivul nu are o locație configurată."); return; }
     setFactureazaPending(true);
@@ -738,6 +740,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
   async function handleDocDownload(docType: "deviz" | "factura" | "chitanta") {
     setDocError(null);
+    if (live().items.length === 0) { setDocError("Devizul nu are niciun produs sau serviciu."); return; }
     const locationId = device()?.locationId;
     if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);

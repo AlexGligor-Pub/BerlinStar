@@ -12,6 +12,9 @@ import { adminFetch } from "./admin-auth";
 import Modal from "../../components/ui/Modal";
 import UsersManager from "../../components/UsersManager";
 import { fmtDate } from "./shared";
+import {
+  generateAccountCredentialsPdf, preloadAccountCredentialsPdf, type AccountCredentials,
+} from "../../utils/accountCredentialsPdf";
 import type { Account } from "./types";
 import { drawDailyCountBars } from "../rapoarte/charts";
 
@@ -241,15 +244,100 @@ export default function AccountsSection() {
       const res = await adminFetch("/api/accounts", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) { setAddErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
       const created: Account = await res.json();
+      let avertisment = "";
       if (f.is_locked) {
-        await adminFetch(`/api/accounts/${created.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ is_locked: true, locked_at: f.locked_at || new Date().toISOString() }),
-        });
+        // Contul exista deja; daca marcarea ca trial esueaza, nu ascundem datele
+        // de acces — parola nu mai poate fi recuperata din alta parte.
+        try {
+          const pr = await adminFetch(`/api/accounts/${created.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ is_locked: true, locked_at: f.locked_at || new Date().toISOString() }),
+          });
+          if (!pr.ok) throw new Error("patch");
+        } catch {
+          avertisment = "Contul a fost creat, dar marcarea ca Trial a eșuat — repet-o din Editează.";
+        }
       }
       setAddOpen(false);
-      loadAccounts();
+      setCredCopied(false);
+      setCredPdfOk(false);
+      setCredErr(avertisment);
+      setCreatedCred({
+        name: created.name, code: created.code ?? null,
+        username: f.username.trim(), password: f.password,
+      });
+      // Parola in clar nu mai are ce cauta in formular dupa ce a fost preluata.
+      setAddForm(emptyForm());
+      void preloadAccountCredentialsPdf();
+      void Promise.resolve(loadAccounts()).catch(() => { /* lista se reincarca oricum */ });
     } finally { setAddSaving(false); }
+  }
+
+  // ── Datele de acces ale contului nou ──────────────────────────────────────
+  // Parola nu se mai poate citi dupa creare (in baza sta doar hash-ul), deci e
+  // singurul moment in care poate fi predata clientului.
+  const [createdCred, setCreatedCred] = createSignal<AccountCredentials | null>(null);
+  const [credCopied, setCredCopied] = createSignal(false);
+  const [credErr, setCredErr] = createSignal("");
+  const [credPdfOk, setCredPdfOk] = createSignal(false);
+
+  function credText(c: AccountCredentials): string {
+    return [
+      `Cont: ${c.name}`,
+      `Cod client: ${c.code ?? "—"}`,
+      `Utilizator: ${c.username}`,
+      `Parola: ${c.password}`,
+      "Date strict confidențiale — se predau doar titularului contului.",
+    ].join("\n");
+  }
+
+  /** `navigator.clipboard` lipseste pe origini nesecurizate (QA merge pe http),
+   *  deci copierea cade pe vechiul `execCommand` dintr-un textarea ascuns. */
+  async function copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* cade pe varianta de mai jos */ }
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async function copyCred() {
+    const c = createdCred();
+    if (!c) return;
+    setCredErr("");
+    if (await copyToClipboard(credText(c))) {
+      setCredCopied(true);
+      setTimeout(() => setCredCopied(false), 2000);
+    } else {
+      setCredErr("Nu am putut copia în clipboard. Notează datele manual sau descarcă PDF-ul.");
+    }
+  }
+
+  async function downloadCred() {
+    const c = createdCred();
+    if (!c) return;
+    setCredErr(""); setCredPdfOk(false);
+    try {
+      await generateAccountCredentialsPdf(c);
+      setCredPdfOk(true);
+    } catch {
+      setCredErr("Nu am putut genera PDF-ul. Notează datele înainte de a închide fereastra.");
+    }
   }
 
   // ── Preview / Edit modal ──────────────────────────────────────────────────
@@ -636,6 +724,65 @@ export default function AccountsSection() {
         </div>
       </Show>
 
+      {/* Modal: datele de acces ale contului nou */}
+      <Show when={createdCred()}>
+        <Modal
+          open
+          title="Cont creat — date de acces"
+          onClose={() => setCreatedCred(null)}
+          closeOnEscape={false}
+        >
+          <div class="admin-modal-body">
+            <p style="margin:0;font-size:13px;color:var(--text-muted)">
+              Contul <strong>{createdCred()!.name}</strong> a fost creat. Parola nu mai poate fi
+              citită după închiderea ferestrei — se păstrează doar criptată.
+            </p>
+            <div class="cont-nou-cred">
+              <div class="cont-nou-cred-row">
+                <span class="cont-nou-cred-label">Cod client</span>
+                <span class="cont-nou-cred-value">{createdCred()!.code ?? "—"}</span>
+              </div>
+              <div class="cont-nou-cred-row">
+                <span class="cont-nou-cred-label">Utilizator</span>
+                <span class="cont-nou-cred-value">{createdCred()!.username}</span>
+              </div>
+              <div class="cont-nou-cred-row">
+                <span class="cont-nou-cred-label">Parolă</span>
+                <span class="cont-nou-cred-value">{createdCred()!.password}</span>
+              </div>
+            </div>
+            <p class="cont-nou-cred-warn">
+              Date strict confidențiale. Se predau doar titularului contului și dau acces de
+              administrator. Nu le trimite pe canale nesecurizate; dacă le copiezi, rămân în
+              istoricul clipboard-ului până îl golești.
+            </p>
+            <p style="margin:0;font-size:12px;color:var(--text-muted)">
+              Dacă parola se pierde, se poate seta una nouă din <strong>Editează › Utilizatori</strong>,
+              pe contul respectiv.
+            </p>
+            <Show when={credErr()}>
+              <p style="color:var(--danger);font-size:13px;margin:0">{credErr()}</p>
+            </Show>
+            <Show when={credPdfOk()}>
+              <p style="font-size:12px;color:var(--text-muted);margin:0">
+                PDF generat. Dacă descărcarea nu a pornit, verifică setările browserului și încearcă din nou.
+              </p>
+            </Show>
+          </div>
+          <div class="sl-modal-footer">
+            <button type="button" class="btn btn-ghost btn-sm" onClick={copyCred}>
+              {credCopied() ? "Copiat" : "Copiază datele"}
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" onClick={downloadCred}>
+              Descarcă PDF
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onClick={() => setCreatedCred(null)}>
+              Am notat datele
+            </button>
+          </div>
+        </Modal>
+      </Show>
+
       {/* Modal: Create */}
       <Show when={addOpen()}>
         <Modal
@@ -672,7 +819,7 @@ export default function AccountsSection() {
               <Show when={addErr()}><p style="color:var(--danger);font-size:13px;margin:0">{addErr()}</p></Show>
             </div>
             <div class="sl-modal-footer">
-              <button type="button" class="btn btn-ghost btn-sm" onClick={() => setAddOpen(false)}>Anulează</button>
+              <button type="button" class="btn btn-ghost btn-sm" onClick={() => { setAddOpen(false); setAddForm(emptyForm()); }}>Anulează</button>
               <button type="submit" class="btn btn-primary btn-sm" disabled={addSaving()}>{addSaving() ? "Se salvează..." : "Creează"}</button>
             </div>
           </form>

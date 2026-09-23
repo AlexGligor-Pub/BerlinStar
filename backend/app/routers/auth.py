@@ -141,6 +141,10 @@ class RegisterRequest(BaseModel):
 
 class RegisterResponse(BaseModel):
     message: str
+    # Codul firmei, cerut la login alaturi de utilizator si parola. Se trimite
+    # doar cand contul chiar s-a creat acum; la un username deja folosit ramane
+    # None, deci raspunsul nu spune mai mult decat mesajul generic.
+    code: str | None = None
 
 
 async def _send_client_nou(account_name: str, account_email: str, account_id: int) -> None:
@@ -214,7 +218,7 @@ async def register(request: Request, body: RegisterRequest, background_tasks: Ba
     )
     if account.email:
         background_tasks.add_task(_send_client_nou, account.name, account.email, account.id)
-    return GENERIC_OK
+    return RegisterResponse(message=GENERIC_OK.message, code=account.code)
 
 
 class ChangePasswordRequest(BaseModel):
