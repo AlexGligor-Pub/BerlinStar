@@ -1,5 +1,7 @@
 import { For, Show, createEffect, createMemo, createSignal, onMount, onCleanup } from "solid-js";
-import { products, loadProducts } from "../store/productsStore";
+import { useNavigate } from "@solidjs/router";
+import { can } from "../store/permissions";
+import { products, loadProducts, isOffline, productsComplete } from "../store/productsStore";
 import { catalogDepartments, loadCatalogDepartments } from "../store/catalogThemesStore";
 import { employees, loadEmployees, selectedEmployeeId, selectEmployee } from "../store/employeesStore";
 import { receipts, loadReceipts, connectPosSSE, disconnectPosSSE, type Receipt } from "../store/receiptsStore";
@@ -46,6 +48,7 @@ function formatDevizTime(dateStr: string): string {
 
 export default function POS() {
   const [panel, setPanel] = createSignal(0);
+  const navigate = useNavigate();
   const [selectedDepartmentId, setSelectedDepartmentId] = createSignal<number | null>(null);
   const [search, setSearch] = createSignal("");
   const [category, setCategory] = createSignal("Toate");
@@ -195,6 +198,19 @@ export default function POS() {
     });
   });
 
+  /** Departament ales care nu are niciun produs sau serviciu — altceva decat o
+   *  cautare sau un filtru care nu potriveste nimic.
+   *
+   *  Se afirma doar cand lista de produse e sigur completa: cu lista trunchiata
+   *  la 300 sau adusa din cache-ul offline, un departament plin ar parea gol. */
+  const departamentGol = createMemo(() => {
+    const tid = selectedDepartmentId();
+    if (tid === null || isOffline() || !productsComplete()) return false;
+    return !products().some((p) => p.departmentId === tid);
+  });
+
+  let listaApi: { openManual: () => void } | undefined;
+
   const activeDepartmentName = createMemo(() => {
     const tid = selectedDepartmentId();
     if (tid === null) return null;
@@ -251,11 +267,55 @@ export default function POS() {
                   </div>
                 </div>
 
-                <div class="product-grid">
-                  <For each={filtered()}>
-                    {(product) => <ProductCard product={product} />}
-                  </For>
-                </div>
+                <Show
+                  when={!departamentGol()}
+                  fallback={
+                    <div class="pos-dept-gol" role="status" aria-live="polite">
+                      <div class="pos-dept-gol-box">
+                        <h2 class="pos-dept-gol-title">
+                          Departamentul <strong>{activeDepartmentName() ?? "selectat"}</strong> nu are niciun produs sau serviciu.
+                        </h2>
+                        <button class="btn btn-primary pos-dept-gol-btn" onClick={() => listaApi?.openManual()}>
+                          Adaugă produs/serviciu manual
+                        </button>
+                        <div class="pos-dept-gol-hint">
+                          <p>Linia adăugată manual intră doar pe devizul curent, cu numele și prețul scrise de tine.</p>
+                          <p>
+                            Ca să rămână în catalog, adaugă-le din meniul <strong>Configurări › Produse și Servicii</strong>.
+                            Produsele stau în categorii, iar categoria e cea care ține de departament:
+                          </p>
+                          <ol>
+                            <li>
+                              în fila <strong>Categorii</strong>, apasă <strong>+ Adaugă</strong>, scrie numele categoriei
+                              (ex. „Manoperă") și alege departamentul <strong>{activeDepartmentName() ?? "selectat"}</strong>;
+                            </li>
+                            <li>treci în fila <strong>Produse</strong> și apasă <strong>+ Adaugă</strong>;</li>
+                            <li>scrie numele, prețul și unitatea, alege <strong>Produs</strong> sau <strong>Serviciu</strong>
+                              și pune-l în categoria de mai sus;</li>
+                            <li>revino în POS și reîncarcă pagina — lista de produse se citește la deschiderea ei.</li>
+                          </ol>
+                          <Show when={can("settings")}>
+                            <button
+                              class="btn btn-ghost btn-sm"
+                              onClick={() => navigate("/configurari?topic=produse")}
+                            >
+                              Deschide Configurări › Produse și Servicii
+                            </button>
+                          </Show>
+                          <Show when={!can("settings")}>
+                            <p>Dacă nu ai acces la Configurări, cere-i unui administrator al contului.</p>
+                          </Show>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                >
+                  <div class="product-grid">
+                    <For each={filtered()}>
+                      {(product) => <ProductCard product={product} />}
+                    </For>
+                  </div>
+                </Show>
               </div>
 
               <div class="pos-right-col">
@@ -274,7 +334,7 @@ export default function POS() {
                     {activeDepartmentName() ?? "Departament"} ▶
                   </button>
                 </div>
-                <ShoppingList onEmployeeBadgeClick={() => setPanel(1)} />
+                <ShoppingList onEmployeeBadgeClick={() => setPanel(1)} expose={(api) => (listaApi = api)} />
               </div>
             </div>
           </div>

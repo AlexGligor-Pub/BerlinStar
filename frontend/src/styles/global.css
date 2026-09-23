@@ -852,6 +852,78 @@ img.pos-theme-preview {
   display: none;
 }
 
+/* AdminV2 > Conturi: datele de acces ale contului nou. */
+.cont-nou-cred {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cont-nou-cred-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.cont-nou-cred-row:last-child { border-bottom: none; }
+.cont-nou-cred-label {
+  flex: 0 0 110px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cont-nou-cred-value {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  word-break: break-all;
+  user-select: all;
+}
+.cont-nou-cred-warn {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* Departament fara produse: in locul grilei, adaugarea manuala si cum se
+   completeaza catalogul. */
+.pos-dept-gol {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.pos-dept-gol-box {
+  max-width: 520px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  padding: 24px 22px;
+}
+.pos-dept-gol-title {
+  font-size: 15px;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.pos-dept-gol-btn {
+  font-size: 15px;
+  padding: 10px 18px;
+}
+.pos-dept-gol-hint {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: left;
+}
+.pos-dept-gol-hint p { margin: 0 0 8px; }
+.pos-dept-gol-hint ol { margin: 0 0 10px; padding-left: 20px; }
+.pos-dept-gol-hint li { margin-bottom: 4px; }
+
 .type-toggle-btn {
   min-width: 76px;
   border: 1px solid var(--border);

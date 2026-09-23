@@ -570,7 +570,13 @@ interface CazariResponse {
   items: CazareDetail[];
 }
 
-export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void } = {}) {
+export default function ShoppingList(
+  props: {
+    onEmployeeBadgeClick?: () => void;
+    /** Primeste actiunile listei, ca sa poata fi pornite si din afara ei. */
+    expose?: (api: { openManual: () => void }) => void;
+  } = {},
+) {
   const navigate = useNavigate();
   const [titlu, setTitlu] = createSignal("");
   const [descriere, setDescriere] = createSignal("");
@@ -697,6 +703,7 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setManualUnit("buc");
     setShowManual(true);
   }
+  props.expose?.({ openManual });
 
   function confirmManual() {
     const name = manualName().trim();
@@ -912,24 +919,33 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
       setShowResumeModal(true);
       metaSaveEnabled = true;
     } else {
+      // Lista e goală, dar poate exista un deviz salvat gol (cazare pornită fără
+      // produse). Fără restaurare, legătura s-ar pierde și devizul ar rămâne
+      // orfan în „Devize neplătite”.
+      const meta = loadCartMeta();
+      if (meta?.receiptId) applyCartMeta(meta);
       metaSaveEnabled = true;
     }
   });
 
+  /** Repune pe ecran datele devizului salvate local (titlu, client, numărul
+   *  devizului deschis). Aceleași câmpuri ca la întoarcerea din Hotel. */
+  function applyCartMeta(meta: NonNullable<ReturnType<typeof loadCartMeta>>) {
+    setTitlu(meta.titlu ?? "");
+    setDescriere(meta.descriere ?? "");
+    setDateTehn(meta.dateTehn ?? "");
+    setSelectedClient(meta.client ?? null);
+    setVehicol(meta.vehicol ?? null);
+    setLoadedReceiptId(meta.receiptId ?? null);
+    setFdlMode(meta.fdlMode ?? false);
+    setConstatari(meta.constatari ?? "");
+    setSugestii(meta.sugestii ?? "");
+    setTimpEstimatOre(meta.timpEstimatOre ?? "");
+  }
+
   function handleContinuaLista() {
     const meta = loadCartMeta();
-    if (meta) {
-      setTitlu(meta.titlu ?? "");
-      setDescriere(meta.descriere ?? "");
-      setDateTehn(meta.dateTehn ?? "");
-      setSelectedClient(meta.client ?? null);
-      setVehicol(meta.vehicol ?? null);
-      setLoadedReceiptId(meta.receiptId ?? null);
-      setFdlMode(meta.fdlMode ?? false);
-      setConstatari(meta.constatari ?? "");
-      setSugestii(meta.sugestii ?? "");
-      setTimpEstimatOre(meta.timpEstimatOre ?? "");
-    }
+    if (meta) applyCartMeta(meta);
     setShowResumeModal(false);
   }
 
@@ -1034,14 +1050,11 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
     setOpeningMontareRoti(true);
 
     let rId = loadedReceiptId();
-    if (rId === null && cart.items.length === 0) {
-      setWarnMsg("Adăugați cel puțin un produs în deviz sau salvați bonul înainte de Montare Roți.");
-      setOpeningMontareRoti(false);
-      return;
-    }
 
     try {
-      if (cart.items.length > 0) {
+      // Ca la Cazare Anvelope: montajul se leaga de un deviz, deci daca inca nu
+      // exista unul se salveaza acum, chiar gol.
+      if (cart.items.length > 0 || rId === null) {
         const receiptData = {
           date: new Date().toISOString(),
           titlu: titlu().trim(),
@@ -1194,14 +1207,11 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
 
     let rId = loadedReceiptId();
 
-    if (rId === null && cart.items.length === 0) {
-      setWarnMsg("Mai este un pas — adăugați cel puțin un produs în deviz înainte de a merge la Hotel Anvelope.");
-      setGoingToHotel(false);
-      return;
-    }
-
     try {
-      if (cart.items.length > 0) {
+      // Cazarea se leaga de un deviz, deci daca inca nu exista unul se salveaza
+      // acum — chiar gol. Utilizatorul poate veni la Hotel inainte sa stie ce
+      // trece pe deviz; liniile se adauga dupa intoarcere, pe acelasi deviz.
+      if (cart.items.length > 0 || rId === null) {
         const receiptData = {
           date: new Date().toISOString(),
           titlu: titlu().trim(),
@@ -1226,6 +1236,10 @@ export default function ShoppingList(props: { onEmployeeBadgeClick?: () => void 
         rId = saved.id;
         setLoadedReceiptId(rId);
         try { await updateReceiptClient(rId, client.id); } catch { /* ignoră */ }
+      } else {
+        // Deviz gol deja salvat: nu are ce linii sa primeasca, dar clientul se
+        // poate fi schimbat intre timp.
+        try { await updateReceiptClient(rId!, client.id); } catch { /* ignoră */ }
       }
     } catch {
       setErrorMsg("Eroare la salvarea devizului.");
