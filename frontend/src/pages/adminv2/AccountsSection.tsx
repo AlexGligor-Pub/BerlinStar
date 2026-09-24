@@ -240,22 +240,22 @@ export default function AccountsSection() {
         name: f.name.trim(), username: f.username.trim(), password: f.password,
         email: f.email.trim() || null, description: f.description.trim() || null,
         image_url: f.image_url.trim() || null,
+        is_locked: f.is_locked,
       };
       const res = await adminFetch("/api/accounts", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) { setAddErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
       const created: Account = await res.json();
       let avertisment = "";
-      if (f.is_locked) {
-        // Contul exista deja; daca marcarea ca trial esueaza, nu ascundem datele
-        // de acces — parola nu mai poate fi recuperata din alta parte.
+      if (f.is_locked && f.locked_at) {
+        // Contul s-a creat deja in trial; aici se pune doar data de start ceruta.
         try {
           const pr = await adminFetch(`/api/accounts/${created.id}`, {
             method: "PATCH",
-            body: JSON.stringify({ is_locked: true, locked_at: f.locked_at || new Date().toISOString() }),
+            body: JSON.stringify({ locked_at: new Date(f.locked_at).toISOString() }),
           });
           if (!pr.ok) throw new Error("patch");
         } catch {
-          avertisment = "Contul a fost creat, dar marcarea ca Trial a eșuat — repet-o din Editează.";
+          avertisment = "Contul a fost creat în trial, dar data de început nu s-a salvat — pune-o din Editează.";
         }
       }
       setAddOpen(false);
@@ -1088,6 +1088,14 @@ export default function AccountsSection() {
                         Trial (is_locked)
                       </label>
                     </div>
+                    <Show when={previewAccount()?.is_locked && !editForm().is_locked}>
+                      <p style="margin:0;font-size:12px;color:var(--text-muted)">
+                        La scoaterea din trial, contul primește un abonament de un an dacă nu are
+                        niciunul sau dacă cel existent a expirat. Fără el, bannerul „Abonament
+                        neconfigurat” ar rămâne, iar un abonament expirat ar bloca din nou contul la
+                        prima autentificare. Data se schimbă din <strong>Abonament › Conturi</strong>.
+                      </p>
+                    </Show>
                     <Show when={editForm().is_locked}>
                       <div class="admin-form-row"><label class="admin-form-label">Locked at</label>
                         <input class="input" type="datetime-local" value={editForm().locked_at} onInput={(e) => setField(setEditForm, "locked_at", e.currentTarget.value)} /></div>

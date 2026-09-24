@@ -13,6 +13,9 @@ class AccountCreate(BaseModel):
     password: str = Field(..., max_length=255)
     email: str | None = Field(None, max_length=255)
     image_url: str | None = Field(None, max_length=500)
+    # Contul se poate crea direct in perioada de proba, fara un PATCH separat
+    # care ar putea esua si ar lasa contul activ din greseala.
+    is_locked: bool = False
 
 
 class AccountUpdate(BaseModel):

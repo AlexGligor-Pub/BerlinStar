@@ -1,13 +1,15 @@
 from __future__ import annotations
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_platform_admin_account
 from app.models.account import Account
+from app.models.subscription import AccountSubscription
 from app.schemas.account import AccountCreate, AccountUpdate, AccountRead
 from app.schemas.common import Page
 from app.services.account_provisioning import provision_account_admin
@@ -18,6 +20,46 @@ from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
 log = logging.getLogger("berlinstar")
+
+# Cat tine abonamentul creat automat cand un cont e scos din trial.
+SUBSCRIPTION_DAYS = 365
+
+
+async def _grant_subscription(db: AsyncSession, account: Account) -> None:
+    """Da contului un abonament valabil `SUBSCRIPTION_DAYS`, la activare.
+
+    Doua motive:
+      * fara rand in `account_subscription`, /api/subscription/me raspunde
+        „Abonament neconfigurat" si bannerul ramane pe ecran desi contul e activ;
+      * cu un abonament deja expirat, login-ul (`auth._apply_subscription_lock`)
+        si jobul de noapte blocheaza contul imediat la loc — activarea ar parea
+        ca nu s-a salvat.
+
+    Un abonament inca valabil nu se atinge: data lui vine din plati sau din
+    AdminV2 > Abonament > Conturi.
+    """
+    azi = date.today()
+    scadenta = azi + timedelta(days=SUBSCRIPTION_DAYS)
+    sub = (await db.execute(
+        select(AccountSubscription).where(AccountSubscription.account_id == account.id)
+    )).scalar_one_or_none()
+    if sub is not None:
+        if sub.next_payment_date >= azi:
+            return
+        sub.next_payment_date = scadenta
+        sub.updated_at = datetime.now(timezone.utc)
+        log.info("Cont %s activat: abonamentul expirat a fost prelungit pana la %s.", account.id, scadenta)
+        return
+    try:
+        # Randul il pot crea intre timp si plata Stripe, si AdminV2 > Abonament
+        # (account_id e unic) — atunci pastram ce a scris celalalt.
+        async with db.begin_nested():
+            db.add(AccountSubscription(account_id=account.id, next_payment_date=scadenta))
+            await db.flush()
+    except IntegrityError:
+        log.info("Cont %s: abonamentul fusese creat intre timp.", account.id)
+        return
+    log.info("Cont %s activat: abonament creat pana la %s.", account.id, scadenta)
 
 # ATENTIE: acest router administreaza TENANTII (crearea unei firme noi, datele
 # ei, stergerea ei), nu resursele din interiorul unui cont. Apartine exclusiv
@@ -78,6 +120,8 @@ async def create_account(body: AccountCreate, background_tasks: BackgroundTasks,
     account = Account(**data)
     db.add(account)
     await db.flush()
+    if not account.is_locked:
+        await _grant_subscription(db, account)
     # Fara user admin + cod de firma, contul nou nu s-ar putea autentifica:
     # login-ul cauta in `users`, nu in `accounts`.
     await provision_account_admin(db, account, data["password"], commit=False)
@@ -125,9 +169,15 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
             patch_data["password"] = await hash_password(patch_data["password"])
         else:
             patch_data.pop("password")
+    # Abonamentul se da doar la trecerea din trial in activ, nu la orice salvare
+    # a formularului (AdminV2 trimite `is_locked` de fiecare data).
+    era_blocat = bool(account.is_locked)
     for k, v in patch_data.items():
         setattr(account, k, v)
     account.updated_at = datetime.now(timezone.utc)
+    if era_blocat and patch_data.get("is_locked") is False:
+        account.locked_at = None
+        await _grant_subscription(db, account)
     await db.commit()
     await db.refresh(account)
     return account
