@@ -24,6 +24,8 @@ import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
 export interface DocContext {
   serie: string;
   nr: number;
+  /** Scadenta stabilita de server la numerotarea facturii (ISO). */
+  due_date?: string | null;
   company: {
     id?: number;
     name: string;

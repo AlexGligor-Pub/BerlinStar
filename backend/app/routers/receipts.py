@@ -972,7 +972,10 @@ async def assign_number(
         if disclaimer:
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
-    return AssignNumberResponse(serie=serie, nr=nr, company=company_data, disclaimer=disclaimer_data)
+    return AssignNumberResponse(
+        serie=serie, nr=nr, due_date=receipt.due_date,
+        company=company_data, disclaimer=disclaimer_data,
+    )
 
 
 @router.post("/{receipt_id}/finalize-fdl", response_model=ReceiptRead)

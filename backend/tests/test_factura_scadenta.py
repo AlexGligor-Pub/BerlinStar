@@ -51,12 +51,15 @@ async def test_the_invoice_number_sets_the_due_date_from_the_company_settings():
     await db.commit()
     emitere = receipt.created_at.date()
 
-    await assign_number(
+    raspuns = await assign_number(
         receipt.id, AssignNumberRequest(doc_type="factura", location_id=location.id), db, acc.id,
     )
 
     await db.refresh(receipt)
-    assert receipt.due_date == emitere + timedelta(days=TERMEN_FIRMA), receipt.due_date
+    scadenta = emitere + timedelta(days=TERMEN_FIRMA)
+    assert receipt.due_date == scadenta, receipt.due_date
+    # Pagina genereaza PDF-ul imediat, din raspuns — nu reincarca bonul.
+    assert raspuns.due_date == scadenta, raspuns.due_date
 
 
 async def test_without_anaf_settings_the_default_term_applies():

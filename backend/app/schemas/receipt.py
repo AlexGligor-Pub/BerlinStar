@@ -129,6 +129,9 @@ class AssignNumberRequest(BaseModel):
 class AssignNumberResponse(BaseModel):
     serie: str
     nr: int
+    # Scadenta stabilita la alocarea numarului de factura; pagina o pune pe bon
+    # inainte de a genera PDF-ul.
+    due_date: date | None = None
     company: dict | None = None
     disclaimer: dict | None = None
 

@@ -755,7 +755,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
-      applyDocNumber(r.id, docType, ctx.serie, ctx.nr);
+      applyDocNumber(r.id, docType, ctx.serie, ctx.nr, ctx.due_date);
       if (docType === "deviz") {
         // Anexam corpul Montare Roti la sfarsitul deviz-ului daca receiptul are date.
         const montajList = await loadMontajRotiByReceipt(Number(r.id)).catch(() => [] as MontajRota[]);
@@ -790,7 +790,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
       } catch { /* fara plati pe deviz */ }
       await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows, payRows);
       }
-      else if (docType === "factura") await generateFactura(r, ctx);
+      // `r` e copia din momentul randarii: scadenta tocmai stabilita de server
+      // vine in raspuns, nu in ea.
+      else if (docType === "factura") await generateFactura({ ...r, dueDate: ctx.due_date ?? r.dueDate }, ctx);
       else if (docType === "chitanta") await generateChitanta(r, ctx);
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare necunoscută.");

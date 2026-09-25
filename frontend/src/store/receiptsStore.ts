@@ -408,9 +408,11 @@ export async function assignFacturaNumber(id: string, locationId: number): Promi
     try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
     throw new Error(msg);
   }
-  const data: { serie: string; nr: number } = await res.json();
+  const data: { serie: string; nr: number; due_date?: string | null } = await res.json();
   const next = receipts().map((r) =>
-    r.id === id ? { ...r, facturaSerie: data.serie, facturaNr: data.nr } : r
+    r.id === id
+      ? { ...r, facturaSerie: data.serie, facturaNr: data.nr, dueDate: data.due_date ?? r.dueDate }
+      : r
   );
   setReceipts(next);
   localStorage.setItem(CACHE_KEY, JSON.stringify(next));
@@ -422,11 +424,15 @@ export function applyDocNumber(
   docType: "deviz" | "factura" | "chitanta",
   serie: string,
   nr: number,
+  /** Scadenta stabilita de server la prima numerotare a facturii. */
+  dueDate?: string | null,
 ) {
   const next = receipts().map((r) => {
     if (r.id !== id) return r;
     if (docType === "deviz") return { ...r, devizSerie: serie, devizNr: nr };
-    if (docType === "factura") return { ...r, facturaSerie: serie, facturaNr: nr };
+    if (docType === "factura") {
+      return { ...r, facturaSerie: serie, facturaNr: nr, dueDate: dueDate ?? r.dueDate };
+    }
     return { ...r, chitantaSerie: serie, chitantaNr: nr };
   });
   setReceipts(next);
