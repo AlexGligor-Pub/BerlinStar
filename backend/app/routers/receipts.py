@@ -833,6 +833,31 @@ async def patch_receipt_client(
     return _serialize(receipt, rec)
 
 
+async def _scadenta_implicita(db: AsyncSession, receipt: Receipt) -> date:
+    """Data bonului + termenul de plata din Configurari > eFactura al firmei.
+
+    Aceeasi regula ca XML-ul trimis la ANAF (`efactura/mapping._calculate_due_date`),
+    ca factura pe hartie si cea electronica sa nu spuna scadente diferite. Daca
+    firma nu are setari ANAF, se foloseste implicitul din schema (30 de zile) —
+    facturarea nu se opreste fiindca eFactura nu e configurata.
+    """
+    # Import local: `app.efactura` importa la randul lui din routere.
+    from app.efactura.mapping import _calculate_due_date
+    from app.efactura.models import AnafSettings
+    from app.efactura.schemas import AnafSettingsBase
+    from app.efactura.service import _resolve_company_for_receipt
+
+    zile = AnafSettingsBase.model_fields["payment_terms_days"].default
+    company = await _resolve_company_for_receipt(db, receipt)
+    if company is not None:
+        row = (await db.execute(
+            select(AnafSettings).where(AnafSettings.company_id == company.id)
+        )).scalar_one_or_none()
+        if row is not None:
+            zile = row.payment_terms_days
+    return _calculate_due_date(receipt, zile)
+
+
 @router.post("/{receipt_id}/assign-number", response_model=AssignNumberResponse)
 async def assign_number(
     receipt_id: int,
@@ -896,6 +921,12 @@ async def assign_number(
         setattr(receipt, serie_field, reg_serie)
         setattr(receipt, nr_field, new_nr)
         receipt.updated_at = datetime.now(timezone.utc)
+
+        # Scadenta se stabileste o singura data, cand factura capata numar: pana
+        # acum ramanea goala si nu aparea pe PDF, desi XML-ul catre ANAF o avea.
+        # Facturile din Factura Rapida vin cu ea completata din formular.
+        if doc_type == "factura" and receipt.due_date is None:
+            receipt.due_date = await _scadenta_implicita(db, receipt)
 
         # Asociere automată client-vehicul dacă lipsește
         if receipt.client_id:
