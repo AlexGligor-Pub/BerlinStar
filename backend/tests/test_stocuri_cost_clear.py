@@ -7,6 +7,7 @@ Rulabil cu pytest sau direct:  python -m tests.test_stocuri_cost_clear  (din bac
 from __future__ import annotations
 from decimal import Decimal
 
+from app.models.location import Location
 from app.routers.stocuri import patch_item_stoc_meta
 from app.schemas.stoc import ItemStocPatch
 from tests._harness import make_account, make_item, make_session, run
@@ -17,6 +18,9 @@ LOC = 1
 async def _fixture(cost: str | None = "12.50", stoc_minim: int = 3):
     db = await make_session()
     acc = await make_account(db)
+    # Locatia LOC trebuie sa existe si sa fie a contului (id 1, prima creata).
+    db.add(Location(account_id=acc.id, name="Sediu"))
+    await db.flush()
     item = await make_item(db, acc, "Ulei 5W30", "40.00")
     item.cost_price = Decimal(cost) if cost is not None else None
     item.stoc_minim = stoc_minim
