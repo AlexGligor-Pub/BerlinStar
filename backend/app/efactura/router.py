@@ -97,6 +97,32 @@ async def _require_company_access(
     return company
 
 
+async def _get_receipt_for_caller(
+    db: AsyncSession, receipt_id: int, account_id: int
+) -> Receipt:
+    """Bonul contului curent; super-adminul platformei il poate citi pe al oricarui cont.
+
+    Aceeasi poarta ca `_require_company_access` (username == "admin"). Pentru orice
+    alt cont raspunsul ramane 404, ca sa nu divulgam existenta bonurilor altor tenanti.
+    """
+    receipt = (
+        await db.execute(
+            select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
+        )
+    ).scalar_one_or_none()
+    if receipt is not None:
+        return receipt
+    from app.models.account import Account
+    acc = (await db.execute(select(Account).where(Account.id == account_id))).scalar_one_or_none()
+    if acc is not None and acc.username == "admin":
+        receipt = (
+            await db.execute(select(Receipt).where(Receipt.id == receipt_id))
+        ).scalar_one_or_none()
+    if receipt is None:
+        raise HTTPException(404, "Receipt-ul nu exista.")
+    return receipt
+
+
 # ---------- Self-service endpoints (per-account) ----------
 
 def _settings_to_out(row: AnafSettings) -> AnafSettingsOut:
@@ -571,13 +597,7 @@ async def get_receipt_status(
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza statusul curent + ANAF check fresh daca e in prelucrare."""
-    receipt = (
-        await db.execute(
-            select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
-        )
-    ).scalar_one_or_none()
-    if receipt is None:
-        raise HTTPException(404, "Receipt-ul nu exista.")
+    await _get_receipt_for_caller(db, receipt_id, account_id)
 
     rec = (
         await db.execute(
@@ -632,13 +652,7 @@ async def download_response_zip(
     db: AsyncSession = Depends(get_db),
 ):
     """Descarca ZIP-ul de raspuns ANAF (cu sigiliu electronic)."""
-    receipt = (
-        await db.execute(
-            select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
-        )
-    ).scalar_one_or_none()
-    if receipt is None:
-        raise HTTPException(404, "Receipt-ul nu exista.")
+    await _get_receipt_for_caller(db, receipt_id, account_id)
 
     rec = (
         await db.execute(
