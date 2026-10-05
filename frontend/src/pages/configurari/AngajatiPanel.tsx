@@ -7,7 +7,7 @@ import { ExportMenu, DeleteModal } from "./components";
 
 export default function AngajatiPanel() {
   const navigate = useNavigate();
-  const list = createListResource<Employee>({ fetcher: cursorFetcher(employeesApi.list, { sort: "name" }), limit: 100 });
+  const list = createListResource<Employee>({ fetcher: cursorFetcher(employeesApi.list), limit: 100 });
   const [search, setSearch]   = createSignal("");
 
   const [editId, setEditId]               = createSignal<number | null>(null);
@@ -26,9 +26,13 @@ export default function AngajatiPanel() {
 
   const [deleteTarget, setDeleteTarget] = createSignal<Employee | null>(null);
 
+  // Cursorul last_id e valabil doar in ordinea id-ului, deci paginile vin pe id
+  // si ordonarea dupa nume se face aici, pe ce s-a incarcat pana acum.
+  const sorted = createMemo(() => [...list.items()].sort((a, b) => a.name.localeCompare(b.name, "ro") || a.id - b.id));
+
   const filtered = createMemo(() => {
     const q = search().toLowerCase();
-    return q ? list.items().filter(e => e.name.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q)) : list.items();
+    return q ? sorted().filter(e => e.name.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q)) : sorted();
   });
 
   const upload = useAction({

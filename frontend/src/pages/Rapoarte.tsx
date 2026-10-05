@@ -1548,17 +1548,20 @@ function AngajatiPanel() {
     setLoadingList(true);
     const all: EmployeeReport[] = [];
     const PAGE = 200;
-    let offset = 0;
+    const MAX_PAGES = 26;
+    let lastId: number | null = null;
     try {
-      while (true) {
-        const res = await apiFetch(`/api/employees?limit=${PAGE}&offset=${offset}`);
+      // Backend-ul pagineaza doar cu cursor (last_id, in ordinea id-ului); offset e ignorat.
+      for (let i = 0; i < MAX_PAGES; i++) {
+        let url = `/api/employees?limit=${PAGE}`;
+        if (lastId !== null) url += `&last_id=${lastId}`;
+        const res = await apiFetch(url);
         if (!res.ok) throw new Error(`Status ${res.status}`);
-        const data = (await res.json()) as { items: EmployeeReport[] };
+        const data = (await res.json()) as { items: EmployeeReport[]; next_cursor?: number | null };
         const items = data.items ?? [];
         all.push(...items);
-        if (items.length < PAGE) break;
-        offset += PAGE;
-        if (offset > 5000) break;
+        if (data.next_cursor == null || items.length === 0) break;
+        lastId = data.next_cursor;
       }
       setEmployees(all);
     } catch (e: unknown) {
