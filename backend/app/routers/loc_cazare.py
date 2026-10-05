@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -27,7 +27,14 @@ async def list_locuri(
         LocCazare.account_id == account_id, LocCazare.is_deleted == False
     )
     if last_id is not None:
-        stmt = stmt.where(LocCazare.id > last_id)
+        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
+        # Cu `id > last_id` pagina a doua sarea randurile cu id mai mic si le dubla pe altele.
+        # Randul-cursor se cauta doar in contul apelantului (altfel pagina ar fi filtrata dupa
+        # numele altui cont); fara is_deleted, ca un rand sters intre pagini sa ramana cursor valid.
+        last_nume = select(LocCazare.nume).where(
+            LocCazare.id == last_id, LocCazare.account_id == account_id
+        ).scalar_subquery()
+        stmt = stmt.where(tuple_(LocCazare.nume, LocCazare.id) > tuple_(last_nume, last_id))
     stmt = stmt.order_by(LocCazare.nume, LocCazare.id).limit(limit + 1)
     return await paginate(db, stmt, limit)
 

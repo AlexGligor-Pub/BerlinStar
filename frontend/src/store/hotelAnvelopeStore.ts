@@ -418,8 +418,12 @@ const PROFIL_CACHE_KEY = "bs_profiluri_anvelope";
 const DOT_CACHE_KEY = "bs_coduri_dot_anvelope";
 const LOCURI_CACHE_KEY = "bs_locuri_cazare";
 const CACHE_TTL = 10 * 60 * 1000;
+// Serverul plafoneaza `limit` la 500; restul vine pe `next_cursor`. Plafonul de
+// pagini e doar o plasa de siguranta impotriva unui cursor care nu avanseaza.
+const NOMENCLATOR_PAGE_SIZE = 500;
+const NOMENCLATOR_MAX_PAGES = 40;
 
-async function loadCached<R, T>(
+async function loadCached<R extends { id: number }, T>(
   cacheKey: string,
   url: string,
   setter: (items: T[]) => void,
@@ -438,10 +442,24 @@ async function loadCached<R, T>(
     }
   }
   try {
-    const res = await apiFetch(`${url}?limit=500`);
-    if (!res.ok) return;
-    const data = (await res.json()) as { items: R[] };
-    const items: T[] = data.items.map(mapper);
+    const raws: R[] = [];
+    const seen = new Set<number>();
+    let cursor: number | null = null;
+    for (let page = 0; page < NOMENCLATOR_MAX_PAGES; page++) {
+      const qs: string = cursor == null ? "" : `&last_id=${cursor}`;
+      const res = await apiFetch(`${url}?limit=${NOMENCLATOR_PAGE_SIZE}${qs}`);
+      // O pagina esuata => pastram lista veche; una trunchiata ar ramane 10 minute in cache.
+      if (!res.ok) return;
+      const data = (await res.json()) as { items: R[]; next_cursor?: number | null };
+      for (const raw of data.items) {
+        if (seen.has(raw.id)) continue;
+        seen.add(raw.id);
+        raws.push(raw);
+      }
+      cursor = data.next_cursor ?? null;
+      if (cursor == null) break;
+    }
+    const items: T[] = raws.map(mapper);
     setter(items);
     try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), items })); } catch {
       // storage quota/disabled — keep in-memory

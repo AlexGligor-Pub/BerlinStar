@@ -201,8 +201,8 @@ export default function POS() {
   /** Departament ales care nu are niciun produs sau serviciu — altceva decat o
    *  cautare sau un filtru care nu potriveste nimic.
    *
-   *  Se afirma doar cand lista de produse e sigur completa: cu lista trunchiata
-   *  la 300 sau adusa din cache-ul offline, un departament plin ar parea gol. */
+   *  Se afirma doar cand lista de produse e sigur completa: cu lista incarcata
+   *  partial sau adusa din cache-ul offline, un departament plin ar parea gol. */
   const departamentGol = createMemo(() => {
     const tid = selectedDepartmentId();
     if (tid === null || isOffline() || !productsComplete()) return false;
