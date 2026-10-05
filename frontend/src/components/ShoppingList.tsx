@@ -226,7 +226,6 @@ function AddClientModal(props: {
         ...f,
         nume: data.name ?? f.nume,
         adresa: data.address ?? f.adresa,
-        reprezentant: data.representative ?? f.reprezentant,
       }));
     } catch {
       setAnafError("Eroare la interogarea ANAF.");
@@ -375,7 +374,6 @@ function EditClientModal(props: {
         ...f,
         nume: data.name ?? f.nume,
         adresa: data.address ?? f.adresa,
-        reprezentant: data.representative ?? f.reprezentant,
       }));
     } catch {
       setAnafError("Eroare la interogarea ANAF.");
@@ -1036,6 +1034,23 @@ export default function ShoppingList(
   const [montareRotiReceiptId, setMontareRotiReceiptId] = createSignal<number | null>(null);
   const [openingMontareRoti, setOpeningMontareRoti] = createSignal(false);
 
+  /** Câmpurile FDL din payload-ul de bon, comune TUTUROR salvărilor din POS
+   *  (Finalizează, Montare Roți, Cazare Anvelope). PATCH /content suprascrie
+   *  constatări/sugestii/timp pe un bon cu source="fdl", deci o salvare care le
+   *  omite le șterge din baza de date. */
+  function fdlReceiptFields(receiptId: string | null) {
+    const isFdl = fdlMode();
+    const timpRaw = parseFloat(timpEstimatOre());
+    return {
+      // La un bon EXISTENT trimitem sursa explicit ca să poată comuta în ambele
+      // sensuri (FDL <-> deviz). La bon nou lăsăm backend-ul cu sursa implicită.
+      source: isFdl ? "fdl" : (receiptId !== null ? "pos" : undefined),
+      constatari: isFdl ? (constatari().trim() || null) : null,
+      sugestii: isFdl ? (sugestii().trim() || null) : null,
+      timpEstimatOre: isFdl && !isNaN(timpRaw) && timpRaw > 0 ? timpRaw : null,
+    };
+  }
+
   async function handleMontareRoti() {
     const client = selectedClient();
     if (!titlu().trim()) {
@@ -1069,6 +1084,7 @@ export default function ShoppingList(
           chitantaSerie: "", chitantaNr: 0,
           programareId: loadedProgramareId(),
           locationId: device()?.locationId ?? null,
+          ...fdlReceiptFields(rId),
         };
         const saved = rId !== null
           ? await updateReceiptContent(rId, receiptData)
@@ -1226,6 +1242,7 @@ export default function ShoppingList(
           chitantaSerie: "", chitantaNr: 0,
           programareId: loadedProgramareId(),
           locationId: device()?.locationId ?? null,
+          ...fdlReceiptFields(rId),
         };
         let saved;
         if (rId !== null) {
@@ -1289,8 +1306,6 @@ export default function ShoppingList(
     if (finalizing()) return;
     setFinalizing(true);
     const receiptId = loadedReceiptId();
-    const isFdl = fdlMode();
-    const timpRaw = parseFloat(timpEstimatOre());
     const receiptData = {
       date: new Date().toISOString(),
       titlu: titlu().trim(),
@@ -1306,12 +1321,7 @@ export default function ShoppingList(
       chitantaSerie: "", chitantaNr: 0,
       programareId: loadedProgramareId(),
       locationId: device()?.locationId ?? null,
-      // La un bon EXISTENT trimitem sursa explicit ca să poată comuta în ambele
-      // sensuri (FDL <-> deviz). La bon nou lăsăm backend-ul cu sursa implicită.
-      source: isFdl ? "fdl" : (receiptId !== null ? "pos" : undefined),
-      constatari: isFdl ? (constatari().trim() || null) : null,
-      sugestii: isFdl ? (sugestii().trim() || null) : null,
-      timpEstimatOre: isFdl && !isNaN(timpRaw) && timpRaw > 0 ? timpRaw : null,
+      ...fdlReceiptFields(receiptId),
     };
     let saved;
     try {
