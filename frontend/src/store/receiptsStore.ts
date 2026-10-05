@@ -279,7 +279,10 @@ export async function loadMoreReceipts() {
     const mapped: Receipt[] = data.items.map(mapFromApi);
     _nextCursor = data.next_cursor ?? null;
     setHasMore(_nextCursor !== null);
-    const updated = [...receipts(), ...mapped];
+    // Un bon modificat intre doua pagini isi schimba pozitia in sortarea dupa
+    // activitate si poate reveni pe pagina urmatoare — nu il afisam de doua ori.
+    const seen = new Set(receipts().map((r) => r.id));
+    const updated = [...receipts(), ...mapped.filter((r) => !seen.has(r.id))];
     setReceipts(updated);
     localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
   } catch {
@@ -388,7 +391,7 @@ export async function updateMetodaPlata(id: string, metodaPlata: string | null, 
       partial_pay: pay_method === "Platit Partial" ? (partialPay ?? 100) : null,
     }),
   });
-  if (!res.ok) return;
+  if (!res.ok) throw new Error(await _readApiError(res, `Eroare ${res.status} la salvarea platii.`));
   // Folosim raspunsul serverului, nu o presupunere locala: la schimbarea
   // statusului backendul poate ajusta `partial_pay` si inregistra automat o
   // miscare in registrul de plati, iar `updated_at` se schimba — de ele depinde
@@ -490,7 +493,12 @@ export async function refreshReceipt(id: string): Promise<Receipt | null> {
 }
 
 export async function deleteReceipt(id: string) {
-  await apiFetch(`/api/receipts/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/receipts/${id}`, { method: "DELETE" });
+  // 404 = bonul e deja sters pe server; il scoatem si din lista locala. Orice alt
+  // refuz (423 blocat de e-Factura, 403 rol, 5xx) trebuie sa ajunga la utilizator.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await _readApiError(res, `Eroare ${res.status} la stergerea bonului.`));
+  }
   const updated = receipts().filter((r) => r.id !== id);
   setReceipts(updated);
   localStorage.setItem(CACHE_KEY, JSON.stringify(updated));

@@ -4,10 +4,11 @@ import json
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, extract, update, delete, or_, and_
-from sqlalchemy.orm import selectinload
+from sqlalchemy import select, func, extract, update, delete, or_, and_, tuple_
+from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -369,6 +370,16 @@ def _serialize(receipt: Receipt, efactura_rec: EFacturaRecord | None = None) -> 
     return data
 
 
+# Filtrele de zi din lista de bonuri sunt zile calendaristice locale (asa le
+# trimite Receptia si asa le grupeaza rapoartele), nu zile UTC.
+_LIST_TZ = ZoneInfo("Europe/Bucharest")
+
+
+def _local_day_start(d: date) -> datetime:
+    """Miezul noptii locale al zilei `d`, ca instant UTC."""
+    return datetime(d.year, d.month, d.day, tzinfo=_LIST_TZ).astimezone(timezone.utc)
+
+
 @router.get("", response_model=Page[ReceiptRead])
 async def list_receipts(
     last_id: int | None = None,
@@ -398,8 +409,6 @@ async def list_receipts(
     )
     if not include_deleted:
         stmt = stmt.where(Receipt.is_deleted == False)
-    if last_id is not None:
-        stmt = stmt.where(Receipt.id < last_id)
     if q:
         stmt = stmt.where(Receipt.titlu.ilike(f"%{q}%"))
     if item_q:
@@ -416,10 +425,11 @@ async def list_receipts(
     if date_from is not None or date_to is not None:
         range_clauses = []
         if date_from is not None:
-            range_clauses.append(Receipt.created_at >= datetime(date_from.year, date_from.month, date_from.day, 0, 0, 0, tzinfo=timezone.utc))
+            range_clauses.append(Receipt.created_at >= _local_day_start(date_from))
         if date_to is not None:
-            dt_to = datetime(date_to.year, date_to.month, date_to.day, 0, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
-            range_clauses.append(Receipt.created_at < dt_to)
+            # Ziua urmatoare se calculeaza pe data, nu pe instant: in zilele cu
+            # schimbare de ora ziua locala nu are 24 de ore.
+            range_clauses.append(Receipt.created_at < _local_day_start(date_to + timedelta(days=1)))
         date_conditions.append(and_(*range_clauses))
     if unpaid_days is not None and unpaid_days > 0:
         now_utc = datetime.now(timezone.utc)
@@ -449,9 +459,28 @@ async def list_receipts(
     stmt = apply_filters(stmt, Receipt, filters)
     if sort in ("-activity", "activity"):
         activity_col = func.coalesce(Receipt.updated_at, Receipt.created_at)
+        if last_id is not None:
+            # Keyset aliniat cu ORDER BY (activitate, id): cursorul ramane id-ul
+            # ultimului rand, iar activitatea lui se citeste din baza. Un simplu
+            # `id < last_id` sarea si dubla randuri, fiindca ordinea nu e pe id.
+            cur = aliased(Receipt)
+            last_activity = (
+                select(func.coalesce(cur.updated_at, cur.created_at))
+                .where(cur.id == last_id, cur.account_id == account_id)
+                .scalar_subquery()
+            )
+            if sort.startswith("-"):
+                stmt = stmt.where(tuple_(activity_col, Receipt.id) < tuple_(last_activity, last_id))
+            else:
+                stmt = stmt.where(or_(
+                    activity_col > last_activity,
+                    and_(activity_col == last_activity, Receipt.id < last_id),
+                ))
         order = activity_col.desc() if sort.startswith("-") else activity_col.asc()
         stmt = stmt.order_by(order, Receipt.id.desc())
     else:
+        if last_id is not None:
+            stmt = stmt.where(Receipt.id < last_id)
         stmt = apply_sort(stmt, Receipt, sort)
     stmt = stmt.limit(limit + 1)
 
