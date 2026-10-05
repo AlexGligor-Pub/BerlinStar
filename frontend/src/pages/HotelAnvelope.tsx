@@ -1,7 +1,8 @@
 import { createSignal, createEffect, createMemo, For, Show, onMount, onCleanup, on } from "solid-js";
 import { useSearchParams, useNavigate } from "@solidjs/router";
-import { apiFetch, API_BASE } from "../utils/api";
+import { apiFetch, API_BASE, parseApiError, readApiError } from "../utils/api";
 import { createDebouncedSearch } from "../utils/debounce";
+import { toLocalISO } from "./rapoarte/format";
 import { createFitToViewport } from "../hooks/createFitToViewport";
 import { CNP_PLACEHOLDER } from "../types/client";
 import { canManage } from "../store/permissions";
@@ -48,7 +49,8 @@ const TIP_LABELS: Record<TipAnvelopa, string> = {
 };
 
 function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+  // Ziua locala, nu cea UTC: intre 00:00 si 03:00 toISOString() da inca "ieri".
+  return toLocalISO(new Date());
 }
 
 /** Indicii de sarcină și viteză, scriși cum apar pe flanc: „91V". */
@@ -106,7 +108,7 @@ const PAGE_SIZE = 100;
 
 function canEditCazare(c: Cazare): boolean {
   if (!c.dataCheckout) return true;
-  return daysBetween(c.dataCheckout, new Date().toISOString().slice(0, 10)) <= EDIT_GRACE_DAYS;
+  return daysBetween(c.dataCheckout, todayStr()) <= EDIT_GRACE_DAYS;
 }
 
 function fmtDate(s: string | null) {
@@ -407,32 +409,50 @@ function AnvelopaForm(props: {
   }
 
   async function addProfilInline(value: string) {
-    const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
-    if (res.ok) {
+    try {
+      const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
+      if (!res.ok) {
+        notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
+        return;
+      }
       const d = await res.json();
       invalidateProfilCache();
       await loadProfil(true);
       setProfilId(d.id);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     }
   }
 
   async function addDim(value: string) {
-    const res = await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
-    if (res.ok) {
+    try {
+      const res = await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
+      if (!res.ok) {
+        notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
+        return;
+      }
       const d = await res.json();
       invalidateDimensiuniCache();
       await loadDimensiuni(true);
       setDimensiuneId(d.id);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     }
   }
 
   async function addDotInline(value: string) {
-    const res = await apiFetch("/api/coduri-dot-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
-    if (res.ok) {
+    try {
+      const res = await apiFetch("/api/coduri-dot-anvelope", { method: "POST", body: JSON.stringify({ valoare: value }) });
+      if (!res.ok) {
+        notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
+        return;
+      }
       const d = await res.json();
       invalidateCoduriDotCache();
       await loadCoduriDot(true);
       setDotId(d.id);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     }
   }
 
@@ -913,6 +933,9 @@ export default function HotelAnvelope() {
   const [combinedCazare, setCombinedCazare] = createSignal<Cazare | null>(null);
   const [combinedSaving, setCombinedSaving] = createSignal(false);
   const [combinedErr, setCombinedErr] = createSignal("");
+  // Id-ul cazarii a carei scoatere a reusit deja in fereastra combinata: la o
+  // reincercare (dupa ce a esuat cazarea noua) scoaterea nu se mai repeta.
+  const [combinedCheckoutDoneId, setCombinedCheckoutDoneId] = createSignal<number | null>(null);
 
   // ── Modal Sugestie Anvelope (din istoricul montajelor) ────────────────────
   const [montajSuggestion, setMontajSuggestion] = createSignal<MontajSuggestion | null>(null);
@@ -1565,11 +1588,15 @@ export default function HotelAnvelope() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          setSaveErr(err.detail ?? "Eroare la salvare anvelopă.");
+          setSaveErr(parseApiError(err.detail, "Eroare la salvare anvelopă."));
           return;
         }
         const d = await res.json();
         tempToReal.set(tempId, d.id);
+        // Id-ul real intra imediat in stare: daca pasul urmator esueaza, o noua
+        // incercare nu mai gaseste ciorna si nu creeaza anvelopa a doua oara.
+        setClientAnvelope((l) => l.map((a) => (a.id === tempId ? { ...a, id: d.id } : a)));
+        setSelectedAnvIds((prev) => new Set(Array.from(prev).map((id) => (id === tempId ? d.id : id))));
       }
 
       const finalIds = Array.from(selectedAnvIds()).map((id) => tempToReal.get(id) ?? id);
@@ -1596,7 +1623,7 @@ export default function HotelAnvelope() {
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        setSaveErr(err.detail ?? "Eroare la salvare.");
+        setSaveErr(parseApiError(err.detail, "Eroare la salvare."));
         return;
       }
       setShowNewModal(false);
@@ -1639,6 +1666,7 @@ export default function HotelAnvelope() {
     setNewReferintaCazareId(c.id);
     setSaveErr("");
     setCombinedErr("");
+    setCombinedCheckoutDoneId(null);
     // Pre-select clientul pentru noua cazare:
     //  - dacă venim din POS → clientul POS (cel nou, pentru care se face devizul)
     //  - altfel → clientul cazării vechi (comportamentul original)
@@ -1683,6 +1711,7 @@ export default function HotelAnvelope() {
     if (selectedAnvIds().size === 0) { setCombinedErr("Selectați cel puțin o anvelopă pentru noua cazare."); return; }
     setCombinedSaving(true);
     setCombinedErr("");
+    const PREFIX_SCOASA = "Scoaterea a fost înregistrată, dar cazarea nouă nu s-a salvat: ";
     try {
       // Create draft anvelope (negative IDs) — same pattern as saveCazare
       const draftIds = Array.from(selectedAnvIds()).filter((id) => id < 0);
@@ -1706,11 +1735,15 @@ export default function HotelAnvelope() {
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          setCombinedErr(err.detail ?? "Eroare la salvare anvelopă.");
+          setCombinedErr(parseApiError(err.detail, "Eroare la salvare anvelopă."));
           return;
         }
         const d = await res.json();
         tempToReal.set(tempId, d.id);
+        // Id-ul real intra imediat in stare: daca pasul urmator esueaza, o noua
+        // incercare nu mai gaseste ciorna si nu creeaza anvelopa a doua oara.
+        setClientAnvelope((l) => l.map((a) => (a.id === tempId ? { ...a, id: d.id } : a)));
+        setSelectedAnvIds((prev) => new Set(Array.from(prev).map((id) => (id === tempId ? d.id : id))));
       }
 
       const finalIds = Array.from(selectedAnvIds()).map((id) => tempToReal.get(id) ?? id);
@@ -1723,16 +1756,17 @@ export default function HotelAnvelope() {
         comments: checkoutComments().trim() || null,
       };
       if (receiptId != null) checkoutBody.receipt_id = receiptId;
-      const checkoutRes = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
-        method: "PATCH",
-        body: JSON.stringify(checkoutBody),
-      });
-      if (!checkoutRes.ok) {
-        const err = await checkoutRes.json().catch(() => ({}));
-        setCombinedErr(err.detail ?? "Eroare la scoatere din depozit.");
-        return;
+      if (combinedCheckoutDoneId() !== c.id) {
+        const checkoutRes = await apiFetch(`/api/cazare-anvelope/${c.id}/checkout`, {
+          method: "PATCH",
+          body: JSON.stringify(checkoutBody),
+        });
+        if (!checkoutRes.ok) {
+          setCombinedErr(await readApiError(checkoutRes, "Eroare la scoatere din depozit."));
+          return;
+        }
+        setCombinedCheckoutDoneId(c.id);
       }
-      await checkoutRes.json();
 
       // POST new cazare
       const newBody: Record<string, any> = {
@@ -1763,17 +1797,19 @@ export default function HotelAnvelope() {
         body: JSON.stringify(newBody),
       });
       if (!newCazareRes.ok) {
-        const err = await newCazareRes.json().catch(() => ({}));
-        setCombinedErr(err.detail ?? "Eroare la salvare cazare nouă.");
+        setCombinedErr(PREFIX_SCOASA + await readApiError(newCazareRes, "Eroare la salvare cazare nouă."));
+        // Lista din spate trebuie sa arate deja scoaterea facuta.
+        await fetchCazari();
         return;
       }
-      await newCazareRes.json();
 
+      setCombinedCheckoutDoneId(null);
       setCombinedCazare(null);
       await fetchCazari();
       if (ctx) returnToPos("scoatere_si_cazare");
     } catch (e: any) {
-      setCombinedErr(e?.message ?? "Eroare necunoscută.");
+      const msg = e?.message ?? "Eroare necunoscută.";
+      setCombinedErr(combinedCheckoutDoneId() === c.id ? PREFIX_SCOASA + msg : msg);
     } finally {
       setCombinedSaving(false);
     }
@@ -1853,9 +1889,12 @@ export default function HotelAnvelope() {
             indice_sarcina: draft.indiceSarcina,
           }),
         });
-        if (!res.ok) { setEditErr("Eroare la salvare anvelopă."); return; }
+        if (!res.ok) { setEditErr(await readApiError(res, "Eroare la salvare anvelopă.")); return; }
         const d = await res.json();
         tempToReal.set(tempId, d.id);
+        // Vezi saveCazare: id-ul real intra in stare ca o reincercare sa nu dubleze anvelopa.
+        setEditAnvelope((l) => l.map((a) => (a.id === tempId ? { ...a, id: d.id } : a)));
+        setEditSelectedIds((prev) => new Set(Array.from(prev).map((id) => (id === tempId ? d.id : id))));
       }
       const finalIds = Array.from(editSelectedIds()).map((id) => tempToReal.get(id) ?? id);
 
@@ -1877,7 +1916,7 @@ export default function HotelAnvelope() {
           numar_masina: editSelectedVehicol() || null,
         }),
       });
-      if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(err.detail ?? "Eroare la salvare."); return; }
+      if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(parseApiError(err.detail, "Eroare la salvare.")); return; }
       setEditCazare(null);
       await fetchCazari();
     } finally { setEditSaving(false); }
@@ -1900,8 +1939,16 @@ export default function HotelAnvelope() {
         method: "PATCH",
         body: JSON.stringify(checkoutBody),
       });
-      if (!res.ok) return;
-      await res.json();
+      if (!res.ok) {
+        notify(await readApiError(res, "Eroare la scoaterea din depozit."), "error");
+        // 400 = scoasa deja de pe alt dispozitiv, 404 = stearsa: fereastra nu mai
+        // are ce confirma, iar lista trebuie adusa la zi.
+        if (res.status === 400 || res.status === 404) {
+          setCheckoutCazare(null);
+          await fetchCazari();
+        }
+        return;
+      }
       setCheckoutCazare(null);
       await fetchCazari();
       if (andNew && c.clientId) {
@@ -1953,6 +2000,8 @@ export default function HotelAnvelope() {
       } else if (ctx) {
         returnToPos("scoatere");
       }
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     } finally { setCheckoutSaving(false); }
   }
 
@@ -1965,7 +2014,16 @@ export default function HotelAnvelope() {
       if (res.ok || res.status === 204) {
         setDeleteTarget(null);
         await fetchCazari();
+      } else {
+        notify(await readApiError(res, "Eroare la ștergere."), "error");
+        // Stearsa deja de altcineva: inchidem si aducem lista la zi.
+        if (res.status === 404) {
+          setDeleteTarget(null);
+          await fetchCazari();
+        }
       }
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     } finally { setDeleting(false); }
   }
 
@@ -1974,46 +2032,67 @@ export default function HotelAnvelope() {
   async function addLoc() {
     const n = newLocNume().trim();
     if (!n) return;
-    await apiFetch("/api/loc-cazare", {
-      method: "POST",
-      body: JSON.stringify({ nume: n, description: newLocDesc().trim() || null }),
-    });
-    invalidateLocuriCache();
-    await loadLocuriCazare(true);
-    setNewLocNume(""); setNewLocDesc("");
+    try {
+      const res = await apiFetch("/api/loc-cazare", {
+        method: "POST",
+        body: JSON.stringify({ nume: n, description: newLocDesc().trim() || null }),
+      });
+      if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
+      invalidateLocuriCache();
+      await loadLocuriCazare(true);
+      setNewLocNume(""); setNewLocDesc("");
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
+    }
   }
 
 
   async function addLocInline(name: string) {
-    const res = await apiFetch("/api/loc-cazare", {
-      method: "POST",
-      body: JSON.stringify({ nume: name, description: null }),
-    });
-    if (res.ok) {
+    try {
+      const res = await apiFetch("/api/loc-cazare", {
+        method: "POST",
+        body: JSON.stringify({ nume: name, description: null }),
+      });
+      if (!res.ok) {
+        notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
+        return;
+      }
       const d = await res.json();
       invalidateLocuriCache();
       await loadLocuriCazare(true);
       setNewLocId(d.id);
       setEditLocId(d.id);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     }
   }
 
   async function addDim() {
     const v = newDimValoare().trim();
     if (!v) return;
-    await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
-    invalidateDimensiuniCache();
-    await loadDimensiuni(true);
-    setNewDimValoare("");
+    try {
+      const res = await apiFetch("/api/dimensiuni-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+      if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
+      invalidateDimensiuniCache();
+      await loadDimensiuni(true);
+      setNewDimValoare("");
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
+    }
   }
 
   async function addProfilAdmin() {
     const v = newProfilValoare().trim();
     if (!v) return;
-    await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
-    invalidateProfilCache();
-    await loadProfil(true);
-    setNewProfilValoare("");
+    try {
+      const res = await apiFetch("/api/profiluri-anvelope", { method: "POST", body: JSON.stringify({ valoare: v }) });
+      if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
+      invalidateProfilCache();
+      await loadProfil(true);
+      setNewProfilValoare("");
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
+    }
   }
 
 
@@ -2033,28 +2112,33 @@ export default function HotelAnvelope() {
     setEditAdminSaving(true);
     try {
       if (t.type === "loc") {
-        await apiFetch(`/api/loc-cazare/${t.id}`, {
+        const res = await apiFetch(`/api/loc-cazare/${t.id}`, {
           method: "PATCH",
           body: JSON.stringify({ nume: editAdminVal1().trim(), description: editAdminVal2().trim() || null }),
         });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
         invalidateLocuriCache();
         await loadLocuriCazare(true);
       } else if (t.type === "dim") {
-        await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, {
+        const res = await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, {
           method: "PATCH",
           body: JSON.stringify({ valoare: editAdminVal1().trim() }),
         });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
         invalidateDimensiuniCache();
         await loadDimensiuni(true);
       } else if (t.type === "profil") {
-        await apiFetch(`/api/profiluri-anvelope/${t.id}`, {
+        const res = await apiFetch(`/api/profiluri-anvelope/${t.id}`, {
           method: "PATCH",
           body: JSON.stringify({ valoare: editAdminVal1().trim() }),
         });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la salvare."), "error"); return; }
         invalidateProfilCache();
         await loadProfil(true);
       }
       setEditAdminTarget(null);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     } finally { setEditAdminSaving(false); }
   }
 
@@ -2064,19 +2148,24 @@ export default function HotelAnvelope() {
     setAdminDeleting(true);
     try {
       if (t.type === "loc") {
-        await apiFetch(`/api/loc-cazare/${t.id}`, { method: "DELETE" });
+        const res = await apiFetch(`/api/loc-cazare/${t.id}`, { method: "DELETE" });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la ștergere."), "error"); return; }
         invalidateLocuriCache();
         await loadLocuriCazare(true);
       } else if (t.type === "dim") {
-        await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, { method: "DELETE" });
+        const res = await apiFetch(`/api/dimensiuni-anvelope/${t.id}`, { method: "DELETE" });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la ștergere."), "error"); return; }
         invalidateDimensiuniCache();
         await loadDimensiuni(true);
       } else if (t.type === "profil") {
-        await apiFetch(`/api/profiluri-anvelope/${t.id}`, { method: "DELETE" });
+        const res = await apiFetch(`/api/profiluri-anvelope/${t.id}`, { method: "DELETE" });
+        if (!res.ok) { notify(await readApiError(res, "Eroare la ștergere."), "error"); return; }
         invalidateProfilCache();
         await loadProfil(true);
       }
       setAdminDeleteTarget(null);
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
     } finally { setAdminDeleting(false); }
   }
 
