@@ -83,7 +83,6 @@ export default function LocatiiPanel() {
       locationsApi.setEmployees(id, Array.from(editEmpIds())),
     ]),
     onSuccess: () => { setEditId(null); void list.reload(); },
-    silentError: true,
   });
 
   const remove = useAction({

@@ -12,8 +12,11 @@ export const locationsApi = {
     http.upload<{ image_path: string | null }>(`/api/locations/${id}/image`, fd, {
       errorMessage: "Eroare la upload imagine.",
     }),
-  setDepartments: (id: number, department_ids: number[]) =>
-    http.put<unknown>(`/api/locations/${id}/departments`, { department_ids }),
-  setEmployees: (id: number, employee_ids: number[]) =>
-    http.put<unknown>(`/api/locations/${id}/employees`, { employee_ids }),
+  // Corpul e `IdsBody` ({ ids }) pe ambele rute. `satisfies` leaga obiectul de
+  // schema generata din OpenAPI: daca backend-ul o schimba, pica la compilare,
+  // nu cu 422 la salvare.
+  setDepartments: (id: number, ids: number[]) =>
+    http.put<LocationDetail>(`/api/locations/${id}/departments`, { ids } satisfies Schemas["IdsBody"]),
+  setEmployees: (id: number, ids: number[]) =>
+    http.put<LocationDetail>(`/api/locations/${id}/employees`, { ids } satisfies Schemas["IdsBody"]),
 };
