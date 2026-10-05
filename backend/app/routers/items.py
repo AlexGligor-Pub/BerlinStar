@@ -16,6 +16,7 @@ from app.models.department import Department
 from app.schemas.item import ItemCreate, ItemUpdate, ItemRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
 from app.utils.storage import upload_image, delete_image_by_url, validate_image
 from app.utils.soft_delete import soft_delete
@@ -83,6 +84,7 @@ async def create_item(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_settings_account_id),
 ):
+    await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
     item = Item(**body.model_dump(), account_id=account_id)
     db.add(item)
     await db.commit()
@@ -112,6 +114,9 @@ async def update_item(
     item = await db.get(Item, item_id)
     if item is None or item.is_deleted or item.account_id != account_id:
         raise HTTPException(404, "Item-ul nu a fost gasit.")
+    # Doar la schimbare: un articol ramas intr-o categorie stearsa trebuie sa poata fi editat.
+    if body.category_id != item.category_id:
+        await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
     for k, v in body.model_dump().items():
         setattr(item, k, v)
     item.updated_at = datetime.now(timezone.utc)
@@ -130,6 +135,8 @@ async def patch_item(
     item = await db.get(Item, item_id)
     if item is None or item.is_deleted or item.account_id != account_id:
         raise HTTPException(404, "Item-ul nu a fost gasit.")
+    if body.category_id is not None and body.category_id != item.category_id:
+        await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     item.updated_at = datetime.now(timezone.utc)
