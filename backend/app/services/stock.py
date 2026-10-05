@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
+from app.models.employee import Employee
 from app.models.item import Item, ItemType
 from app.models.receipt import Receipt, ReceiptItem
 from app.models.stock import Stock
@@ -136,6 +137,40 @@ async def _collect_produs_lines(
     ]
 
 
+async def _own_lines_with_cost(
+    db: AsyncSession, account_id: int, lines: list[ReceiptLineForStock]
+) -> tuple[list[ReceiptLineForStock], dict[int, Decimal | None]]:
+    """Liniile al caror articol apartine contului + costul fiecarui articol.
+
+    `ReceiptItem.item_id`/`employee_id` vin din body-ul bonului. O linie cu articolul
+    altui cont e sarita cu totul: altfel i-am copia costul de achizitie in miscari
+    (vizibil in rapoarte) si am crea stoc pe contul apelantului pentru un articol strain.
+    Un angajat strain e scos de pe miscare, ca sa nu-i apara numele in raportul pe angajat.
+    Fara filtru pe `is_deleted`: un bon vechi, cu articol sau angajat sters intre timp,
+    trebuie sa poata fi platit/stornat in continuare."""
+    cost_map: dict[int, Decimal | None] = {
+        item_id: cost
+        for item_id, cost in (await db.execute(
+            select(Item.id, Item.cost_price).where(
+                Item.id.in_({ln.item_id for ln in lines}),
+                Item.account_id == account_id,
+            )
+        )).all()
+    }
+    own = [ln for ln in lines if ln.item_id in cost_map]
+    employee_ids = {ln.employee_id for ln in own if ln.employee_id is not None}
+    if employee_ids:
+        own_employees = set((await db.execute(
+            select(Employee.id).where(
+                Employee.id.in_(employee_ids), Employee.account_id == account_id
+            )
+        )).scalars().all())
+        for ln in own:
+            if ln.employee_id not in own_employees:
+                ln.employee_id = None
+    return own, cost_map
+
+
 async def apply_sale_for_receipt(
     db: AsyncSession, account_id: int, receipt: Receipt,
     created_by_user: str | None = None,
@@ -146,11 +181,11 @@ async def apply_sale_for_receipt(
     lines = await _collect_produs_lines(db, account_id, receipt.id)
     if not lines:
         return
+    lines, cost_map = await _own_lines_with_cost(db, account_id, lines)
+    if not lines:
+        return
 
     item_ids = [ln.item_id for ln in lines]
-    cost_map = dict((await db.execute(
-        select(Item.id, Item.cost_price).where(Item.id.in_(item_ids))
-    )).all())
 
     now = datetime.now(timezone.utc)
     stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
@@ -183,11 +218,11 @@ async def reverse_sale_for_receipt(
     lines = await _collect_produs_lines(db, account_id, receipt.id)
     if not lines:
         return
+    lines, cost_map = await _own_lines_with_cost(db, account_id, lines)
+    if not lines:
+        return
 
     item_ids = [ln.item_id for ln in lines]
-    cost_map = dict((await db.execute(
-        select(Item.id, Item.cost_price).where(Item.id.in_(item_ids))
-    )).all())
 
     now = datetime.now(timezone.utc)
     stocks = await _get_or_create_stocks(db, account_id, item_ids, receipt.location_id)
