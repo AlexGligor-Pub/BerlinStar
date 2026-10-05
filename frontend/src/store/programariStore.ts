@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, readApiError } from "../utils/api";
 
 export type ProgramareStatus = "Programat" | "In lucru" | "Executat" | "Anulat";
 
@@ -129,14 +129,7 @@ export async function createProgramare(input: ProgramareInput): Promise<Programa
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      msg = j.detail ?? msg;
-    } catch {
-      // body not JSON — keep status-based message
-    }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const created = mapFromApi(await res.json());
   setProgramari([created, ...programari()]);
@@ -159,14 +152,7 @@ export async function updateProgramare(id: string, input: Partial<ProgramareInpu
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try {
-      const j = (await res.json()) as { detail?: string };
-      msg = j.detail ?? msg;
-    } catch {
-      // body not JSON — keep status-based message
-    }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const updated = mapFromApi(await res.json());
   setProgramari(programari().map((p) => p.id === id ? updated : p));
@@ -174,6 +160,10 @@ export async function updateProgramare(id: string, input: Partial<ProgramareInpu
 }
 
 export async function deleteProgramare(id: string): Promise<void> {
-  await apiFetch(`/api/programari/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/programari/${id}`, { method: "DELETE" });
+  // 404 = programarea e deja stearsa pe server; o scoatem si local.
+  if (!res.ok && res.status !== 404) {
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
+  }
   setProgramari(programari().filter((p) => p.id !== id));
 }

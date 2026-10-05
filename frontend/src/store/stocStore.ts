@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, readApiError } from "../utils/api";
 
 export interface StocRow {
   item_id: number;
@@ -74,7 +74,7 @@ export async function updateItemMeta(
     method: "PATCH",
     body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   const updated: StocRow = await res.json();
   setStocuri((prev) => prev.map((r) => (r.item_id === itemId ? updated : r)));
   return updated;
@@ -91,7 +91,7 @@ export async function intrareMarfa(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   const updated: StocRow = await res.json();
   setStocuri((prev) => prev.map((r) => (r.item_id === payload.item_id ? updated : r)));
   return updated;
@@ -107,7 +107,7 @@ export async function ajustareStoc(payload: {
     method: "POST",
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   const updated: StocRow = await res.json();
   setStocuri((prev) => prev.map((r) => (r.item_id === payload.item_id ? updated : r)));
   return updated;
@@ -115,7 +115,7 @@ export async function ajustareStoc(payload: {
 
 export async function loadSnapshot(locationId: number): Promise<StocSnapshot> {
   const res = await apiFetch(`/api/stocuri/snapshot?location_id=${locationId}`);
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   return await res.json();
 }
 
@@ -133,7 +133,7 @@ export async function loadMiscari(params: {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
   const res = await apiFetch(`/api/stocuri/miscari?${qs.toString()}`);
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   return await res.json();
 }
 
@@ -158,7 +158,7 @@ export async function loadTopProduse(params: {
   const res = await apiFetch(`/api/stocuri/reports/top-produse?${qs.toString()}`, {
     handleUnauthorized: false,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   return await res.json();
 }
 
@@ -181,6 +181,6 @@ export async function loadPerAngajat(params: {
   const res = await apiFetch(`/api/stocuri/reports/per-angajat?${qs.toString()}`, {
     handleUnauthorized: false,
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await readApiError(res, `Eroare ${res.status}`));
   return await res.json();
 }

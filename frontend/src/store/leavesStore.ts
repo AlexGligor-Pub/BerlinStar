@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch, apiFetchJson } from "../utils/api";
+import { apiFetch, apiFetchJson, readApiError } from "../utils/api";
 
 export type LeaveType =
   | "Concediu de odihna"
@@ -281,9 +281,7 @@ function inputToBody(input: LeaveInput): Record<string, unknown> {
 export async function createLeave(input: LeaveInput): Promise<Leave> {
   const res = await apiFetch("/api/leaves", { method: "POST", body: JSON.stringify(inputToBody(input)) });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const created = mapLeave(await res.json());
   setLeaves([created, ...leaves()]);
@@ -301,9 +299,7 @@ export async function updateLeave(id: number, input: Partial<LeaveInput>): Promi
   if (input.notes       !== undefined) body.notes = input.notes;
   const res = await apiFetch(`/api/leaves/${id}`, { method: "PATCH", body: JSON.stringify(body) });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const updated = mapLeave(await res.json());
   setLeaves(leaves().map((l) => l.id === id ? updated : l));
@@ -313,9 +309,7 @@ export async function updateLeave(id: number, input: Partial<LeaveInput>): Promi
 export async function deleteLeave(id: number): Promise<void> {
   const res = await apiFetch(`/api/leaves/${id}`, { method: "DELETE" });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   setLeaves(leaves().filter((l) => l.id !== id));
 }
@@ -330,9 +324,7 @@ async function approvalAction(
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const updated = mapLeave(await res.json());
   setLeaves(leaves().map((l) => l.id === id ? updated : l));
@@ -363,9 +355,7 @@ export async function consentLeave(id: number, employeeConsent: boolean): Promis
     body: JSON.stringify({ employee_consent: employeeConsent }),
   });
   if (!res.ok) {
-    let msg = `Eroare ${res.status}`;
-    try { const j = await res.json() as { detail?: string }; msg = j.detail ?? msg; } catch { /* non-JSON */ }
-    throw new Error(msg);
+    throw new Error(await readApiError(res, `Eroare ${res.status}`));
   }
   const updated = mapLeave(await res.json());
   setLeaves(leaves().map((l) => l.id === id ? updated : l));
