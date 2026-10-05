@@ -79,7 +79,8 @@ export default function RevertImport(props: { session: ImportSession; onDone: ()
                 Ce a fost folosit sau modificat între timp <strong>se păstrează</strong>.
               </p>
               <ul class="import-rules">
-                <Show when={p().cazari_deleted !== undefined}>
+                {/* Serverul trimite null (nu lipsa) la contoarele care nu exista pentru tipul de import. */}
+                <Show when={p().cazari_deleted != null}>
                   <li>Cazări șterse: <strong>{p().cazari_deleted}</strong> (păstrate: {p().cazari_kept})</li>
                   <li>Anvelope șterse: <strong>{p().anvelope_deleted}</strong></li>
                   <li>Mașini scoase din garajul clienților: <strong>{p().vehicole_deleted}</strong></li>
@@ -113,7 +114,7 @@ export default function RevertImport(props: { session: ImportSession; onDone: ()
 
 function describe(r: RevertSummary): string {
   const parts = [];
-  if (r.cazari_deleted !== undefined) parts.push(`${r.cazari_deleted} cazări, ${r.anvelope_deleted} anvelope`);
+  if (r.cazari_deleted != null) parts.push(`${r.cazari_deleted} cazări, ${r.anvelope_deleted ?? 0} anvelope`);
   parts.push(`${r.clients_deleted} clienți șterși`);
   const kept = (r.cazari_kept ?? 0) + r.clients_kept;
   if (kept) parts.push(`${kept} păstrate`);

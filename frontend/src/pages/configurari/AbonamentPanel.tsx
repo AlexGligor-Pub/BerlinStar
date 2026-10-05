@@ -29,6 +29,16 @@ function statusLabel(status: string): string {
   }
 }
 
+/** paid_at vine ca timestamp ISO; in tabel aratam doar ziua (ora locala), in
+ *  acelasi format aaaa-ll-zz ca data facturii si perioada. */
+function paidDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function anafLabel(s: string | null | undefined): string {
   if (!s) return "—";
   if (s === "in_prelucrare") return "În prelucrare ANAF";
@@ -236,7 +246,7 @@ export default function AbonamentPanel() {
                       <td style="padding:8px 10px;font-family:var(--font-mono,monospace)">
                         {p.invoice_number || "—"}
                       </td>
-                      <td style="padding:8px 10px">{p.invoice_issue_date || p.paid_at || "—"}</td>
+                      <td style="padding:8px 10px">{p.invoice_issue_date || paidDate(p.paid_at) || "—"}</td>
                       <td style="padding:8px 10px">
                         {p.amount_ron.toFixed(2)} RON
                         <div style="font-size:0.75rem;color:var(--text-muted)">

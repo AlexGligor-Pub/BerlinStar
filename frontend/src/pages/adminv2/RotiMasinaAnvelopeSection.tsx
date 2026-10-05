@@ -190,10 +190,17 @@ export default function RotiMasinaAnvelopeSection() {
   async function doDelete() {
     const t = delTarget();
     if (!t) return;
-    setDeleting(true);
+    setDeleting(true); setActionErr(null);
     try {
       const res = await adminFetch(`/api/admin/marci-anvelope/${t.id}`, { method: "DELETE" });
-      if (!res.ok) return;
+      if (!res.ok) {
+        setActionErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la ștergere.");
+        // Bannerul de eroare e in pagina, sub modal: il inchidem ca mesajul sa se vada.
+        // Reincarcarea scoate din lista o marca stearsa intre timp din alt tab.
+        setDelTarget(null);
+        await Promise.all([loadCounts(), loadRows(true)]);
+        return;
+      }
       setDelTarget(null);
       await Promise.all([loadCounts(), loadRows(true)]);
     } finally { setDeleting(false); }
