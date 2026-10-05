@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch, API_BASE } from "../utils/api";
+import { apiFetch, API_BASE, parseApiError } from "../utils/api";
 import { auth } from "./authStore";
 import type { CartItem } from "./cartStore";
 import { notify } from "./notificationsStore";
@@ -303,7 +303,8 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
     location_id: receipt.locationId ?? null,
     client_id: receipt.clientId ?? null,
     source: receipt.source ?? "reception",
-    due_date: receipt.dueDate ?? null,
+    // Camp de data golit in formular = "" -> null (altfel 422 pe `date | None`).
+    due_date: receipt.dueDate || null,
     constatari: receipt.constatari ?? null,
     sugestii: receipt.sugestii ?? null,
     timp_estimat_ore: receipt.timpEstimatOre != null ? receipt.timpEstimatOre.toFixed(2) : null,
@@ -328,7 +329,7 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
 
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const created = mapFromApi(await res.json());
@@ -342,7 +343,7 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
     titlu: receipt.titlu,
     descriere: receipt.descriere ?? null,
     date_tehn: receipt.dateTehn ?? null,
-    due_date: receipt.dueDate ?? null,
+    due_date: receipt.dueDate || null,
     // null = backend nu schimbă sursa; "fdl"/"pos" comută FDL <-> deviz.
     source: receipt.source ?? null,
     constatari: receipt.constatari ?? null,
@@ -369,7 +370,7 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
 
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const updated = mapFromApi(await res.json());
@@ -405,7 +406,7 @@ export async function assignFacturaNumber(id: string, locationId: number): Promi
   });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const data: { serie: string; nr: number; due_date?: string | null } = await res.json();
@@ -443,7 +444,7 @@ export async function finalizeFdl(id: string): Promise<Receipt> {
   const res = await apiFetch(`/api/receipts/${id}/finalize-fdl`, { method: "POST" });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const updated = mapFromApi(await res.json());
@@ -457,7 +458,7 @@ export async function convertFdlToDeviz(id: string): Promise<Receipt> {
   const res = await apiFetch(`/api/receipts/${id}/convert-to-deviz`, { method: "POST" });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const updated = mapFromApi(await res.json());
@@ -502,7 +503,7 @@ export async function updateReceiptClient(id: string, clientId: number | null): 
   });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const updated = mapFromApi(await res.json());
@@ -526,7 +527,7 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
   });
   if (!res.ok) {
     let msg = `Eroare ${res.status}`;
-    try { const j = await res.json(); msg = j.detail ?? j.message ?? msg; } catch {}
+    try { const j = await res.json(); msg = parseApiError(j.detail ?? j, msg); } catch {}
     throw new Error(msg);
   }
   const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
@@ -537,7 +538,7 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
 async function _readApiError(res: Response, fallback: string): Promise<string> {
   try {
     const j = await res.json();
-    return j.detail ?? j.message ?? fallback;
+    return parseApiError(j.detail ?? j, fallback);
   } catch {
     return fallback;
   }
