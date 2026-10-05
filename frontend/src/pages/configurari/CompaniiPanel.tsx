@@ -36,7 +36,6 @@ export default function CompaniiPanel() {
       list.mutate(items => items.map(c => c.id === id ? { ...c, logo_path: data.logo_path } : c));
     },
     errorMessage: "Eroare la încărcarea logo-ului.",
-    silentError: true,
   });
 
   const bgUpload = useAction({
@@ -51,7 +50,6 @@ export default function CompaniiPanel() {
       list.mutate(items => items.map(c => c.id === id ? { ...c, background_path: data.background_path } : c));
     },
     errorMessage: "Eroare la încărcarea imaginii de fundal.",
-    silentError: true,
   });
 
   function handleLogoFile(file: File) {
@@ -110,7 +108,6 @@ export default function CompaniiPanel() {
       setAddMode(false); setForm({}); setCuiInput(""); setAnafError(null);
       void list.reload();
     },
-    silentError: true,
   });
 
   const save = useAction({
@@ -119,13 +116,11 @@ export default function CompaniiPanel() {
       return companiesApi.update(editId()!, { ...f, name: f.name!.trim() } as CompanyUpdate);
     },
     onSuccess: () => { setEditId(null); void list.reload(); },
-    silentError: true,
   });
 
   const remove = useAction({
     fn: (id: number) => companiesApi.remove(id),
     onSuccess: () => void list.reload(),
-    silentError: true,
   });
 
   const saving = () => save.loading() || add.loading() || remove.loading() || logoUpload.loading() || bgUpload.loading();

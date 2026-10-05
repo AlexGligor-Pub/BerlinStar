@@ -45,7 +45,6 @@ export default function AngajatiPanel() {
       setEditImagePath(updated.image_path ?? null);
       list.mutate(items => items.map(e => e.id === id ? { ...e, image_path: updated.image_path ?? null } : e));
     },
-    silentError: true,
   });
 
   const save = useAction({
@@ -56,13 +55,11 @@ export default function AngajatiPanel() {
       annual_vacation_days: Math.max(0, Math.min(365, parseInt(editVacationDays(), 10) || 0)),
     }),
     onSuccess: () => { setEditId(null); void list.reload(); },
-    silentError: true,
   });
 
   const remove = useAction({
     fn: (id: number) => employeesApi.remove(id),
     onSuccess: () => void list.reload(),
-    silentError: true,
   });
 
   const add = useAction({
@@ -76,7 +73,6 @@ export default function AngajatiPanel() {
       setNewName(""); setNewDesc(""); setNewTarget("0"); setNewVacationDays("21"); setAddMode(false);
       void list.reload();
     },
-    silentError: true,
   });
 
   const saving = () => save.loading() || add.loading() || remove.loading();

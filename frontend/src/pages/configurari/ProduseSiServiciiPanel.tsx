@@ -78,19 +78,16 @@ export default function ProduseSiServiciiPanel() {
   const catSave = useAction({
     fn: (id: number) => categoriesApi.update(id, { name: catEditName().trim(), department_id: catEditDeptId()! }),
     onSuccess: () => { setCatEditId(null); void categories.reload(); },
-    silentError: true,
   });
 
   const catAdd = useAction({
     fn: () => categoriesApi.create({ name: catNewName().trim(), department_id: catNewDeptId()! }),
     onSuccess: () => { setCatNewName(""); setCatAddMode(false); void categories.reload(); },
-    silentError: true,
   });
 
   const catRemove = useAction({
     fn: (id: number) => categoriesApi.remove(id),
     onSuccess: () => void categories.reload(),
-    silentError: true,
   });
 
   function confirmCatDelete() {
@@ -110,7 +107,6 @@ export default function ProduseSiServiciiPanel() {
       });
     },
     onSuccess: () => { setItemEditId(null); void items.reload(); },
-    silentError: true,
   });
 
   const itemAdd = useAction({
@@ -122,13 +118,11 @@ export default function ProduseSiServiciiPanel() {
       });
     },
     onSuccess: () => { setItemNewForm(emptyItemForm(itemNewForm().category_id)); setItemAddMode(false); void items.reload(); },
-    silentError: true,
   });
 
   const itemRemove = useAction({
     fn: (id: number) => itemsApi.remove(id),
     onSuccess: () => void items.reload(),
-    silentError: true,
   });
 
   const upload = useAction({
@@ -141,7 +135,6 @@ export default function ProduseSiServiciiPanel() {
       setItemEditImagePath(updated.image_path ?? null);
       items.mutate((prev) => prev.map((it) => (it.id === id ? { ...it, image_path: updated.image_path ?? null } : it)));
     },
-    silentError: true,
   });
 
   function confirmItemDelete() {
