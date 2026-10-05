@@ -10,10 +10,15 @@ from app.dependencies import get_account_id, get_settings_account_id
 from app.models.cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from app.models.anvelopa import Anvelopa
 from app.models.client import Client
+from app.models.employee import Employee
+from app.models.loc_cazare import LocCazare
+from app.models.location import Location
+from app.models.receipt import Receipt
 from app.schemas.cazare_anvelope import (
     CazareCreate, CazareRead, CazareCheckoutBody, CazareUpdateBody, CazariSummary,
 )
 from app.schemas.common import Page
+from app.utils.ownership import assert_all_owned, assert_owned
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
@@ -286,6 +291,16 @@ async def create_cazare(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
+    # Id-urile din body trebuie sa fie ale contului: relatiile nu filtreaza pe
+    # account_id, deci un id strain ar fi salvat si apoi afisat in raspuns.
+    await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
+    await assert_owned(db, Employee, body.employee_id, account_id, what="Angajatul")
+    await assert_owned(db, LocCazare, body.loc_cazare_id, account_id, what="Locul de cazare")
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
+    await assert_owned(db, CazareAnvelope, body.referinta_cazare_id, account_id, what="Cazarea de referinta")
+    await assert_owned(db, Receipt, body.receipt_id, account_id, what="Bonul")
+    await assert_all_owned(db, Anvelopa, body.anvelopa_ids, account_id, what="Anvelopele")
+
     # validare: anvelopele nu trebuie să fie în cazare activă
     if body.anvelopa_ids:
         active_items = (await db.execute(
@@ -369,6 +384,26 @@ async def update_cazare(
             400,
             f"Cazarea a fost închisă acum mai mult de {EDIT_GRACE_DAYS} zile și nu mai poate fi editată.",
         )
+    # Verificam doar id-urile care se schimba: o cazare veche, legata de un
+    # angajat/loc/bon sters intre timp, trebuie sa ramana editabila.
+    if body.employee_id != cazare.employee_id:
+        await assert_owned(db, Employee, body.employee_id, account_id, what="Angajatul")
+    if body.loc_cazare_id != cazare.loc_cazare_id:
+        await assert_owned(db, LocCazare, body.loc_cazare_id, account_id, what="Locul de cazare")
+    if body.referinta_cazare_id != cazare.referinta_cazare_id:
+        if body.referinta_cazare_id == cazare_id:
+            raise HTTPException(400, "Cazarea de referinta nu exista.")
+        await assert_owned(db, CazareAnvelope, body.referinta_cazare_id, account_id, what="Cazarea de referinta")
+    if body.receipt_id != cazare.receipt_id:
+        await assert_owned(db, Receipt, body.receipt_id, account_id, what="Bonul")
+    if body.anvelopa_ids is not None:
+        # Anvelopele aflate deja pe cazare raman acceptate, chiar daca au fost sterse intre timp.
+        existing = set((await db.execute(
+            select(CazareAnvelopaItem.anvelopa_id).where(CazareAnvelopaItem.cazare_id == cazare_id)
+        )).scalars().all())
+        await assert_all_owned(
+            db, Anvelopa, [i for i in body.anvelopa_ids if i not in existing], account_id, what="Anvelopele",
+        )
     cazare.employee_id = body.employee_id
     cazare.loc_cazare_id = body.loc_cazare_id
     if body.data_checkin is not None:
@@ -423,6 +458,8 @@ async def checkout_cazare(
         raise HTTPException(404, "Cazarea nu a fost găsită.")
     if cazare.data_checkout is not None:
         raise HTTPException(400, "Cazarea a fost deja închisă (checkout efectuat).")
+    if body.receipt_id != cazare.receipt_id:
+        await assert_owned(db, Receipt, body.receipt_id, account_id, what="Bonul")
     cazare.data_checkout = body.data_checkout
     if body.comments is not None:
         cazare.comments = body.comments

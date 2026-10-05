@@ -16,6 +16,7 @@ from app.models.vehicol import Vehicol
 from app.models.receipt import Receipt
 from app.models.client import Client
 from app.schemas.montaj_rota import MontajRotaRead, MontajRotiBulkUpsert
+from app.utils.ownership import assert_all_owned, assert_owned
 
 router = APIRouter()
 
@@ -209,6 +210,32 @@ async def bulk_upsert(
         invalid = req_marca_ids - valid_ids
         if invalid:
             raise HTTPException(400, f"Marcă invalidă (neaprobată sau ștearsă): {sorted(invalid)}")
+
+    # Izolare intre conturi: bonul si nomenclatoarele vin din body, deci trebuie
+    # sa fie ale contului INAINTE sa atingem ceva (inclusiv soft-delete-ul de mai jos).
+    await assert_owned(db, Receipt, body.receipt_id, account_id, what="Bonul")
+
+    # Salvarea rescrie toate rotile bonului, deci id-urile deja puse pe ele vin
+    # inapoi neschimbate: pe acelea nu le reverificam, ca bonurile vechi sa ramana
+    # editabile. Restul trebuie sa fie ale contului. Valorile sterse sunt acceptate
+    # (allow_deleted): raman afisate pe montajele istorice si sunt preluate din
+    # sugestia dupa numarul de inmatriculare.
+    res = await db.execute(
+        select(MontajRota.dimensiune_id, MontajRota.profil_id, MontajRota.dot_id).where(
+            MontajRota.account_id == account_id,
+            MontajRota.receipt_id == body.receipt_id,
+            MontajRota.is_deleted == False,
+        )
+    )
+    existing = res.all()
+    for model, field, idx_col, what in (
+        (DimensiuneAnvelopa, "dimensiune_id", 0, "Dimensiunea"),
+        (ProfilAnvelopa, "profil_id", 1, "Profilul"),
+        (CodDotAnvelopa, "dot_id", 2, "Codul DOT"),
+    ):
+        kept = {row[idx_col] for row in existing}
+        new_ids = {getattr(item, field) for item in body.items} - kept
+        await assert_all_owned(db, model, new_ids, account_id, what=what, allow_deleted=True)
 
     # Soft-delete pe roțile existente pentru acest receipt
     await db.execute(

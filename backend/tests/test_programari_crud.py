@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from app.routers.programare import (
     create_programare, delete_programare, get_programare, list_programari, update_programare,
 )
+from app.models.location import Location
 from app.schemas.programare import ProgramareCreate, ProgramarePatch
 from tests._harness import make_account, make_employee, make_session, raises_http, run
 
@@ -23,6 +24,12 @@ async def _fixture():
     db = await make_session()
     acc = await make_account(db)
     other = await make_account(db, username="alta", code="alta")
+    # `_body()` foloseste location_id=1: locatia trebuie sa existe si sa fie a
+    # contului, altfel crearea e refuzata (verificarea de izolare intre conturi).
+    db.add(Location(account_id=acc.id, name="Locatie"))
+    await db.flush()
+    db.add(Location(account_id=other.id, name="Locatie straina"))  # id 2
+    await db.flush()
     emp = await make_employee(db, acc, "Ion")
     emp2 = await make_employee(db, acc, "Maria")
     foreign = await make_employee(db, other, "Strain")
@@ -87,7 +94,7 @@ async def test_list_filters_by_employee_and_isolates_accounts():
     await create_programare(_body(employee_id=emp.id), db=db, account_id=acc.id)
     await create_programare(_body(employee_id=emp2.id), db=db, account_id=acc.id)
     await create_programare(_body(), db=db, account_id=acc.id)
-    await create_programare(_body(employee_id=foreign.id), db=db, account_id=other.id)
+    await create_programare(_body(employee_id=foreign.id, location_id=2), db=db, account_id=other.id)
     assert len(await list_programari(limit=200, offset=0, db=db, account_id=acc.id)) == 3
     only = await list_programari(employee_id=emp.id, limit=200, offset=0, db=db, account_id=acc.id)
     assert [r.employee_name for r in only] == ["Ion"]
