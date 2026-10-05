@@ -51,6 +51,10 @@ async def list_stocuri(
             Item.account_id == account_id,
             Item.is_deleted == False,
             Item.type == ItemType.PRODUS,
+            # Si pe cont: un produs vechi legat de categoria altui cont nu
+            # trebuie sa aduca numele categoriei / departamentului de acolo.
+            Category.account_id == account_id,
+            Department.account_id == account_id,
             Category.is_deleted == False,
             Department.is_deleted == False,
         )
@@ -85,6 +89,11 @@ async def patch_item_stoc_meta(
         raise HTTPException(404, "Produsul nu a fost gasit.")
     if item.type != ItemType.PRODUS:
         raise HTTPException(400, "Doar produsele au stoc.")
+    # Aceeasi verificare ca in list_stocuri, inainte de orice modificare.
+    loc = await db.get(Location, location_id)
+    if loc is None or loc.account_id != account_id or loc.is_deleted:
+        raise HTTPException(404, "Locatia nu a fost gasita.")
+    cat, dept = await _own_category_and_department(db, item)
 
     if body.cost_price is not None:
         item.cost_price = body.cost_price
@@ -100,9 +109,6 @@ async def patch_item_stoc_meta(
         .outerjoin(Stock, and_(Stock.item_id == Item.id, Stock.location_id == location_id))
         .where(Item.id == item_id)
     )).scalar() or 0
-
-    cat = await db.get(Category, item.category_id)
-    dept = await db.get(Department, cat.department_id)
 
     return StocRow(
         item_id=item.id, name=item.name, unit=item.unit, price=item.price,
@@ -129,8 +135,9 @@ async def intrare_stoc(
     if item.type != ItemType.PRODUS:
         raise HTTPException(400, "Doar produsele au stoc.")
     loc = await db.get(Location, body.location_id)
-    if loc is None or loc.account_id != account_id:
+    if loc is None or loc.account_id != account_id or loc.is_deleted:
         raise HTTPException(404, "Locatia nu a fost gasita.")
+    cat, dept = await _own_category_and_department(db, item)
 
     await apply_purchase(
         db, account_id=account_id, item=item, location_id=body.location_id,
@@ -139,7 +146,7 @@ async def intrare_stoc(
     )
     await db.commit()
 
-    return await _read_stoc_row(db, item, body.location_id)
+    return await _read_stoc_row(db, item, body.location_id, cat, dept)
 
 
 @router.post("/ajustare", response_model=StocRow)
@@ -158,8 +165,9 @@ async def ajustare_stoc(
     if item.type != ItemType.PRODUS:
         raise HTTPException(400, "Doar produsele au stoc.")
     loc = await db.get(Location, body.location_id)
-    if loc is None or loc.account_id != account_id:
+    if loc is None or loc.account_id != account_id or loc.is_deleted:
         raise HTTPException(404, "Locatia nu a fost gasita.")
+    cat, dept = await _own_category_and_department(db, item)
 
     await apply_adjustment(
         db, account_id=account_id, item=item, location_id=body.location_id,
@@ -168,18 +176,34 @@ async def ajustare_stoc(
     )
     await db.commit()
 
-    return await _read_stoc_row(db, item, body.location_id)
+    return await _read_stoc_row(db, item, body.location_id, cat, dept)
 
 
-async def _read_stoc_row(db: AsyncSession, item: Item, location_id: int) -> StocRow:
+async def _own_category_and_department(db: AsyncSession, item: Item) -> tuple[Category, Department]:
+    """Categoria si departamentul produsului, doar daca sunt ale aceluiasi cont.
+
+    Un produs vechi poate indica spre categoria altui cont (`category_id` venea
+    nevalidat din request). Il tratam ca negasit INAINTE de orice modificare, in
+    loc sa intoarcem numele categoriei / departamentului din celalalt cont.
+    """
+    cat = await db.get(Category, item.category_id)
+    if cat is None or cat.account_id != item.account_id:
+        raise HTTPException(404, "Produsul nu a fost gasit.")
+    dept = await db.get(Department, cat.department_id)
+    if dept is None or dept.account_id != item.account_id:
+        raise HTTPException(404, "Produsul nu a fost gasit.")
+    return cat, dept
+
+
+async def _read_stoc_row(
+    db: AsyncSession, item: Item, location_id: int, cat: Category, dept: Department,
+) -> StocRow:
     qty = (await db.execute(
         select(func.coalesce(Stock.qty, 0))
         .select_from(Item)
         .outerjoin(Stock, and_(Stock.item_id == Item.id, Stock.location_id == location_id))
         .where(Item.id == item.id)
     )).scalar() or 0
-    cat = await db.get(Category, item.category_id)
-    dept = await db.get(Department, cat.department_id)
     return StocRow(
         item_id=item.id, name=item.name, unit=item.unit, price=item.price,
         cost_price=item.cost_price, stoc_minim=item.stoc_minim,
@@ -203,7 +227,12 @@ async def list_miscari(
 ):
     stmt = (
         select(StockMovement, Employee.name)
-        .outerjoin(Employee, Employee.id == StockMovement.employee_id)
+        # Si pe cont: o miscare veche cu employee_id din alt cont nu trebuie sa
+        # aduca numele acelui angajat.
+        .outerjoin(Employee, and_(
+            Employee.id == StockMovement.employee_id,
+            Employee.account_id == StockMovement.account_id,
+        ))
         .where(StockMovement.account_id == account_id)
         .order_by(StockMovement.created_at.desc())
         .limit(limit)
@@ -336,7 +365,10 @@ async def report_per_angajat(
             func.sum(-StockMovement.qty_delta).label("qty_total"),
             func.coalesce(func.sum(-StockMovement.qty_delta * StockMovement.unit_price), 0).label("valoare"),
         )
-        .outerjoin(Employee, Employee.id == StockMovement.employee_id)
+        .outerjoin(Employee, and_(
+            Employee.id == StockMovement.employee_id,
+            Employee.account_id == StockMovement.account_id,
+        ))
         .where(
             StockMovement.account_id == account_id,
             StockMovement.movement_type == StockMovementType.SALE,

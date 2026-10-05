@@ -356,7 +356,7 @@ async def reports_locatii_yoy(
                    EXTRACT(YEAR FROM r.report_date)::int AS y,
                    COALESCE(SUM(r.{metric_col}), 0) AS v
             FROM report_receipts_daily r
-            LEFT JOIN locations l ON l.id = r.location_id
+            LEFT JOIN locations l ON l.id = r.location_id AND l.account_id = r.account_id
             WHERE r.account_id = :acc
               AND EXTRACT(YEAR FROM r.report_date) IN (:ya, :yb)
               {('AND r.location_id = ANY(:loc_ids)') if location_ids else ''}
@@ -522,8 +522,8 @@ async def reports_produse_servicii(
                    COALESCE(d.name, 'Introducere Manuala') AS department_name,
                    SUM(b.sum_amount) AS total
             FROM report_receipts_breakdown_daily b
-            LEFT JOIN categories c ON c.id = b.dimension_id
-            LEFT JOIN departments d ON d.id = c.department_id
+            LEFT JOIN categories c ON c.id = b.dimension_id AND c.account_id = b.account_id
+            LEFT JOIN departments d ON d.id = c.department_id AND d.account_id = c.account_id
             WHERE b.account_id = :acc
               AND b.dimension_type = 'category'
               AND b.report_date BETWEEN :d1 AND :d2
@@ -548,7 +548,7 @@ async def reports_produse_servicii(
                    COALESCE(e.name, 'Fără angajat') AS employee_name,
                    SUM(r.sum_amount) AS total
             FROM report_employee_daily r
-            LEFT JOIN employees e ON e.id = r.employee_id
+            LEFT JOIN employees e ON e.id = r.employee_id AND e.account_id = r.account_id
             WHERE r.account_id = :acc
               AND r.report_date BETWEEN :d1 AND :d2
               {emp_loc_filter}
@@ -617,18 +617,21 @@ async def reports_items_catalog(
     Folosit de UI-ul de comparare timeseries pentru a popula picker-ul cu filtre
     pe departament / categorie. Itemii sterși sunt excluși.
     """
+    # Categoria si departamentul se leaga doar in acelasi cont. LEFT JOIN, ca un
+    # articol ramas legat de o categorie straina sa nu dispara din catalog:
+    # apare cu id-ul stocat pe el si fara numele categoriei celuilalt cont.
     rows = (await db.execute(
         text("""
             SELECT i.id AS item_id,
                    i.name AS item_name,
-                   i.type::text AS item_type,
-                   c.id AS category_id,
-                   c.name AS category_name,
+                   CAST(i.type AS text) AS item_type,
+                   i.category_id AS category_id,
+                   COALESCE(c.name, 'Fara categorie') AS category_name,
                    d.id AS department_id,
                    COALESCE(d.name, 'Fara departament') AS department_name
             FROM items i
-            JOIN categories c ON c.id = i.category_id
-            LEFT JOIN departments d ON d.id = c.department_id
+            LEFT JOIN categories c ON c.id = i.category_id AND c.account_id = i.account_id
+            LEFT JOIN departments d ON d.id = c.department_id AND d.account_id = c.account_id
             WHERE i.account_id = :acc
               AND i.is_deleted = false
             ORDER BY d.name NULLS LAST, c.name, i.name
@@ -728,11 +731,11 @@ async def reports_items_timeseries(
     meta_rows = (await db.execute(
         text("""
             SELECT i.id AS item_id, i.name AS item_name,
-                   c.name AS category_name,
+                   COALESCE(c.name, 'Fara categorie') AS category_name,
                    COALESCE(d.name, 'Fara departament') AS department_name
             FROM items i
-            JOIN categories c ON c.id = i.category_id
-            LEFT JOIN departments d ON d.id = c.department_id
+            LEFT JOIN categories c ON c.id = i.category_id AND c.account_id = i.account_id
+            LEFT JOIN departments d ON d.id = c.department_id AND d.account_id = c.account_id
             WHERE i.id = ANY(:ids) AND i.account_id = :acc
         """),
         {"ids": item_ids, "acc": account_id},
@@ -1003,7 +1006,7 @@ async def reports_employee_detail(
                    COALESCE(l.name, 'Fără locație') AS location_name,
                    SUM(r.sum_amount) AS total
             FROM report_employee_daily r
-            LEFT JOIN locations l ON l.id = r.location_id
+            LEFT JOIN locations l ON l.id = r.location_id AND l.account_id = r.account_id
             WHERE r.account_id = :acc AND r.employee_id = :eid
               AND r.report_date BETWEEN :d1 AND :d2
             GROUP BY r.location_id, l.name
@@ -1112,7 +1115,7 @@ async def reports_contributii_angajati(
                    SUM(r.sum_amount) AS sum_amount,
                    SUM(r.count_items) AS count_items
             FROM report_employee_daily r
-            LEFT JOIN employees e ON e.id = r.employee_id
+            LEFT JOIN employees e ON e.id = r.employee_id AND e.account_id = r.account_id
             WHERE r.account_id = :acc
               AND r.report_date BETWEEN :d1 AND :d2
             GROUP BY 1, r.employee_id, e.name, e.image_path, e.target
@@ -1259,7 +1262,7 @@ async def reports_hotel_anvelope(
                    COUNT(*) AS cazari_active,
                    COALESCE(SUM(items.nr), 0) AS anvelope_depozitate
             FROM cazari_anvelope c
-            LEFT JOIN locations l ON l.id = c.location_id
+            LEFT JOIN locations l ON l.id = c.location_id AND l.account_id = c.account_id
             LEFT JOIN (
                 SELECT cazare_id, COUNT(*) AS nr
                 FROM cazare_anvelope_items
@@ -1297,8 +1300,8 @@ async def reports_hotel_anvelope(
                    COUNT(*) AS cazari_active,
                    COALESCE(SUM(items.nr), 0) AS anvelope_depozitate
             FROM cazari_anvelope c
-            LEFT JOIN locations l ON l.id = c.location_id
-            LEFT JOIN locuri_cazare lc ON lc.id = c.loc_cazare_id
+            LEFT JOIN locations l ON l.id = c.location_id AND l.account_id = c.account_id
+            LEFT JOIN locuri_cazare lc ON lc.id = c.loc_cazare_id AND lc.account_id = c.account_id
             LEFT JOIN (
                 SELECT cazare_id, COUNT(*) AS nr
                 FROM cazare_anvelope_items
@@ -1368,7 +1371,7 @@ async def reports_hotel_anvelope(
                    COALESCE(SUM(r.count_checkins), 0)  AS count_checkins,
                    COALESCE(SUM(r.count_checkouts), 0) AS count_checkouts
             FROM report_cazari_daily r
-            LEFT JOIN employees e ON e.id = r.employee_id
+            LEFT JOIN employees e ON e.id = r.employee_id AND e.account_id = r.account_id
             WHERE r.account_id = :acc
               AND r.report_date BETWEEN :d1 AND :d2
               {loc_filter_r}
@@ -1399,8 +1402,8 @@ async def reports_hotel_anvelope(
                    COALESCE(l.name, 'Fără locație') AS location_name,
                    COALESCE(SUM(r.count_checkouts), 0) AS count_checkouts
             FROM report_cazari_daily r
-            LEFT JOIN employees e ON e.id = r.employee_id
-            LEFT JOIN locations l ON l.id = r.location_id
+            LEFT JOIN employees e ON e.id = r.employee_id AND e.account_id = r.account_id
+            LEFT JOIN locations l ON l.id = r.location_id AND l.account_id = r.account_id
             WHERE r.account_id = :acc
               AND r.report_date BETWEEN :d1 AND :d2
               {loc_filter_r}
@@ -1624,6 +1627,7 @@ async def reports_clienti(
                    SUM(rcd.count_receipts) AS count_receipts
             FROM report_clients_daily rcd
             JOIN clienti c ON c.id = rcd.client_id AND c.is_deleted = false
+                          AND c.account_id = rcd.account_id
             WHERE rcd.account_id = :acc
               AND rcd.report_date BETWEEN :d1 AND :d2
               AND rcd.client_id IS NOT NULL
@@ -1698,6 +1702,7 @@ async def reports_clienti(
                    COUNT(*) AS count_receipts_total
             FROM clienti c
             JOIN receipts r ON r.client_id = c.id AND r.is_deleted = false AND r.source <> 'fdl'
+                           AND r.account_id = c.account_id
             WHERE c.account_id = :acc AND c.is_deleted = false
             GROUP BY c.id, c.nume, c.telefon, c.numar_masina
             HAVING MAX((r.created_at AT TIME ZONE 'Europe/Bucharest')::date) < :threshold
