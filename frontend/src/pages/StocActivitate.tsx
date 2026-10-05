@@ -7,6 +7,7 @@ import {
 import { device } from "../store/deviceStore";
 import { useIsMobile } from "../hooks/createMediaQuery";
 import { loadMiscari, stocuri, loadStocuri, type MiscareStoc, type StocRow } from "../store/stocStore";
+import { toLocalISO, todayISO } from "./rapoarte/format";
 
 const MOVEMENT_LABELS: Record<string, string> = {
   SALE: "Vânzare",
@@ -33,11 +34,9 @@ function fmtDateTime(iso: string): string {
 function defaultFromISO(): string {
   const d = new Date();
   d.setDate(d.getDate() - 90);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Zi locala, nu UTC: capetele de interval sunt interpretate de server ca ora
+  // Romaniei, iar toISOString() ar da „ieri" intre 00:00 si 02:00/03:00.
+  return toLocalISO(d);
 }
 
 export default function StocActivitate() {

@@ -480,8 +480,16 @@ function EditMetaModal(props: {
   );
   const [stocMinim, setStocMinim] = createSignal<string>(String(props.row.stoc_minim));
   const [saving, setSaving] = createSignal(false);
+  let costInput: HTMLInputElement | undefined;
 
   async function save() {
+    // Un input type=number cu text neinterpretabil (ex. „1e", „--") raporteaza
+    // value "" — identic cu un camp golit intentionat, care sterge pretul.
+    if (costInput?.validity.badInput) {
+      notify("Prețul de cumpărare nu este un număr valid.", "error");
+      costInput.focus();
+      return;
+    }
     setSaving(true);
     try {
       const patch: { cost_price?: number | null; stoc_minim?: number } = {};
@@ -529,6 +537,7 @@ function EditMetaModal(props: {
         step="0.01"
         min="0"
         class="input"
+        ref={costInput}
         value={costPrice()}
         placeholder="ex. 12.50 (gol = necunoscut)"
         onInput={(e) => setCostPrice(e.currentTarget.value)}
