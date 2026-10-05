@@ -1,6 +1,7 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,20 @@ from app.schemas.stoc import (
 from app.services.stock import apply_purchase, apply_adjustment
 
 router = APIRouter()
+
+_LOCAL_TZ = ZoneInfo("Europe/Bucharest")
+
+
+def _as_instant(dt: datetime | None) -> datetime | None:
+    """Capat de interval primit fara fus orar = ora locala a utilizatorului.
+
+    UI-ul trimite zile calendaristice (`2026-10-05T23:59:59`), iar `created_at`
+    e timestamptz in UTC. Fara conversia asta, asyncpg ar interpreta valoarea
+    in fusul procesului, deci ziua ar fi decalata cu 2-3 ore pe un server UTC.
+    """
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=_LOCAL_TZ).astimezone(timezone.utc)
 
 
 @router.get("", response_model=list[StocRow])
@@ -86,7 +101,9 @@ async def patch_item_stoc_meta(
     if item.type != ItemType.PRODUS:
         raise HTTPException(400, "Doar produsele au stoc.")
 
-    if body.cost_price is not None:
+    # Pretul de cumparare poate fi sters: null trimis explicit = „necunoscut",
+    # camp absent = neschimbat. `stoc_minim` e NOT NULL, deci null se ignora.
+    if "cost_price" in body.model_fields_set:
         item.cost_price = body.cost_price
     if body.stoc_minim is not None:
         item.stoc_minim = body.stoc_minim
@@ -201,6 +218,7 @@ async def list_miscari(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_instant(date_to)
     stmt = (
         select(StockMovement, Employee.name)
         .outerjoin(Employee, Employee.id == StockMovement.employee_id)
@@ -282,6 +300,7 @@ async def report_top_produse(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_instant(date_to)
     stmt = (
         select(
             StockMovement.item_id,
@@ -327,6 +346,7 @@ async def report_per_angajat(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_instant(date_to)
     stmt = (
         select(
             StockMovement.employee_id,
