@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +10,7 @@ from app.database import get_db
 from app.dependencies import get_platform_admin_account
 from app.models.account import Account
 from app.models.subscription import AccountSubscription
+from app.models.user import User, UserSession
 from app.schemas.account import AccountCreate, AccountUpdate, AccountRead
 from app.schemas.common import Page
 from app.services.account_provisioning import provision_account_admin
@@ -183,6 +184,79 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
     return account
 
 
+async def _revoke_account_sessions(db: AsyncSession, account_id: int) -> None:
+    """Inchide sesiunile deschise ale tuturor utilizatorilor contului. Nu face
+    commit: se salveaza odata cu stergerea / restaurarea care o cere.
+
+    Cat contul e sters, token-urile sunt respinse doar fiindca
+    `resolve_auth_context` cere `Account.is_deleted == False`; fara revocare,
+    restaurarea le-ar readuce la viata pe toate cele neexpirate.
+    """
+    # Autentificarea leaga sesiunea de cont prin user (`User.account_id`), deci
+    # dupa el filtram; `UserSession.account_id` e acoperit doar ca plasa.
+    sessions = (await db.execute(
+        select(UserSession).where(
+            UserSession.revoked_at.is_(None),
+            or_(
+                UserSession.account_id == account_id,
+                UserSession.user_id.in_(select(User.id).where(User.account_id == account_id)),
+            ),
+        )
+    )).scalars().all()
+    now = datetime.now(timezone.utc)
+    for s in sessions:
+        s.revoked_at = now
+
+
 @router.delete("/{account_id}", status_code=204)
 async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    # Verificarea e repetata si in `soft_delete`; aici opreste revocarea
+    # sesiunilor pentru un cont care oricum raspunde 404.
+    account = await db.get(Account, account_id)
+    if account is None or account.is_deleted:
+        raise HTTPException(status_code=404, detail="Inregistrarea nu a fost gasita.")
+    await _revoke_account_sessions(db, account_id)
+    # `soft_delete` face commit-ul, deci revocarea si stergerea intra impreuna.
     await soft_delete(db, Account, account_id)
+
+
+@router.post("/{account_id}/restore", response_model=AccountRead)
+async def restore_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    """Inversul stergerii. Stergerea nu blocheaza contul si nu atinge
+    utilizatorii sau abonamentul, deci readucem doar `is_deleted` — `is_locked`
+    ramane cum l-a lasat adminul. Sesiunile inchise la stergere raman inchise:
+    utilizatorii se autentifica din nou."""
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise HTTPException(404, "Contul nu a fost gasit.")
+    if not account.is_deleted:
+        # Dublu click sau lista veche in browser: contul e deja activ.
+        return account
+    # Login-ul si inregistrarea cauta contul dupa username/cod doar printre cele
+    # nesterse, deci doua conturi active cu acelasi identificator le-ar strica.
+    identic = [Account.username == account.username]
+    if account.code:
+        identic.append(Account.code == account.code)
+    conflict = (await db.execute(
+        select(Account.id)
+        .where(Account.id != account.id, Account.is_deleted == False, or_(*identic))
+        .limit(1)
+    )).scalar_one_or_none()
+    if conflict is not None:
+        raise HTTPException(
+            409,
+            "Username-ul sau codul firmei este folosit intre timp de alt cont. "
+            "Modifica-l pe celalalt cont, apoi incearca din nou.",
+        )
+    # Conturile sterse inainte ca stergerea sa revoce sesiunile le au inca
+    # deschise in `user_sessions`; le inchidem aici, in aceeasi tranzactie.
+    await _revoke_account_sessions(db, account.id)
+    account.is_deleted = False
+    account.updated_at = datetime.now(timezone.utc)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Username-ul sau codul firmei este folosit intre timp de alt cont.")
+    await db.refresh(account)
+    return account

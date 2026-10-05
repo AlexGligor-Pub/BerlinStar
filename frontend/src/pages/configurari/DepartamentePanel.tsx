@@ -37,25 +37,21 @@ export default function DepartamentePanel() {
       setEditImagePath(updated.image_path ?? null);
       list.mutate((items) => items.map((d) => (d.id === id ? { ...d, image_path: updated.image_path ?? null } : d)));
     },
-    silentError: true,
   });
 
   const save = useAction({
     fn: (id: number) => departmentsApi.update(id, { name: editName().trim(), description: editDesc().trim() || null }),
     onSuccess: () => { setEditId(null); void list.reload(); },
-    silentError: true,
   });
 
   const remove = useAction({
     fn: (id: number) => departmentsApi.remove(id),
     onSuccess: () => void list.reload(),
-    silentError: true,
   });
 
   const add = useAction({
     fn: () => departmentsApi.create({ name: newName().trim(), description: newDesc().trim() || null }),
     onSuccess: () => { setNewName(""); setNewDesc(""); setAddMode(false); void list.reload(); },
-    silentError: true,
   });
 
   const saving = () => save.loading() || remove.loading() || add.loading();

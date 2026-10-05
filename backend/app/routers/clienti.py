@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,31 +21,26 @@ from sqlalchemy import func
 
 router = APIRouter()
 
+# Plafonul unui `integer` Postgres: `clienti.id` si OFFSET-ul sunt legate ca int4,
+# iar o valoare mai mare pica in driver (500) in loc sa fie refuzata cu 422.
+_INT4_MAX = 2_147_483_647
+
 
 @router.get("", response_model=Page[ClientRead])
 async def list_clienti(
-    last_id: int | None = None,
+    last_id: Annotated[int | None, Query(ge=0, le=_INT4_MAX)] = None,
     limit: int = 100,
     q: str | None = None,
     q_masina: str | None = None,
     tip: str | None = None,
     cui: str | None = None,
+    # Annotated, nu `= Query(...)`: testele apeleaza functia direct si au nevoie de None ca default real.
+    offset: Annotated[int | None, Query(ge=0, le=_INT4_MAX)] = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
     limit = min(limit, 200)
     stmt = select(Client).where(Client.account_id == account_id, Client.is_deleted == False)
-    if last_id is not None:
-        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
-        # Filtrul pe cont e obligatoriu: altfel numele unui client al ALTUI cont ar
-        # fi folosit ca reper, iar pagina intoarsa ar trada unde se sorteaza el.
-        # Cursor strain/inexistent -> reper NULL -> pagina goala.
-        last_nume = (
-            select(Client.nume)
-            .where(Client.id == last_id, Client.account_id == account_id)
-            .scalar_subquery()
-        )
-        stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
     if q:
         from sqlalchemy import or_
         stmt = stmt.where(or_(
@@ -68,9 +64,22 @@ async def list_clienti(
         stmt = stmt.where(Client.tip == tip)
     if cui:
         stmt = stmt.where(Client.cui == cui)
+
+    # Doua moduri de paginare: keyset pe `last_id` (cautari, listAll) si pagini
+    # numerotate pe `offset` (pagina Clienti). Totalul se numara doar in al doilea,
+    # peste exact aceleasi filtre — celelalte apeluri nu platesc un COUNT.
+    total: int | None = None
+    if last_id is not None:
+        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
+        # Reperul se cauta doar in contul apelantului: un cursor strain da pagina goala.
+        last_nume = select(Client.nume).where(Client.id == last_id, Client.account_id == account_id).scalar_subquery()
+        stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
+    elif offset is not None:
+        total = (await db.execute(stmt.with_only_columns(func.count(Client.id)))).scalar_one()
+        stmt = stmt.offset(offset)
     stmt = stmt.order_by(Client.nume, Client.id).limit(limit + 1)
 
-    return await paginate(db, stmt, limit)
+    return await paginate(db, stmt, limit, total=total)
 
 
 async def _sync_client_plate_to_garage(db: AsyncSession, account_id: int, client: Client) -> None:

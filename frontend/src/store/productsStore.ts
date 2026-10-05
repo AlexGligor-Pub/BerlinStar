@@ -37,30 +37,61 @@ function getCached(): Product[] | null {
 
 const [products, setProducts] = createSignal<Product[]>(getCached() ?? []);
 const [isOffline, setIsOffline] = createSignal(false);
-// `products()` e o singura pagina de 300. Cat timp mai sunt pagini (sau cat timp
-// nu s-a incarcat nimic de la server), absenta unui produs din lista NU inseamna
-// ca nu exista — vezi mesajul „departament fara produse" din POS.
+// Catalogul vine in pagini de 300 (plafonul serverului). Cat timp nu s-au adus
+// toate paginile (sau cat timp nu s-a incarcat nimic de la server), absenta unui
+// produs din lista NU inseamna ca nu exista — vezi mesajul „departament fara
+// produse" din POS.
 const [productsComplete, setProductsComplete] = createSignal(false);
 
+const PAGE_SIZE = 300;
+// Plasa de siguranta impotriva unui cursor care nu avanseaza (15.000 de articole).
+const MAX_PAGES = 50;
+
+function mapItem(item: RawItem): Product {
+  return {
+    id: item.id,
+    name: item.name,
+    price: typeof item.price === "number" ? item.price : parseFloat(item.price),
+    unit: item.unit,
+    category: item.category_name ?? "",
+    type: item.type ?? "Produs",
+    departmentId: item.department_id ?? null,
+    imagePath: item.image_path ?? null,
+  };
+}
+
 export async function loadProducts(): Promise<void> {
+  // Fara nimic afisat (prima deschidere, fara cache) aratam paginile pe masura ce
+  // sosesc. Cu o lista deja afisata o inlocuim abia la final, altfel produsele din
+  // paginile urmatoare ar disparea din POS pana se termina incarcarea.
+  const progressive = products().length === 0;
   try {
-    const res = await apiFetch("/api/items?limit=300", {
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) throw new Error("API error");
-    const data = (await res.json()) as { items: RawItem[]; next_cursor: number | null };
-    const mapped: Product[] = data.items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      price: typeof item.price === "number" ? item.price : parseFloat(item.price),
-      unit: item.unit,
-      category: item.category_name ?? "",
-      type: item.type ?? "Produs",
-      departmentId: item.department_id ?? null,
-      imagePath: item.image_path ?? null,
-    }));
+    const mapped: Product[] = [];
+    const seen = new Set<number>();
+    let cursor: number | null = null;
+    let complete = false;
+    for (let page = 0; page < MAX_PAGES; page++) {
+      // Sortarea implicita din /api/items e pe id, deci `last_id` e un keyset corect.
+      const qs: string = cursor == null ? "" : `&last_id=${cursor}`;
+      const res = await apiFetch(`/api/items?limit=${PAGE_SIZE}${qs}`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) throw new Error("API error");
+      const data = (await res.json()) as { items: RawItem[]; next_cursor: number | null };
+      for (const item of data.items) {
+        if (seen.has(item.id)) continue;
+        seen.add(item.id);
+        mapped.push(mapItem(item));
+      }
+      cursor = data.next_cursor ?? null;
+      if (cursor == null) { complete = true; break; }
+      if (progressive) {
+        setProductsComplete(false);
+        setProducts([...mapped]);
+      }
+    }
     setProducts(mapped);
-    setProductsComplete(data.next_cursor == null);
+    setProductsComplete(complete);
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(mapped)); } catch {
       // quota or storage disabled — keep in-memory cache regardless
     }

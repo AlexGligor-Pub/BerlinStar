@@ -1016,10 +1016,27 @@ function StatusTab(props: { companies: CompanySummary[] }) {
     }
   }
 
-  function downloadZip(receiptId: number | null) {
+  async function downloadZip(receiptId: number | null) {
     if (!receiptId) return;
-    const url = `/api/efactura/receipts/${receiptId}/download`;
-    window.open(url, "_blank");
+    try {
+      const res = await adminFetch(`/api/efactura/receipts/${receiptId}/download`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        notify(d.detail ?? "Nu am putut descărca ZIP-ul.", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `anaf_response_${receiptId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      notify("Eroare la descărcare ZIP.", "error");
+    }
   }
 
   return (

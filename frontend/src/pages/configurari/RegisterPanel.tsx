@@ -29,19 +29,16 @@ export default function RegisterPanel() {
   const save = useAction({
     fn: (id: number) => registersApi.update(id, editForm()),
     onSuccess: () => { setEditId(null); void list.reload(); },
-    silentError: true,
   });
 
   const add = useAction({
     fn: () => registersApi.create(addForm()),
     onSuccess: () => { setAddForm(emptyRegForm()); setAddOpen(false); void list.reload(); },
-    silentError: true,
   });
 
   const remove = useAction({
     fn: (id: number) => registersApi.remove(id),
     onSuccess: () => void list.reload(),
-    silentError: true,
   });
 
   const saving = () => save.loading() || add.loading() || remove.loading();

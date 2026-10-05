@@ -1,8 +1,15 @@
 import { Show, For, createSignal, createMemo, createEffect } from "solid-js";
 import Modal from "../../components/ui/Modal";
 import Input from "../../components/ui/Input";
-import { apiFetch } from "../../utils/api";
-import { saveReceipt, updateReceiptContent, applyDocNumber, type Receipt } from "../../store/receiptsStore";
+import { apiFetch, parseApiError } from "../../utils/api";
+import {
+  saveReceipt,
+  updateReceiptContent,
+  updateReceiptClient,
+  applyDocNumber,
+  receipts,
+  type Receipt,
+} from "../../store/receiptsStore";
 import { generateFactura } from "../../utils/generateDocuments";
 import type { DocContext } from "../../utils/generateDocuments";
 import { notify } from "../../store/notificationsStore";
@@ -185,10 +192,23 @@ export default function FacturaRapidaForm(props: Props) {
         saved = await updateReceiptContent(props.editing.id, baseInput);
         // Client change separately (PATCH /client)
         if (props.editing.clientId !== c.id) {
-          await apiFetch(`/api/receipts/${saved.id}/client`, {
-            method: "PATCH",
-            body: JSON.stringify({ client_id: c.id }),
-          });
+          const savedId = saved.id;
+          // Arunca la refuz: fara asta factura ramanea pe clientul vechi sub un mesaj de succes.
+          await updateReceiptClient(savedId, c.id);
+          // `saved` vine din /content, care nu atinge clientul; PDF-ul trebuie sa-l
+          // foloseasca pe cel nou. Bonul rapid poate lipsi din lista globala, de aceea
+          // exista si varianta construita din clientul ales in formular.
+          saved = receipts().find((r) => r.id === savedId) ?? {
+            ...saved,
+            clientId: c.id,
+            clientNume: c.nume,
+            clientCui: c.cui,
+            clientAdresa: c.adresa,
+            clientTelefon: c.telefon,
+            clientTip: c.tip,
+            clientReprezentant: c.reprezentant,
+            clientNumarMasina: c.numar_masina,
+          };
         }
         // pay_method nu trece prin /content — PATCH separat daca s-a schimbat
         if (props.editing.metodaPlata !== payMethod()) {
@@ -196,9 +216,11 @@ export default function FacturaRapidaForm(props: Props) {
             method: "PATCH",
             body: JSON.stringify({ pay_method: payMethod(), partial_pay: null }),
           });
-          if (payRes.ok) {
-            saved = { ...saved, metodaPlata: payMethod() };
+          if (!payRes.ok) {
+            const j = await payRes.json().catch(() => ({}));
+            throw new Error(parseApiError(j.detail ?? j, "Metoda de plata nu s-a salvat."));
           }
+          saved = { ...saved, metodaPlata: payMethod() };
         }
       } else {
         saved = await saveReceipt(baseInput);
@@ -211,13 +233,19 @@ export default function FacturaRapidaForm(props: Props) {
       });
       if (!ctxRes.ok) {
         const j = await ctxRes.json().catch(() => ({}));
-        throw new Error(j.detail ?? "Eroare la alocarea numarului de factura.");
+        throw new Error(parseApiError(j.detail ?? j, "Eroare la alocarea numarului de factura."));
       }
       const ctx: DocContext = await ctxRes.json();
-      applyDocNumber(saved.id, "factura", ctx.serie, ctx.nr);
+      applyDocNumber(saved.id, "factura", ctx.serie, ctx.nr, ctx.due_date);
 
-      // Update local receipt with new serie/nr for the PDF generator
-      const forPdf: Receipt = { ...saved, facturaSerie: ctx.serie, facturaNr: ctx.nr };
+      // Update local receipt with new serie/nr for the PDF generator.
+      // Scadenta: daca a fost golita in formular, serverul o completeaza la numerotare.
+      const forPdf: Receipt = {
+        ...saved,
+        facturaSerie: ctx.serie,
+        facturaNr: ctx.nr,
+        dueDate: ctx.due_date ?? saved.dueDate,
+      };
       await generateFactura(forPdf, ctx);
 
       notify("Factura a fost generata.", "success");

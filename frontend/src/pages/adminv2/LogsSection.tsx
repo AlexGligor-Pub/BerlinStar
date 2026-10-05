@@ -3,6 +3,7 @@ import {
   createSolidTable, flexRender, getCoreRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
+import { readApiError } from "../../utils/api";
 import { adminFetch } from "./admin-auth";
 import { fmtDate, statusDisplay } from "./shared";
 
@@ -45,6 +46,7 @@ export default function LogsSection() {
   const [jobsList, setJobsList] = createSignal<JobInfoMin[]>([]);
   const [expanded, setExpanded] = createSignal<number | null>(null);
   const [clearing, setClearing] = createSignal(false);
+  const [clearErr, setClearErr] = createSignal<string | null>(null);
   const [sorting, setSorting] = createSignal<SortingState>([{ id: "started_at", desc: true }]);
 
   async function loadJobsList() {
@@ -103,13 +105,17 @@ export default function LogsSection() {
 
   async function doClearAll() {
     if (!confirm("Stergi TOATE logurile? Aceasta operatie nu poate fi revocata.")) return;
-    setClearing(true);
+    setClearing(true); setClearErr(null);
     try {
       const res = await adminFetch("/api/admin/efactura/task-logs", { method: "DELETE" });
       if (res.ok) {
         setOffset(0);
         await loadLogs(true);
+      } else {
+        setClearErr(await readApiError(res, "Stergerea logurilor a esuat."));
       }
+    } catch {
+      setClearErr("Eroare de conexiune. Logurile nu au fost sterse.");
     } finally {
       setClearing(false);
     }
@@ -268,6 +274,10 @@ export default function LogsSection() {
           Auto-refresh la 30s · retenție 90 zile
         </span>
       </div>
+
+      <Show when={clearErr()}>
+        <div class="login-error" style="margin-bottom:12px">{clearErr()}</div>
+      </Show>
 
       <Show when={logs().length === 0 && !loading()}>
         <div class="card" style="text-align:center;padding:48px 16px">

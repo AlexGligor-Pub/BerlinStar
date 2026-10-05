@@ -183,7 +183,10 @@ async def update_user(
         user.email = patch["email"] or None
     if "role" in patch and patch["role"] is not None:
         user.role = patch["role"]
-    if "employee_id" in patch:
+    # Validam angajatul doar cand legatura se SCHIMBA. Formularul retrimite
+    # mereu `employee_id`-ul stocat; daca angajatul a fost sters intre timp,
+    # validarea lui ar bloca orice editare a userului (nume, rol, activ) cu 400.
+    if "employee_id" in patch and patch["employee_id"] != user.employee_id:
         await _assert_employee_owned(db, account_id, patch["employee_id"])
         user.employee_id = patch["employee_id"]
     if "is_active" in patch and patch["is_active"] is not None:

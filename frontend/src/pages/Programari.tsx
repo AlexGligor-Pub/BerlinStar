@@ -660,8 +660,10 @@ export default function Programari() {
     try {
       await deleteProgramare(id);
       setSelectedAppt(null); setDeleteConfirm(null);
-    } catch (err: any) {
-      setActionError(err?.message ?? "Eroare la stergere.");
+    } catch (err: unknown) {
+      // Confirmarea se inchide, altfel mesajul ramane ascuns in spatele ei.
+      setDeleteConfirm(null);
+      notify(err instanceof Error ? err.message : "Eroare la stergere.", "error");
     }
   }
 

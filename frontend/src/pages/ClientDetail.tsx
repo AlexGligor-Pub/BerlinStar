@@ -92,6 +92,7 @@ interface RawReceiptItem {
 interface RawReceipt {
   id: number | string;
   created_at: string;
+  updated_at?: string | null;
   titlu: string;
   client_id?: number | null;
   client_nume?: string | null;
@@ -214,21 +215,26 @@ export default function ClientDetail() {
     // Iteram cu cursor pana epuizam — count e in summary, dar avem nevoie de detalii pentru filtrare per masina.
     const PAGE = 100;
     let cursor: number | null = null;
-    const all: NormalizedReceipt[] = [];
+    const all: RawReceipt[] = [];
     try {
       while (true) {
-        let qs = `/api/receipts?limit=${PAGE}&sort=-activity&client_id=${clientId()}`;
+        // Cursorul last_id e valabil doar in ordinea id-ului (backend: id < last_id), asa ca
+        // paginam pe -id si ordonam dupa activitate abia la final, pe lista completa.
+        let qs = `/api/receipts?limit=${PAGE}&sort=-id&client_id=${clientId()}`;
         if (cursor !== null) qs += `&last_id=${cursor}`;
         const res = await apiFetch(qs);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as { items: RawReceipt[]; next_cursor: number | null };
         const items = data.items ?? [];
-        for (const it of items) all.push(normalize(it));
+        all.push(...items);
         if (data.next_cursor === null || items.length < PAGE) break;
         cursor = data.next_cursor;
         if (all.length > 10_000) break; // safeguard
       }
-      setReceipts(all);
+      // Aceeasi ordine ca sort=-activity pe backend: COALESCE(updated_at, created_at) desc, id desc.
+      const activity = (r: RawReceipt): number => Date.parse(r.updated_at ?? r.created_at) || 0;
+      all.sort((a, b) => activity(b) - activity(a) || Number(b.id) - Number(a.id));
+      setReceipts(all.map(normalize));
     } catch (e: unknown) {
       notify(e instanceof Error ? e.message : "Eroare la încărcare devize.", "error");
     }

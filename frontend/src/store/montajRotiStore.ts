@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { apiFetch, API_BASE } from "../utils/api";
+import { apiFetch, API_BASE, readApiError } from "../utils/api";
 import {
   INDICE_VITEZA_SHORTCUTS as _IV,
   INDICE_SARCINA_SHORTCUTS as _IS,
@@ -179,8 +179,7 @@ export async function bulkUpsertMontajRoti(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const detail = await res.json().catch(() => ({}));
-    throw new Error(detail?.detail ?? "Eroare la salvarea rotilor.");
+    throw new Error(await readApiError(res, "Eroare la salvarea rotilor."));
   }
   const data = await res.json();
   return (data as any[]).map(mapMontajRota);

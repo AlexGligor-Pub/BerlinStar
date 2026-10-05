@@ -612,13 +612,17 @@ function ReceiptCard(props: { receipt: Receipt }) {
     setMontajeSelected(s);
   }
 
-  // Pasul final: șterge cazările bifate, apoi montajele bifate, apoi bonul.
-  // Continuă chiar dacă unele cereri eșuează — la final raportează erorile.
+  // Pasul final: șterge întâi bonul, apoi cazările și montajele bifate. Serverul
+  // nu șterge în cascadă și poate refuza bonul (blocat de e-Factura, rol fără
+  // drept): dacă refuză, ne oprim înainte să dispară ceva legat de el.
+  // La elementele legate continuă chiar dacă unele cereri eșuează — la final
+  // raportează erorile.
   async function handleConfirmDelete() {
     if (deletePending()) return;
     setDeletePending(true);
     let failed = 0;
     try {
+      await deleteReceipt(r.id);
       for (const id of cazariSelected()) {
         try {
           const res = await apiFetch(`/api/cazare-anvelope/${id}`, { method: "DELETE" });
@@ -631,7 +635,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
           if (!res.ok) failed++;
         } catch { failed++; }
       }
-      await deleteReceipt(r.id);
       if (failed > 0) {
         notify(`Bonul a fost șters, dar ${failed} element(e) legate nu au putut fi șterse.`, "error");
       }
@@ -843,9 +846,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
   async function handleSaveMetoda() {
     setSaving(true);
     const partial = isPartial() ? parseFloat(partialDraft()) || 100 : undefined;
-    await updateMetodaPlata(r.id, metodaDraft() || null, partial);
-    setPayRefresh((n) => n + 1);
-    setSaving(false);
+    try {
+      await updateMetodaPlata(r.id, metodaDraft() || null, partial);
+      setPayRefresh((n) => n + 1);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Eroare la salvarea metodei de plată.", "error");
+    } finally {
+      setSaving(false);
+    }
   }
   const date = new Date(r.date);
   const dateStr = date.toLocaleDateString("ro-RO");

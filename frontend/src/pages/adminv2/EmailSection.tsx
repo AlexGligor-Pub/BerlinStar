@@ -97,11 +97,22 @@ export default function EmailSection() {
       notify(e instanceof Error ? e.message : "Eroare la încărcare template-uri email.", "error");
     }
     try {
-      const r = await adminFetch("/api/accounts?limit=200&sort=id");
-      if (r.ok) {
-        const data: { items: Account[] } = await r.json();
-        setLogsAccounts(data.items);
+      // Backend-ul plafoneaza limit la 100, asa ca mergem pe cursor pana la capat.
+      const all: Account[] = [];
+      let lastId: number | null = null;
+      let ok = true;
+      for (let i = 0; i < 100; i++) {
+        let url = "/api/accounts?limit=100&sort=id";
+        if (lastId !== null) url += `&last_id=${lastId}`;
+        const r = await adminFetch(url);
+        if (!r.ok) { ok = false; break; }
+        const data: { items: Account[]; next_cursor?: number | null } = await r.json();
+        const items = data.items ?? [];
+        all.push(...items);
+        if (data.next_cursor == null || items.length === 0) break;
+        lastId = data.next_cursor;
       }
+      if (ok) setLogsAccounts(all);
     } catch (e: unknown) {
       notify(e instanceof Error ? e.message : "Eroare la încărcare conturi.", "error");
     }

@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -30,7 +30,14 @@ async def list_dimensiuni(
         DimensiuneAnvelopa.account_id == account_id, DimensiuneAnvelopa.is_deleted == False
     )
     if last_id is not None:
-        stmt = stmt.where(DimensiuneAnvelopa.id > last_id)
+        # Keyset aliniat cu ORDER BY (valoare, id); cursorul ramane id-ul ultimului rand.
+        # Cu `id > last_id` pagina a doua sarea randurile cu id mai mic si le dubla pe altele.
+        # Randul-cursor se cauta doar in contul apelantului (altfel pagina ar fi filtrata dupa
+        # valoarea altui cont); fara is_deleted, ca un rand sters intre pagini sa ramana cursor valid.
+        last_valoare = select(DimensiuneAnvelopa.valoare).where(
+            DimensiuneAnvelopa.id == last_id, DimensiuneAnvelopa.account_id == account_id
+        ).scalar_subquery()
+        stmt = stmt.where(tuple_(DimensiuneAnvelopa.valoare, DimensiuneAnvelopa.id) > tuple_(last_valoare, last_id))
     stmt = stmt.order_by(DimensiuneAnvelopa.valoare, DimensiuneAnvelopa.id).limit(limit + 1)
     return await paginate(db, stmt, limit)
 

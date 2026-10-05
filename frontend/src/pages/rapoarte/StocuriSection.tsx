@@ -47,8 +47,10 @@ export default function StocuriSection() {
     if (!lid) return;
     setLoading(true);
     try {
-      const fromISO = periodFrom();
-      const toISO = periodTo();
+      // Perioada e in zile calendaristice; backend-ul filtreaza pe momente,
+      // deci trimitem capetele zilei — altfel ultima zi (implicit azi) e exclusa.
+      const fromISO = periodFrom() ? `${periodFrom()}T00:00:00` : undefined;
+      const toISO = periodTo() ? `${periodTo()}T23:59:59` : undefined;
       const [snap, top, ang, mov] = await Promise.all([
         loadSnapshot(lid).catch(() => null),
         loadTopProduse({ date_from: fromISO, date_to: toISO, location_ids: [lid], limit: 20 }).catch(() => []),

@@ -1,6 +1,7 @@
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_, case
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,39 @@ from app.schemas.stoc import (
 from app.services.stock import apply_purchase, apply_adjustment
 
 router = APIRouter()
+
+_LOCAL_TZ = ZoneInfo("Europe/Bucharest")
+
+
+def _as_instant(dt: datetime | None) -> datetime | None:
+    """Capat de interval primit fara fus orar = ora locala a utilizatorului.
+
+    UI-ul trimite zile calendaristice (`2026-10-05T23:59:59`), iar `created_at`
+    e timestamptz in UTC. Fara conversia asta, asyncpg ar interpreta valoarea
+    in fusul procesului, deci ziua ar fi decalata cu 2-3 ore pe un server UTC.
+    """
+    if dt is None or dt.tzinfo is not None:
+        return dt
+    return dt.replace(tzinfo=_LOCAL_TZ).astimezone(timezone.utc)
+
+
+def _as_end_instant(dt: datetime | None) -> datetime | None:
+    """Capatul de sus al intervalului, inclusiv ultima secunda.
+
+    UI-ul trimite `...T23:59:59`, iar `created_at` are microsecunde: fara
+    completare, o miscare de la 23:59:59.4 n-ar aparea in nicio zi. Valorile cu
+    fus orar sau cu microsecunde sunt instante exacte si raman neatinse.
+    """
+    if dt is not None and dt.tzinfo is None and dt.microsecond == 0:
+        dt = dt.replace(microsecond=999999)
+    return _as_instant(dt)
+
+
+# Rapoartele de vanzari sunt nete de stornari: SALE are qty_delta negativ, iar
+# SALE_REVERSE (bon anulat / replatit / editat) il are pozitiv, deci suma lui
+# `-qty_delta` peste ambele tipuri da exact ce a ramas vandut — la fel cum
+# `Stock.qty` e deplasat de ambele miscari.
+_SALE_TYPES = (StockMovementType.SALE, StockMovementType.SALE_REVERSE)
 
 
 @router.get("", response_model=list[StocRow])
@@ -95,7 +129,9 @@ async def patch_item_stoc_meta(
         raise HTTPException(404, "Locatia nu a fost gasita.")
     cat, dept = await _own_category_and_department(db, item)
 
-    if body.cost_price is not None:
+    # Pretul de cumparare poate fi sters: null trimis explicit = „necunoscut",
+    # camp absent = neschimbat. `stoc_minim` e NOT NULL, deci null se ignora.
+    if "cost_price" in body.model_fields_set:
         item.cost_price = body.cost_price
     if body.stoc_minim is not None:
         item.stoc_minim = body.stoc_minim
@@ -225,6 +261,7 @@ async def list_miscari(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_end_instant(date_to)
     stmt = (
         select(StockMovement, Employee.name)
         # Si pe cont: o miscare veche cu employee_id din alt cont nu trebuie sa
@@ -311,6 +348,7 @@ async def report_top_produse(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_end_instant(date_to)
     stmt = (
         select(
             StockMovement.item_id,
@@ -321,9 +359,11 @@ async def report_top_produse(
         )
         .where(
             StockMovement.account_id == account_id,
-            StockMovement.movement_type == StockMovementType.SALE,
+            StockMovement.movement_type.in_(_SALE_TYPES),
         )
         .group_by(StockMovement.item_id, StockMovement.item_name)
+        # Vanzare stornata integral = nimic vandut, nu un rand cu 0 bucati.
+        .having(func.sum(-StockMovement.qty_delta) != 0)
         .order_by(func.sum(-StockMovement.qty_delta).desc())
         .limit(limit)
     )
@@ -356,6 +396,7 @@ async def report_per_angajat(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_advanced_account_id),
 ):
+    date_from, date_to = _as_instant(date_from), _as_end_instant(date_to)
     stmt = (
         select(
             StockMovement.employee_id,
@@ -371,9 +412,10 @@ async def report_per_angajat(
         ))
         .where(
             StockMovement.account_id == account_id,
-            StockMovement.movement_type == StockMovementType.SALE,
+            StockMovement.movement_type.in_(_SALE_TYPES),
         )
         .group_by(StockMovement.employee_id, Employee.name, StockMovement.item_id, StockMovement.item_name)
+        .having(func.sum(-StockMovement.qty_delta) != 0)
         .order_by(Employee.name, func.sum(-StockMovement.qty_delta).desc())
     )
     if date_from is not None:

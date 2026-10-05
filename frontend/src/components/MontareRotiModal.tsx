@@ -174,6 +174,8 @@ export default function MontareRotiModal(props: {
     if (res.ok) {
       invalidateProfilCache();
       await loadProfil(true);
+    } else {
+      notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
     }
   }
   async function addDim(value: string) {
@@ -181,6 +183,8 @@ export default function MontareRotiModal(props: {
     if (res.ok) {
       invalidateDimensiuniCache();
       await loadDimensiuni(true);
+    } else {
+      notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
     }
   }
   async function addDot(value: string) {
@@ -188,6 +192,8 @@ export default function MontareRotiModal(props: {
     if (res.ok) {
       invalidateCoduriDotCache();
       await loadCoduriDot(true);
+    } else {
+      notify(await readApiError(res, "Valoarea nu a putut fi adăugată."), "error");
     }
   }
 

@@ -11,13 +11,15 @@ async def paginate(
     stmt,
     limit: int,
     transform: Callable | None = None,
+    total: int | None = None,
 ) -> Page:
     """
     Executa un statement SQLAlchemy si returneaza o Page cu cursor-based pagination.
     transform: functie optionala aplicata fiecarui rand inainte de serializare.
+    total: numarul total de randuri, calculat de apelant doar la paginarea pe offset.
     """
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
     items = [transform(r) for r in page] if transform else list(page)
-    return Page(items=items, next_cursor=page[-1].id if has_more else None)
+    return Page(items=items, next_cursor=page[-1].id if has_more else None, total=total)

@@ -27,7 +27,6 @@ export default function DisclaimersPanel() {
       list.mutate(items => items.map(d => d.id === id ? { ...d, title: editTitle().trim(), text: editText().trim() } : d));
       cancelEdit();
     },
-    silentError: true,
   });
 
   const add = useAction({
@@ -36,13 +35,11 @@ export default function DisclaimersPanel() {
       list.mutate(items => [...items, created]);
       setAddTitle(""); setAddText(""); setAddOpen(false);
     },
-    silentError: true,
   });
 
   const remove = useAction({
     fn: (id: number) => disclaimersApi.remove(id),
     onSuccess: (_result, id) => list.mutate(items => items.filter(x => x.id !== id)),
-    silentError: true,
   });
 
   const saving = () => save.loading() || add.loading() || remove.loading();

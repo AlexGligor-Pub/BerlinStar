@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, createEffect, onMount } from "solid-js";
 import Modal from "../components/ui/Modal";
-import { canManage } from "../store/permissions";
+import { canAdvanced, canManage } from "../store/permissions";
 import { notify } from "../store/notificationsStore";
 import { employees, loadEmployees, type Employee } from "../store/employeesStore";
 import { apiFetch } from "../utils/api";
@@ -461,14 +461,15 @@ export default function Concedii() {
   // Incarca datele legale ale angajatului selectat in formular (preview + verificare dosar).
   createEffect(() => {
     const id = form().employeeId;
-    if (id == null) { setFormDetails(null); return; }
+    // Dosarul de personal cere resursa "advanced" (admin/manager); pentru restul
+    // rolurilor serverul raspunde 403, deci nu mai facem cererea.
+    if (id == null || !canAdvanced()) { setFormDetails(null); return; }
     void (async () => {
       try {
-        // Dosarul de personal e permis doar rolurilor admin/manager (server-side).
         const res = await apiFetch(`/api/employees/${id}/details`);
-        // Fara acces Rapoarte (401) nu putem sti daca exista dosar — nu afisam
-        // avertismentul "fara dosar" (ar fi inselator), doar ascundem preview-ul.
-        if (res.status === 401) { setFormDetails(null); return; }
+        // Fara acces (403; 401 = sesiune expirata) nu putem sti daca exista dosar —
+        // nu afisam avertismentul "fara dosar" (ar fi inselator), doar ascundem preview-ul.
+        if (res.status === 401 || res.status === 403) { setFormDetails(null); return; }
         if (!res.ok) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
         const d = await res.json();
         if (!d) { setFormDetails({ has: false, cnp: null, job_title: null, department: null, contract_number: null, company_name: null }); return; }
