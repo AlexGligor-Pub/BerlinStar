@@ -20,7 +20,13 @@ from app.database import get_db
 # status, download) raman operationale — casierul trimite factura de la
 # tejghea. Configurarea companiei si listele din paginile e-Factura sunt
 # admin + manager, la fel ca ruta /efactura din UI.
-from app.dependencies import get_account_id, get_advanced_account_id
+from app.dependencies import (
+    PLATFORM_ACCOUNT_USERNAME,
+    AuthContext,
+    get_account_id,
+    get_advanced_account_id,
+    get_auth_context,
+)
 from app.efactura import oauth_service, runtime_config, service as efactura_service
 from app.efactura.anaf_client import AnafEFacturaClient
 from app.efactura.exceptions import (
@@ -54,6 +60,7 @@ from app.efactura.xml_builder import build_xml, pretty_print
 from app.models.client import Client
 from app.models.company import Company
 from app.models.receipt import Receipt
+from app.permissions import Resource
 from fastapi.responses import PlainTextResponse, StreamingResponse
 
 log = logging.getLogger("berlinstar.efactura")
@@ -98,23 +105,23 @@ async def _require_company_access(
 
 
 async def _get_receipt_for_caller(
-    db: AsyncSession, receipt_id: int, account_id: int
+    db: AsyncSession, receipt_id: int, ctx: AuthContext
 ) -> Receipt:
     """Bonul contului curent; super-adminul platformei il poate citi pe al oricarui cont.
 
-    Aceeasi poarta ca `_require_company_access` (username == "admin"). Pentru orice
-    alt cont raspunsul ramane 404, ca sa nu divulgam existenta bonurilor altor tenanti.
+    Aceleasi doua conditii ca `get_platform_admin_account`: contul de platforma SI
+    rolul `admin`. Doar username-ul contului nu ajunge — un worker/manager creat in
+    contul de platforma ar citi bonurile tuturor clientilor. Pentru oricine altcineva
+    raspunsul ramane 404, ca sa nu divulgam existenta bonurilor altor tenanti.
     """
     receipt = (
         await db.execute(
-            select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
+            select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == ctx.account_id)
         )
     ).scalar_one_or_none()
     if receipt is not None:
         return receipt
-    from app.models.account import Account
-    acc = (await db.execute(select(Account).where(Account.id == account_id))).scalar_one_or_none()
-    if acc is not None and acc.username == "admin":
+    if ctx.account.username == PLATFORM_ACCOUNT_USERNAME and ctx.can(Resource.USERS):
         receipt = (
             await db.execute(select(Receipt).where(Receipt.id == receipt_id))
         ).scalar_one_or_none()
@@ -593,11 +600,11 @@ async def upload_receipt(
 @router.get("/receipts/{receipt_id}/status", response_model=EFacturaRecordOut)
 async def get_receipt_status(
     receipt_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza statusul curent + ANAF check fresh daca e in prelucrare."""
-    await _get_receipt_for_caller(db, receipt_id, account_id)
+    await _get_receipt_for_caller(db, receipt_id, ctx)
 
     rec = (
         await db.execute(
@@ -648,11 +655,11 @@ async def retry_receipt(
 @router.get("/receipts/{receipt_id}/download")
 async def download_response_zip(
     receipt_id: int = Path(..., gt=0),
-    account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Descarca ZIP-ul de raspuns ANAF (cu sigiliu electronic)."""
-    await _get_receipt_for_caller(db, receipt_id, account_id)
+    await _get_receipt_for_caller(db, receipt_id, ctx)
 
     rec = (
         await db.execute(
