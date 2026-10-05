@@ -26,6 +26,11 @@ describe("buildQuery", () => {
     expect(buildQuery()).toBe("");
     expect(buildQuery({ a: null })).toBe("");
   });
+  // Pagina 1 din Clienti trimite offset=0; serverul calculeaza `total` doar daca
+  // primeste `offset`, deci un 0 aruncat ar lasa prima pagina fara numere.
+  it("keeps the number 0 (offset=0 on the first page)", () => {
+    expect(buildQuery({ limit: 25, offset: 0 })).toBe("?limit=25&offset=0");
+  });
 });
 
 describe("crudApi", () => {
@@ -36,6 +41,13 @@ describe("crudApi", () => {
     const page = await api.list({ limit: 10, q: "x" });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/things?limit=10&q=x");
     expect(page.items).toEqual([{ id: 1 }]);
+  });
+
+  it("list sends offset=0 and returns the total", async () => {
+    fetchMock.mockResolvedValue(json({ items: [{ id: 1 }], next_cursor: null, total: 1 }));
+    const page = await api.list({ limit: 25, offset: 0 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/things?limit=25&offset=0");
+    expect(page.total).toBe(1);
   });
 
   it("listAll follows next_cursor until exhausted", async () => {

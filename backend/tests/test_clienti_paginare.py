@@ -14,6 +14,8 @@ Rulabil cu pytest sau direct:  python -m tests.test_clienti_paginare  (din backe
 """
 from __future__ import annotations
 
+from typing import get_args, get_type_hints
+
 from app.routers.clienti import list_clienti
 from app.schemas.common import Page
 from tests._harness import make_account, make_client, make_session, run
@@ -165,6 +167,40 @@ async def test_tenant_isolation():
     hit = await list_clienti(limit=200, offset=0, q="Client 02", db=db, account_id=acc.id)
     assert hit.total == 1 and hit.items[0].account_id == acc.id
     assert (await list_clienti(limit=200, offset=0, q="Strain", db=db, account_id=acc.id)).total == 0
+
+
+def _annotated_extras(hint) -> list:
+    # Recursiv: sub Python 3.11, un default None inveleste adnotarea in Optional[...].
+    out = list(getattr(hint, "__metadata__", ()))
+    for arg in get_args(hint):
+        out += _annotated_extras(arg)
+    return out
+
+
+def _query_bounds(param: str) -> tuple[int | None, int | None]:
+    """(ge, le) declarate in `Query(...)` pe un parametru al lui list_clienti."""
+    ge = le = None
+    for query in _annotated_extras(get_type_hints(list_clienti, include_extras=True)[param]):
+        for m in getattr(query, "metadata", ()):
+            ge = getattr(m, "ge", ge)
+            le = getattr(m, "le", le)
+    return ge, le
+
+
+async def test_offset_and_last_id_are_bounded_in_signature():
+    # Testele apeleaza functia direct, deci validarea FastAPI nu ruleaza aici: o
+    # fixam prin semnatura. Fara `ge`, offset=-1 ajunge OFFSET -1 in Postgres; fara
+    # `le`, o valoare peste int4 pica in asyncpg — ambele 500 in loc de 422.
+    int4_max = 2**31 - 1
+    assert _query_bounds("offset") == (0, int4_max)
+    assert _query_bounds("last_id") == (0, int4_max)
+
+
+async def test_offset_at_upper_bound_is_empty_not_an_error():
+    # Cea mai mare valoare admisa trebuie sa treaca prin interogare, nu doar prin validare.
+    db, acc, _ = await _fixture()
+    page = await list_clienti(limit=3, offset=2**31 - 1, db=db, account_id=acc.id)
+    assert page.items == [] and page.total == len(NUME)
 
 
 async def test_page_total_is_optional_for_other_endpoints():

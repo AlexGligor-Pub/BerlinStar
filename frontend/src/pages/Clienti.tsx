@@ -144,8 +144,12 @@ export default function Clienti() {
     setSaving(true); setFormError(null);
     try {
       const created = await clientiApi.create(clientFormPayload(f), { errorMessage: "Eroare la salvare." });
-      list.mutate((items) => [created, ...items]);
       setAddMode(false);
+      // Reincarcam ca totalul si paginile sa ramana corecte. Lista e alfabetica,
+      // deci clientul nou poate cadea pe alta pagina: il aratam oricum sus, ca
+      // operatorul sa vada ca s-a salvat.
+      await list.reload();
+      if (!clienti().some((c) => c.id === created.id)) list.mutate((items) => [created, ...items]);
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : "Eroare la salvare.");
     } finally {
@@ -159,10 +163,16 @@ export default function Clienti() {
     setSaving(true);
     try {
       await clientiApi.remove(target.id);
-      list.mutate((items) => items.filter((c) => c.id !== target.id));
       setDeleteTarget(null);
-    } catch {
-      setFormError("Eroare la ștergere.");
+      setFormError(null);
+      // Ultimul rand de pe o pagina > 1: mergem inapoi o pagina (schimbarea paginii
+      // reincarca singura). Altfel reincarcam, ca totalul si offset-urile sa fie reale.
+      if (clienti().length <= 1 && pagination.page() > 1) pagination.setPage(pagination.page() - 1);
+      else await list.reload();
+    } catch (e: unknown) {
+      // Inchidem dialogul: mesajul e in bannerul paginii, sub overlay nu s-ar vedea.
+      setDeleteTarget(null);
+      setFormError(e instanceof Error && e.message ? e.message : "Eroare la ștergere.");
     } finally {
       setSaving(false);
     }
@@ -246,8 +256,9 @@ export default function Clienti() {
       setVehicoleMap((m) => ({ ...m, [target.clientId]: (m[target.clientId] ?? []).filter((v) => v.id !== target.v.id) }));
       setVDeleteTarget(null);
       setVEditId(null);
-    } catch {
-      setVError("Eroare la ștergere.");
+    } catch (e: unknown) {
+      setVDeleteTarget(null);
+      setVError(e instanceof Error && e.message ? e.message : "Eroare la ștergere.");
     } finally {
       setVSaving(false);
     }
@@ -284,6 +295,14 @@ export default function Clienti() {
   createFitToViewport({ scroll: () => scrollRef, page: () => pageRef });
   // La alta pagina sau alta cautare, lista porneste de sus.
   createEffect(on(() => pagination.params(), () => scrollRef?.scrollTo({ top: 0 }), { defer: true }));
+  // Totalul poate scadea sub pagina curenta (stergeri, si din alta sesiune):
+  // revenim pe ultima pagina care mai exista, nu ramanem pe una goala.
+  createEffect(() => {
+    const t = total();
+    if (t === undefined) return;
+    const last = Math.max(1, Math.ceil(t / pagination.pageSize()));
+    if (pagination.page() > last) pagination.setPage(last);
+  });
 
   return (
     <div class="page-content reception-page" ref={pageRef}>
@@ -336,7 +355,7 @@ export default function Clienti() {
       </Show>
 
       <Show when={!loading() && clienti().length === 0}>
-        <p class="cfg-hint">Niciun client înregistrat.</p>
+        <p class="cfg-hint">{pagination.page() > 1 ? "Niciun client pe această pagină." : "Niciun client înregistrat."}</p>
       </Show>
 
       <div class="cfg-location-list">
@@ -519,7 +538,7 @@ export default function Clienti() {
         </For>
       </div>
 
-      <Show when={!loading() && clienti().length > 0}>
+      <Show when={!loading() && (clienti().length > 0 || pagination.page() > 1)}>
         <Pagination api={pagination} total={total()} pageSizeOptions={[10, 25, 50, 100]} />
       </Show>
       </div>

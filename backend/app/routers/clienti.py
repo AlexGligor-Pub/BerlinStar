@@ -21,17 +21,21 @@ from sqlalchemy import func
 
 router = APIRouter()
 
+# Plafonul unui `integer` Postgres: `clienti.id` si OFFSET-ul sunt legate ca int4,
+# iar o valoare mai mare pica in driver (500) in loc sa fie refuzata cu 422.
+_INT4_MAX = 2_147_483_647
+
 
 @router.get("", response_model=Page[ClientRead])
 async def list_clienti(
-    last_id: int | None = None,
+    last_id: Annotated[int | None, Query(ge=0, le=_INT4_MAX)] = None,
     limit: int = 100,
     q: str | None = None,
     q_masina: str | None = None,
     tip: str | None = None,
     cui: str | None = None,
     # Annotated, nu `= Query(...)`: testele apeleaza functia direct si au nevoie de None ca default real.
-    offset: Annotated[int | None, Query(ge=0)] = None,
+    offset: Annotated[int | None, Query(ge=0, le=_INT4_MAX)] = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
