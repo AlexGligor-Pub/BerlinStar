@@ -465,9 +465,21 @@ export default function AccountsSection() {
     } finally { setDeleting(false); }
   }
 
+  const [restoreErr, setRestoreErr] = createSignal("");
+
   async function doRestore(a: Account) {
-    await adminFetch(`/api/accounts/${a.id}`, { method: "PATCH", body: JSON.stringify({ is_deleted: false }) });
-    loadAccounts();
+    setRestoreErr("");
+    try {
+      const res = await adminFetch(`/api/accounts/${a.id}/restore`, { method: "POST" });
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        setRestoreErr(`${a.name}: ${d.detail ?? "Eroare la restaurare."}`);
+        return;
+      }
+      loadAccounts();
+    } catch {
+      setRestoreErr(`${a.name}: Eroare de conexiune.`);
+    }
   }
 
   const columns: ColumnDef<Account>[] = [
@@ -607,6 +619,10 @@ export default function AccountsSection() {
           <button class="btn btn-sm btn-primary" onClick={openAdd}>+ Cont nou</button>
         </div>
       </div>
+
+      <Show when={restoreErr()}>
+        <p style="color:var(--danger);font-size:13px;margin:0 0 12px">{restoreErr()}</p>
+      </Show>
 
       {/* Loading / empty state */}
       <Show when={loading() && accounts().length === 0}>

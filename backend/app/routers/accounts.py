@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -186,3 +186,41 @@ async def patch_account(account_id: int, body: AccountUpdate, db: AsyncSession =
 @router.delete("/{account_id}", status_code=204)
 async def delete_account(account_id: int, db: AsyncSession = Depends(get_db)):
     await soft_delete(db, Account, account_id)
+
+
+@router.post("/{account_id}/restore", response_model=AccountRead)
+async def restore_account(account_id: int, db: AsyncSession = Depends(get_db)):
+    """Inversul stergerii. Stergerea schimba doar `is_deleted` (nu blocheaza
+    contul, nu atinge utilizatorii sau abonamentul), deci atat readucem —
+    `is_locked` ramane cum l-a lasat adminul."""
+    account = await db.get(Account, account_id)
+    if account is None:
+        raise HTTPException(404, "Contul nu a fost gasit.")
+    if not account.is_deleted:
+        # Dublu click sau lista veche in browser: contul e deja activ.
+        return account
+    # Login-ul si inregistrarea cauta contul dupa username/cod doar printre cele
+    # nesterse, deci doua conturi active cu acelasi identificator le-ar strica.
+    identic = [Account.username == account.username]
+    if account.code:
+        identic.append(Account.code == account.code)
+    conflict = (await db.execute(
+        select(Account.id)
+        .where(Account.id != account.id, Account.is_deleted == False, or_(*identic))
+        .limit(1)
+    )).scalar_one_or_none()
+    if conflict is not None:
+        raise HTTPException(
+            409,
+            "Username-ul sau codul firmei este folosit intre timp de alt cont. "
+            "Modifica-l pe celalalt cont, apoi incearca din nou.",
+        )
+    account.is_deleted = False
+    account.updated_at = datetime.now(timezone.utc)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(409, "Username-ul sau codul firmei este folosit intre timp de alt cont.")
+    await db.refresh(account)
+    return account
