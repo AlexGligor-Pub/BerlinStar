@@ -8,3 +8,5 @@ T = TypeVar("T")
 class Page(BaseModel, Generic[T]):
     items: list[T]
     next_cursor: int | None  # None = ultima pagina
+    # Completat doar de listele cu paginare numerotata (offset); restul il lasa None.
+    total: int | None = None

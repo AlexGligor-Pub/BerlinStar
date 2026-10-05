@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,15 +30,13 @@ async def list_clienti(
     q_masina: str | None = None,
     tip: str | None = None,
     cui: str | None = None,
+    # Annotated, nu `= Query(...)`: testele apeleaza functia direct si au nevoie de None ca default real.
+    offset: Annotated[int | None, Query(ge=0)] = None,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
     limit = min(limit, 200)
     stmt = select(Client).where(Client.account_id == account_id, Client.is_deleted == False)
-    if last_id is not None:
-        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
-        last_nume = select(Client.nume).where(Client.id == last_id).scalar_subquery()
-        stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
     if q:
         from sqlalchemy import or_
         stmt = stmt.where(or_(
@@ -61,9 +60,21 @@ async def list_clienti(
         stmt = stmt.where(Client.tip == tip)
     if cui:
         stmt = stmt.where(Client.cui == cui)
+
+    # Doua moduri de paginare: keyset pe `last_id` (cautari, listAll) si pagini
+    # numerotate pe `offset` (pagina Clienti). Totalul se numara doar in al doilea,
+    # peste exact aceleasi filtre — celelalte apeluri nu platesc un COUNT.
+    total: int | None = None
+    if last_id is not None:
+        # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
+        last_nume = select(Client.nume).where(Client.id == last_id).scalar_subquery()
+        stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
+    elif offset is not None:
+        total = (await db.execute(stmt.with_only_columns(func.count(Client.id)))).scalar_one()
+        stmt = stmt.offset(offset)
     stmt = stmt.order_by(Client.nume, Client.id).limit(limit + 1)
 
-    return await paginate(db, stmt, limit)
+    return await paginate(db, stmt, limit, total=total)
 
 
 async def _sync_client_plate_to_garage(db: AsyncSession, account_id: int, client: Client) -> None:
