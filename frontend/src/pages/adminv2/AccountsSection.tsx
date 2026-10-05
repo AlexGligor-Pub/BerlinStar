@@ -355,6 +355,7 @@ export default function AccountsSection() {
 
   const [deleteConfirmInput, setDeleteConfirmInput] = createSignal("");
   const [deleting, setDeleting] = createSignal(false);
+  const [deleteErr, setDeleteErr] = createSignal("");
 
   // ── Support tehnic / impersonate ─────────────────────────────────────────
   const [confirmSupportOpen, setConfirmSupportOpen] = createSignal(false);
@@ -457,11 +458,18 @@ export default function AccountsSection() {
 
   async function doDelete() {
     const a = previewAccount(); if (!a) return;
-    setDeleting(true);
+    setDeleting(true); setDeleteErr("");
     try {
-      await adminFetch(`/api/accounts/${a.id}`, { method: "DELETE" });
+      const res = await adminFetch(`/api/accounts/${a.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await readJsonSafe<ApiMessageBody>(res);
+        setDeleteErr(d.detail ?? "Eroare la ștergere.");
+        return;
+      }
       closePreview();
       loadAccounts();
+    } catch {
+      setDeleteErr("Eroare de conexiune.");
     } finally { setDeleting(false); }
   }
 
@@ -1051,7 +1059,7 @@ export default function AccountsSection() {
                   <button
                     class="btn btn-danger btn-sm"
                     style="margin-right:auto"
-                    onClick={() => { setDeleteConfirmInput(""); setPreviewMode("delete"); }}
+                    onClick={() => { setDeleteConfirmInput(""); setDeleteErr(""); setPreviewMode("delete"); }}
                   >
                     Șterge
                   </button>
@@ -1147,6 +1155,9 @@ export default function AccountsSection() {
                     onInput={(e) => setDeleteConfirmInput(e.currentTarget.value)}
                     autofocus
                   />
+                  <Show when={deleteErr()}>
+                    <p style="color:var(--danger);font-size:13px;margin:8px 0 0">{deleteErr()}</p>
+                  </Show>
                 </div>
                 <div class="sl-modal-footer">
                   <button class="btn btn-ghost btn-sm" onClick={() => setPreviewMode("view")}>Anulează</button>
