@@ -8,10 +8,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.anvelopa import Anvelopa
+from app.models.client import Client
+from app.models.cod_dot_anvelopa import CodDotAnvelopa
+from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.models.marca_anvelopa import MarcaAnvelopa
+from app.models.profil_anvelopa import ProfilAnvelopa
 from app.schemas.anvelopa import AnvelopaCreate, AnvelopaUpdate, AnvelopaRead
 from app.schemas.common import Page
+from app.utils.ownership import assert_owned
 from app.utils.soft_delete import soft_delete
+
+# Nomenclatoarele sunt per cont (marcile sunt globale si au verificarea lor).
+_NOMENCLATOARE = (
+    ("dimensiune_id", DimensiuneAnvelopa, "Dimensiunea"),
+    ("profil_id", ProfilAnvelopa, "Profilul"),
+    ("dot_id", CodDotAnvelopa, "Codul DOT"),
+)
 
 
 async def _assert_marca_aprobata(db: AsyncSession, marca_id: int | None) -> None:
@@ -88,6 +100,11 @@ async def create_anvelopa(
     account_id: int = Depends(get_account_id),
 ):
     await _assert_marca_aprobata(db, body.marca_id)
+    await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
+    # allow_deleted: „Copy" si sugestia din montaj retrimit id-uri de nomenclator
+    # sterse intre timp din contul propriu; filtrul pe cont ramane.
+    for field, model, what in _NOMENCLATOARE:
+        await assert_owned(db, model, getattr(body, field), account_id, what=what, allow_deleted=True)
     anv = Anvelopa(**body.model_dump(), account_id=account_id)
     db.add(anv)
     await db.commit()
@@ -131,6 +148,11 @@ async def update_anvelopa(
     payload = body.model_dump(exclude_unset=True)
     if "marca_id" in payload:
         await _assert_marca_aprobata(db, payload["marca_id"])
+    # Doar id-urile care se schimba: o anvelopa veche trebuie sa ramana editabila
+    # cu id-urile pe care le are deja.
+    for field, model, what in _NOMENCLATOARE:
+        if field in payload and payload[field] != getattr(anv, field):
+            await assert_owned(db, model, payload[field], account_id, what=what, allow_deleted=True)
     for k, v in payload.items():
         setattr(anv, k, v)
     anv.updated_at = datetime.now(timezone.utc)

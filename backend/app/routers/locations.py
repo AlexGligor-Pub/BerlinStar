@@ -12,8 +12,12 @@ from app.dependencies import get_account_id, get_settings_account_id
 from app.models.location import Location
 from app.models.department import Department
 from app.models.employee import Employee
+from app.models.disclaimer import Disclaimer
+from app.models.register import Register
+from app.models.company import Company
 from app.schemas.location import LocationCreate, LocationRead, LocationDetail, IdsBody
 from app.schemas.common import Page
+from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 from app.utils.storage import upload_image as storage_upload_image, delete_image_by_url, validate_image
@@ -51,6 +55,23 @@ async def _get_with_relations(db: AsyncSession, location_id: int, account_id: in
     return loc
 
 
+async def _validate_links(
+    db: AsyncSession, body: LocationCreate, account_id: int, current: Location | None = None
+) -> None:
+    """Disclaimerul, registrul si firma trebuie sa fie ale contului. La editare
+    verificam doar ce se schimba: o locatie veche care arata spre un rand sters
+    intre timp trebuie sa se poata salva in continuare."""
+    for field, model, what in (
+        ("disclaimer_id", Disclaimer, "Disclaimerul"),
+        ("register_id", Register, "Registrul"),
+        ("company_id", Company, "Firma"),
+    ):
+        value = getattr(body, field)
+        if current is not None and value == getattr(current, field):
+            continue
+        await assert_owned(db, model, value, account_id, what=what)
+
+
 @router.get("", response_model=Page[LocationDetail])
 async def list_locations(
     last_id: int | None = None,
@@ -83,6 +104,7 @@ async def create_location(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_settings_account_id),
 ):
+    await _validate_links(db, body, account_id)
     location = Location(
         name=body.name,
         description=body.description,
@@ -117,6 +139,7 @@ async def update_location(
     location = await db.get(Location, location_id)
     if location is None or location.account_id != account_id or location.is_deleted:
         raise HTTPException(404, "Locația nu a fost găsită.")
+    await _validate_links(db, body, account_id, current=location)
     location.name = body.name
     location.description = body.description
     location.disclaimer_id = body.disclaimer_id

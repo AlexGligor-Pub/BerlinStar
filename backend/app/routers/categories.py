@@ -10,9 +10,11 @@ from app.database import get_db
 # app/permissions.py pentru matricea completa.
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.category import Category
+from app.models.department import Department
 from app.schemas.category import CategoryCreate, CategoryUpdate, CategoryRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
@@ -54,6 +56,7 @@ async def create_category(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_settings_account_id),
 ):
+    await assert_owned(db, Department, body.department_id, account_id, what="Departamentul")
     category = Category(**body.model_dump(), account_id=account_id)
     db.add(category)
     await db.commit()
@@ -83,6 +86,10 @@ async def update_category(
     cat = await db.get(Category, category_id)
     if cat is None or cat.is_deleted or cat.account_id != account_id:
         raise HTTPException(404, "Categoria nu a fost gasita.")
+    # Doar la schimbare: o categorie veche, cu departamentul sters intre timp,
+    # trebuie sa ramana editabila.
+    if body.department_id != cat.department_id:
+        await assert_owned(db, Department, body.department_id, account_id, what="Departamentul")
     for k, v in body.model_dump().items():
         setattr(cat, k, v)
     cat.updated_at = datetime.now(timezone.utc)
@@ -101,7 +108,13 @@ async def patch_category(
     cat = await db.get(Category, category_id)
     if cat is None or cat.is_deleted or cat.account_id != account_id:
         raise HTTPException(404, "Categoria nu a fost gasita.")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    # department_id e NOT NULL: un null explicit inseamna „nu schimba".
+    if data.get("department_id") is None:
+        data.pop("department_id", None)
+    elif data["department_id"] != cat.department_id:
+        await assert_owned(db, Department, data["department_id"], account_id, what="Departamentul")
+    for k, v in data.items():
         setattr(cat, k, v)
     cat.updated_at = datetime.now(timezone.utc)
     await db.commit()

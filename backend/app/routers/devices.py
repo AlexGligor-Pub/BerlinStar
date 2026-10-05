@@ -8,8 +8,10 @@ from app.database import get_db
 # prima pornire. Redenumirea si stergerea sunt insa administrative.
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.device import Device
+from app.models.location import Location
 from app.schemas.device import DeviceCreate, DeviceRead
 from app.schemas.common import Page
+from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
 
 router = APIRouter()
@@ -43,6 +45,7 @@ async def create_device(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
     device = Device(
         name=body.name,
         account_id=account_id,
@@ -76,6 +79,10 @@ async def update_device(
     device = await db.get(Device, device_id)
     if device is None or device.account_id != account_id:
         raise HTTPException(404, "Dispozitivul nu a fost găsit.")
+    # Doar la schimbare: o statie legata de o locatie stearsa intre timp trebuie
+    # sa poata fi redenumita in continuare.
+    if body.location_id != device.location_id:
+        await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
     device.name = body.name
     device.location_id = body.location_id
     await db.commit()

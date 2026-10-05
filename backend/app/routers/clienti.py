@@ -36,7 +36,14 @@ async def list_clienti(
     stmt = select(Client).where(Client.account_id == account_id, Client.is_deleted == False)
     if last_id is not None:
         # Keyset aliniat cu ORDER BY (nume, id); cursorul ramane id-ul ultimului rand.
-        last_nume = select(Client.nume).where(Client.id == last_id).scalar_subquery()
+        # Filtrul pe cont e obligatoriu: altfel numele unui client al ALTUI cont ar
+        # fi folosit ca reper, iar pagina intoarsa ar trada unde se sorteaza el.
+        # Cursor strain/inexistent -> reper NULL -> pagina goala.
+        last_nume = (
+            select(Client.nume)
+            .where(Client.id == last_id, Client.account_id == account_id)
+            .scalar_subquery()
+        )
         stmt = stmt.where(tuple_(Client.nume, Client.id) > tuple_(last_nume, last_id))
     if q:
         from sqlalchemy import or_

@@ -22,6 +22,7 @@ from app.schemas.receipt import ReceiptCreate, ReceiptPatch, ReceiptContentPatch
 from app.models.client import Client
 from app.models.item import Item, ItemType
 from app.models.location import Location
+from app.models.programare import Programare
 from app.models.register import Register
 from app.models.company import Company
 from app.models.disclaimer import Disclaimer
@@ -32,6 +33,7 @@ from app.efactura.models import EFacturaRecord
 from app.schemas.vehicol import VehicolCreate, VehicolRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
+from app.utils.ownership import assert_all_owned, assert_owned
 from app.utils.plate import normalize_plate, normalized_plate_column
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
@@ -200,7 +202,7 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
     for emp_id in employee_ids:
         await db.execute(
             update(Employee)
-            .where(Employee.id == emp_id)
+            .where(Employee.id == emp_id, Employee.account_id == account_id)
             .values(current_target_accumulation=totals.get(emp_id, Decimal("0.00")))
         )
 
@@ -340,7 +342,15 @@ def _serialize(receipt: Receipt, efactura_rec: EFacturaRecord | None = None) -> 
     data["receipt_items"] = [
         ReceiptItemRead.from_orm_item(it).model_dump() for it in receipt.receipt_items
     ]
+    # Legaturi salvate inainte de verificarea de apartenenta pot arata spre randuri
+    # ale altui cont: id-ul ramane pe bon, dar datele acelui cont nu se afiseaza.
+    for it, row in zip(receipt.receipt_items, data["receipt_items"]):
+        if it.employee is not None and it.employee.account_id != receipt.account_id:
+            row["employee_name"] = None
+            row["employee_target_pct"] = None
     c = receipt.client
+    if c is not None and c.account_id != receipt.account_id:
+        c = None
     data["client_nume"]         = c.nume          if c else None
     data["client_cui"]          = c.cui           if c else None
     data["client_adresa"]       = c.adresa        if c else None
@@ -478,6 +488,28 @@ async def create_receipt(
     # deci referinta e strict catalogul.
     await _assert_may_change_prices(db, account_id, None, body.items, ctx)
     _verify_total_against_items(body.items, body.total)
+    # Id-urile vin din payload: fiecare trebuie sa fie al contului inainte sa fie
+    # salvat, altfel bonul ar lega (si ar afisa prin relatii) randuri ale altui cont.
+    await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
+    # Locatia si programarea proprii raman acceptate si dupa stergere: stergerea
+    # locatiei nu dezleaga dispozitivele, deci POS-ul ii trimite in continuare
+    # id-ul la fiecare bon, iar o programare poate fi stearsa cat timp bonul
+    # pornit din ea e inca deschis in POS. Filtrul pe cont se aplica oricum.
+    await assert_owned(
+        db, Programare, body.programare_id, account_id, what="Programarea", allow_deleted=True,
+    )
+    await assert_owned(
+        db, Location, body.location_id, account_id, what="Locatia", allow_deleted=True,
+    )
+    await assert_all_owned(
+        db, Employee, {it.employee_id for it in body.items}, account_id, what="Angajatul",
+    )
+    # Articolele sterse raman acceptate: POS-ul lucreaza cu un catalog incarcat
+    # mai devreme, iar linia isi pastreaza oricum propria denumire si propriul pret.
+    await assert_all_owned(
+        db, Item, {it.item_id for it in body.items}, account_id,
+        what="Articolul", allow_deleted=True,
+    )
     receipt = Receipt(
         account_id=account_id,
         titlu=body.titlu,
@@ -692,11 +724,23 @@ async def patch_receipt_content(
 
     _verify_total_against_items(body.items, body.total)
 
-    old_emp_ids = {
-        eid for eid in
-        (await db.execute(select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id))).scalars().all()
-        if eid
-    }
+    old_links = (await db.execute(
+        select(ReceiptItem.employee_id, ReceiptItem.item_id).where(ReceiptItem.receipt_id == receipt_id)
+    )).all()
+    old_emp_ids = {r.employee_id for r in old_links if r.employee_id}
+    old_item_ids = {r.item_id for r in old_links if r.item_id}
+
+    # Liniile se sterg si se reinsereaza, deci clientul retrimite si id-urile deja
+    # aflate pe bon. Verificam doar ce e nou: o linie veche legata de un angajat
+    # sau articol sters intre timp trebuie sa se poata salva in continuare.
+    await assert_all_owned(
+        db, Employee, {it.employee_id for it in body.items} - old_emp_ids, account_id,
+        what="Angajatul",
+    )
+    await assert_all_owned(
+        db, Item, {it.item_id for it in body.items} - old_item_ids, account_id,
+        what="Articolul", allow_deleted=True,
+    )
 
     # Daca bonul e platit, intoarcem stocul pentru liniile vechi inainte de a le sterge,
     # apoi vom reaplica scaderea pentru liniile noi mai jos.
@@ -808,6 +852,10 @@ async def patch_receipt_client(
     if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost găsit.")
     await _assert_not_locked(db, receipt_id)
+    # Doar la schimbare: un bon vechi legat de un client sters intre timp se
+    # poate salva in continuare cu acelasi client.
+    if body.client_id != receipt.client_id:
+        await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
     receipt.client_id = body.client_id
     if body.client_id:
         vehicol = (await db.execute(

@@ -12,10 +12,12 @@ from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
 from app.models.account import Account
 from app.models.leave import Leave, LeaveType, LeaveStatus, HOUR_BASED_TYPES
+from app.models.location import Location
 from app.schemas.leave import (
     LeaveCreate, LeavePatch, LeaveRead, LeaveBalance, LeaveTypeBreakdown, RomanianHoliday,
     LeaveConsent, LeaveApprove,
 )
+from app.utils.ownership import assert_owned
 from app.utils.romanian_holidays import count_working_days, get_romanian_holidays
 from app.utils.soft_delete import soft_delete
 
@@ -33,7 +35,10 @@ def _with_relations():
 def _serialize(l: Leave) -> LeaveRead:
     # Fallback la prima locatie a angajatului daca leave-ul nu are una proprie.
     effective_loc_id = l.location_id
-    effective_loc_name = l.location.name if l.location else None
+    # Numele se expune doar pentru locatia propriului cont: un rand salvat inainte
+    # de verificarea de apartenenta poate indica locatia altui cont.
+    own_location = l.location is not None and l.location.account_id == l.account_id
+    effective_loc_name = l.location.name if own_location else None
     if effective_loc_id is None and l.employee and l.employee.locations:
         first_loc = l.employee.locations[0]
         effective_loc_id = first_loc.id
@@ -361,6 +366,7 @@ async def create_leave(
     account_id: int = Depends(get_account_id),
 ) -> LeaveRead:
     emp = await _validate_employee(db, account_id, body.employee_id)
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
     now = datetime.now(timezone.utc)
 
     location_id = body.location_id
@@ -443,6 +449,10 @@ async def update_leave(
         raise HTTPException(404, "Cererea nu a fost gasita.")
 
     data = body.model_dump(exclude_unset=True)
+    # Doar o locatie NOUA se verifica: o cerere veche, legata de o locatie stearsa
+    # intre timp, trebuie sa ramana editabila.
+    if "location_id" in data and data["location_id"] != l.location_id:
+        await assert_owned(db, Location, data["location_id"], account_id, what="Locatia")
     for k, v in data.items():
         setattr(l, k, v)
 

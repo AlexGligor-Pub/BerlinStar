@@ -8,9 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id, get_settings_account_id
 from app.models.client import Client
+from app.models.department import Department
 from app.models.employee import Employee
+from app.models.location import Location
 from app.models.programare import Programare, ProgramareStatus
 from app.schemas.programare import ProgramareCreate, ProgramarePatch, ProgramareRead
+from app.utils.ownership import assert_owned
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
@@ -20,19 +23,26 @@ def _with_relations():
     return [selectinload(Programare.client), selectinload(Programare.department), selectinload(Programare.employee)]
 
 
+def _own(p: Programare, rel):
+    # Randurile vechi pot arata spre un client/departament/angajat al altui cont
+    # (id-urile nu erau verificate la salvare): numele lor nu se afiseaza.
+    return rel if rel is not None and rel.account_id == p.account_id else None
+
+
 def _serialize(p: Programare) -> ProgramareRead:
+    client, department, employee = _own(p, p.client), _own(p, p.department), _own(p, p.employee)
     return ProgramareRead(
         id=p.id,
         account_id=p.account_id,
         titlu=p.titlu,
         notite=p.notite,
         client_id=p.client_id,
-        client_nume=p.client.nume if p.client else None,
+        client_nume=client.nume if client else None,
         location_id=p.location_id,
         department_id=p.department_id,
-        department_name=p.department.name if p.department else None,
+        department_name=department.name if department else None,
         employee_id=p.employee_id,
-        employee_name=p.employee.name if p.employee else None,
+        employee_name=employee.name if employee else None,
         start_time=p.start_time,
         end_time=p.end_time,
         status=p.status,
@@ -103,7 +113,9 @@ async def list_programari(
         stmt = stmt.where(
             or_(
                 Programare.titlu.ilike(pattern),
-                Programare.client.has(Client.nume.ilike(pattern)),
+                Programare.client.has(
+                    (Client.account_id == account_id) & Client.nume.ilike(pattern)
+                ),
             )
         )
     stmt = stmt.order_by(Programare.start_time, Programare.id).limit(limit).offset(offset)
@@ -121,6 +133,9 @@ async def create_programare(
     if body.end_time <= body.start_time:
         raise HTTPException(400, "end_time trebuie sa fie dupa start_time.")
     await _validate_employee(db, account_id, body.employee_id)
+    await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
+    await assert_owned(db, Department, body.department_id, account_id, what="Departamentul")
 
     p = Programare(**body.model_dump(), account_id=account_id)
     db.add(p)
@@ -156,7 +171,14 @@ async def update_programare(
         raise HTTPException(404, "Programarea nu a fost gasita.")
 
     data = body.model_dump(exclude_unset=True)
-    await _validate_employee(db, account_id, data.get("employee_id"))
+    # Verificam doar id-urile care se schimba: o programare veche, legata de un
+    # client/departament/angajat sters intre timp, trebuie sa ramana editabila.
+    if data.get("employee_id") != p.employee_id:
+        await _validate_employee(db, account_id, data.get("employee_id"))
+    if data.get("client_id") != p.client_id:
+        await assert_owned(db, Client, data.get("client_id"), account_id, what="Clientul")
+    if data.get("department_id") != p.department_id:
+        await assert_owned(db, Department, data.get("department_id"), account_id, what="Departamentul")
     for k, v in data.items():
         setattr(p, k, v)
 

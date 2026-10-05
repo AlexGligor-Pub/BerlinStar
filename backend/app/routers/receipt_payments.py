@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.rate_limit import limiter
+from app.models.employee import Employee
 from app.models.receipt import PayMethod, Receipt
 from app.routers.receipts import _assert_not_locked
 from app.schemas.receipt_payment import (
@@ -27,6 +28,7 @@ from app.schemas.receipt_payment import (
     PaymentSummary,
 )
 from app.services import payments_service as svc
+from app.utils.ownership import assert_owned
 
 router = APIRouter()
 
@@ -89,6 +91,9 @@ async def add_payment(
     account_id: int = Depends(get_account_id),
 ):
     await _assert_open(db, account_id, receipt_id)
+    # employee_id vine din body: fara verificare s-ar putea lega (si citi, prin
+    # employee_name) un angajat al altui cont.
+    await assert_owned(db, Employee, body.employee_id, account_id, what="Angajatul")
     await svc.add_payment(
         db,
         account_id=account_id,

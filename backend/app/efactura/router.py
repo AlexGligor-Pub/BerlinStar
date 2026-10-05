@@ -85,16 +85,30 @@ async def _require_company_access(
     company = (
         await db.execute(select(Company).where(Company.id == company_id))
     ).scalar_one_or_none()
-    if company is None:
-        raise HTTPException(404, "Compania nu exista.")
-    # Super-admin always has access; otherwise must match account_id
-    if company.account_id != account_id:
-        # check admin flag via account username (simple gate matching admin.py)
+    if company is not None and company.account_id == account_id and not company.is_deleted:
+        return company
+    if company is not None:
+        # Super-admin always has access (simple gate matching admin.py)
         from app.models.account import Account
         acc = (await db.execute(select(Account).where(Account.id == account_id))).scalar_one_or_none()
-        if acc is None or acc.username != "admin":
-            raise HTTPException(403, "Acces interzis la aceasta companie.")
-    return company
+        if acc is not None and acc.username == "admin":
+            return company
+    # Acelasi raspuns pentru „nu exista", „e a altui cont" si „e stearsa": cu 404 vs
+    # 403 se puteau enumera id-urile companiilor celorlalte conturi.
+    raise HTTPException(404, "Compania nu exista.")
+
+
+def _own_client(receipt: Receipt) -> Client | None:
+    """Clientul bonului, doar daca e al aceluiasi cont.
+
+    `Receipt.client` nu filtreaza pe cont: un bon ramas legat de clientul altui
+    cont (inainte de verificarea de la scriere) i-ar pune numele, CUI/CNP-ul si
+    adresa in XML. Clientul sters intre timp ramane valabil — factura lui exista.
+    """
+    client = receipt.client
+    if client is None or client.account_id != receipt.account_id:
+        return None
+    return client
 
 
 # ---------- Self-service endpoints (per-account) ----------
@@ -363,7 +377,7 @@ async def validate_receipt(
     if company is None:
         raise HTTPException(400, "Nu am gasit compania emitenta pentru aceasta factura.")
 
-    client = receipt.client
+    client = _own_client(receipt)
 
     errors: list[ValidationIssue] = []
     warnings: list[ValidationIssue] = []
@@ -403,7 +417,7 @@ async def preview_receipt_xml(
         raise HTTPException(400, "Nu am gasit compania emitenta.")
 
     try:
-        payload = build_invoice_payload(receipt, company, receipt.client, raise_on_error=True)
+        payload = build_invoice_payload(receipt, company, _own_client(receipt), raise_on_error=True)
     except AnafValidationError as exc:
         raise HTTPException(422, "Validare esuata: " + "; ".join(exc.issues))
 
@@ -440,14 +454,15 @@ async def audit_mapping(
 
     out: list[MappingAuditEntry] = []
     for r in receipts:
+        client = _own_client(r)
         try:
-            payload = build_invoice_payload(r, company, r.client, raise_on_error=False)
+            payload = build_invoice_payload(r, company, client, raise_on_error=False)
             issues = list(payload.issues)
         except AnafValidationError as exc:
             issues = list(exc.issues)
 
         # Verificari sumare pentru audit
-        if r.client is None:
+        if client is None:
             issues.append("Client lipseste pe factura.")
         if not r.receipt_items:
             issues.append("Factura nu are linii.")
@@ -476,16 +491,29 @@ async def _resolve_supplier_company(
     Logica:
     - Daca receipt.location_id e setat -> Location.company_id
     - Altfel prima companie a account-ului
+
+    Locatia si compania se cauta DOAR in contul apelantului: cu un location_id sau
+    company_id strain, XML-ul ar contine CUI-ul, adresa si IBAN-ul altui cont.
     """
     if receipt.location_id:
         from app.models.location import Location
 
         loc = (
-            await db.execute(select(Location).where(Location.id == receipt.location_id))
+            await db.execute(
+                select(Location).where(
+                    Location.id == receipt.location_id,
+                    Location.account_id == account_id,
+                )
+            )
         ).scalar_one_or_none()
         if loc and loc.company_id:
             comp = (
-                await db.execute(select(Company).where(Company.id == loc.company_id))
+                await db.execute(
+                    select(Company).where(
+                        Company.id == loc.company_id,
+                        Company.account_id == account_id,
+                    )
+                )
             ).scalar_one_or_none()
             if comp is not None:
                 return comp
@@ -525,7 +553,9 @@ async def upload_receipt(
         raise HTTPException(404, "Receipt-ul nu exista.")
     if receipt.factura_nr == 0:
         raise HTTPException(400, "Bonul nu are numar de factura alocat. Apasa 'Factureaza' mai intai.")
-    if receipt.client_id is None:
+    # Un client al altui cont (bon legat inainte de verificarea de la scriere) e
+    # tratat ca lipsa: datele lui nu au voie sa plece la ANAF pe factura noastra.
+    if receipt.client_id is None or _own_client(receipt) is None:
         raise HTTPException(400, "Bonul nu are client asociat. Aloca un client inainte de trimitere.")
 
     existing = (
@@ -612,6 +642,8 @@ async def retry_receipt(
     ).scalar_one_or_none()
     if receipt is None:
         raise HTTPException(404, "Receipt-ul nu exista.")
+    if receipt.client_id is not None and _own_client(receipt) is None:
+        raise HTTPException(400, "Bonul nu are client asociat. Aloca un client inainte de trimitere.")
 
     try:
         rec = await efactura_service.mark_pending_upload(db, receipt)

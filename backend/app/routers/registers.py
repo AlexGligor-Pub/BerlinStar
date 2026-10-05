@@ -9,9 +9,11 @@ from app.database import get_db
 # operational depinde de ea), dar MODIFICAREA e admin + manager. Vezi
 # app/permissions.py pentru matricea completa.
 from app.dependencies import get_account_id, get_settings_account_id
+from app.models.company import Company
 from app.models.register import Register
 from app.schemas.register import RegisterCreate, RegisterUpdate, RegisterRead
 from app.schemas.common import Page
+from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
 
@@ -47,6 +49,7 @@ async def create_register(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_settings_account_id),
 ):
+    await assert_owned(db, Company, body.company_id, account_id, what="Firma")
     r = Register(**body.model_dump(), account_id=account_id)
     db.add(r)
     await db.commit()
@@ -76,7 +79,12 @@ async def patch_register(
     r = await db.get(Register, register_id)
     if r is None or r.account_id != account_id or r.is_deleted:
         raise HTTPException(404, "Registrul nu a fost găsit.")
-    for k, v in body.model_dump(exclude_unset=True).items():
+    data = body.model_dump(exclude_unset=True)
+    # Doar cand firma se schimba: un registru vechi, legat de o firma intre timp
+    # stearsa, trebuie sa ramana editabil.
+    if "company_id" in data and data["company_id"] != r.company_id:
+        await assert_owned(db, Company, data["company_id"], account_id, what="Firma")
+    for k, v in data.items():
         setattr(r, k, v)
     r.updated_at = datetime.now(timezone.utc)
     await db.commit()

@@ -61,13 +61,25 @@ def _add_business_days(start: date, days: int) -> date:
 async def _resolve_company_for_receipt(
     db: AsyncSession, receipt: Receipt
 ) -> Company | None:
+    # Locatia si compania se cauta DOAR in contul bonului: cu un location_id sau
+    # company_id strain, factura ar pleca la ANAF cu tokenul si CUI-ul altui cont.
     if receipt.location_id:
         loc = (
-            await db.execute(select(Location).where(Location.id == receipt.location_id))
+            await db.execute(
+                select(Location).where(
+                    Location.id == receipt.location_id,
+                    Location.account_id == receipt.account_id,
+                )
+            )
         ).scalar_one_or_none()
         if loc and loc.company_id:
             comp = (
-                await db.execute(select(Company).where(Company.id == loc.company_id))
+                await db.execute(
+                    select(Company).where(
+                        Company.id == loc.company_id,
+                        Company.account_id == receipt.account_id,
+                    )
+                )
             ).scalar_one_or_none()
             if comp is not None:
                 return comp
@@ -104,6 +116,19 @@ async def get_or_create_record(
         )
     ).scalar_one_or_none()
     if rec is not None:
+        if rec.company_id != company.id:
+            # Record vechi creat pe compania altui cont (inainte de filtrul pe cont):
+            # il readucem pe compania bonului, altfel reincercarea ar ramane vizibila
+            # in lista celuilalt cont. O companie proprie schimbata intre timp ramane.
+            owned = await db.scalar(
+                select(Company.id).where(
+                    Company.id == rec.company_id,
+                    Company.account_id == receipt.account_id,
+                )
+            )
+            if owned is None:
+                rec.company_id = company.id
+                rec.cui = str(company.cui)
         return rec
 
     issue_date = receipt.created_at.date() if hasattr(receipt.created_at, "date") else date.today()
