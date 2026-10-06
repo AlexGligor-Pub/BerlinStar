@@ -1,6 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { adminFetch } from "./admin-auth";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import Modal from "../../components/ui/Modal";
 
@@ -61,7 +61,7 @@ export default function SubscriptionAccountsSection() {
     });
     if (!res.ok) {
       const d = await readJsonSafe<{ detail?: string }>(res);
-      notify(d.detail || "Eroare.", "error");
+      notify(parseApiError(d.detail, "Eroare."), "error");
       return;
     }
     notify("Scadenţa actualizată.", "success");

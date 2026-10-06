@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount, type JSX } from "solid-js";
 import { A, useLocation } from "@solidjs/router";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, parseApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import { EFacturaProvider, type EFacturaCompany } from "./CompanyContext";
 
@@ -54,7 +54,7 @@ export default function EFacturaLayout(props: { children?: JSX.Element }) {
         notify(`Sincronizare OK — ${d.messages ?? 0} mesaje (${d.inserted ?? 0} noi).`, "success");
         window.dispatchEvent(new CustomEvent("efactura:refresh"));
       } else {
-        notify(d.detail ?? "Sync eșuat.", "error");
+        notify(parseApiError(d.detail, "Sync eșuat."), "error");
       }
     } catch {
       notify("Eroare de rețea la sync.", "error");

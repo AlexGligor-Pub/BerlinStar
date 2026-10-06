@@ -1,6 +1,6 @@
 import { Show, For, createSignal } from "solid-js";
 import Modal from "../../components/ui/Modal";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, parseApiError } from "../../utils/api";
 import { generateFactura } from "../../utils/generateDocuments";
 import type { DocContext } from "../../utils/generateDocuments";
 import { notify } from "../../store/notificationsStore";
@@ -43,7 +43,7 @@ export default function FacturaRapidaView(props: Props) {
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
-      notify(j.detail ?? "Eroare la alocarea numarului.", "error");
+      notify(parseApiError(j.detail, "Eroare la alocarea numarului."), "error");
       return null;
     }
     const ctx: DocContext = await res.json();

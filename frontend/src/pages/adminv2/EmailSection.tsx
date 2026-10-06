@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onMount, createEffect, on } from "solid-js";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
@@ -143,7 +143,7 @@ export default function EmailSection() {
         setSmtpMsg({ ok: true, text: "Setări salvate." });
       } else {
         const d = await readJsonSafe<ApiMessageBody>(r);
-        setSmtpMsg({ ok: false, text: d.detail ?? "Eroare la salvare." });
+        setSmtpMsg({ ok: false, text: parseApiError(d.detail, "Eroare la salvare.") });
       }
     } catch {
       setSmtpMsg({ ok: false, text: "Eroare de conexiune." });
@@ -165,7 +165,7 @@ export default function EmailSection() {
         setTestMsg({ ok: true, text: d.message ?? "Email trimis." });
         loadLogs();
       } else {
-        setTestMsg({ ok: false, text: d.detail ?? "Eroare la trimitere." });
+        setTestMsg({ ok: false, text: parseApiError(d.detail, "Eroare la trimitere.") });
         loadLogs();
       }
     } catch {
@@ -197,7 +197,7 @@ export default function EmailSection() {
       } else {
         setTmplMsg((prev) => ({
           ...prev,
-          [scenario]: { ok: false, text: d.detail ?? "Eroare." },
+          [scenario]: { ok: false, text: parseApiError(d.detail, "Eroare.") },
         }));
       }
     } catch {
@@ -218,7 +218,7 @@ export default function EmailSection() {
         setResendMsg({ id: log.id, ok: true, text: "Email retrims cu succes." });
         loadLogs();
       } else {
-        setResendMsg({ id: log.id, ok: false, text: d.detail ?? "Eroare la retrimitere." });
+        setResendMsg({ id: log.id, ok: false, text: parseApiError(d.detail, "Eroare la retrimitere.") });
       }
     } catch {
       setResendMsg({ id: log.id, ok: false, text: "Eroare de conexiune." });

@@ -3,7 +3,7 @@ import {
   createSolidTable, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
 import { fmtDate } from "./shared";
@@ -107,7 +107,7 @@ export default function RotiMasinaAnvelopeSection() {
     try {
       const res = await adminFetch(`/api/admin/marci-anvelope/${id}/approve`, { method: "POST" });
       if (!res.ok) {
-        setActionErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la aprobare.");
+        setActionErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la aprobare."));
         return;
       }
       await Promise.all([loadCounts(), loadRows(true)]);
@@ -119,7 +119,7 @@ export default function RotiMasinaAnvelopeSection() {
     try {
       const res = await adminFetch(`/api/admin/marci-anvelope/${id}/reject`, { method: "POST" });
       if (!res.ok) {
-        setActionErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la respingere.");
+        setActionErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la respingere."));
         return;
       }
       await Promise.all([loadCounts(), loadRows(true)]);
@@ -143,7 +143,7 @@ export default function RotiMasinaAnvelopeSection() {
         body: JSON.stringify({ nume: name }),
       });
       if (!res.ok) {
-        setAddErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare.");
+        setAddErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la salvare."));
         return;
       }
       setAddOpen(false);
@@ -176,7 +176,7 @@ export default function RotiMasinaAnvelopeSection() {
         body: JSON.stringify({ nume: name }),
       });
       if (!res.ok) {
-        setEditErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare.");
+        setEditErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la salvare."));
         return;
       }
       setEditTarget(null);
@@ -194,7 +194,7 @@ export default function RotiMasinaAnvelopeSection() {
     try {
       const res = await adminFetch(`/api/admin/marci-anvelope/${t.id}`, { method: "DELETE" });
       if (!res.ok) {
-        setActionErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la ștergere.");
+        setActionErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la ștergere."));
         // Bannerul de eroare e in pagina, sub modal: il inchidem ca mesajul sa se vada.
         // Reincarcarea scoate din lista o marca stearsa intre timp din alt tab.
         setDelTarget(null);

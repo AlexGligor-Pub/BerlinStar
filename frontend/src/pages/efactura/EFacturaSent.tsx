@@ -3,7 +3,7 @@ import {
   createSolidTable, flexRender, getCoreRowModel,
   type ColumnDef,
 } from "@tanstack/solid-table";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, readApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import Pagination from "../../components/data/Pagination";
 import { createPagination } from "../../hooks/createPagination";
@@ -127,8 +127,7 @@ export default function EFacturaSent() {
     try {
       const res = await apiFetch(`/api/efactura/receipts/${row.receipt_id}/retry`, { method: "POST" });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        notify(j.detail ?? `Eroare ${res.status}`, "error");
+        notify(await readApiError(res, `Eroare ${res.status}`), "error");
         return;
       }
       notify("Factura a fost retrimisa catre ANAF.", "info");
@@ -147,8 +146,7 @@ export default function EFacturaSent() {
     try {
       const res = await apiFetch(`/api/efactura/companies/${cid}/sent/sync`, { method: "POST" });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        notify(j.detail ?? `Eroare ${res.status}`, "error");
+        notify(await readApiError(res, `Eroare ${res.status}`), "error");
         return;
       }
       const data = await res.json();

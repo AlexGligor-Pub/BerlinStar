@@ -1,5 +1,5 @@
 import { Show, createSignal } from "solid-js";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { adminUpload } from "./admin-auth";
 import { compressToPng } from "./shared";
@@ -43,7 +43,7 @@ export default function ImageUploadDialog(props: {
       const res = await adminUpload(props.endpoint, fd);
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setErr(d.detail ?? "Eroare la upload.");
+        setErr(parseApiError(d.detail, "Eroare la upload."));
         return;
       }
       const data = await res.json() as { url: string };

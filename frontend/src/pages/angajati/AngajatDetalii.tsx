@@ -1,6 +1,6 @@
 import { For, Show, createSignal, onMount } from "solid-js";
 import { useNavigate, useParams } from "@solidjs/router";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, readApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 
 /** Dosar de personal (date legale) — toate campurile optionale. */
@@ -173,8 +173,7 @@ export default function AngajatDetalii() {
         body: JSON.stringify(form()),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `HTTP ${res.status}`);
+        throw new Error(await readApiError(res, `HTTP ${res.status}`));
       }
       const d = await res.json();
       setHasDetails(true);

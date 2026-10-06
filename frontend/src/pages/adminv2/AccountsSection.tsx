@@ -3,7 +3,7 @@ import {
   createSolidTable, flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import { debounce } from "../../utils/debounce";
 import { useIsMobile } from "../../hooks/createMediaQuery";
 import type { ApiMessageBody } from "../../types";
@@ -191,7 +191,7 @@ export default function AccountsSection() {
         await loadEfactCompanies();
         setRefreshMsg({ id: companyId, ok: true, text: body.detail ?? "Token refreshat." });
       } else {
-        setRefreshMsg({ id: companyId, ok: false, text: body.detail ?? "Eroare la refresh." });
+        setRefreshMsg({ id: companyId, ok: false, text: parseApiError(body.detail, "Eroare la refresh.") });
       }
     } catch {
       setRefreshMsg({ id: companyId, ok: false, text: "Eroare de conexiune." });
@@ -243,7 +243,7 @@ export default function AccountsSection() {
         is_locked: f.is_locked,
       };
       const res = await adminFetch("/api/accounts", { method: "POST", body: JSON.stringify(body) });
-      if (!res.ok) { setAddErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
+      if (!res.ok) { setAddErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la salvare.")); return; }
       const created: Account = await res.json();
       let avertisment = "";
       if (f.is_locked && f.locked_at) {
@@ -373,7 +373,7 @@ export default function AccountsSection() {
       const res = await adminFetch(`/api/admin/accounts/${a.id}/impersonate`, { method: "POST" });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setSupportErr(d.detail ?? "Eroare la logare.");
+        setSupportErr(parseApiError(d.detail, "Eroare la logare."));
         return;
       }
       const data: {
@@ -450,7 +450,7 @@ export default function AccountsSection() {
         is_locked: f.is_locked, locked_at: f.locked_at ? new Date(f.locked_at).toISOString() : null,
       };
       const res = await adminFetch(`/api/accounts/${a.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-      if (!res.ok) { setEditErr((await readJsonSafe<ApiMessageBody>(res)).detail ?? "Eroare la salvare."); return; }
+      if (!res.ok) { setEditErr(parseApiError((await readJsonSafe<ApiMessageBody>(res)).detail, "Eroare la salvare.")); return; }
       closePreview();
       loadAccounts();
     } finally { setEditSaving(false); }
@@ -463,7 +463,7 @@ export default function AccountsSection() {
       const res = await adminFetch(`/api/accounts/${a.id}`, { method: "DELETE" });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setDeleteErr(d.detail ?? "Eroare la ștergere.");
+        setDeleteErr(parseApiError(d.detail, "Eroare la ștergere."));
         return;
       }
       closePreview();
@@ -481,7 +481,7 @@ export default function AccountsSection() {
       const res = await adminFetch(`/api/accounts/${a.id}/restore`, { method: "POST" });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setRestoreErr(`${a.name}: ${d.detail ?? "Eroare la restaurare."}`);
+        setRestoreErr(`${a.name}: ${parseApiError(d.detail, "Eroare la restaurare.")}`);
         return;
       }
       loadAccounts();
