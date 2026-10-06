@@ -5,6 +5,7 @@ Rulabil cu pytest sau direct:  python -m tests.test_izolare_anvelope  (din backe
 """
 from __future__ import annotations
 
+from app.models.anvelopa import Anvelopa
 from app.models.cod_dot_anvelopa import CodDotAnvelopa
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
 from app.models.profil_anvelopa import ProfilAnvelopa
@@ -138,6 +139,29 @@ async def test_patch_unchanged_legacy_ids_still_work():
     a = await update_anvelopa(
         a["id"], AnvelopaUpdate(dimensiune_id=own2["dimensiune_id"].id), db=db, account_id=acc.id)
     assert a["dimensiune_id"] == own2["dimensiune_id"].id
+
+
+async def test_legacy_foreign_nomenclator_is_rendered_blank():
+    """Anvelopa salvata inainte de verificari, legata de nomenclatoarele altui
+    cont: id-urile raman, valorile celuilalt cont nu se afiseaza, iar editarea
+    care retrimite aceleasi id-uri merge."""
+    db, acc, _, _, _, _, _, foreign = await _fixture()
+    ids = {f: foreign[f].id for f in FIELDS}
+    veche = Anvelopa(account_id=acc.id, **ids)
+    db.add(veche)
+    await db.commit()
+    anv_id = veche.id
+
+    def _check(a: dict) -> None:
+        assert [a[f] for f in FIELDS] == [ids[f] for f in FIELDS]
+        assert (a["dimensiune_valoare"], a["profil_valoare"], a["dot_valoare"]) == (None, None, None)
+
+    _check(await get_anvelopa(anv_id, db=db, account_id=acc.id))
+    page = await list_anvelope(client_id=None, last_id=None, limit=200, db=db, account_id=acc.id)
+    _check(next(i for i in page.items if i["id"] == anv_id))
+    a = await update_anvelopa(anv_id, AnvelopaUpdate(comments="uzata", **ids), db=db, account_id=acc.id)
+    assert a["comments"] == "uzata"
+    _check(a)
 
 
 async def test_patch_foreign_anvelopa_is_404():

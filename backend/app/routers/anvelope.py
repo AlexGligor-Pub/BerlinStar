@@ -43,7 +43,15 @@ async def _assert_marca_aprobata(db: AsyncSession, marca_id: int | None) -> None
 router = APIRouter()
 
 
+def _own(a: Anvelopa, rel):
+    # Randurile vechi pot arata spre un nomenclator al altui cont (id-urile nu
+    # erau verificate la salvare): id-ul ramane, valoarea lui nu se afiseaza.
+    return rel if rel is not None and rel.account_id == a.account_id else None
+
+
 def _serialize(a: Anvelopa) -> dict:
+    # Marca e nomenclator global (fara account_id); restul sunt per cont.
+    dimensiune, profil, dot = _own(a, a.dimensiune), _own(a, a.profil), _own(a, a.dot)
     return {
         "id": a.id,
         "account_id": a.account_id,
@@ -58,9 +66,9 @@ def _serialize(a: Anvelopa) -> dict:
         "indice_sarcina": a.indice_sarcina,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
-        "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,
-        "profil_valoare": a.profil.valoare if a.profil else None,
-        "dot_valoare": a.dot.valoare if a.dot else None,
+        "dimensiune_valoare": dimensiune.valoare if dimensiune else None,
+        "profil_valoare": profil.valoare if profil else None,
+        "dot_valoare": dot.valoare if dot else None,
         "created_at": a.created_at,
         "updated_at": a.updated_at,
         "is_deleted": a.is_deleted,

@@ -134,7 +134,10 @@ async def create_programare(
         raise HTTPException(400, "end_time trebuie sa fie dupa start_time.")
     await _validate_employee(db, account_id, body.employee_id)
     await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
-    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
+    # Locatia vine de la dispozitiv, nu dintr-o alegere a utilizatorului, iar
+    # stergerea locatiei nu dezleaga dispozitivele: cea proprie ramane acceptata
+    # si dupa stergere, ca la bonuri. Filtrul pe cont se aplica oricum.
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia", allow_deleted=True)
     await assert_owned(db, Department, body.department_id, account_id, what="Departamentul")
 
     p = Programare(**body.model_dump(), account_id=account_id)

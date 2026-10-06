@@ -125,10 +125,25 @@ async def test_create_rejects_deleted_own_rows():
         _body(fx, client_id=fx.client.id), db=fx.db, account_id=fx.acc.id))
     await raises_http(400, create_programare(
         _body(fx, department_id=fx.dept.id), db=fx.db, account_id=fx.acc.id))
-    fx.loc.is_deleted = True
-    await fx.db.commit()
-    await raises_http(400, create_programare(_body(fx), db=fx.db, account_id=fx.acc.id))
     assert await _count(fx) == 0
+
+
+async def test_create_accepts_deleted_own_location_but_not_foreign():
+    """Locatia vine de la dispozitiv, iar stergerea ei nu dezleaga dispozitivele:
+    statia trebuie sa poata face programari in continuare. A altui cont ramane
+    refuzata, stearsa sau nu."""
+    fx = await _fixture()
+    fx.loc.is_deleted = True
+    fx.f_loc.is_deleted = True
+    await fx.db.commit()
+    p = await create_programare(_body(fx), db=fx.db, account_id=fx.acc.id)
+    assert p.location_id == fx.loc.id
+    d_foreign = await raises_http(400, create_programare(
+        _body(fx, location_id=fx.f_loc.id), db=fx.db, account_id=fx.acc.id))
+    d_missing = await raises_http(400, create_programare(
+        _body(fx, location_id=99999), db=fx.db, account_id=fx.acc.id))
+    assert d_foreign == d_missing
+    assert await _count(fx) == 1
 
 
 # ─── PATCH /api/programari/{id} ───────────────────────────────────────────────
