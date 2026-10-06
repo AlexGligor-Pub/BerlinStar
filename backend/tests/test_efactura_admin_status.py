@@ -19,6 +19,8 @@ from app.models.user import UserRole
 from tests._harness import make_account, make_receipt, make_session, make_user, raises_http, run
 
 NO_RECEIPT = "Receipt-ul nu exista."
+NOT_SENT = "Aceasta factura nu a fost transmisa la ANAF."
+NO_ZIP = "Nu exista raspuns ANAF descarcabil pentru aceasta factura."
 
 
 async def _fixture(download_id: int | None = 555):
@@ -159,6 +161,107 @@ async def test_download_platform_admin_gets_client_zip():
     assert resp.media_type == "application/zip"
     assert "anaf_response_777.zip" in resp.headers["content-disposition"]
     assert seen == {"company_id": rec.company_id, "cui": "12345678", "download_id": 555}
+
+
+async def _move_record_to_foreign_company(db, other, rec) -> Company:
+    """Record vechi, creat pe compania altui cont inainte de filtrul pe cont."""
+    foreign = Company(account_id=other.id, cui=87654321, name="Straina SRL")
+    db.add(foreign)
+    await db.flush()
+    rec.company_id = foreign.id
+    await db.flush()
+    return foreign
+
+
+async def test_status_legacy_record_on_foreign_company_is_404_for_tenant():
+    db, _, owner, other, receipt, rec = await _fixture()
+    rec.status = "in_prelucrare"
+    await _move_record_to_foreign_company(db, other, rec)
+    polled: list = []
+
+    async def fake_poll(_db, _rec):
+        polled.append(_rec.id)
+        return _rec
+
+    orig = efactura_router.efactura_service.poll_status
+    efactura_router.efactura_service.poll_status = fake_poll
+    try:
+        for role in (UserRole.ADMIN, UserRole.WORKER):
+            ctx = await _ctx(db, owner, role)
+            detail = await raises_http(404, get_receipt_status(receipt.id, ctx=ctx, db=db))
+            assert detail == NOT_SENT
+    finally:
+        efactura_router.efactura_service.poll_status = orig
+    # Nimic interogat la ANAF cu tokenul celuilalt cont.
+    assert polled == []
+
+
+async def test_status_legacy_record_on_foreign_company_stays_visible_to_platform_admin():
+    db, admin, _, other, receipt, rec = await _fixture()
+    await _move_record_to_foreign_company(db, other, rec)
+    got = await get_receipt_status(receipt.id, ctx=await _ctx(db, admin), db=db)
+    assert got.id == rec.id
+    # Fara rolul `admin`, contul de platforma nu trece nici de filtrul pe bon.
+    ctx = await _ctx(db, admin, UserRole.MANAGER)
+    assert await raises_http(404, get_receipt_status(receipt.id, ctx=ctx, db=db)) == NO_RECEIPT
+
+
+async def test_status_record_on_own_deleted_company_still_works():
+    # Compania proprie stearsa intre timp: transmiterile ei raman consultabile.
+    db, _, owner, _, receipt, rec = await _fixture()
+    company = await db.get(Company, rec.company_id)
+    company.is_deleted = True
+    await db.flush()
+    got = await get_receipt_status(receipt.id, ctx=await _ctx(db, owner), db=db)
+    assert got.id == rec.id
+
+
+async def test_download_legacy_record_on_foreign_company_is_404_for_tenant():
+    db, _, owner, other, receipt, rec = await _fixture()
+    foreign = await _move_record_to_foreign_company(db, other, rec)
+    db.add(AnafSettings(company_id=foreign.id, use_test_env=True))
+    await db.flush()
+    asked: list = []
+
+    async def fake_token(_db, company_id):
+        asked.append(company_id)
+        return "tok"
+
+    orig_token = efactura_router.oauth_service.get_valid_access_token
+    efactura_router.oauth_service.get_valid_access_token = fake_token
+    try:
+        detail = await raises_http(404, download_response_zip(receipt.id, ctx=await _ctx(db, owner), db=db))
+    finally:
+        efactura_router.oauth_service.get_valid_access_token = orig_token
+    assert detail == NO_ZIP
+    assert asked == []
+
+
+async def test_download_owner_gets_own_zip():
+    db, _, owner, _, receipt, rec = await _fixture()
+    db.add(AnafSettings(company_id=rec.company_id, use_test_env=True))
+    await db.flush()
+
+    async def fake_token(_db, _company_id):
+        return "tok"
+
+    class FakeClient:
+        def __init__(self, access_token, cui, use_test=False):
+            pass
+
+        async def download_response(self, download_id):
+            return b"PK-zip"
+
+    orig_token = efactura_router.oauth_service.get_valid_access_token
+    orig_client = efactura_router.AnafEFacturaClient
+    efactura_router.oauth_service.get_valid_access_token = fake_token
+    efactura_router.AnafEFacturaClient = FakeClient
+    try:
+        resp = await download_response_zip(receipt.id, ctx=await _ctx(db, owner, UserRole.WORKER), db=db)
+    finally:
+        efactura_router.oauth_service.get_valid_access_token = orig_token
+        efactura_router.AnafEFacturaClient = orig_client
+    assert resp.media_type == "application/zip"
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

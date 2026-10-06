@@ -56,8 +56,8 @@ from app.efactura.schemas import (
     ValidationIssue,
     ValidationResult,
 )
+from app.efactura.service import own_client as _own_client
 from app.efactura.xml_builder import build_xml, pretty_print
-from app.models.client import Client
 from app.models.company import Company
 from app.models.receipt import Receipt
 from app.permissions import Resource
@@ -85,37 +85,51 @@ def _append_query(base: str, extra: str) -> str:
     return f"{base}{sep}{extra}"
 
 
+def _is_platform_admin(ctx: AuthContext) -> bool:
+    """Super-adminul platformei: contul de platforma SI rolul `admin`.
+
+    Aceleasi doua conditii ca `get_platform_admin_account`. Doar username-ul
+    contului nu ajunge — un worker/manager creat in contul de platforma ar vedea
+    datele tuturor clientilor.
+    """
+    return ctx.account.username == PLATFORM_ACCOUNT_USERNAME and ctx.can(Resource.USERS)
+
+
 async def _require_company_access(
-    db: AsyncSession, company_id: int, account_id: int
+    db: AsyncSession, company_id: int, ctx: AuthContext
 ) -> Company:
-    """Ensure caller's account owns the given company (or admin)."""
+    """Compania contului curent; super-adminul platformei o poate accesa pe a oricarui cont."""
     company = (
         await db.execute(select(Company).where(Company.id == company_id))
     ).scalar_one_or_none()
-    if company is not None and company.account_id == account_id and not company.is_deleted:
-        return company
     if company is not None:
-        # Super-admin always has access (simple gate matching admin.py)
-        from app.models.account import Account
-        acc = (await db.execute(select(Account).where(Account.id == account_id))).scalar_one_or_none()
-        if acc is not None and acc.username == "admin":
+        if company.account_id == ctx.account_id and not company.is_deleted:
+            return company
+        if _is_platform_admin(ctx):
             return company
     # Acelasi raspuns pentru „nu exista", „e a altui cont" si „e stearsa": cu 404 vs
     # 403 se puteau enumera id-urile companiilor celorlalte conturi.
     raise HTTPException(404, "Compania nu exista.")
 
 
-def _own_client(receipt: Receipt) -> Client | None:
-    """Clientul bonului, doar daca e al aceluiasi cont.
+async def _record_company_allowed(
+    db: AsyncSession, rec: EFacturaRecord, ctx: AuthContext
+) -> bool:
+    """Record-ul e pe o companie a contului curent (sau apelantul e super-admin).
 
-    `Receipt.client` nu filtreaza pe cont: un bon ramas legat de clientul altui
-    cont (inainte de verificarea de la scriere) i-ar pune numele, CUI/CNP-ul si
-    adresa in XML. Clientul sters intre timp ramane valabil — factura lui exista.
+    Un record vechi, creat pe compania altui cont (inainte de filtrul pe cont), ar
+    interoga ANAF cu tokenul si CUI-ul acelui cont. Compania proprie stearsa intre
+    timp ramane valabila — transmiterile ei exista.
     """
-    client = receipt.client
-    if client is None or client.account_id != receipt.account_id:
-        return None
-    return client
+    if _is_platform_admin(ctx):
+        return True
+    owned = await db.scalar(
+        select(Company.id).where(
+            Company.id == rec.company_id,
+            Company.account_id == ctx.account_id,
+        )
+    )
+    return owned is not None
 
 
 async def _get_receipt_for_caller(
@@ -135,7 +149,7 @@ async def _get_receipt_for_caller(
     ).scalar_one_or_none()
     if receipt is not None:
         return receipt
-    if ctx.account.username == PLATFORM_ACCOUNT_USERNAME and ctx.can(Resource.USERS):
+    if _is_platform_admin(ctx):
         receipt = (
             await db.execute(select(Receipt).where(Receipt.id == receipt_id))
         ).scalar_one_or_none()
@@ -229,10 +243,11 @@ async def list_my_companies(
 async def get_my_company_settings(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza setarile ANAF ale unei companii detinute de cont (auto-creeaza daca lipsesc)."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     row = (
         await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
     ).scalar_one_or_none()
@@ -249,10 +264,11 @@ async def update_my_company_settings(
     body: AnafSettingsUpdate,
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """User-level update pentru AnafSettings. Acces doar pentru proprietarul contului."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     row = (
         await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
     ).scalar_one_or_none()
@@ -276,10 +292,11 @@ async def update_my_company_settings(
 async def test_my_company_connection(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Smoke-test al conexiunii ANAF pentru o companie a contului (refresh-uieste tokenul daca expira curand)."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     try:
         await oauth_service.get_valid_access_token(db, company_id)
     except AnafTokenMissing:
@@ -299,10 +316,11 @@ async def test_my_company_connection(
 async def connect_company(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Genereaza URL-ul de redirect catre ANAF pentru autentificare cu USB."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     try:
         url = await oauth_service.build_authorize_url(db, company_id)
     except AnafConfigError as exc:
@@ -348,9 +366,10 @@ async def oauth_callback(
 async def disconnect_company(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     removed = await oauth_service.revoke(db, company_id)
     return {"ok": True, "removed": removed}
 
@@ -361,9 +380,10 @@ async def disconnect_company(
 async def get_company_status(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     token = (
         await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
     ).scalar_one_or_none()
@@ -466,11 +486,12 @@ async def preview_receipt_xml(
 async def audit_mapping(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     limit: int = Query(default=50, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """Listeaza receipts cu campuri incomplete pentru eFactura (TVA, adresa, etc.)."""
-    company = await _require_company_access(db, company_id, account_id)
+    company = await _require_company_access(db, company_id, ctx)
 
     receipts = (
         await db.execute(
@@ -644,7 +665,7 @@ async def get_receipt_status(
             )
         )
     ).scalar_one_or_none()
-    if rec is None:
+    if rec is None or not await _record_company_allowed(db, rec, ctx):
         raise HTTPException(404, "Aceasta factura nu a fost transmisa la ANAF.")
 
     if rec.status == "in_prelucrare" and rec.index_incarcare:
@@ -701,7 +722,7 @@ async def download_response_zip(
             )
         )
     ).scalar_one_or_none()
-    if rec is None or not rec.download_id:
+    if rec is None or not rec.download_id or not await _record_company_allowed(db, rec, ctx):
         raise HTTPException(404, "Nu exista raspuns ANAF descarcabil pentru aceasta factura.")
 
     settings = (
@@ -732,6 +753,7 @@ async def download_response_zip(
 async def list_company_records(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     status_filter: str | None = Query(default=None, alias="status"),
@@ -743,7 +765,7 @@ async def list_company_records(
     """Listeaza transmiterile companiei (paginat, sortat descrescator dupa id)."""
     from sqlalchemy import func, or_, cast, String
 
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     base = select(EFacturaRecord).where(EFacturaRecord.company_id == company_id)
 
     if status_filter:
@@ -806,6 +828,7 @@ _RECEIVED_SORT_COLUMNS = {
 async def list_received_invoices(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     search: str | None = Query(default=None),
@@ -823,7 +846,7 @@ async def list_received_invoices(
     """Listeaza facturile primite din SPV (paginat, cu filtre + sortare)."""
     from sqlalchemy import func, or_
 
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
 
     base = select(EFacturaReceivedIndex).where(EFacturaReceivedIndex.company_id == company_id)
 
@@ -916,6 +939,7 @@ async def get_received_details(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Returneaza detaliile parsate ale unei facturi primite.
@@ -928,7 +952,7 @@ async def get_received_details(
         parse_ubl_invoice,
     )
 
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     idx = (
         await db.execute(
             select(EFacturaReceivedIndex).where(
@@ -968,10 +992,11 @@ async def mark_received_read(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Marcheaza factura primita ca citita (idempotent, atomic)."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     now = datetime.now(timezone.utc)
     res = await db.execute(
         update(EFacturaReceivedIndex)
@@ -1009,13 +1034,14 @@ async def mark_received_paid(
     received_id: int = Path(..., gt=0),
     body: MarkPaidIn | None = None,
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Marcheaza/demarcheaza factura primita ca platita.
 
     Default `paid=true`. Trimite `{"paid": false}` ca sa anulezi marcarea.
     """
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     target = True if body is None else bool(body.paid)
     now = datetime.now(timezone.utc)
     res = await db.execute(
@@ -1038,12 +1064,13 @@ async def download_received_xml(
     company_id: int = Path(..., gt=0),
     received_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Descarca XML-ul raw al facturii primite (extras din ZIP-ul ANAF)."""
     from app.efactura.received_parser import UBLParseError, extract_invoice_xml_from_zip
 
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     idx = (
         await db.execute(
             select(EFacturaReceivedIndex).where(
@@ -1080,13 +1107,14 @@ async def download_received_xml(
 async def sync_received_for_company(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Sincronizeaza facturile primite din SPV ANAF pentru aceasta companie (manual trigger).
 
     Pentru job-ul automat (la 60 min) vezi efactura/scheduler.job_sync_received.
     """
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     from sqlalchemy.dialects.postgresql import insert as pg_insert
 
     token = (
@@ -1150,6 +1178,7 @@ async def sync_received_for_company(
 async def sync_sent_for_company(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Importa facturile TRIMISE din SPV ANAF in efactura_records, ca sa apara TOATE in
@@ -1161,7 +1190,7 @@ async def sync_sent_for_company(
     """
     from datetime import date as _date
 
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
 
     token = (
         await db.execute(select(AnafToken).where(AnafToken.company_id == company_id))
@@ -1259,11 +1288,12 @@ async def sync_sent_for_company(
 async def list_pending_deadlines(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     days_ahead: int = Query(default=5, ge=0, le=30),
     db: AsyncSession = Depends(get_db),
 ):
     """Facturi cu deadline iminent (azi sau in <days_ahead zile) si statusul != accepted."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     from datetime import date as _date, timedelta as _td
 
     today = _date.today()
@@ -1286,10 +1316,11 @@ async def list_pending_deadlines(
 async def refresh_company_token(
     company_id: int = Path(..., gt=0),
     account_id: int = Depends(get_advanced_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
     """Force-refresh token-ul (util pentru debugging / verificare)."""
-    await _require_company_access(db, company_id, account_id)
+    await _require_company_access(db, company_id, ctx)
     try:
         await oauth_service.get_valid_access_token(db, company_id)
     except AnafTokenMissing:
