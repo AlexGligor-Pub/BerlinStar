@@ -4,6 +4,10 @@
  * Persistat in localStorage cu TTL 24h. La acces, daca tokenul a expirat il
  * stergem si cadem inapoi pe tokenul de user (auth.token) — astfel utilizatorul
  * vede in continuare datele de cont, dar operatii admin-only vor primi 403.
+ *
+ * Stergerea din browser nu ajunge: pe server sesiunea AdminV2 traieste 30 de
+ * zile. De aceea la logout si la expirarea TTL-ului o si revocam
+ * (POST /api/auth/logout cu tokenul admin), ca o copie a lui sa nu mai valoreze nimic.
  */
 
 import { apiFetch, apiUpload } from "../../utils/api";
@@ -15,10 +19,25 @@ const _ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 let _adminToken: string | null = null;
 
+/** Revoca pe server sesiunea din spatele unui token admin. Best-effort. */
+function _revokeOnServer(token: string | null): void {
+  // Niciodata tokenul de user: asta ar inchide sesiunea aplicatiei principale.
+  if (!token || token === auth.token) return;
+  // `handleUnauthorized: false`: un 401 aici inseamna doar ca sesiunea admin
+  // era deja moarta, nu ca userul trebuie scos din aplicatie.
+  void apiFetch("/api/auth/logout", {
+    method: "POST",
+    authToken: token,
+    handleUnauthorized: false,
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 function _readPersistedAdminToken(): string | null {
   try {
     const exp = Number(localStorage.getItem(_ADMIN_TOKEN_EXP_KEY) ?? 0);
     if (!exp || Date.now() >= exp) {
+      _revokeOnServer(localStorage.getItem(_ADMIN_TOKEN_KEY));
       localStorage.removeItem(_ADMIN_TOKEN_KEY);
       localStorage.removeItem(_ADMIN_TOKEN_EXP_KEY);
       return null;
@@ -43,6 +62,26 @@ export function setAdminToken(t: string | null): void {
   } catch {
     // storage quota/disabled — token ramane doar in-memory
   }
+}
+
+/** Logout AdminV2: revoca sesiunea pe server, apoi uita tokenul local. */
+export function revokeAdminToken(): void {
+  let token = _adminToken;
+  if (!token) {
+    try {
+      token = localStorage.getItem(_ADMIN_TOKEN_KEY);
+    } catch {
+      token = null;
+    }
+  }
+  _revokeOnServer(token);
+  setAdminToken(null);
+}
+
+/** `true` daca exista un token admin persistat si inca valabil (<24h).
+ *  Unul expirat este revocat pe server si sters pe loc. */
+export function hasValidAdminToken(): boolean {
+  return _readPersistedAdminToken() !== null;
 }
 
 /** Tokenul admin daca exista si nu a expirat, altfel tokenul user, altfel null. */
