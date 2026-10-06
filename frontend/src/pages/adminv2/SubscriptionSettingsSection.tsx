@@ -2,6 +2,8 @@ import { Show, createSignal, onMount } from "solid-js";
 import { adminFetch } from "./admin-auth";
 import { parseApiError, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
+import DecimalInput from "../../components/ui/DecimalInput";
+import { formatDecimal, parseDecimal } from "../../utils/decimal";
 
 interface SubSettings {
   subscription_price_eur: number;
@@ -43,12 +45,24 @@ export default function SubscriptionSettingsSection() {
   const [saving, setSaving] = createSignal(false);
   const [stripeSecretInput, setStripeSecretInput] = createSignal("");
   const [stripeWebhookInput, setStripeWebhookInput] = createSignal("");
+  // Campurile numerice tin textul tastat si sunt citite o singura data, la
+  // salvare: scrise in `s` la fiecare tasta, un camp golit devenea pe loc 0 / 1.
+  const [priceText, setPriceText] = createSignal("");
+  const [vatText, setVatText] = createSignal("");
+  const [nextNrText, setNextNrText] = createSignal("");
+
+  function apply(data: SubSettings) {
+    setS(data);
+    setPriceText(formatDecimal(data.subscription_price_eur));
+    setVatText(formatDecimal(data.subscription_vat_percent));
+    setNextNrText(formatDecimal(data.subscription_next_invoice_number));
+  }
 
   async function load() {
     setLoading(true);
     try {
       const res = await adminFetch("/api/admin/subscription/settings");
-      if (res.ok) setS(await res.json());
+      if (res.ok) apply(await res.json());
     } finally { setLoading(false); }
   }
 
@@ -63,9 +77,31 @@ export default function SubscriptionSettingsSection() {
   async function save() {
     const cur = s();
     if (!cur) return;
+    const price = parseDecimal(priceText(), { maxDecimals: 2 });
+    if (!price.valid) {
+      notify("Preţul nu este un număr valid. Foloseşte cel mult 2 zecimale (ex. 150,50).", "error");
+      return;
+    }
+    const vat = parseDecimal(vatText());
+    if (!vat.valid) {
+      notify("TVA % nu este un număr valid (ex. 21 sau 9,5).", "error");
+      return;
+    }
+    const nextNr = parseDecimal(nextNrText(), { integer: true });
+    // `min="1"` de pe vechiul camp, acum verificat explicit.
+    if (!nextNr.valid || (nextNr.value != null && nextNr.value < 1)) {
+      notify("Următorul număr de factură trebuie să fie un număr întreg, cel puţin 1.", "error");
+      return;
+    }
     setSaving(true);
     try {
-      const body: any = { ...cur };
+      const body: any = {
+        ...cur,
+        // Gol = 0 (pret, TVA) respectiv 1 (numar), ca pana acum.
+        subscription_price_eur: price.value ?? 0,
+        subscription_vat_percent: vat.value ?? 0,
+        subscription_next_invoice_number: nextNr.value ?? 1,
+      };
       // doar daca admin a introdus, trimite cheia in clar; altfel pastreaza ce e in DB
       if (stripeSecretInput().trim()) body.stripe_secret_key = stripeSecretInput().trim();
       if (stripeWebhookInput().trim()) body.stripe_webhook_secret = stripeWebhookInput().trim();
@@ -84,7 +120,7 @@ export default function SubscriptionSettingsSection() {
         notify(parseApiError(d.detail, "Eroare la salvare."), "error");
         return;
       }
-      setS(await res.json());
+      apply(await res.json());
       setStripeSecretInput("");
       setStripeWebhookInput("");
       notify("Setări abonament salvate.", "success");
@@ -124,11 +160,11 @@ export default function SubscriptionSettingsSection() {
               <div style="display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
                 <div class="form-group">
                   <label class="form-label">Preţ EUR (cu TVA inclus)</label>
-                  <input class="input" type="number" step="0.01" value={d().subscription_price_eur} onInput={(e) => update("subscription_price_eur", parseFloat(e.currentTarget.value || "0"))} />
+                  <DecimalInput class="input" maxDecimals={2} value={priceText()} onInput={(raw) => setPriceText(raw)} />
                 </div>
                 <div class="form-group">
                   <label class="form-label">TVA %</label>
-                  <input class="input" type="number" step="0.01" value={d().subscription_vat_percent} onInput={(e) => update("subscription_vat_percent", parseFloat(e.currentTarget.value || "0"))} />
+                  <DecimalInput class="input" value={vatText()} onInput={(raw) => setVatText(raw)} />
                 </div>
                 <div class="form-group">
                   <label class="form-label">Moneda încasată</label>
@@ -143,7 +179,7 @@ export default function SubscriptionSettingsSection() {
                 </div>
                 <div class="form-group">
                   <label class="form-label">Următorul număr factură</label>
-                  <input class="input" type="number" min="1" value={d().subscription_next_invoice_number} onInput={(e) => update("subscription_next_invoice_number", parseInt(e.currentTarget.value || "1", 10))} />
+                  <DecimalInput class="input" integer value={nextNrText()} onInput={(raw) => setNextNrText(raw)} />
                 </div>
               </div>
             </div>

@@ -1,6 +1,8 @@
-import { Show, For, Index, createSignal, onMount, onCleanup, type JSX } from "solid-js";
+import { Show, For, Index, createEffect, createSignal, createUniqueId, onMount, onCleanup, type JSX } from "solid-js";
 import { apiFetch, parseApiError } from "../../utils/api";
+import { parseDecimal } from "../../utils/decimal";
 import Input from "../../components/ui/Input";
+import DecimalInput from "../../components/ui/DecimalInput";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
 import { VAT_OPTIONS, lineTotalGross, newLine } from "./types";
 import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../../types/client";
@@ -349,6 +351,79 @@ export function AnafLookup(props: {
   );
 }
 
+/**
+ * Camp numeric pentru o linie de factura (cantitate, pret).
+ *
+ * Linia tine numere, dar campul nu mai e rescris din ele la fiecare tasta:
+ * local se tine numarul citit din text, iar campul e resincronizat doar cand
+ * linia se schimba din afara (factura incarcata la editare, rand sters).
+ */
+function LineNumberField(props: {
+  label?: string;
+  lineId: string;
+  value: number;
+  integer?: boolean;
+  maxDecimals?: number;
+  /** Numarul pus in linie pentru un camp gol. */
+  empty: number;
+  /** Valorile mai mici sunt respinse (fostul atribut `min`). */
+  min?: number;
+  invalidMessage: string;
+  onChange: (n: number) => void;
+  error?: string;
+}) {
+  const id = createUniqueId();
+  const [shown, setShown] = createSignal<number | null>(props.value);
+  const [bad, setBad] = createSignal(false);
+  // Ultimul numar trimis in linie si linia careia ii apartine: orice altceva
+  // primit prin props e o schimbare din afara.
+  let sent = props.value;
+  let lineId = props.lineId;
+
+  createEffect(() => {
+    const v = props.value;
+    const lid = props.lineId;
+    if (v === sent && lid === lineId) return;
+    sent = v;
+    lineId = lid;
+    setShown(v);
+    setBad(false);
+  });
+
+  const error = () => (bad() ? props.invalidMessage : props.error);
+
+  return (
+    <div class={`field ${error() ? "field--error" : ""}`}>
+      <Show when={props.label}>
+        <label class="field-label" for={id}>{props.label}</label>
+      </Show>
+      <DecimalInput
+        id={id}
+        class="input"
+        integer={props.integer}
+        maxDecimals={props.maxDecimals}
+        value={shown()}
+        onInput={(raw) => {
+          const p = parseDecimal(raw, { integer: props.integer, maxDecimals: props.maxDecimals });
+          const ok = p.valid && (p.value == null || props.min == null || p.value >= props.min);
+          // Textul invalid pune 0 in linie, nu ultima valoare buna: 0 nu trece
+          // de validare (pret > 0, cantitate >= 1), deci factura nu se poate
+          // emite cu alt numar decat cel vizibil in camp.
+          const n = ok ? p.value ?? props.empty : 0;
+          setShown(p.value);
+          // Un text neterminat („12,") nu e semnalat cat timp se tasteaza.
+          setBad(!ok && !p.incomplete);
+          sent = n;
+          props.onChange(n);
+        }}
+      />
+      <Show when={error()}>
+        <span class="field-error" role="alert">{error()}</span>
+      </Show>
+    </div>
+  );
+}
+
 export function ItemsEditor(props: {
   lines: QuickInvoiceLine[];
   onChange: (lines: QuickInvoiceLine[]) => void;
@@ -385,26 +460,30 @@ export function ItemsEditor(props: {
               onInput={(v) => update(idx, { name: v })}
               error={props.errors[`name_${idx}`]}
             />
-            <Input
+            <LineNumberField
               label={idx === 0 ? "Cant" : undefined}
-              type="number"
-              min="1"
-              step="1"
-              value={String(line().qty)}
-              onInput={(v) => update(idx, { qty: Math.max(1, parseInt(v, 10) || 1) })}
+              lineId={line().lineId}
+              value={line().qty}
+              integer
+              empty={1}
+              min={1}
+              invalidMessage="Intreg >= 1"
+              onChange={(n) => update(idx, { qty: n })}
+              error={props.errors[`qty_${idx}`]}
             />
             <Input
               label={idx === 0 ? "UM" : undefined}
               value={line().unit}
               onInput={(v) => update(idx, { unit: v })}
             />
-            <Input
+            <LineNumberField
               label={idx === 0 ? "Pret (net)" : undefined}
-              type="number"
-              min="0"
-              step="0.01"
-              value={String(line().price)}
-              onInput={(v) => update(idx, { price: parseFloat(v) || 0 })}
+              lineId={line().lineId}
+              value={line().price}
+              maxDecimals={2}
+              empty={0}
+              invalidMessage="Numar invalid"
+              onChange={(n) => update(idx, { price: n })}
               error={props.errors[`price_${idx}`]}
             />
             <div class="field">

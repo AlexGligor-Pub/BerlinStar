@@ -4,6 +4,8 @@ import { categoriesApi, itemsApi, type Category, type Item, type ItemType } from
 import { createListResource, cursorFetcher, useAction } from "../../hooks";
 import { compressToPng, exportCSV, exportPDF } from "./shared";
 import { ExportMenu, DeleteModal } from "./components";
+import DecimalInput from "../../components/ui/DecimalInput";
+import { parseDecimal } from "../../utils/decimal";
 
 interface ItemFormState {
   name: string;
@@ -16,6 +18,15 @@ interface ItemFormState {
 
 function emptyItemForm(categoryId = 0): ItemFormState {
   return { name: "", description: "", price: "", unit: "", type: "Produs", category_id: categoryId };
+}
+
+// Pretul e citit o singura data, la salvare. Un text invalid opreste salvarea
+// (useAction afiseaza eroarea) in loc sa plece NaN spre server.
+function readPrice(text: string): number {
+  const p = parseDecimal(text, { maxDecimals: 2, allowNegative: true });
+  if (!p.valid) throw new Error("Prețul nu este un număr valid. Folosește cel mult 2 zecimale (ex. 150,50).");
+  if (p.value == null) throw new Error("Prețul este obligatoriu.");
+  return p.value;
 }
 
 export default function ProduseSiServiciiPanel() {
@@ -101,9 +112,10 @@ export default function ProduseSiServiciiPanel() {
   const itemSave = useAction({
     fn: (id: number) => {
       const f = itemEditForm();
+      const price = readPrice(f.price);
       return itemsApi.update(id, {
         name: f.name.trim(), description: f.description.trim() || null,
-        price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
+        price, unit: f.unit.trim(), type: f.type, category_id: f.category_id,
       });
     },
     onSuccess: () => { setItemEditId(null); void items.reload(); },
@@ -112,9 +124,10 @@ export default function ProduseSiServiciiPanel() {
   const itemAdd = useAction({
     fn: () => {
       const f = itemNewForm();
+      const price = readPrice(f.price);
       return itemsApi.create({
         name: f.name.trim(), description: f.description.trim() || null, currency: "RON",
-        price: parseFloat(f.price), unit: f.unit.trim(), type: f.type, category_id: f.category_id,
+        price, unit: f.unit.trim(), type: f.type, category_id: f.category_id,
       });
     },
     onSuccess: () => { setItemNewForm(emptyItemForm(itemNewForm().category_id)); setItemAddMode(false); void items.reload(); },
@@ -192,9 +205,9 @@ export default function ProduseSiServiciiPanel() {
         <input class="input" placeholder="Nume *" value={props.f.name} onInput={e => props.setF({ ...props.f, name: e.currentTarget.value })} />
         <input class="input" placeholder="Descriere" value={props.f.description} onInput={e => props.setF({ ...props.f, description: e.currentTarget.value })} />
         <div style="display:flex;gap:8px">
-          {/* Fara min="0": preturile negative sunt permise si se folosesc ca
+          {/* allowNegative: preturile negative sunt permise si se folosesc ca
               linii de reducere / restituire pe bon (ex. -100 lei). */}
-          <input class="input" style="flex:1" type="number" step="0.01" placeholder="Preț * (negativ = reducere)" value={props.f.price} onInput={e => props.setF({ ...props.f, price: e.currentTarget.value })} />
+          <DecimalInput class="input" style="flex:1" maxDecimals={2} allowNegative placeholder="Preț * (negativ = reducere)" value={props.f.price} onInput={(raw) => props.setF({ ...props.f, price: raw })} />
           <input class="input" style="width:100px" placeholder="UM *" value={props.f.unit} onInput={e => props.setF({ ...props.f, unit: e.currentTarget.value })} />
         </div>
         <div style="display:flex;gap:8px">

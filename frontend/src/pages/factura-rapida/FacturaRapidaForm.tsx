@@ -131,6 +131,7 @@ export default function FacturaRapidaForm(props: Props) {
     lines().forEach((l, idx) => {
       if (!l.name.trim()) errs[`name_${idx}`] = "Obligatoriu";
       if (!(l.price > 0)) errs[`price_${idx}`] = "> 0";
+      if (!(Number.isInteger(l.qty) && l.qty >= 1)) errs[`qty_${idx}`] = ">= 1";
     });
     setErrors(errs);
     return Object.keys(errs).length === 0;
