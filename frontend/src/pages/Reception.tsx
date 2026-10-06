@@ -1,11 +1,11 @@
-import { For, Show, createMemo, createSignal, createEffect, onMount, onCleanup } from "solid-js";
+import { For, Show, createMemo, createSignal, createEffect, on, onMount, onCleanup, untrack } from "solid-js";
 import { canManage } from "../store/permissions";
 import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { notify } from "../store/notificationsStore";
 import { useNavigate } from "@solidjs/router";
 import PaymentsSection from "../components/PaymentsSection";
 import DiscountModal from "../components/DiscountModal";
-import { cachedPayments, loadPayments } from "../store/paymentsStore";
+import { cachedPayments, loadPayments, paymentSign, type Payment } from "../store/paymentsStore";
 import type { PaymentRowForPdf } from "../utils/pdf";
 import { receipts, deleteReceipt, loadReceipts, loadMoreReceipts, hasMore, loadingMore, updateMetodaPlata, updateReceiptClient, assignFacturaNumber, applyDocNumber, uploadToSpv, retryEFactura, connectSSE, disconnectSSE, posCount, convertFdlToDeviz, finalizeFdl, refreshReceipt, type Receipt } from "../store/receiptsStore";
 import { generateDeviz, generateFactura, generateChitanta, generateFisaDeLucru, generateCazareCheckin, generateCazareCheckout, generateCazareScoatereIntroducere, generateMontajRoti } from "../utils/generateDocuments";
@@ -492,6 +492,20 @@ async function fetchCompanyData(): Promise<CompanyData | null> {
   } catch { return null; }
 }
 
+/** Numerarul primit efectiv pe un bon, din registrul de plati (restituirile scad).
+ *
+ *  Miscarile „Card" si „OP" nu trec prin casa. „Alta" se numara: asa inregistreaza
+ *  serverul suma pusa direct din selectorul „Status plată", unde metoda nu se cere. */
+function cashCollected(payments: Payment[]): number {
+  let bani = 0;
+  for (const p of payments) {
+    if (p.method !== "Cash" && p.method !== "Alta") continue;
+    const amount = Math.round(parseFloat(p.amount) * 100);
+    if (Number.isFinite(amount)) bani += paymentSign(p.kind) * amount;
+  }
+  return bani / 100;
+}
+
 function ReceiptCard(props: { receipt: Receipt }) {
   const navigate = useNavigate();
   const [expanded, setExpanded] = createSignal(false);
@@ -526,8 +540,22 @@ function ReceiptCard(props: { receipt: Receipt }) {
   const [spvPending, setSpvPending] = createSignal(false);
   const [spvError, setSpvError] = createSignal<string | null>(null);
   const [hotelPdfLoading, setHotelPdfLoading] = createSignal<string | null>(null);
-  const r = props.receipt;
-  const live = createMemo<Receipt>(() => receipts().find((x) => x.id === r.id) ?? r);
+  // Cardul ramane montat cat timp bonul e in lista (lista e cheiata pe id), deci
+  // `props.receipt` e doar starea de la montare: tot ce se afiseaza sau se trimite
+  // mai departe se citeste din `live()`, in momentul folosirii.
+  const initial = props.receipt;
+  const live = createMemo<Receipt>(
+    (prev) => receipts().find((x) => x.id === initial.id) ?? prev,
+    initial,
+  );
+
+  // Statusul platii vazut de server s-a schimbat (salvare proprie, miscare in
+  // registru, alt post): selectorul porneste din nou de la valoarea reala.
+  const serverPay = createMemo(() => `${live().metodaPlata ?? ""}|${live().partialPay?.toFixed(2) ?? "100.00"}`);
+  createEffect(on(serverPay, () => {
+    setMetodaDraft(live().metodaPlata ?? "");
+    setPartialDraft(live().partialPay?.toFixed(2) ?? "100.00");
+  }, { defer: true }));
 
   function openSpvModal() {
     setSpvError(null);
@@ -538,7 +566,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     setSpvError(null);
     setSpvPending(true);
     try {
-      await uploadToSpv(r.id);
+      await uploadToSpv(live().id);
       setShowSpvModal(false);
       // SSE-ul va reincarca statusul; intre timp, marcam optimist statusul
       // ca sa se actualizeze instant butonul.
@@ -551,7 +579,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
   async function handleSpvRetry() {
     try {
-      await retryEFactura(r.id);
+      await retryEFactura(live().id);
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare la reincercare.");
     }
@@ -577,7 +605,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         indiceSarcina: m.indiceSarcina,
         imageUrl: montareImgs[m.pozitie as PozitieRoata] ?? null,
       }));
-      await generateMontajRoti(r, company, rows, r.vehicol ?? null);
+      await generateMontajRoti(live(), company, rows, live().vehicol ?? null);
     } finally { setMontajPdfLoading(false); }
   }
 
@@ -587,9 +615,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
   async function handleDeleteClick() {
     try {
       const [cazariRes, montaje] = await Promise.all([
-        apiFetch(`/api/cazare-anvelope?receipt_id=${r.id}&limit=10`)
+        apiFetch(`/api/cazare-anvelope?receipt_id=${live().id}&limit=10`)
           .then((res) => (res.ok ? res.json() : { items: [] })),
-        loadMontajRotiByReceipt(Number(r.id)),
+        loadMontajRotiByReceipt(Number(live().id)),
       ]);
       setCazariHotel(cazariRes.items ?? []);
       setMontajRoti(montaje);
@@ -622,7 +650,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     setDeletePending(true);
     let failed = 0;
     try {
-      await deleteReceipt(r.id);
+      await deleteReceipt(live().id);
       for (const id of cazariSelected()) {
         try {
           const res = await apiFetch(`/api/cazare-anvelope/${id}`, { method: "DELETE" });
@@ -653,7 +681,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
       const [full, company] = await Promise.all([getCazareById(cazareId), fetchCompanyData(), loadHotelImages()]);
       if (!full) return;
       const imgs = buildHotelImageProxyUrls();
-      const vehicle = r.vehicol ?? null;
+      const vehicle = live().vehicol ?? null;
       if (type === "checkin") {
         await generateCazareCheckin(full, company, imgs, vehicle);
       } else if (type === "checkout") {
@@ -689,7 +717,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     if (!locationId) { setFactureazaError("Dispozitivul nu are o locație configurată."); return; }
     setFactureazaPending(true);
     try {
-      await assignFacturaNumber(r.id, locationId);
+      await assignFacturaNumber(live().id, locationId);
       setShowFactureazaModal(false);
     } catch (e: any) {
       setFactureazaError(e?.message ?? "Eroare la alocarea numărului de factură.");
@@ -703,7 +731,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     setDocLoading("fdl");
     try {
       const company = await fetchCompanyData();
-      await generateFisaDeLucru(r, company, generalSettings()?.fdlDisclaimerText ?? null);
+      await generateFisaDeLucru(live(), company, generalSettings()?.fdlDisclaimerText ?? null);
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare la generarea Fișei de Lucru.");
     } finally {
@@ -717,7 +745,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     if (convertPending()) return;
     setConvertPending(true);
     try {
-      await convertFdlToDeviz(r.id);
+      await convertFdlToDeviz(live().id);
       setShowConvertConfirm(false);
       notify("Fișa de Lucru a fost transformată în deviz.", "success");
     } catch (e: any) {
@@ -732,7 +760,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     if (finalizePending()) return;
     setFinalizePending(true);
     try {
-      await finalizeFdl(r.id);
+      await finalizeFdl(live().id);
       notify("Fișa de Lucru a fost finalizată.", "success");
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare la finalizare.");
@@ -748,7 +776,27 @@ function ReceiptCard(props: { receipt: Receipt }) {
     if (!locationId) { setDocError("Dispozitivul nu are o locație configurată."); return; }
     setDocLoading(docType);
     try {
-      const res = await apiFetch(`/api/receipts/${r.id}/assign-number`, {
+      // Chitanta atesta bani primiti. La „Platit Partial" suma se ia din registrul
+      // de plati, inainte de a consuma un numar de chitanta: daca registrul nu
+      // poate fi citit sau nu contine numerar, documentul nu se emite.
+      let sumaIncasata: number | undefined;
+      if (docType === "chitanta" && live().metodaPlata === "Platit Partial") {
+        let cash: number;
+        try {
+          const { payments } = await loadPayments(live().id);
+          // Bon partial dinaintea registrului: singura evidenta e suma de pe bon.
+          cash = payments.length === 0 ? (live().partialPay ?? 0) : cashCollected(payments);
+        } catch {
+          setDocError("Plățile bonului nu au putut fi citite, deci chitanța nu a fost emisă. Încearcă din nou.");
+          return;
+        }
+        if (cash <= 0) {
+          setDocError("Bonul e plătit parțial și nu are nicio încasare în numerar în „Situație plăți”. Chitanța se emite doar pentru suma primită efectiv.");
+          return;
+        }
+        sumaIncasata = cash;
+      }
+      const res = await apiFetch(`/api/receipts/${live().id}/assign-number`, {
         method: "POST",
         body: JSON.stringify({ doc_type: docType, location_id: locationId }),
       });
@@ -758,10 +806,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
         return;
       }
       const ctx: DocContext = await res.json();
-      applyDocNumber(r.id, docType, ctx.serie, ctx.nr, ctx.due_date);
+      applyDocNumber(live().id, docType, ctx.serie, ctx.nr, ctx.due_date);
       if (docType === "deviz") {
         // Anexam corpul Montare Roti la sfarsitul deviz-ului daca receiptul are date.
-        const montajList = await loadMontajRotiByReceipt(Number(r.id)).catch(() => [] as MontajRota[]);
+        const montajList = await loadMontajRotiByReceipt(Number(live().id)).catch(() => [] as MontajRota[]);
         let montajRows: MontajRotaRow[] | undefined;
         if (montajList.length > 0) {
           await loadMontareRotiImages();
@@ -786,17 +834,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
       // se genereaza oricum, fara sectiunea de plati.
       let payRows: PaymentRowForPdf[] | undefined;
       try {
-        const pr = cachedPayments(r.id) ?? (await loadPayments(r.id));
+        const pr = cachedPayments(live().id) ?? (await loadPayments(live().id));
         payRows = pr.payments.map((p) => ({
           kind: p.kind, amount: p.amount, method: p.method, paid_at: p.paid_at, note: p.note,
         }));
       } catch { /* fara plati pe deviz */ }
-      await generateDeviz(r, ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows, payRows);
+      await generateDeviz(live(), ctx, generalSettings()?.afiseazaTehnicianDeviz === true, undefined, montajRows, payRows);
       }
-      // `r` e copia din momentul randarii: scadenta tocmai stabilita de server
-      // vine in raspuns, nu in ea.
-      else if (docType === "factura") await generateFactura({ ...r, dueDate: ctx.due_date ?? r.dueDate }, ctx);
-      else if (docType === "chitanta") await generateChitanta(r, ctx);
+      // Scadenta tocmai stabilita de server vine in raspuns.
+      else if (docType === "factura") await generateFactura({ ...live(), dueDate: ctx.due_date ?? live().dueDate }, ctx);
+      else if (docType === "chitanta") await generateChitanta(live(), ctx, sumaIncasata);
     } catch (e: any) {
       setDocError(e?.message ?? "Eroare necunoscută.");
     } finally {
@@ -806,8 +853,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
   const isPartial = () => metodaDraft() === "Platit Partial";
   const metodaChanged = () =>
-    metodaDraft() !== (r.metodaPlata ?? "") ||
-    (isPartial() && partialDraft() !== (r.partialPay?.toFixed(2) ?? "100.00"));
+    metodaDraft() !== (live().metodaPlata ?? "") ||
+    (isPartial() && partialDraft() !== (live().partialPay?.toFixed(2) ?? "100.00"));
 
   // Incrementat dupa salvarea statusului, ca "Situatie plati" sa reciteasca
   // registrul: backendul a inregistrat deja diferenta de bani corespunzatoare.
@@ -847,7 +894,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
     setSaving(true);
     const partial = isPartial() ? parseFloat(partialDraft()) || 100 : undefined;
     try {
-      await updateMetodaPlata(r.id, metodaDraft() || null, partial);
+      await updateMetodaPlata(live().id, metodaDraft() || null, partial);
       setPayRefresh((n) => n + 1);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Eroare la salvarea metodei de plată.", "error");
@@ -855,13 +902,19 @@ function ReceiptCard(props: { receipt: Receipt }) {
       setSaving(false);
     }
   }
-  const date = new Date(r.date);
-  const dateStr = date.toLocaleDateString("ro-RO");
-  const timeStr = date.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" });
-  const updatedDate = r.updatedAt ? new Date(r.updatedAt) : null;
-  const isUpdated = updatedDate && updatedDate > date;
-  const updatedDateStr = isUpdated ? updatedDate!.toLocaleDateString("ro-RO") : null;
-  const updatedTimeStr = isUpdated ? updatedDate!.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : null;
+  const stamps = createMemo(() => {
+    const date = new Date(live().date);
+    const upd = live().updatedAt;
+    const updatedDate = upd ? new Date(upd) : null;
+    const isUpdated = updatedDate !== null && updatedDate > date;
+    return {
+      dateStr: date.toLocaleDateString("ro-RO"),
+      timeStr: date.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }),
+      isUpdated,
+      updatedDateStr: isUpdated ? updatedDate.toLocaleDateString("ro-RO") : null,
+      updatedTimeStr: isUpdated ? updatedDate.toLocaleTimeString("ro-RO", { hour: "2-digit", minute: "2-digit" }) : null,
+    };
+  });
 
   const isFdl = createMemo(() => live().source === "fdl");
 
@@ -881,7 +934,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
             <Show when={isFdl()}>
               <span class="rcard-fdl-badge" title="Fișă de Lucru — estimare, nu intră în totaluri">FDL</span>
             </Show>
-            <span class="rcard-titlu">{r.titlu}</span>
+            <span class="rcard-titlu">{live().titlu}</span>
             <Show when={live().clientNume}>
               <span style="font-size:12px;color:var(--text-muted);font-weight:400">{live().clientNume}</span>
             </Show>
@@ -906,21 +959,21 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
           </div>
           <span class="rcard-meta">
-            {dateStr} {timeStr}
-            <Show when={isUpdated}>
-              <span style="margin-left:6px;color:var(--text-muted)">· upd. {updatedDateStr} {updatedTimeStr}</span>
+            {stamps().dateStr} {stamps().timeStr}
+            <Show when={stamps().isUpdated}>
+              <span style="margin-left:6px;color:var(--text-muted)">· upd. {stamps().updatedDateStr} {stamps().updatedTimeStr}</span>
             </Show>
           </span>
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">
-            <span class="rcard-total">{r.total.toFixed(2)} lei</span>
+            <span class="rcard-total">{live().total.toFixed(2)} lei</span>
             <Show
               when={!isFdl()}
               fallback={<span class="rcard-fdl-badge" style="font-size:0.6rem">Estimare</span>}
             >
-              <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !r.metodaPlata }}>
-                {displayMetoda(r.metodaPlata)}
+              <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !live().metodaPlata }}>
+                {displayMetoda(live().metodaPlata)}
               </span>
             </Show>
           </div>
@@ -930,16 +983,16 @@ function ReceiptCard(props: { receipt: Receipt }) {
               onClick={(e) => {
                 e.stopPropagation();
                 setResume({
-                  id: r.id,
-                  titlu: r.titlu,
-                  descriere: r.descriere ?? "",
-                  dateTehn: r.dateTehn ?? "",
-                  items: r.items,
+                  id: live().id,
+                  titlu: live().titlu,
+                  descriere: live().descriere ?? "",
+                  dateTehn: live().dateTehn ?? "",
+                  items: live().items,
                   clientId: live().clientId,
                   clientNume: live().clientNume,
                   clientCui: live().clientCui,
                   clientTip: live().clientTip,
-                  vehicol: r.vehicol ?? null,
+                  vehicol: live().vehicol ?? null,
                   source: live().source,
                   constatari: live().constatari ?? null,
                   sugestii: live().sugestii ?? null,
@@ -974,8 +1027,6 @@ function ReceiptCard(props: { receipt: Receipt }) {
             </Show>
 
             <div class="receipt-items">
-              {/* `live()` si nu `r`: dupa aplicarea unei reduceri liniile se
-                  schimba, iar `r` e snapshot-ul de la montarea cardului. */}
               <For each={live().items}>
                 {(item, index) => (
                   <div class="receipt-item">
@@ -1029,10 +1080,10 @@ function ReceiptCard(props: { receipt: Receipt }) {
               </div>
             </Show>
 
-            {!isFdl() && r.metodaPlata && (
+            {!isFdl() && live().metodaPlata && (
               <div class="receipt-plata">
                 <span>Metodă de plată</span>
-                <span>{displayMetoda(r.metodaPlata)}</span>
+                <span>{displayMetoda(live().metodaPlata)}</span>
               </div>
             )}
 
@@ -1249,7 +1300,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
               {/* Registrul de miscari de bani: avans / plata / restituire.
                   Separat de liniile bonului — un avans nu scade valoarea prestatiei. */}
               <PaymentsSection
-                receiptId={r.id}
+                receiptId={live().id}
                 // Registrul se inchide odata cu incasarea integrala: miscarile de
                 // bani se mai pot adauga sau sterge doar cat timp statusul e
                 // Neplatit sau Platit partial (si bonul n-a plecat la ANAF).
@@ -1261,44 +1312,44 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 }
                 // Serverul recalculeaza statusul bonului din registru, deci
                 // recitim bonul ca selectorul „Status plată" sa nu ramana in urma.
-                onChanged={() => { void refreshReceipt(r.id); }}
+                onChanged={() => { void refreshReceipt(live().id); }}
                 // Amprenta starii bonului: orice schimbare de status, total sau
                 // actualizare venita prin SSE reincarca situatia platilor.
                 refreshKey={`${payRefresh()}|${live().metodaPlata ?? ""}|${live().partialPay ?? ""}|${live().total}|${live().updatedAt ?? ""}`}
               />
             </Show>
 
-            <Show when={!!r.descriere}>
+            <Show when={!!live().descriere}>
               <div class="rcard-extra-card">
                 <div class="rcard-extra-title">Descriere</div>
-                <div class="rcard-extra-text">{r.descriere}</div>
+                <div class="rcard-extra-text">{live().descriere}</div>
               </div>
             </Show>
-            <Show when={!!r.dateTehn}>
+            <Show when={!!live().dateTehn}>
               <div class="rcard-extra-card">
                 <div class="rcard-extra-title">Observații</div>
-                <div class="rcard-extra-text">{r.dateTehn}</div>
+                <div class="rcard-extra-text">{live().dateTehn}</div>
               </div>
             </Show>
-            <Show when={!!r.vehicol}>
+            <Show when={!!live().vehicol}>
               <div class="rcard-extra-card">
                 <div class="rcard-extra-title">Vehicul</div>
                 <div style="font-size:13px;display:grid;gap:3px">
-                  <strong>{r.vehicol!.numarMasina}</strong>
-                  <Show when={r.vehicol!.marca || r.vehicol!.model}>
-                    <span>{[r.vehicol!.marca, r.vehicol!.model].filter(Boolean).join(" ")}</span>
+                  <strong>{live().vehicol!.numarMasina}</strong>
+                  <Show when={live().vehicol!.marca || live().vehicol!.model}>
+                    <span>{[live().vehicol!.marca, live().vehicol!.model].filter(Boolean).join(" ")}</span>
                   </Show>
-                  <Show when={r.vehicol!.anFabricatie != null}>
-                    <span>An fabricație: {r.vehicol!.anFabricatie}</span>
+                  <Show when={live().vehicol!.anFabricatie != null}>
+                    <span>An fabricație: {live().vehicol!.anFabricatie}</span>
                   </Show>
-                  <Show when={r.vehicol!.numarKilometrii != null}>
-                    <span>Km: {r.vehicol!.numarKilometrii!.toLocaleString("ro-RO")}</span>
+                  <Show when={live().vehicol!.numarKilometrii != null}>
+                    <span>Km: {live().vehicol!.numarKilometrii!.toLocaleString("ro-RO")}</span>
                   </Show>
-                  <Show when={r.vehicol!.vin}>
-                    <span style="font-size:11px;color:var(--text-muted)">VIN: {r.vehicol!.vin}</span>
+                  <Show when={live().vehicol!.vin}>
+                    <span style="font-size:11px;color:var(--text-muted)">VIN: {live().vehicol!.vin}</span>
                   </Show>
-                  <Show when={r.vehicol!.observatii}>
-                    <span style="color:var(--text-muted);white-space:pre-wrap">{r.vehicol!.observatii}</span>
+                  <Show when={live().vehicol!.observatii}>
+                    <span style="color:var(--text-muted);white-space:pre-wrap">{live().vehicol!.observatii}</span>
                   </Show>
                 </div>
               </div>
@@ -1413,7 +1464,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         >
           <div style="padding:0 16px 8px">
             <p style="font-size:0.88rem;margin-bottom:10px">
-              Bonul <strong>{r.titlu}</strong> are elemente legate. Bifează ce vrei să se șteargă împreună cu bonul (debifează ce vrei să păstrezi):
+              Bonul <strong>{live().titlu}</strong> are elemente legate. Bifează ce vrei să se șteargă împreună cu bonul (debifează ce vrei să păstrezi):
             </p>
 
             <Show when={cazariHotel().length > 0}>
@@ -1477,7 +1528,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                     Nu poți emite o factură fără client.
                   </p>
                   <p style="margin:0 0 10px">
-                    Bonul <strong>{r.titlu}</strong> nu are un client asociat. O factură fiscală
+                    Bonul <strong>{live().titlu}</strong> nu are un client asociat. O factură fiscală
                     trebuie să conțină datele cumpărătorului (nume, CUI/CNP, adresă).
                   </p>
                   <p style="margin:0;color:var(--text-muted)">
@@ -1500,7 +1551,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 Se va aloca un număr nou de factură din registrul locației pentru bonul:
               </p>
               <ul style="margin:0 0 12px 16px;padding:0">
-                <li><strong>{r.titlu}</strong></li>
+                <li><strong>{live().titlu}</strong></li>
                 <li>
                   Deviz:&nbsp;
                   <span class="rcard-doc-tag rcard-doc-tag--deviz" style="display:inline-block">
@@ -1508,7 +1559,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                   </span>
                 </li>
                 <li>Client: <strong>{live().clientNume}</strong></li>
-                <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
+                <li>Total: <strong>{live().total.toFixed(2)} lei</strong></li>
               </ul>
               <p style="color:var(--text-muted);margin:0">
                 După confirmare, bonul va fi marcat ca facturat. Acțiunea este ireversibilă —
@@ -1557,7 +1608,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
         >
           <div style="padding:0 16px 8px;font-size:0.88rem">
             <p style="margin-bottom:10px">
-              Fișa de Lucru <strong>{r.titlu}</strong> va deveni un deviz real.
+              Fișa de Lucru <strong>{live().titlu}</strong> va deveni un deviz real.
             </p>
             <ul style="margin:0 0 12px 16px;padding:0;color:var(--text-muted)">
               <li>Va intra în totalurile zilei și în rapoarte.</li>
@@ -1597,7 +1648,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
               Se va trimite factura electronică (UBL 2.1) către ANAF — Spațiul Privat Virtual.
             </p>
             <ul style="margin:0 0 12px 16px;padding:0">
-              <li><strong>{r.titlu}</strong></li>
+              <li><strong>{live().titlu}</strong></li>
               <li>
                 Factura:&nbsp;
                 <span class="rcard-doc-tag rcard-doc-tag--factura" style="display:inline-block">
@@ -1605,7 +1656,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </span>
               </li>
               <li>Client: <strong>{live().clientNume ?? "—"}</strong></li>
-              <li>Total: <strong>{r.total.toFixed(2)} lei</strong></li>
+              <li>Total: <strong>{live().total.toFixed(2)} lei</strong></li>
             </ul>
             <p style="color:var(--text-muted);margin:0">
               După trimitere, bonul va fi <strong>blocat</strong> — nu va mai putea fi editat
@@ -1645,7 +1696,7 @@ function ReceiptCard(props: { receipt: Receipt }) {
           <div style="padding:0 16px 8px;font-size:0.88rem">
             <p style="margin-bottom:8px">Vei șterge definitiv:</p>
             <ul style="margin:0 0 8px 16px;padding:0">
-              <li><strong>Bonul {r.titlu}</strong></li>
+              <li><strong>Bonul {live().titlu}</strong></li>
               <Show when={cazariSelected().size > 0}>
                 <li><strong>{cazariSelected().size}</strong> cazare(i) Hotel Anvelope</li>
               </Show>
@@ -1732,6 +1783,16 @@ export default function Reception() {
       return !titleQ || r.titlu.toLowerCase().includes(titleQ) || (r.clientNume ?? "").toLowerCase().includes(titleQ);
     });
   });
+
+  // Cardurile sunt cheiate pe id-ul bonului, nu pe obiect: store-ul inlocuieste
+  // obiectul la fiecare actualizare (plata, numar de document, eveniment SSE), iar
+  // un card recreat isi pierdea starea — extins, modale deschise, erori afisate.
+  const filteredIds = createMemo(
+    () => filtered().map((r) => r.id),
+    undefined,
+    { equals: (a, b) => a.length === b.length && a.every((id, i) => id === b[i]) },
+  );
+  const receiptById = createMemo(() => new Map(receipts().map((r) => [r.id, r])));
 
   const hasFilter = () => selected().size > 0;
 
@@ -1942,8 +2003,11 @@ export default function Reception() {
           }
         >
           <div class="rcard-list">
-            <For each={filtered()}>
-              {(r) => <ReceiptCard receipt={r} />}
+            <For each={filteredIds()}>
+              {(id) => {
+                const first = untrack(() => receiptById().get(id));
+                return first ? <ReceiptCard receipt={first} /> : null;
+              }}
             </For>
           </div>
           <div ref={sentinelRef} class="reception-sentinel">

@@ -146,7 +146,10 @@ function mapFromApi(r: RawReceipt): Receipt {
     partialPay: r.partial_pay != null ? (typeof r.partial_pay === "number" ? r.partial_pay : parseFloat(r.partial_pay)) : undefined,
     items: r.receipt_items.map((i) => ({
       id: i.id,
-      lineId: `${i.id}_${i.employee_id ?? ""}`,
+      // Prefix propriu: `i.id` e id-ul randului din bon, iar cosul din POS
+      // construieste `${idProdus}_${angajat}` pentru produsele din catalog. Fara
+      // prefix, un produs cu acelasi numar s-ar aduna peste aceasta linie.
+      lineId: `ri_${i.id}_${i.employee_id ?? ""}`,
       name: i.name,
       price: typeof i.price === "number" ? i.price : parseFloat(i.price),
       qty: i.qty,
@@ -203,6 +206,28 @@ function loadCache(): Receipt[] {
 
 const [receipts, setReceipts] = createSignal<Receipt[]>(loadCache());
 
+/** Cache-ul local e doar o comoditate la pornire. Un `setItem` care arunca
+ *  (spatiu epuizat, stocare blocata) nu are voie sa transforme in eroare o
+ *  operatie deja reusita pe server — utilizatorul ar repeta-o si ar dubla bonul. */
+function persistCache(list: Receipt[]): void {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(list));
+  } catch {
+    // Mai bine fara cache decat cu unul ramas in urma.
+    try { localStorage.removeItem(CACHE_KEY); } catch { /* stocare indisponibila */ }
+  }
+}
+
+/** Pastreaza obiectul vechi pentru bonurile neschimbate la o reincarcare, ca
+ *  tot ce depinde de ele in interfata sa nu fie recalculat degeaba. */
+function keepUnchanged(prev: Receipt[], next: Receipt[]): Receipt[] {
+  const old = new Map(prev.map((r) => [r.id, r]));
+  return next.map((r) => {
+    const before = old.get(r.id);
+    return before && JSON.stringify(before) === JSON.stringify(r) ? before : r;
+  });
+}
+
 function _diffAndNotifyEfacturaStatus(prev: Receipt[], next: Receipt[]): void {
   const prevMap = new Map(prev.map((r) => [r.id, r.efacturaStatus]));
   for (const r of next) {
@@ -221,7 +246,7 @@ function _diffAndNotifyEfacturaStatus(prev: Receipt[], next: Receipt[]): void {
   }
 }
 
-// Parametrii ultimului load — folositi de SSE scheduleReload
+// Parametrii ultimului load — folositi de loadMoreReceipts si de reimprospatarea SSE
 let _lastDateFrom: string | null = null;
 let _lastDateTo: string | null = null;
 let _lastLimit: number = 10;
@@ -229,35 +254,67 @@ let _lastSearch: string = "";
 let _lastItemSearch: string = "";
 let _lastLocationId: number | null = null;
 let _nextCursor: number | null = null;
+// Cate pagini sunt in lista (prima + cele aduse cu „load more").
+let _pagesLoaded = 1;
+// Creste la fiecare incarcare completa; un raspuns pornit inaintea ei e aruncat.
+let _loadSeq = 0;
+// Creste la fiecare reimprospatare SSE; doar cea mai recenta are voie sa scrie lista.
+let _refreshSeq = 0;
+// La un eveniment SSE recitim cel mult atatea pagini din cele deja incarcate.
+const MAX_REFRESH_PAGES = 3;
 
 const [hasMore, setHasMore] = createSignal(false);
 const [loadingMore, setLoadingMore] = createSignal(false);
 export { hasMore, loadingMore };
 
+interface ReceiptsPage {
+  items: Receipt[];
+  nextCursor: number | null;
+}
+
+/** O pagina din lista, cu filtrele ultimului load. `null` = raspuns refuzat. */
+async function _fetchPage(lastId: number | null): Promise<ReceiptsPage | null> {
+  let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30`;
+  if (lastId != null) qs += `&last_id=${lastId}`;
+  if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
+  if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
+  if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
+  if (_lastItemSearch) qs += `&item_q=${encodeURIComponent(_lastItemSearch)}`;
+  if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
+  const res = await apiFetch(qs);
+  if (!res.ok) return null;
+  const data = await res.json();
+  return { items: (data.items as RawReceipt[]).map(mapFromApi), nextCursor: data.next_cursor ?? null };
+}
+
+/**
+ * Incarca prima pagina cu filtrele date si inlocuieste lista.
+ *
+ * Un filtru omis inseamna „fara filtru", nu „ca data trecuta": „Deschide
+ * existent" din POS apeleaza fara cautare/interval/locatie si nu trebuie sa
+ * mosteneasca ce a ramas din Receptie. Doar `limit` omis pastreaza valoarea
+ * anterioara.
+ */
 export async function loadReceipts(dateFrom?: string | null, dateTo?: string | null, limit?: number, q?: string, locationId?: number | null, itemQ?: string) {
-  if (dateFrom !== undefined) _lastDateFrom = dateFrom ?? null;
-  if (dateTo !== undefined) _lastDateTo = dateTo ?? null;
+  _lastDateFrom = dateFrom ?? null;
+  _lastDateTo = dateTo ?? null;
   if (limit !== undefined) _lastLimit = limit;
-  if (q !== undefined) _lastSearch = q;
-  if (itemQ !== undefined) _lastItemSearch = itemQ;
-  if (locationId !== undefined) _lastLocationId = locationId ?? null;
+  _lastSearch = q ?? "";
+  _lastItemSearch = itemQ ?? "";
+  _lastLocationId = locationId ?? null;
   _nextCursor = null;
+  const seq = ++_loadSeq;
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30`;
-    if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
-    if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
-    if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
-    if (_lastItemSearch) qs += `&item_q=${encodeURIComponent(_lastItemSearch)}`;
-    if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
-    const res = await apiFetch(qs);
-    if (!res.ok) return;
-    const data = await res.json();
-    const mapped: Receipt[] = data.items.map(mapFromApi);
-    _nextCursor = data.next_cursor ?? null;
+    const page = await _fetchPage(null);
+    // Intre timp a pornit o incarcare mai noua (alt filtru): raspunsul acesta e vechi.
+    if (!page || seq !== _loadSeq) return;
+    _nextCursor = page.nextCursor;
+    _pagesLoaded = 1;
     setHasMore(_nextCursor !== null);
-    _diffAndNotifyEfacturaStatus(receipts(), mapped);
-    setReceipts(mapped);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(mapped));
+    _diffAndNotifyEfacturaStatus(receipts(), page.items);
+    const next = keepUnchanged(receipts(), page.items);
+    setReceipts(next);
+    persistCache(next);
   } catch {
     // ramane cache-ul existent
   }
@@ -266,29 +323,71 @@ export async function loadReceipts(dateFrom?: string | null, dateTo?: string | n
 export async function loadMoreReceipts() {
   if (!_nextCursor || loadingMore()) return;
   setLoadingMore(true);
+  const seq = _loadSeq;
   try {
-    let qs = `/api/receipts?limit=${_lastLimit}&sort=-activity&unpaid_days=30&last_id=${_nextCursor}`;
-    if (_lastDateFrom) qs += `&date_from=${_lastDateFrom}`;
-    if (_lastDateTo) qs += `&date_to=${_lastDateTo}`;
-    if (_lastSearch) qs += `&q=${encodeURIComponent(_lastSearch)}`;
-    if (_lastItemSearch) qs += `&item_q=${encodeURIComponent(_lastItemSearch)}`;
-    if (_lastLocationId != null) qs += `&location_id=${_lastLocationId}`;
-    const res = await apiFetch(qs);
-    if (!res.ok) return;
-    const data = await res.json();
-    const mapped: Receipt[] = data.items.map(mapFromApi);
-    _nextCursor = data.next_cursor ?? null;
+    const page = await _fetchPage(_nextCursor);
+    // Lista a fost reincarcata cu alte filtre cat a durat cererea: pagina
+    // aceasta apartine listei vechi si nu are ce cauta in cea noua.
+    if (!page || seq !== _loadSeq) return;
+    _nextCursor = page.nextCursor;
+    _pagesLoaded += 1;
     setHasMore(_nextCursor !== null);
     // Un bon modificat intre doua pagini isi schimba pozitia in sortarea dupa
     // activitate si poate reveni pe pagina urmatoare — nu il afisam de doua ori.
     const seen = new Set(receipts().map((r) => r.id));
-    const updated = [...receipts(), ...mapped.filter((r) => !seen.has(r.id))];
+    const updated = [...receipts(), ...page.items.filter((r) => !seen.has(r.id))];
     setReceipts(updated);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+    persistCache(updated);
   } catch {
     // ignore
   } finally {
     setLoadingMore(false);
+  }
+}
+
+/**
+ * Reimprospatare dupa un eveniment SSE: reciteste paginile deja incarcate, cu
+ * aceleasi filtre, in loc sa se intoarca la prima pagina (operatorul care a
+ * derulat isi pierdea pozitia la fiecare salvare a unui coleg).
+ *
+ * Marginit la MAX_REFRESH_PAGES cereri: daca erau incarcate mai multe pagini,
+ * restul se elibereaza si revin la derulare, prin „load more" — un rand
+ * neverificat (poate sters intre timp) nu ramane afisat.
+ */
+async function refreshLoadedReceipts(): Promise<void> {
+  // O pagina in curs de adus ar fi suprascrisa de rezultat; mai asteptam.
+  if (loadingMore()) { scheduleReload(); return; }
+  const seq = _loadSeq;
+  const my = ++_refreshSeq;
+  const pages = Math.min(Math.max(_pagesLoaded, 1), MAX_REFRESH_PAGES);
+  try {
+    const fresh: Receipt[] = [];
+    const seen = new Set<string>();
+    let cursor: number | null = null;
+    let loaded = 0;
+    for (let i = 0; i < pages; i++) {
+      const page = await _fetchPage(cursor);
+      // Fara raspuns sau cu filtrele schimbate intre timp: lista ramane cum e.
+      if (!page || seq !== _loadSeq) return;
+      // A pornit o reimprospatare mai noua (alt eveniment SSE): paginile citite
+      // aici sunt mai vechi decat ale ei si nu au voie sa ajunga ultimele in lista.
+      if (my !== _refreshSeq) return;
+      for (const r of page.items) {
+        if (!seen.has(r.id)) { seen.add(r.id); fresh.push(r); }
+      }
+      cursor = page.nextCursor;
+      loaded += 1;
+      if (cursor === null) break;
+    }
+    _nextCursor = cursor;
+    _pagesLoaded = loaded;
+    setHasMore(_nextCursor !== null);
+    _diffAndNotifyEfacturaStatus(receipts(), fresh);
+    const next = keepUnchanged(receipts(), fresh);
+    setReceipts(next);
+    persistCache(next);
+  } catch {
+    // ramane lista existenta; urmatorul eveniment reincearca
   }
 }
 
@@ -337,7 +436,7 @@ export async function saveReceipt(receipt: ReceiptInput): Promise<Receipt> {
   }
   const created = mapFromApi(await res.json());
   setReceipts([created, ...receipts()]);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(receipts()));
+  persistCache(receipts());
   return created;
 }
 
@@ -378,7 +477,7 @@ export async function updateReceiptContent(id: string, receipt: ReceiptInput): P
   }
   const updated = mapFromApi(await res.json());
   setReceipts(receipts().map((r) => r.id === String(id) ? updated : r));
-  localStorage.setItem(CACHE_KEY, JSON.stringify(receipts()));
+  persistCache(receipts());
   return updated;
 }
 
@@ -399,7 +498,7 @@ export async function updateMetodaPlata(id: string, metodaPlata: string | null, 
   const fresh = mapFromApi(await res.json());
   const updated = receipts().map((r) => (r.id === id ? fresh : r));
   setReceipts(updated);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+  persistCache(updated);
 }
 
 export async function assignFacturaNumber(id: string, locationId: number): Promise<{ serie: string; nr: number }> {
@@ -419,7 +518,7 @@ export async function assignFacturaNumber(id: string, locationId: number): Promi
       : r
   );
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
   return { serie: data.serie, nr: data.nr };
 }
 
@@ -440,7 +539,7 @@ export function applyDocNumber(
     return { ...r, chitantaSerie: serie, chitantaNr: nr };
   });
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
 }
 
 export async function finalizeFdl(id: string): Promise<Receipt> {
@@ -453,7 +552,7 @@ export async function finalizeFdl(id: string): Promise<Receipt> {
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
   return updated;
 }
 
@@ -467,7 +566,7 @@ export async function convertFdlToDeviz(id: string): Promise<Receipt> {
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
   return updated;
 }
 
@@ -485,7 +584,7 @@ export async function refreshReceipt(id: string): Promise<Receipt | null> {
     const updated = mapFromApi(await res.json());
     const next = receipts().map((r) => (r.id === id ? updated : r));
     setReceipts(next);
-    localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+    persistCache(next);
     return updated;
   } catch {
     return null;
@@ -501,7 +600,7 @@ export async function deleteReceipt(id: string) {
   }
   const updated = receipts().filter((r) => r.id !== id);
   setReceipts(updated);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+  persistCache(updated);
 }
 
 export async function updateReceiptClient(id: string, clientId: number | null): Promise<void> {
@@ -517,7 +616,7 @@ export async function updateReceiptClient(id: string, clientId: number | null): 
   const updated = mapFromApi(await res.json());
   const next = receipts().map((r) => r.id === id ? updated : r);
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
 }
 
 export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Promise<void> {
@@ -540,7 +639,7 @@ export async function saveReceiptVehicol(id: string, vehicol: VehicolData): Prom
   }
   const next = receipts().map((r) => r.id === id ? { ...r, vehicol } : r);
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
 }
 
 async function _readApiError(res: Response, fallback: string): Promise<string> {
@@ -570,7 +669,7 @@ export function applyEfacturaStatus(
     };
   });
   setReceipts(next);
-  localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  persistCache(next);
 }
 
 export async function uploadToSpv(receiptId: string): Promise<void> {
@@ -601,7 +700,7 @@ let _esAttempts = 0;
 
 function scheduleReload() {
   clearTimeout(_reloadTimer);
-  _reloadTimer = setTimeout(() => loadReceipts(), 300);
+  _reloadTimer = setTimeout(() => { void refreshLoadedReceipts(); }, 300);
 }
 
 // Exponential backoff cu jitter pentru reconectare SSE (max 60s).
@@ -645,6 +744,8 @@ export function connectSSE(): void {
 export function disconnectSSE(): void {
   if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
   if (_es) { _es.close(); _es = null; }
+  // O reimprospatare programata nu mai are ce cauta dupa parasirea Receptiei.
+  clearTimeout(_reloadTimer);
   _esAttempts = 0;
   setSseStatus("disconnected");
 }

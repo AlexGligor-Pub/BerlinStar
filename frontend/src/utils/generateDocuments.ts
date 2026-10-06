@@ -15,6 +15,7 @@ import {
   drawItemsTable, drawTotals, drawDisclaimer, drawSignatures, SIGNATURES_PIN_Y,
   drawPaymentsHistory, type PaymentRowForPdf,
 } from "./pdf";
+import { sumaInLitere } from "./sumaInLitere";
 // Importat ca asset Vite → primeste hash in nume la build, deci nu mai sufera de
 // cache stale la nivel de nginx/CDN cand schimbam continutul fontului.
 import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
@@ -518,12 +519,21 @@ export async function generateFactura(r: Receipt, ctx: DocContext): Promise<void
 
 // ─── CHITANTA ────────────────────────────────────────────────────────────────
 
-export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<void> {
+/**
+ * @param sumaIncasata Suma primita efectiv. Obligatorie pentru un bon „Platit
+ *   Partial": chitanta atesta bani primiti, deci nu poate purta totalul bonului
+ *   cat timp acesta nu a fost incasat integral.
+ */
+export async function generateChitanta(r: Receipt, ctx: DocContext, sumaIncasata?: number): Promise<void> {
+  const partial = r.metodaPlata === "Platit Partial";
+  if (partial && !(sumaIncasata != null && Number.isFinite(sumaIncasata) && sumaIncasata > 0)) {
+    throw new Error("Chitanța pentru un bon plătit parțial se emite doar pentru suma încasată efectiv.");
+  }
   const { jsPDF } = await loadPdf();
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   await enableRomanianFont(doc);
   const tvaPct = ctx.company?.tva_percentage ?? 0;
-  const totalFinal = r.total;
+  const totalFinal = partial ? sumaIncasata! : r.total;
   const totalNet = totalFinal / (1 + tvaPct / 100);
   const tvaAmt = totalFinal - totalNet;
   const date = fmtDate(r.date);
@@ -625,7 +635,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   y += 5.5;
 
   // In litere
-  const inLitere = sumInLitere(totalFinal);
+  const inLitere = sumaInLitere(totalFinal);
   doc.setFont("helvetica", "italic");
   doc.setFontSize(8.5);
   const litereLines: string[] = doc.splitTextToSize(ro(`(adică ${inLitere})`), innerW);
@@ -659,7 +669,9 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
   if (r.metodaPlata) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.text(ro(`Modalitate de plată: ${r.metodaPlata}`), innerX, y);
+    // La plata partiala, totalul facturii apare doar ca reper, langa suma primita.
+    const modalitate = partial ? `plată parțială (total factură ${lei(r.total)})` : r.metodaPlata;
+    doc.text(ro(`Modalitate de plată: ${modalitate}`), innerX, y);
     y += 4.5;
   }
 
@@ -669,7 +681,7 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
       : `${r.facturaNr}`;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    const prefix = ro("Achitată conform facturii nr. ");
+    const prefix = ro(partial ? "Plată parțială conform facturii nr. " : "Achitată conform facturii nr. ");
     doc.text(prefix, innerX, y);
     const prefixW = doc.getTextWidth(prefix);
     doc.setFont("helvetica", "bold");
@@ -709,43 +721,6 @@ export async function generateChitanta(r: Receipt, ctx: DocContext): Promise<voi
 
   await drawFooterWithBranding(doc, ctx.company?.website);
   doc.save(docFilename("chitanta", r.titlu));
-}
-
-// ─── Suma in litere ───────────────────────────────────────────────────────────
-
-function sumInLitere(n: number): string {
-  const total = Math.round(n);
-  const bani = Math.round((n - Math.floor(n)) * 100);
-  const s = numarInLitere(total);
-  if (bani > 0) return `${s} lei si ${numarInLitere(bani)} bani`;
-  return `${s} lei`;
-}
-
-function numarInLitere(n: number): string {
-  if (n === 0) return "zero";
-  const u = ["", "unu", "doi", "trei", "patru", "cinci", "sase", "sapte", "opt", "noua",
-    "zece", "unsprezece", "doisprezece", "treisprezece", "paisprezece", "cincisprezece",
-    "saisprezece", "saptesprezece", "optsprezece", "nouasprezece"];
-  const z = ["", "", "douazeci", "treizeci", "patruzeci", "cincizeci", "saizeci", "saptezeci", "optzeci", "nouazeci"];
-
-  function sub100(x: number): string {
-    if (x < 20) return u[x];
-    const zd = Math.floor(x / 10), ud = x % 10;
-    return ud === 0 ? z[zd] : `${z[zd]} si ${u[ud]}`;
-  }
-
-  function sub1000(x: number): string {
-    if (x < 100) return sub100(x);
-    const h = Math.floor(x / 100), rest = x % 100;
-    const prefix = h === 1 ? "o suta" : h === 2 ? "doua sute" : `${sub100(h)} sute`;
-    return rest === 0 ? prefix : `${prefix} ${sub100(rest)}`;
-  }
-
-  let result = "";
-  if (n >= 1_000_000) { const m = Math.floor(n / 1_000_000); result += `${sub1000(m)} ${m === 1 ? "milion" : "milioane"} `; n %= 1_000_000; }
-  if (n >= 1_000)     { const k = Math.floor(n / 1_000);     result += `${sub1000(k)} ${k === 1 ? "mie" : "mii"} `;     n %= 1_000; }
-  if (n > 0) result += sub1000(n);
-  return result.trim();
 }
 
 // ─── Hotel Anvelope ───────────────────────────────────────────────────────────
