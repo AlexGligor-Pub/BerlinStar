@@ -18,7 +18,7 @@ from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.ownership import assert_owned
 from app.utils.paginate import paginate
-from app.utils.storage import upload_image, delete_image_by_url, validate_image
+from app.utils.storage import upload_image, delete_image_by_url, validate_image, check_image_ref
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -85,6 +85,7 @@ async def create_item(
     account_id: int = Depends(get_settings_account_id),
 ):
     await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
+    check_image_ref(body.image_path, None, account_id)
     item = Item(**body.model_dump(), account_id=account_id)
     db.add(item)
     await db.commit()
@@ -117,6 +118,7 @@ async def update_item(
     # Doar la schimbare: un articol ramas intr-o categorie stearsa trebuie sa poata fi editat.
     if body.category_id != item.category_id:
         await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
+    check_image_ref(body.image_path, item.image_path, account_id)
     for k, v in body.model_dump().items():
         setattr(item, k, v)
     item.updated_at = datetime.now(timezone.utc)
@@ -137,6 +139,7 @@ async def patch_item(
         raise HTTPException(404, "Item-ul nu a fost gasit.")
     if body.category_id is not None and body.category_id != item.category_id:
         await assert_owned(db, Category, body.category_id, account_id, what="Categoria")
+    check_image_ref(body.image_path, item.image_path, account_id)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(item, k, v)
     item.updated_at = datetime.now(timezone.utc)
@@ -161,7 +164,7 @@ async def upload_item_image(
     item.image_path = url
     await db.commit()
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     result = await db.execute(
         select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
     )
