@@ -57,6 +57,18 @@ def _as_end_instant(dt: datetime | None) -> datetime | None:
 # SALE_REVERSE (bon anulat / replatit / editat) il are pozitiv, deci suma lui
 # `-qty_delta` peste ambele tipuri da exact ce a ramas vandut — la fel cum
 # `Stock.qty` e deplasat de ambele miscari.
+#
+# Netarea se face in interiorul perioadei cerute, dupa data fiecarei miscari. Un
+# bon vandut luna trecuta si anulat luna asta lasa in perioada doar stornarea,
+# adica un net negativ: intr-un raport de „vandute in perioada" asta nu e o
+# vanzare, deci randurile cu net <= 0 nu se afiseaza (`having ... > 0`).
+# Totalurile din UI se aduna din randurile primite, deci raman egale cu ce se vede.
+#
+# Limita cunoscuta, doar pe cost/marja: SALE_REVERSE e scris cu costul curent al
+# articolului (`services/stock.py :: reverse_sale_for_receipt`), nu cu cel de pe
+# vanzarea stornata. Daca `cost_price` s-a schimbat (sau a fost golit) intre
+# vanzare si stornare, `valoare_cost` si `marja` nu se neteaza exact; cantitatea
+# si valoarea de vanzare da, pentru ca stornarea refoloseste qty si pretul liniei.
 _SALE_TYPES = (StockMovementType.SALE, StockMovementType.SALE_REVERSE)
 
 
@@ -362,8 +374,8 @@ async def report_top_produse(
             StockMovement.movement_type.in_(_SALE_TYPES),
         )
         .group_by(StockMovement.item_id, StockMovement.item_name)
-        # Vanzare stornata integral = nimic vandut, nu un rand cu 0 bucati.
-        .having(func.sum(-StockMovement.qty_delta) != 0)
+        # Stornata integral (0) sau doar stornari in perioada (< 0) = nimic vandut.
+        .having(func.sum(-StockMovement.qty_delta) > 0)
         .order_by(func.sum(-StockMovement.qty_delta).desc())
         .limit(limit)
     )
@@ -415,7 +427,7 @@ async def report_per_angajat(
             StockMovement.movement_type.in_(_SALE_TYPES),
         )
         .group_by(StockMovement.employee_id, Employee.name, StockMovement.item_id, StockMovement.item_name)
-        .having(func.sum(-StockMovement.qty_delta) != 0)
+        .having(func.sum(-StockMovement.qty_delta) > 0)
         .order_by(Employee.name, func.sum(-StockMovement.qty_delta).desc())
     )
     if date_from is not None:

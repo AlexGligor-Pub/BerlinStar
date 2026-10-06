@@ -28,9 +28,11 @@ def _test_modules() -> list[str]:
 def main() -> int:
     failed: list[tuple[str, BaseException]] = []
     for name in _test_modules():
-        module = importlib.import_module(f"tests.{name}")
-        runner = getattr(module, "main", None)
         try:
+            # Importul sta in `try`: un modul care nu se importa e esecul lui,
+            # nu al suitei — cele de dupa el trebuie sa ruleze.
+            module = importlib.import_module(f"tests.{name}")
+            runner = getattr(module, "main", None)
             if runner is not None:
                 runner()
             else:
