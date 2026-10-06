@@ -7,7 +7,8 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, extract, update, delete, or_, and_, tuple_, literal
+from sqlalchemy import select, func, update, delete, or_, and_, tuple_, literal
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +40,9 @@ from app.utils.plate import normalize_plate, normalized_plate_column
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 from app.services.payments_service import resync_after_total_change, sync_from_status
-from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
+from app.services.stock import reconcile_sale_for_receipt, unapplied_sale_qty
+
+from app.utils.paginate import checked_limit
 
 router = APIRouter()
 
@@ -182,7 +185,11 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
     """Recalculează current_target_accumulation pentru angajații afectați (luna curentă)."""
     if not employee_ids:
         return
-    now = datetime.now(timezone.utc)
+    # Luna calendaristica locala, ca interval: cu `extract()` pe ora UTC, bonurile
+    # din primele ore ale zilei de 1 se numarau la luna precedenta.
+    today = datetime.now(_LIST_TZ).date()
+    month_start = _local_day_start(today.replace(day=1))
+    next_month = (today.replace(day=1) + timedelta(days=32)).replace(day=1)
     rows = (await db.execute(
         select(ReceiptItem.employee_id, func.coalesce(func.sum(ReceiptItem.price * ReceiptItem.qty), 0))
         .join(Receipt, Receipt.id == ReceiptItem.receipt_id)
@@ -192,8 +199,8 @@ async def _refresh_accumulations(db: AsyncSession, account_id: int, employee_ids
             Receipt.is_deleted == False,
             Receipt.source != "fdl",
             Receipt.pay_method != PayMethod.NEPLATIT,
-            extract("year",  Receipt.created_at) == now.year,
-            extract("month", Receipt.created_at) == now.month,
+            Receipt.created_at >= month_start,
+            Receipt.created_at < _local_day_start(next_month),
         )
         .group_by(ReceiptItem.employee_id)
     )).all()
@@ -297,14 +304,18 @@ _RECEIPT_PATCH_LOCKED_ALLOWED = {"pay_method", "partial_pay"}
 #   - pending_upload  -> e in coada catre ANAF (background task ruleaza)
 #   - in_prelucrare   -> ANAF a primit factura si o valideaza
 #   - accepted        -> factura e validata si arhivata la ANAF
-#   - rejected        -> respins asincron, dar are index_incarcare (cuplata cu factura)
 #   - error CU index_incarcare -> caz exceptional: post-upload, dar pre-ANAF response
 #     parse (rar; tratat ca locked din precautie)
 #
 # IMPORTANT: "error" fara index_incarcare NU blocheaza — upload-ul n-a ajuns la ANAF
 # (HTTP/timeout/validare schematron), deci bonul redevine editabil pentru retry.
+#
+# "rejected" NU blocheaza: ANAF a raspuns „nok", deci factura nu e inregistrata
+# in SPV si nu are cu ce sa diverga. Blocata, nu putea fi corectata niciodata —
+# /retry reconstruieste XML-ul din bon, deci retrimitea aceleasi linii respinse.
+# Stergerea ramane refuzata si pentru ea (vezi `delete_receipt`).
 # Daca adaugi un status nou, decide-l aici si in `EFacturaSent.canRetry` (FE).
-_EFACTURA_LOCKING_STATUSES = {"pending_upload", "in_prelucrare", "accepted", "rejected"}
+_EFACTURA_LOCKING_STATUSES = {"pending_upload", "in_prelucrare", "accepted"}
 
 
 def _efactura_lock_from_record(rec: EFacturaRecord | None) -> tuple[str | None, bool, str | None, int | None]:
@@ -336,13 +347,45 @@ async def _load_efactura_record_for(db: AsyncSession, receipt_id: int) -> EFactu
     )).scalar_one_or_none()
 
 
-async def _assert_not_locked(db: AsyncSession, receipt_id: int) -> None:
+async def _assert_not_locked(db: AsyncSession, receipt_id: int, *, deleting: bool = False) -> None:
     rec = await _load_efactura_record_for(db, receipt_id)
     status, locked, _, _ = _efactura_lock_from_record(rec)
     if locked:
         raise HTTPException(
             423,
             f"Bonul a fost trimis la ANAF (status: {status}) si nu mai poate fi modificat decat metoda de plata."
+        )
+    if deleting and status == "rejected":
+        # Factura respinsa se corecteaza si se retrimite; stergerea ar lasa in urma
+        # transmiterea inregistrata (cu numarul facturii) fara bonul ei.
+        raise HTTPException(
+            423,
+            "Factura a fost respinsa de ANAF: corecteaz-o si retrimite-o. "
+            "Un bon cu o transmitere ANAF inregistrata nu poate fi sters.",
+        )
+
+
+def _assert_partial_pay(pay_method: PayMethod, partial_pay: Decimal | None, total: Decimal) -> None:
+    """„Platit Partial" cere un avans real: mai mare ca zero si, pe un bon cu
+    total, cel mult totalul.
+
+    Fara verificare, valoarea implicita din formular (100 lei) ajungea pe bonuri
+    mai mici, iar registrul de plati si rapoartele aratau incasari peste total.
+    """
+    if pay_method != PayMethod.PARTIAL:
+        return
+    if partial_pay is None or partial_pay <= 0:
+        raise HTTPException(
+            422, "Pentru „Platit Partial” introdu suma incasata (mai mare decat zero)."
+        )
+    # Bonul cu total 0 (deviz inca fara linii) ramane fara plafon, la fel ca in
+    # registrul de plati (`add_payment`): avansul luat inainte de a trece
+    # lucrarile pe bon e o operatie obisnuita.
+    if total is not None and total > 0 and partial_pay > total:
+        raise HTTPException(
+            422,
+            f"Avansul de {partial_pay} lei depaseste totalul bonului ({total} lei). "
+            "Introdu suma incasata efectiv sau alege o metoda de plata integrala.",
         )
 
 
@@ -432,7 +475,7 @@ async def list_receipts(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    limit = min(limit, 1000)
+    limit = min(checked_limit(limit), 1000)
     stmt = (
         select(Receipt)
         .options(
@@ -556,6 +599,8 @@ async def create_receipt(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
     ctx: AuthContext = Depends(get_auth_context),
+    # Cine face actiunea — pentru jurnalul de stoc, cand bonul e creat direct platit.
+    actor: str = Depends(get_actor_username),
 ):
     # Un bon nou nu poate porni nici cu reducere, nici cu preturi sub catalog,
     # daca rolul nu are dreptul — altfel restrictia de la editare s-ar ocoli
@@ -563,6 +608,7 @@ async def create_receipt(
     # deci referinta e strict catalogul.
     await _assert_may_change_prices(db, account_id, None, body.items, ctx)
     _verify_total_against_items(body.items, body.total)
+    _assert_partial_pay(body.pay_method, body.partial_pay, body.total)
     # Id-urile vin din payload: fiecare trebuie sa fie al contului inainte sa fie
     # salvat, altfel bonul ar lega (si ar afisa prin relatii) randuri ale altui cont.
     await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
@@ -621,6 +667,17 @@ async def create_receipt(
             vat_percent=it.vat_percent,
             original_price=it.original_price,
         ))
+
+    if receipt.pay_method != PayMethod.NEPLATIT:
+        # Bon creat direct platit (Factura Rapida): aceeasi urma ca la trecerea
+        # pe platit din ecranul bonului — marfa scazuta din stoc si incasarea in
+        # registrul de plati. Fara ele, readucerea pe Neplatit sau stergerea
+        # adaugau in stoc marfa care nu fusese scazuta niciodata.
+        await db.flush()
+        await reconcile_sale_for_receipt(
+            db, account_id, receipt, paid=True, created_by_user=actor
+        )
+        await sync_from_status(db, account_id, receipt)
 
     emp_ids = {it.employee_id for it in body.items if it.employee_id}
     await _refresh_accumulations(db, account_id, emp_ids)
@@ -724,8 +781,11 @@ async def patch_receipt(
     actor: str = Depends(get_actor_username),
 ):
     receipt = await db.get(Receipt, receipt_id, with_for_update=True)
-    if receipt is None or receipt.account_id != account_id:
+    # Un bon sters nu mai are status de schimbat: altfel o fila ramasa deschisa
+    # ii muta stocul si scrie in registrul de plati.
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
+    _assert_partial_pay(body.pay_method, body.partial_pay, receipt.total)
 
     # Pe bon blocat in ANAF, permitem doar campurile din `_RECEIPT_PATCH_LOCKED_ALLOWED`.
     # Asta protejeaza enforcement-ul daca cineva extinde `ReceiptPatch` cu un camp nou
@@ -751,10 +811,14 @@ async def patch_receipt(
     # Valoarea de dinainte de modificare — necesara pentru bonurile vechi care au
     # `partial_pay` dar nu au inca inregistrari in registrul de plati.
     old_partial = receipt.partial_pay
-    if old_pay == PayMethod.NEPLATIT and new_pay != PayMethod.NEPLATIT:
-        await apply_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
-    elif old_pay != PayMethod.NEPLATIT and new_pay == PayMethod.NEPLATIT:
-        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+    # Stocul se misca doar la trecerea pragului Neplatit <-> platit, iar cat anume
+    # se decide din jurnal (`reconcile_sale_for_receipt`), nu din tranzitie.
+    was_unpaid = old_pay == PayMethod.NEPLATIT
+    is_unpaid = new_pay == PayMethod.NEPLATIT
+    if was_unpaid != is_unpaid:
+        await reconcile_sale_for_receipt(
+            db, account_id, receipt, paid=not is_unpaid, created_by_user=actor
+        )
 
     receipt.pay_method = body.pay_method
     receipt.partial_pay = body.partial_pay
@@ -792,7 +856,9 @@ async def patch_receipt_content(
     ctx: AuthContext = Depends(get_auth_context),
 ):
     receipt = await db.get(Receipt, receipt_id, with_for_update=True)
-    if receipt is None or receipt.account_id != account_id:
+    # Bon sters intre timp (ex. din Receptie, cat era deschis in POS): salvarea
+    # trebuie refuzata, nu scrisa pe un rand pe care nu-l mai vede nimeni.
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
     await _assert_not_locked(db, receipt_id)
     await _assert_may_change_prices(db, account_id, receipt_id, body.items, ctx)
@@ -817,11 +883,13 @@ async def patch_receipt_content(
         what="Articolul", allow_deleted=True,
     )
 
-    # Daca bonul e platit, intoarcem stocul pentru liniile vechi inainte de a le sterge,
-    # apoi vom reaplica scaderea pentru liniile noi mai jos.
+    # Intoarcem in stoc ce e scazut pentru liniile vechi inainte de a le sterge
+    # (jurnalul spune cat, deci nimic pe un bon fara vanzare inregistrata), apoi
+    # reaplicam scaderea pentru liniile noi mai jos, daca bonul e platit.
     was_paid = receipt.pay_method != PayMethod.NEPLATIT
-    if was_paid:
-        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+    # Ce era platit dar nescazut (bon vechi fara SALE) ramane nescazut si dupa editare.
+    stock_gap = await unapplied_sale_qty(db, account_id, receipt) if was_paid else {}
+    await reconcile_sale_for_receipt(db, account_id, receipt, paid=False, created_by_user=actor)
 
     receipt.titlu = body.titlu
     receipt.descriere = body.descriere
@@ -892,7 +960,10 @@ async def patch_receipt_content(
     await db.flush()
     # Reaplica scaderea pentru liniile noi daca bonul era platit
     if was_paid:
-        await apply_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+        await reconcile_sale_for_receipt(
+            db, account_id, receipt, paid=True, created_by_user=actor,
+            keep_unapplied=stock_gap,
+        )
 
     # Totalul s-a schimbat (ex. s-a aplicat o reducere): restul de plata si
     # statusul trebuie recitite din registru, nu lasate pe valorile vechi.
@@ -981,6 +1052,42 @@ async def _scadenta_implicita(db: AsyncSession, receipt: Receipt) -> date:
     return _calculate_due_date(receipt, zile)
 
 
+async def _number_holder(
+    db: AsyncSession, account_id: int, doc_type: str, serie: str, nr: int, receipt_id: int
+) -> int | None:
+    """Alt bon din cont care poarta deja numarul. Si bonurile sterse il pastreaza:
+    un numar emis nu se refoloseste."""
+    return (await db.execute(
+        select(Receipt.id).where(
+            Receipt.account_id == account_id,
+            getattr(Receipt, f"{doc_type}_serie") == serie,
+            getattr(Receipt, f"{doc_type}_nr") == nr,
+            Receipt.id != receipt_id,
+        ).limit(1)
+    )).scalar_one_or_none()
+
+
+async def _number_taken_error(
+    db: AsyncSession, account_id: int, doc_type: str, serie: str, nr: int, register_name: str
+) -> HTTPException:
+    """409 cu ce are de corectat operatorul. Se apeleaza dupa rollback."""
+    last = await db.scalar(
+        select(func.max(getattr(Receipt, f"{doc_type}_nr"))).where(
+            Receipt.account_id == account_id,
+            getattr(Receipt, f"{doc_type}_serie") == serie,
+        )
+    )
+    return HTTPException(
+        409,
+        f"Numarul de {doc_type} {f'{serie} {nr}'.strip()} este deja emis pe alt document "
+        f"din cont, deci registrul „{register_name}” nu il poate aloca din nou. Fie "
+        "contorul registrului a fost coborat sub ultimul numar emis, fie alt registru "
+        "foloseste aceeasi serie. Corecteaza in Configurari > Registre: seteaza contorul "
+        f"de {doc_type} la ultimul numar emis in seria „{serie}” ({last or nr}) sau da "
+        "registrului o serie proprie. Nu s-a alocat niciun numar.",
+    )
+
+
 @router.post("/{receipt_id}/assign-number", response_model=AssignNumberResponse)
 async def assign_number(
     receipt_id: int,
@@ -1046,9 +1153,26 @@ async def assign_number(
             .execution_options(synchronize_session=False)
         )).scalar_one()
         set_committed_value(register, reg_numar_field, new_nr)
+        # Numarul trebuie sa fie liber in cont: indexul unic e pe (cont, serie, nr),
+        # dar contorul e pe registru. Doua registre cu aceeasi serie sau un contor
+        # coborat sub ultimul numar emis ajung aici pe un numar deja folosit. Nu
+        # sarim peste el (numerotarea trebuie sa ramana fara goluri): anulam
+        # incrementarea si spunem operatorului ce are de corectat.
+        register_name = register.name
+        if await _number_holder(db, account_id, doc_type, reg_serie, new_nr, receipt_id) is not None:
+            await db.rollback()
+            raise await _number_taken_error(db, account_id, doc_type, reg_serie, new_nr, register_name)
         setattr(receipt, serie_field, reg_serie)
         setattr(receipt, nr_field, new_nr)
         receipt.updated_at = datetime.now(timezone.utc)
+        try:
+            await db.flush()
+        except IntegrityError:
+            # Alt registru cu aceeasi serie a emis acelasi numar intre verificare si scriere.
+            await db.rollback()
+            if await _number_holder(db, account_id, doc_type, reg_serie, new_nr, receipt_id) is None:
+                raise
+            raise await _number_taken_error(db, account_id, doc_type, reg_serie, new_nr, register_name)
 
         # Scadenta se stabileste o singura data, cand factura capata numar: pana
         # acum ramanea goala si nu aparea pe PDF, desi XML-ul catre ANAF o avea.
@@ -1172,6 +1296,14 @@ async def convert_fdl_to_deviz(
     # totdeauna din rapoartele zilei respective.
     receipt.created_at = now
     receipt.updated_at = now
+    # Bonul intră acum în scope-ul acumulărilor (sursa != 'fdl'). Recalculul se
+    # face ÎNAINTE de commit: făcut după, rămânea necomis și se pierdea la
+    # închiderea sesiunii. `flush` ca interogarea să vadă deja sursa nouă.
+    await db.flush()
+    emp_id_rows = (await db.execute(
+        select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
+    )).scalars().all()
+    await _refresh_accumulations(db, account_id, {eid for eid in emp_id_rows if eid})
     await db.commit()
 
     result = (await db.execute(
@@ -1183,11 +1315,6 @@ async def convert_fdl_to_deviz(
         )
         .where(Receipt.id == receipt_id)
     )).scalar_one()
-
-    # Refresh totaluri lunare/anuale pentru angajații implicați — bonul intră
-    # acum în scope (sursa != 'fdl').
-    emp_ids: set[int] = {ri.employee_id for ri in result.receipt_items if ri.employee_id}
-    await _refresh_accumulations(db, account_id, emp_ids)
 
     broadcaster.notify(account_id)
     rec = await _load_efactura_record_for(db, receipt_id)
@@ -1248,18 +1375,18 @@ async def delete_receipt(
     actor: str = Depends(get_actor_username),
 ):
     receipt = await db.get(Receipt, receipt_id, with_for_update=True)
-    if receipt is None or receipt.account_id != account_id:
+    if receipt is None or receipt.account_id != account_id or receipt.is_deleted:
         raise HTTPException(404, "Bonul nu a fost gasit.")
-    await _assert_not_locked(db, receipt_id)
+    await _assert_not_locked(db, receipt_id, deleting=True)
 
     emp_id_rows = (await db.execute(
         select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt_id)
     )).scalars().all()
     emp_ids = {eid for eid in emp_id_rows if eid}
 
-    # Storno stoc daca bonul era platit (marfa revine in stoc).
-    if receipt.pay_method != PayMethod.NEPLATIT:
-        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+    # Storno stoc: revine in stoc exact ce e inca scazut pentru bon in jurnal —
+    # nimic pe un bon ajuns platit fara vanzare inregistrata.
+    await reconcile_sale_for_receipt(db, account_id, receipt, paid=False, created_by_user=actor)
 
     await soft_delete(db, Receipt, receipt_id)
     await _refresh_accumulations(db, account_id, emp_ids)
