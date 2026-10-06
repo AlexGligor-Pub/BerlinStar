@@ -30,6 +30,11 @@ from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
 # routere, de aceea vine ca parametru.
 PaidChangeHook = Callable[[AsyncSession, Receipt], Awaitable[None]]
 
+# Verificari ale apelantului („registrul e deschis", „bonul nu e la ANAF") rulate
+# DUPA ce randul bonului e blocat, pe bonul recitit. Facute doar inainte de lock,
+# doua cereri simultane trec amandoua de ele. Ridica HTTPException ca sa opreasca.
+ReceiptGuard = Callable[[AsyncSession, Receipt], Awaitable[None]]
+
 # Toleranta la comparatia sumelor (rotunjiri de 1 ban).
 EPS = Decimal("0.01")
 
@@ -221,11 +226,20 @@ async def add_payment(
     note: str | None = None,
     actor: str | None = None,
     on_paid_change: PaidChangeHook | None = None,
+    guard: ReceiptGuard | None = None,
 ) -> tuple[ReceiptPayment, dict]:
+    # Tot ce urmeaza (garda apelantului, registrul, restul de plata) se citeste
+    # cu randul bonului blocat: a doua cerere simultana asteapta aici si vede
+    # plata primei.
     receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
+    if guard is not None:
+        await guard(db, receipt)
     was_unpaid = receipt.pay_method == PayMethod.NEPLATIT
-    amount = _q2(amount)
-    if amount <= 0:
+    try:
+        amount = _q2(amount)
+    except ArithmeticError:
+        raise HTTPException(400, "Suma nu este valida.")
+    if not amount.is_finite() or amount <= 0:
         raise HTTPException(400, "Suma trebuie sa fie mai mare decat zero.")
 
     existing = await list_payments(db, account_id, receipt_id)
@@ -240,6 +254,28 @@ async def add_payment(
             raise HTTPException(
                 400,
                 f"Nu poti restitui {amount} lei: pe acest bon s-au incasat net {net} lei.",
+            )
+    else:
+        # Pe un bon deja acoperit nu se mai incaseaza nimic. Fara verificarea
+        # asta, doua incasari integrale trimise simultan (dublu click, doua
+        # statii) se inregistrau amandoua, iar registrul arata dublul sumei.
+        # Bonul cu total 0 (deviz inca fara linii) nu e „acoperit": avansul luat
+        # inainte de a trece lucrarile pe bon e o operatie obisnuita.
+        s = summarize(existing, receipt.total)
+        rest = s["rest_de_plata"]
+        if s["total_bon"] > 0 and rest <= 0:
+            raise HTTPException(
+                409,
+                "Bonul este deja incasat integral: nu mai este nimic de incasat. "
+                "Daca plata a fost inregistrata si de pe alt dispozitiv, reincarca bonul.",
+            )
+        # Plafonul la rest e doar pentru PLATA. Avansul poate depasi totalul de
+        # moment: pe un deviz cu o parte din linii se ia avansul intreg, apoi se
+        # adauga restul lucrarilor si `resync_after_total_change` reciteste restul.
+        if kind == PaymentKind.PLATA and s["total_bon"] > 0 and amount > rest + EPS:
+            raise HTTPException(
+                409,
+                f"Suma de {amount} lei depaseste restul de plata de {rest} lei.",
             )
 
     payment = ReceiptPayment(
@@ -270,6 +306,7 @@ async def delete_payment(
     payment_id: int,
     actor: str | None = None,
     on_paid_change: PaidChangeHook | None = None,
+    guard: ReceiptGuard | None = None,
 ) -> dict:
     """Sterge logic o miscare de pe un bon anume.
 
@@ -277,6 +314,12 @@ async def delete_payment(
     payment_id de pe alt bon ar fi acceptat, iar verificarile facute de router pe
     bonul din path (proprietate, lock ANAF) ar fi ocolite.
     """
+    # Intai lock-ul pe bon, abia apoi cautam plata: la doua stergeri simultane
+    # ale aceleiasi miscari, a doua o vede deja stearsa si primeste 404.
+    receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
+    if guard is not None:
+        await guard(db, receipt)
+
     payment = (await db.execute(
         select(ReceiptPayment).where(
             ReceiptPayment.id == payment_id,
@@ -288,7 +331,20 @@ async def delete_payment(
     if payment is None:
         raise HTTPException(404, "Inregistrarea de plata nu a fost gasita.")
 
-    receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
+    if payment.kind == PaymentKind.RESTITUIRE:
+        # Stergerea unei restituiri urca incasarile la loc; nu are voie sa le
+        # duca peste total (acelasi plafon ca la adaugare).
+        others = [
+            p for p in await list_payments(db, account_id, receipt.id) if p.id != payment.id
+        ]
+        s = summarize(others, receipt.total)
+        if s["total_bon"] > 0 and s["incasat_net"] > s["total_bon"] + EPS:
+            raise HTTPException(
+                409,
+                f"Restituirea nu poate fi stearsa: incasarile ar ajunge la "
+                f"{s['incasat_net']} lei, peste totalul bonului de {s['total_bon']} lei.",
+            )
+
     was_unpaid = receipt.pay_method == PayMethod.NEPLATIT
     payment.is_deleted = True
     payment.deleted_at = datetime.now(timezone.utc)

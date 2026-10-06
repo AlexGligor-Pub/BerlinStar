@@ -37,17 +37,33 @@ router = APIRouter()
 _LEDGER_OPEN_STATUSES = (PayMethod.NEPLATIT, PayMethod.PARTIAL)
 
 
-async def _assert_open(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
-    """Bonul exista, e al contului, nu e la ANAF si nu e incasat integral."""
-    receipt = await svc.get_receipt(db, account_id, receipt_id)
-    await _assert_not_locked(db, receipt_id)
+def _assert_status_open(receipt: Receipt) -> None:
     if receipt.pay_method not in _LEDGER_OPEN_STATUSES:
         raise HTTPException(
             409,
             "Bonul este incasat. Registrul de plati se poate modifica doar cat timp "
             "statusul este Neplatit sau Platit partial.",
         )
+
+
+async def _assert_open(db: AsyncSession, account_id: int, receipt_id: int) -> Receipt:
+    """Raspuns rapid, fara lock: bonul exista, e al contului si nu e incasat
+    integral. Verificarea care conteaza e `_guard_open`, sub lock."""
+    receipt = await svc.get_receipt(db, account_id, receipt_id)
+    _assert_status_open(receipt)
     return receipt
+
+
+async def _guard_open(db: AsyncSession, receipt: Receipt) -> None:
+    """Rulat de serviciu dupa ce randul bonului e blocat, pe bonul recitit: o
+    cerere simultana poate sa fi incasat bonul sau sa-l fi trimis la ANAF intre
+    verificarea de mai sus si lock.
+
+    Lock-ul ANAF se citeste DOAR aici: citita si inainte de lock, inregistrarea
+    de eFactura ar ramane in sesiune cu statusul vechi.
+    """
+    _assert_status_open(receipt)
+    await _assert_not_locked(db, receipt.id)
 
 
 async def _refresh_receipt_accumulations(db: AsyncSession, receipt: Receipt) -> None:
@@ -123,6 +139,7 @@ async def add_payment(
         note=body.note,
         actor=actor,
         on_paid_change=_refresh_receipt_accumulations,
+        guard=_guard_open,
     )
     return await _response(db, account_id, receipt_id)
 
@@ -145,5 +162,6 @@ async def delete_payment(
     await svc.delete_payment(
         db, account_id, receipt_id, payment_id,
         actor=actor, on_paid_change=_refresh_receipt_accumulations,
+        guard=_guard_open,
     )
     return await _response(db, account_id, receipt_id)
