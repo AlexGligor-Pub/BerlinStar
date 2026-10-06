@@ -11,6 +11,7 @@ registru la fiecare modificare. Bonurile fara inregistrari se comporta exact ca
 inainte de acest modul.
 """
 from __future__ import annotations
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -21,6 +22,13 @@ from sqlalchemy.orm import selectinload
 
 from app.models.receipt import PayMethod, Receipt
 from app.models.receipt_payment import PaymentKind, PaymentMethod, ReceiptPayment
+from app.models.stock_movement import StockMovement, StockMovementType
+from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
+
+# Apelat in aceeasi tranzactie cand bonul trece intre Neplatit si platit (si
+# partial): routerul recalculeaza acumularile angajatilor. Serviciul nu importa
+# routere, de aceea vine ca parametru.
+PaidChangeHook = Callable[[AsyncSession, Receipt], Awaitable[None]]
 
 # Toleranta la comparatia sumelor (rotunjiri de 1 ban).
 EPS = Decimal("0.01")
@@ -64,7 +72,10 @@ async def get_receipt(
         Receipt.is_deleted == False,
     )
     if for_update:
-        stmt = stmt.with_for_update()
+        # `populate_existing`: routerul a citit deja bonul in aceeasi sesiune, fara
+        # lock. Fara el am primi obiectul vechi din sesiune, iar doua incasari
+        # simultane ar vedea amandoua „Neplatit" si ar scadea stocul de doua ori.
+        stmt = stmt.with_for_update().execution_options(populate_existing=True)
     receipt = (await db.execute(stmt)).scalar_one_or_none()
     if receipt is None:
         raise HTTPException(404, "Bonul nu a fost gasit.")
@@ -132,6 +143,55 @@ async def _sync_receipt_status(db: AsyncSession, receipt: Receipt, payments: lis
     receipt.updated_at = datetime.now(timezone.utc)
 
 
+async def _sale_is_applied(db: AsyncSession, account_id: int, receipt_id: int) -> bool:
+    """Ultima miscare de vanzare a bonului e SALE (nu SALE_REVERSE si nu lipsa)?"""
+    last = (await db.execute(
+        select(StockMovement.movement_type)
+        .where(
+            StockMovement.receipt_id == receipt_id,
+            StockMovement.account_id == account_id,
+            StockMovement.movement_type.in_(
+                (StockMovementType.SALE, StockMovementType.SALE_REVERSE)
+            ),
+        )
+        .order_by(StockMovement.id.desc())
+        .limit(1)
+    )).scalar_one_or_none()
+    return last == StockMovementType.SALE
+
+
+async def _sync_stock_with_status(
+    db: AsyncSession,
+    account_id: int,
+    receipt: Receipt,
+    was_unpaid: bool,
+    actor: str | None,
+    on_paid_change: PaidChangeHook | None,
+) -> None:
+    """Aceeasi regula ca `patch_receipt`: stocul se scade la Neplatit -> orice alt
+    status (si „Platit Partial") si revine la intoarcerea pe Neplatit.
+
+    Pana acum registrul schimba doar statusul; stornarea ulterioara (status
+    readus pe Neplatit, stergerea bonului) adauga in stoc marfa care nu fusese
+    scazuta niciodata.
+
+    Actionam doar la trecerea pragului, deci a doua incasare nu mai scade nimic.
+    In plus ne uitam la jurnal: bonurile incasate prin registru inainte de
+    aceasta corectie nu au SALE, deci nu au ce storna, iar cele ramase cu SALE
+    dupa o stergere de plata nu se mai scad o data.
+    """
+    is_unpaid = receipt.pay_method == PayMethod.NEPLATIT
+    if was_unpaid == is_unpaid:
+        return
+    applied = await _sale_is_applied(db, account_id, receipt.id)
+    if was_unpaid and not applied:
+        await apply_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+    elif is_unpaid and applied:
+        await reverse_sale_for_receipt(db, account_id, receipt, created_by_user=actor)
+    if on_paid_change is not None:
+        await on_paid_change(db, receipt)
+
+
 async def _seed_legacy_partial(db: AsyncSession, receipt: Receipt) -> None:
     """Bon vechi cu `partial_pay` dar fara registru: transformam suma existenta in
     prima inregistrare, ca istoricul sa rămână coerent cand se adauga plati noi."""
@@ -159,8 +219,11 @@ async def add_payment(
     paid_at: datetime | None = None,
     employee_id: int | None = None,
     note: str | None = None,
+    actor: str | None = None,
+    on_paid_change: PaidChangeHook | None = None,
 ) -> tuple[ReceiptPayment, dict]:
     receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
+    was_unpaid = receipt.pay_method == PayMethod.NEPLATIT
     amount = _q2(amount)
     if amount <= 0:
         raise HTTPException(400, "Suma trebuie sa fie mai mare decat zero.")
@@ -194,13 +257,19 @@ async def add_payment(
 
     payments = await list_payments(db, account_id, receipt_id)
     await _sync_receipt_status(db, receipt, payments)
+    await _sync_stock_with_status(db, account_id, receipt, was_unpaid, actor, on_paid_change)
     await db.commit()
     await db.refresh(payment)
     return payment, summarize(payments, receipt.total)
 
 
 async def delete_payment(
-    db: AsyncSession, account_id: int, receipt_id: int, payment_id: int
+    db: AsyncSession,
+    account_id: int,
+    receipt_id: int,
+    payment_id: int,
+    actor: str | None = None,
+    on_paid_change: PaidChangeHook | None = None,
 ) -> dict:
     """Sterge logic o miscare de pe un bon anume.
 
@@ -220,12 +289,14 @@ async def delete_payment(
         raise HTTPException(404, "Inregistrarea de plata nu a fost gasita.")
 
     receipt = await get_receipt(db, account_id, receipt_id, for_update=True)
+    was_unpaid = receipt.pay_method == PayMethod.NEPLATIT
     payment.is_deleted = True
     payment.deleted_at = datetime.now(timezone.utc)
     await db.flush()
 
     payments = await list_payments(db, account_id, receipt.id)
     await _sync_receipt_status(db, receipt, payments)
+    await _sync_stock_with_status(db, account_id, receipt, was_unpaid, actor, on_paid_change)
     await db.commit()
     return summarize(payments, receipt.total)
 
@@ -297,7 +368,9 @@ async def sync_from_status(
     await db.flush()
 
 
-async def resync_after_total_change(db: AsyncSession, account_id: int, receipt: Receipt) -> None:
+async def resync_after_total_change(
+    db: AsyncSession, account_id: int, receipt: Receipt, actor: str | None = None
+) -> None:
     """Realiniaza statusul de plata dupa ce s-a schimbat TOTALUL bonului.
 
     Cazul tipic: bon incasat partial, apoi se aplica o reducere. Restul de plata
@@ -305,6 +378,9 @@ async def resync_after_total_change(db: AsyncSession, account_id: int, receipt: 
     ramane „Platit Partial" chiar daca reducerea a acoperit tot restul. Nu
     inregistram nicio miscare de bani — doar recitim ce inseamna incasarile
     existente fata de noul total.
+
+    Daca recitirea muta bonul peste pragul Neplatit, stocul il urmeaza (vezi
+    `_sync_stock_with_status`); acumularile le recalculeaza apelantul.
     """
     payments = await list_payments(db, account_id, receipt.id)
     if not payments:
@@ -315,4 +391,6 @@ async def resync_after_total_change(db: AsyncSession, account_id: int, receipt: 
             if _q2(receipt.partial_pay) > _q2(receipt.total):
                 receipt.partial_pay = _q2(receipt.total)
         return
+    was_unpaid = receipt.pay_method == PayMethod.NEPLATIT
     await _sync_receipt_status(db, receipt, payments)
+    await _sync_stock_with_status(db, account_id, receipt, was_unpaid, actor, None)
