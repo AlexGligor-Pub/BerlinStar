@@ -111,9 +111,11 @@ La fiecare `UPDATE_CHECK_MINUTES` (implicit 15) botul face `git fetch`; dacă
 `origin/MainProd` are commit-uri noi:
 1. `git pull` (ff sau merge; la conflict anulează și anunță)
 2. backup DB: `deploy/backup_Productie_<ts>.sqlplus` + `/root/db_backups/auto_update_<ts>.dump`
-   (format custom, pentru restore; se păstrează ultimele `UPDATE_KEEP_DUMPS`=10)
-3. din `deploy/`: `git add .`, `git commit -m "backup <zi> <lună> (auto-update <sha>)"`,
-   `git push` cu `GIT_PUSH_TOKEN`
+   (format custom, pentru restore; se păstrează ultimele `UPDATE_KEEP_DUMPS`=10 din
+   fiecare). Dump-urile rămân **doar pe server**: nu se mai comit și nu se mai urcă pe
+   GitHub (conțin date de producție) — vezi `docs/deploy_backup_si_rollback.md`.
+3. imaginile Docker care rulează (backend, frontend) primesc tag-ul
+   `berlinstar-<serviciu>:rollback`, pentru rollback fără rebuild
 4. agent **Opus 5** (`UPDATE_MODEL`), **auto mode** (`UPDATE_PERMISSION_MODE`), cu
    tool-urile Claude Code read/write: citește instrucțiunile (commit-uri, `.md`,
    `.env.example`), face `docker compose build --no-cache && up -d`, verifică alembic,
@@ -127,7 +129,9 @@ update-ul eșuează, botul trimite situația abonaților (+ `UPDATE_NOTIFY_CHAT_
 cere sfat: orice mesaj text de la un admin ajunge la agent (aceeași sesiune).
 `/rollback` sau `UPDATE_ADVICE_TIMEOUT_MIN` (60) fără răspuns → rollback: cod la
 commit-ul inițial, `deploy/.env` restaurat, DB restaurat **doar dacă alembic s-a
-schimbat** (DB-ul migrat rămâne ca `berlinstar_failed_<ts>`), rebuild, verificări.
+schimbat** (DB-ul migrat rămâne ca `berlinstar_failed_<ts>`), containerele repornite
+pe imaginile `:rollback` (rebuild din sursă doar dacă imaginile lipsesc), verificări.
+Un `pg_restore` eșuat sau containere rămase pe imaginea nouă = „Rollback cu probleme”.
 Commit-ul eșuat nu se reîncearcă până nu apare altul nou (`/update force` = acum).
 Dacă s-a schimbat codul botului, botul se repornește singur la final.
 
