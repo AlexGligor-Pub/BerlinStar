@@ -1,5 +1,5 @@
 import { Show, For, Index, createSignal, onMount, onCleanup, type JSX } from "solid-js";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, parseApiError } from "../../utils/api";
 import Input from "../../components/ui/Input";
 import type { ClientLite, CompanyMeta, QuickInvoiceLine } from "./types";
 import { VAT_OPTIONS, lineTotalGross, newLine } from "./types";
@@ -211,7 +211,7 @@ export function FizicClientForm(props: { onClientCreated: (c: ClientLite) => voi
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setError(j.detail ?? "Eroare la salvarea clientului.");
+        setError(parseApiError(j.detail, "Eroare la salvarea clientului."));
         return;
       }
       const created: ClientLite = await res.json();
@@ -289,7 +289,7 @@ export function AnafLookup(props: {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        setError(j.detail ?? "Eroare la salvarea clientului.");
+        setError(parseApiError(j.detail, "Eroare la salvarea clientului."));
         return;
       }
       const created: ClientLite = await res.json();
@@ -362,7 +362,9 @@ export function ItemsEditor(props: {
     props.onChange(props.lines.filter((_, i) => i !== idx));
   }
   function add() {
-    props.onChange([...props.lines, newLine()]);
+    // Linia noua ia cota ultimei linii (prima vine din firma): altfel o firma
+    // neplatitoare ar primi 21% pe liniile adaugate si factura n-ar mai trece de validare.
+    props.onChange([...props.lines, newLine(props.lines[props.lines.length - 1]?.vatPercent)]);
   }
 
   // Folosim <Index> in loc de <For> ca DOM-ul sa ramana stabil per index:

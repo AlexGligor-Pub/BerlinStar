@@ -19,6 +19,7 @@ from app.models.register import Register
 from app.efactura.models import AnafSettings
 from app.routers.receipts import assign_number
 from app.schemas.receipt import AssignNumberRequest
+from app.efactura.mapping import invoice_issue_date
 from tests._harness import make_account, make_receipt, make_session, run
 
 TERMEN_FIRMA = 15
@@ -49,7 +50,7 @@ async def test_the_invoice_number_sets_the_due_date_from_the_company_settings():
     acc, location = await _fixture(db)
     receipt = await make_receipt(db, acc, location_id=location.id)
     await db.commit()
-    emitere = receipt.created_at.date()
+    emitere = invoice_issue_date(receipt)
 
     raspuns = await assign_number(
         receipt.id, AssignNumberRequest(doc_type="factura", location_id=location.id), db, acc.id,
@@ -68,7 +69,7 @@ async def test_without_anaf_settings_the_default_term_applies():
     acc, location = await _fixture(db, termen=None)
     receipt = await make_receipt(db, acc, location_id=location.id)
     await db.commit()
-    emitere = receipt.created_at.date()
+    emitere = invoice_issue_date(receipt)
 
     await assign_number(
         receipt.id, AssignNumberRequest(doc_type="factura", location_id=location.id), db, acc.id,

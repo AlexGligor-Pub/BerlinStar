@@ -5,9 +5,12 @@ Pydantic payload care apoi e dat catre xml_builder.py pentru randare XML.
 
 Reguli de fallback:
 - vat_percent per line -> daca lipseste, foloseste company.tva_percentage
+- pretul liniei: cu vat_percent setat (Factura Rapida) e NET si TVA-ul se adauga;
+  fara vat_percent (POS/receptie) e BRUT, cu TVA-ul firmei inclus, si TVA-ul se
+  extrage din el — aceeasi regula ca PDF-ul (frontend utils/pdf/documents.ts)
 - unit_code per line -> daca lipseste, mapeaza din `unit` text catre UNECE
 - currency -> default RON
-- DueDate -> created_at + anaf_settings.payment_terms_days
+- DueDate -> data emiterii (ziua din Romania a lui created_at) + payment_terms_days
 - adresa (street/city) -> daca lipseste, foloseste address text (best-effort)
 """
 from __future__ import annotations
@@ -15,9 +18,10 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 from app.efactura.exceptions import AnafValidationError
 from app.models.client import Client
@@ -30,7 +34,15 @@ CIUS_RO_CUSTOMIZATION_ID = (
 )
 
 ALLOWED_VAT_CATEGORIES = {"S", "Z", "E", "O", "K", "G", "L", "M", "AE"}
-ALLOWED_VAT_PERCENTS = {Decimal("0"), Decimal("5"), Decimal("9"), Decimal("19")}
+# 21 si 11 sunt cotele in vigoare; 19/9/5 raman pentru facturile mai vechi si stornari.
+ALLOWED_VAT_PERCENTS = {
+    Decimal("0"), Decimal("5"), Decimal("9"), Decimal("11"), Decimal("19"), Decimal("21"),
+}
+
+# Diferenta maxima acceptata intre totalul din XML si totalul bonului (rotunjiri).
+TOTAL_TOLERANCE = Decimal("0.02")
+
+_BUCHAREST = ZoneInfo("Europe/Bucharest")
 
 # ISO 4461 / UNCL4461 payment means codes (PEPPOL)
 PAY_METHOD_TO_CODE = {
@@ -87,8 +99,8 @@ class InvoiceLineData:
     name: str
     quantity: Decimal
     unit_code: str
-    line_extension_amount: Decimal  # qty * unit_price (fara TVA)
-    unit_price: Decimal
+    line_extension_amount: Decimal  # valoarea liniei fara TVA
+    unit_price: Decimal  # fara TVA
     vat_category: str
     vat_percent: Decimal
     tax_exemption_reason: str | None = None
@@ -161,6 +173,64 @@ def _q2(value: Decimal | float | int | None) -> Decimal:
     if not isinstance(value, Decimal):
         value = Decimal(str(value))
     return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def local_date(value: datetime) -> date:
+    """Ziua calendaristica din Romania a unui moment. created_at e tinut in UTC, deci
+    `.date()` direct ar da ziua precedenta pentru tot ce se intampla dupa miezul noptii
+    (00:00-03:00 vara, 00:00-02:00 iarna). Un datetime fara fus e considerat UTC."""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(_BUCHAREST).date()
+
+
+def today_local() -> date:
+    return datetime.now(_BUCHAREST).date()
+
+
+def invoice_issue_date(receipt: Receipt) -> date:
+    """Data emiterii facturii: ziua din Romania a lui created_at.
+
+    Bonul nu retine momentul alocarii numarului de factura, deci un deviz facturat
+    in alta zi decat cea in care a fost creat poarta in continuare data crearii.
+    """
+    created = receipt.created_at
+    if isinstance(created, datetime):
+        return local_date(created)
+    if isinstance(created, date):
+        return created
+    return today_local()
+
+
+def _spread_net(gross_amounts: list[Decimal], divisor: Decimal, target: Decimal) -> list[Decimal]:
+    """Valorile nete (2 zecimale) ale unor sume brute, astfel incat suma lor sa fie `target`.
+
+    Fiecare suma se rotunjeste separat; banii ramasi din rotunjiri merg, cate un ban, la
+    liniile pe care rotunjirea le-a deplasat cel mai mult in sens opus. Asa BT-106 ramane
+    suma liniilor (BR-CO-10), iar baza cotei e cea extrasa din totalul brut.
+    """
+    exact = [g / divisor for g in gross_amounts]
+    nets = [_q2(e) for e in exact]
+    cent = Decimal("0.01")
+    rest = int((target - sum(nets, Decimal("0"))) / cent)
+    if rest == 0 or not nets:
+        return nets
+    step = cent if rest > 0 else -cent
+    order = sorted(range(len(nets)), key=lambda i: (exact[i] - nets[i]) * step, reverse=True)
+    remaining = abs(rest)
+    while remaining:
+        moved = False
+        for i in order:
+            if remaining == 0:
+                break
+            if nets[i] + step < 0:
+                continue
+            nets[i] += step
+            remaining -= 1
+            moved = True
+        if not moved:
+            break
+    return nets
 
 
 def _resolve_unit_code(item: ReceiptItem) -> str:
@@ -365,8 +435,7 @@ def _format_invoice_number(receipt: Receipt) -> str:
 def _calculate_due_date(receipt: Receipt, payment_terms_days: int) -> date:
     if receipt.due_date:
         return receipt.due_date
-    base = receipt.created_at.date() if hasattr(receipt.created_at, "date") else date.today()
-    return base + timedelta(days=max(0, payment_terms_days))
+    return invoice_issue_date(receipt) + timedelta(days=max(0, payment_terms_days))
 
 
 # ---------- Validation ----------
@@ -425,7 +494,7 @@ def _validate_receipt_header(receipt: Receipt, errors: list[str]) -> None:
     if not receipt.created_at:
         errors.append("Receipt-ul nu are data emiterii.")
     else:
-        age_days = (date.today() - receipt.created_at.date()).days
+        age_days = (today_local() - invoice_issue_date(receipt)).days
         if age_days > 60:
             errors.append(f"Factura este mai veche de 60 zile ({age_days} zile).")
 
@@ -451,8 +520,9 @@ def _validate_lines(lines: Iterable[ReceiptItem], errors: list[str]) -> None:
         if line.vat_percent is not None:
             pct = _q2(line.vat_percent)
             if pct not in ALLOWED_VAT_PERCENTS:
+                permise = "/".join(str(int(p)) for p in sorted(ALLOWED_VAT_PERCENTS))
                 errors.append(
-                    f"Linia '{line.name}' are vat_percent {pct} (permise: 0/5/9/19)"
+                    f"Linia '{line.name}' are vat_percent {pct} (permise: {permise})"
                 )
     if not has_line:
         errors.append("Factura nu are linii.")
@@ -604,10 +674,17 @@ def build_invoice_payload(
     # ca linii de factura: EN16931 BR-27 cere pret unitar >= 0. Standardul le
     # exprima ca reduceri la nivel de document (BG-20 / cac:AllowanceCharge), pe
     # cota de TVA a liniei originale, ca sa scada si baza impozabila a acelei cote.
+    #
+    # Pretul unei linii e NET cand linia are vat_percent propriu (Factura Rapida) si
+    # BRUT, cu TVA-ul firmei inclus, cand nu are (POS/receptie) — exact cum il citeste
+    # PDF-ul. Liniile brute se strang separat pe cota si se transforma in net mai jos:
+    # trimise ca net, XML-ul ar pune TVA peste un pret care il contine deja.
     lines_data: list[InvoiceLineData] = []
     tax_groups: dict[tuple[str, Decimal], Decimal] = {}       # (cat, pct) -> net linii
     allowance_groups: dict[tuple[str, Decimal], Decimal] = {}  # (cat, pct) -> reduceri
     allowances: list[AllowanceChargeData] = []
+    gross_lines: dict[tuple[str, Decimal], list[tuple[InvoiceLineData, Decimal]]] = {}
+    gross_allowances: dict[tuple[str, Decimal], list[tuple[AllowanceChargeData, Decimal]]] = {}
     line_no = 0
     for item in receipt.receipt_items:
         if vat_payer:
@@ -619,35 +696,71 @@ def build_invoice_payload(
             vat_pct = Decimal("0")
         line_total = _q2(Decimal(item.qty) * Decimal(item.price))
         key = (vat_cat, vat_pct)
+        # La cota 0 (si la neplatitori) net = brut, deci nu e nimic de extras.
+        gross_priced = vat_payer and item.vat_percent is None and vat_pct > 0
 
         if line_total < 0:
-            allowances.append(
-                AllowanceChargeData(
-                    amount=_q2(-line_total),
-                    vat_category=vat_cat,
-                    vat_percent=vat_pct,
-                    reason=item.name or "Reducere",
-                )
+            allowance = AllowanceChargeData(
+                amount=_q2(-line_total),
+                vat_category=vat_cat,
+                vat_percent=vat_pct,
+                reason=item.name or "Reducere",
             )
-            allowance_groups[key] = allowance_groups.get(key, Decimal("0")) + _q2(-line_total)
+            allowances.append(allowance)
+            if gross_priced:
+                gross_allowances.setdefault(key, []).append((allowance, _q2(-line_total)))
+            else:
+                allowance_groups[key] = allowance_groups.get(key, Decimal("0")) + _q2(-line_total)
             continue
 
         line_no += 1
-        lines_data.append(
-            InvoiceLineData(
-                line_id=line_no,
-                name=item.name,
-                quantity=Decimal(item.qty),
-                unit_code=_resolve_unit_code(item),
-                line_extension_amount=line_total,
-                unit_price=_q2(item.price),
-                vat_category=vat_cat,
-                vat_percent=vat_pct,
-                tax_exemption_reason=item.tax_exemption_reason,
-                item_id_ref=item.item_id,
-            )
+        line_data = InvoiceLineData(
+            line_id=line_no,
+            name=item.name,
+            quantity=Decimal(item.qty),
+            unit_code=_resolve_unit_code(item),
+            line_extension_amount=line_total,
+            unit_price=_q2(item.price),
+            vat_category=vat_cat,
+            vat_percent=vat_pct,
+            tax_exemption_reason=item.tax_exemption_reason,
+            item_id_ref=item.item_id,
         )
-        tax_groups[key] = tax_groups.get(key, Decimal("0")) + line_total
+        lines_data.append(line_data)
+        if gross_priced:
+            line_data.unit_price = _q2(Decimal(item.price) / (1 + vat_pct / Decimal("100")))
+            gross_lines.setdefault(key, []).append((line_data, line_total))
+        else:
+            tax_groups[key] = tax_groups.get(key, Decimal("0")) + line_total
+
+    # Linii brute -> net, pe cota. Baza cotei se extrage din totalul brut al cotei
+    # (brut / (1 + cota)), iar TVA-ul e restul pana la brut: asa totalul din XML e exact
+    # cel incasat. TVA-ul poate diferi cu cel mult 0.01 de baza x cota (BR-CO-17 admite).
+    gross_taxable: dict[tuple[str, Decimal], Decimal] = {}
+    gross_vat: dict[tuple[str, Decimal], Decimal] = {}
+    for key in set(gross_lines) | set(gross_allowances):
+        divisor = 1 + key[1] / Decimal("100")
+        g_lines = gross_lines.get(key, [])
+        g_allowances = gross_allowances.get(key, [])
+        gross_total = (
+            sum((g for _, g in g_lines), Decimal("0"))
+            - sum((g for _, g in g_allowances), Decimal("0"))
+        )
+        reduceri_net = Decimal("0")
+        for allowance, gross in g_allowances:
+            allowance.amount = _q2(gross / divisor)
+            reduceri_net += allowance.amount
+        nets = _spread_net(
+            [g for _, g in g_lines], divisor, _q2(gross_total / divisor) + reduceri_net
+        )
+        lines_net = Decimal("0")
+        for (line_data, _), net in zip(g_lines, nets):
+            line_data.line_extension_amount = net
+            lines_net += net
+        gross_taxable[key] = lines_net - reduceri_net
+        gross_vat[key] = gross_total - gross_taxable[key]
+        tax_groups[key] = tax_groups.get(key, Decimal("0")) + lines_net
+        allowance_groups[key] = allowance_groups.get(key, Decimal("0")) + reduceri_net
 
     allowance_total = _q2(sum(allowance_groups.values(), Decimal("0")))
 
@@ -668,7 +781,10 @@ def build_invoice_payload(
                 f"articolelor pe aceeasi cota ({lines_net}). Factura nu poate avea "
                 "baza impozabila negativa — foloseste o factura de stornare."
             )
-        tax_amt = _q2(taxable_q * pct / Decimal("100"))
+        # Partea venita din preturi brute isi aduce TVA-ul deja extras; restul (preturi
+        # nete) se calculeaza ca pana acum, baza x cota.
+        net_priced = taxable_q - gross_taxable.get(key, Decimal("0"))
+        tax_amt = _q2(net_priced * pct / Decimal("100")) + gross_vat.get(key, Decimal("0"))
         tax_total += tax_amt
         tax_subtotals.append(
             TaxSubtotalData(
@@ -685,13 +801,16 @@ def build_invoice_payload(
     tax_total_q = _q2(tax_total)
     tax_inclusive_total = _q2(tax_exclusive_total + tax_total_q)
 
-    # Sanity check vs receipt.total
+    # O factura care nu spune suma incasata de la client nu pleaca la ANAF: diferenta
+    # inseamna ca liniile bonului nu se pot traduce sigur in net + TVA.
     if receipt.total is not None:
         expected = _q2(receipt.total)
         diff = abs(tax_inclusive_total - expected)
-        if diff > Decimal("0.02"):
-            warnings.append(
-                f"Totalul calculat ({tax_inclusive_total}) difera de receipt.total ({expected}) cu {diff}"
+        if diff > TOTAL_TOLERANCE:
+            errors.append(
+                f"Totalul facturii calculat pentru ANAF ({tax_inclusive_total}) difera de "
+                f"totalul bonului ({expected}) cu {diff}. Factura nu poate fi trimisa: "
+                "verifica preturile si cotele de TVA ale liniilor."
             )
 
     # BT-113 (avans incasat) trebuie declarat explicit in XML, altfel
@@ -723,7 +842,7 @@ def build_invoice_payload(
     payload = InvoicePayload(
         customization_id=CIUS_RO_CUSTOMIZATION_ID,
         invoice_number=invoice_number,
-        issue_date=receipt.created_at.date() if hasattr(receipt.created_at, "date") else date.today(),
+        issue_date=invoice_issue_date(receipt),
         due_date=due_date,
         invoice_type_code=receipt.invoice_type_code or "380",
         currency=receipt.currency or "RON",

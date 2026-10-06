@@ -36,7 +36,7 @@ const PAY_METHOD_OPTIONS = [
 function defaultVatForCompany(c: CompanyMeta | null | undefined): number {
   if (!c) return 19;
   if (c.is_vat_payer === false) return 0;
-  return c.tva_percentage ?? 19;
+  return c.tva_percentage ?? 21;
 }
 
 interface Props {
