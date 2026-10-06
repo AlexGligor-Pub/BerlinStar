@@ -20,6 +20,8 @@ import { apiFetch, API_BASE, readApiError } from "../utils/api";
 import { device } from "../store/deviceStore";
 import { generalSettings, loadGeneralSettings } from "../store/generalSettingsStore";
 import Modal from "../components/ui/Modal";
+import DecimalInput from "../components/ui/DecimalInput";
+import { parseDecimal } from "../utils/decimal";
 import { createFitToViewport } from "../hooks/createFitToViewport";
 
 const RO_MONTHS_FULL = ["Ianuarie","Februarie","Martie","Aprilie","Mai","Iunie","Iulie","August","Septembrie","Octombrie","Noiembrie","Decembrie"];
@@ -891,8 +893,17 @@ function ReceiptCard(props: { receipt: Receipt }) {
   });
 
   async function handleSaveMetoda() {
+    let partial: number | undefined;
+    if (isPartial()) {
+      const parsed = parseDecimal(partialDraft(), { maxDecimals: 2 });
+      if (!parsed.valid) {
+        notify("Suma nu este un număr valid. Folosește cel mult 2 zecimale (ex. 150,50).", "error");
+        return;
+      }
+      // Gol sau 0 = 100, ca pana acum.
+      partial = parsed.value || 100;
+    }
     setSaving(true);
-    const partial = isPartial() ? parseFloat(partialDraft()) || 100 : undefined;
     try {
       await updateMetodaPlata(live().id, metodaDraft() || null, partial);
       setPayRefresh((n) => n + 1);
@@ -1274,13 +1285,11 @@ function ReceiptCard(props: { receipt: Receipt }) {
                 </select>
                 <Show when={isPartial()}>
                   <div style="margin-top:8px;display:flex;align-items:center;gap:6px">
-                    <input
+                    <DecimalInput
                       class="rcard-plata-select"
-                      type="number"
-                      min="0"
-                      step="10"
+                      maxDecimals={2}
                       value={partialDraft()}
-                      onInput={(e) => setPartialDraft(e.currentTarget.value)}
+                      onInput={(raw) => setPartialDraft(raw)}
                       style="flex:1"
                     />
                     <span style="font-size:0.82rem;white-space:nowrap">lei</span>

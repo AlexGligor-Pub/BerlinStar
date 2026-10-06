@@ -14,6 +14,8 @@ import {
   type StocRow,
 } from "../store/stocStore";
 import Modal from "../components/ui/Modal";
+import DecimalInput from "../components/ui/DecimalInput";
+import { parseDecimal } from "../utils/decimal";
 
 interface Loc { id: number; name: string }
 
@@ -604,8 +606,13 @@ function EditMetaModal(props: {
 
 function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onSaved: () => void }) {
   const [itemId, setItemId] = createSignal<number | null>(null);
-  const [qty, setQty] = createSignal(1);
+  // Textul tastat; se citeste la salvare (vezi utils/decimal).
+  const [qtyText, setQtyText] = createSignal("1");
   const [unitCost, setUnitCost] = createSignal<string>("");
+  const qtyParsed = createMemo(() => parseDecimal(qtyText(), { integer: true }));
+  // Gol sau 0 tin butonul dezactivat, ca pana acum; textul invalid il lasa
+  // activ, ca apasarea sa explice ce e gresit.
+  const qtyMissing = () => qtyParsed().valid && (qtyParsed().value ?? 0) <= 0;
   const [note, setNote] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   const [search, setSearch] = createSignal("");
@@ -623,12 +630,22 @@ function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onS
 
   async function save() {
     const id = itemId();
-    if (!id || qty() <= 0) return;
+    if (!id || qtyMissing()) return;
+    const qty = qtyParsed().value;
+    if (!qtyParsed().valid || qty == null) {
+      notify("Cantitatea trebuie să fie un număr întreg, fără zecimale.", "error");
+      return;
+    }
+    const cost = parseDecimal(unitCost(), { maxDecimals: 2 });
+    if (!cost.valid) {
+      notify("Prețul unitar nu este un număr valid. Folosește cel mult 2 zecimale (ex. 12,50).", "error");
+      return;
+    }
     setSaving(true);
     try {
       await intrareMarfa({
-        item_id: id, location_id: props.locationId, qty: qty(),
-        unit_cost: unitCost() ? Number(unitCost()) : null,
+        item_id: id, location_id: props.locationId, qty,
+        unit_cost: cost.value,
         note: note() || null,
       });
       notify("Intrare salvată.", "success");
@@ -649,7 +666,7 @@ function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onS
       bodyStyle="padding:16px 20px;display:flex;flex-direction:column;gap:10px"
       footer={<>
         <button class="btn btn-ghost btn-sm" onClick={props.onClose}>Anulează</button>
-        <button class="btn btn-primary btn-sm" disabled={saving() || !itemId() || qty() <= 0} onClick={save}>
+        <button class="btn btn-primary btn-sm" disabled={saving() || !itemId() || qtyMissing()} onClick={save}>
           {saving() ? "..." : "Salvează"}
         </button>
       </>}
@@ -662,9 +679,9 @@ function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onS
         <For each={options()}>{(o) => <option value={o.id}>{o.label}</option>}</For>
       </select>
       <label style="font-size:13px;font-weight:500">Cantitate</label>
-      <input type="number" class="input" min="1" value={qty()} onInput={(e) => setQty(Number(e.currentTarget.value) || 0)} />
+      <DecimalInput class="input" integer value={qtyText()} onInput={(raw) => setQtyText(raw)} />
       <label style="font-size:13px;font-weight:500">Preț unitar cumpărare (opțional)</label>
-      <input type="number" step="0.01" class="input" value={unitCost()} onInput={(e) => setUnitCost(e.currentTarget.value)} />
+      <DecimalInput class="input" maxDecimals={2} value={unitCost()} onInput={(raw) => setUnitCost(raw)} />
       <label style="font-size:13px;font-weight:500">Notă (ex. furnizor)</label>
       <input type="text" class="input" value={note()} onInput={(e) => setNote(e.currentTarget.value)} maxlength="500" />
     </Modal>
@@ -672,12 +689,21 @@ function IntrareMarfaModal(props: { locationId: number; onClose: () => void; onS
 }
 
 function AjustareModal(props: { row: StocRow; locationId: number; onClose: () => void; onSaved: () => void }) {
-  const [newQty, setNewQty] = createSignal(props.row.qty);
+  const [newQtyText, setNewQtyText] = createSignal(String(props.row.qty));
   const [note, setNote] = createSignal("");
   const [saving, setSaving] = createSignal(false);
+  // allowNegative doar ca un stoc curent negativ sa poata fi afisat si citit;
+  // valorile sub zero tin butonul dezactivat, ca pana acum.
+  const newQtyParsed = createMemo(() => parseDecimal(newQtyText(), { integer: true, allowNegative: true }));
+  // Camp gol = 0, ca pana acum.
+  const newQty = () => newQtyParsed().value ?? 0;
   const delta = createMemo(() => newQty() - props.row.qty);
 
   async function save() {
+    if (!newQtyParsed().valid) {
+      notify("Stocul nou trebuie să fie un număr întreg, fără zecimale.", "error");
+      return;
+    }
     setSaving(true);
     try {
       await ajustareStoc({
@@ -714,8 +740,8 @@ function AjustareModal(props: { row: StocRow; locationId: number; onClose: () =>
         </div>
       </div>
       <label style="font-size:13px;font-weight:500">Stoc nou</label>
-      <input type="number" min="0" class="input" value={newQty()} onInput={(e) => setNewQty(Number(e.currentTarget.value) || 0)} />
-      <Show when={delta() !== 0}>
+      <DecimalInput class="input" integer allowNegative value={newQtyText()} onInput={(raw) => setNewQtyText(raw)} />
+      <Show when={newQtyParsed().valid && delta() !== 0}>
         <div style={`font-size:13px;color:${delta() > 0 ? "var(--success,#198754)" : "var(--danger)"}`}>
           Delta: {delta() > 0 ? "+" : ""}{delta()}
         </div>
