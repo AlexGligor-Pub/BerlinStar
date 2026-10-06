@@ -16,16 +16,24 @@ from sqlalchemy import func, select
 from app.models.account import Account
 from app.models.client import Client
 from app.models.client_vehicol import ClientVehicol
+from app.models.company import Company
+from app.models.disclaimer import Disclaimer
 from app.models.employee import Employee
 from app.models.item import Item, ItemType
 from app.models.location import Location
 from app.models.programare import Programare
 from app.models.receipt import PayMethod, Receipt, ReceiptItem
+from app.models.register import Register
 from app.models.user import UserRole
+from app.models.vehicol import Vehicol
 from app.routers.receipts import (
-    _refresh_accumulations, create_receipt, get_receipt, patch_receipt_client, patch_receipt_content,
+    _refresh_accumulations, assign_number, create_receipt, get_receipt, patch_receipt_client,
+    patch_receipt_content, upsert_vehicol,
 )
-from app.schemas.receipt import ReceiptClientPatch, ReceiptContentPatch, ReceiptCreate, ReceiptItemCreate
+from app.schemas.receipt import (
+    AssignNumberRequest, ReceiptClientPatch, ReceiptContentPatch, ReceiptCreate, ReceiptItemCreate,
+)
+from app.schemas.vehicol import VehicolCreate
 from tests._harness import (
     FakeCtx, make_account, make_client, make_employee, make_item, make_receipt, make_session,
     raises_http, run, set_receipt_vehicol,
@@ -342,6 +350,121 @@ async def test_already_stored_foreign_links_are_not_echoed():
         assert r[key] is None, (key, r[key])
     line = r["receipt_items"][0]
     assert line["employee_name"] is None and line["employee_target_pct"] is None
+
+
+async def _garage_rows(db, **where) -> int:
+    stmt = select(func.count()).select_from(ClientVehicol)
+    for col, value in where.items():
+        stmt = stmt.where(getattr(ClientVehicol, col) == value)
+    return await db.scalar(stmt)
+
+
+async def test_vehicle_edit_on_a_receipt_with_a_foreign_client_leaves_the_garage_alone():
+    db, o, f = await _fixture()
+    receipt = await make_receipt(db, await _account(db, o.acc), client_id=f.client)
+    await db.commit()
+    rid = receipt.id
+
+    v = await upsert_vehicol(
+        rid, VehicolCreate(numar_masina="B123ABC", marca="Dacia"), db=db, account_id=o.acc,
+    )
+    # Masina ramane pe bon, dar nu se scrie nimic in garaj, in niciun cont.
+    assert (v.numar_masina, v.marca) == ("B123ABC", "Dacia")
+    assert await db.scalar(select(Vehicol.client_vehicol_id).where(Vehicol.receipt_id == rid)) is None
+    assert await _garage_rows(db) == 0
+
+    # Bonul cu client propriu se sincronizeaza in continuare.
+    own = await make_receipt(db, await _account(db, o.acc), client_id=o.client)
+    await db.commit()
+    await upsert_vehicol(own.id, VehicolCreate(numar_masina="B456DEF"), db=db, account_id=o.acc)
+    assert await _garage_rows(db, account_id=o.acc, client_id=o.client) == 1
+    assert await _garage_rows(db) == 1
+
+
+async def test_vehicle_edit_keeps_syncing_for_an_own_since_deleted_client():
+    db, o, _ = await _fixture()
+    receipt = await make_receipt(db, await _account(db, o.acc), client_id=o.client)
+    client = await db.get(Client, o.client)
+    client.is_deleted = True
+    await db.commit()
+    await upsert_vehicol(receipt.id, VehicolCreate(numar_masina="B123ABC"), db=db, account_id=o.acc)
+    assert await _garage_rows(db, account_id=o.acc, client_id=o.client) == 1
+
+
+async def _numbering_rows(db, account_id: int, prefix: str) -> SimpleNamespace:
+    company = Company(account_id=account_id, name=f"Firma {prefix}", cui=123456)
+    register = Register(
+        account_id=account_id, name=f"Registru {prefix}", factura_serie=f"F{prefix}", factura_numar=100,
+        deviz_serie=f"D{prefix}", deviz_numar=200, chitanta_serie=f"C{prefix}", chitanta_numar=300,
+    )
+    disclaimer = Disclaimer(account_id=account_id, title=f"Titlu {prefix}", text=f"Text {prefix}")
+    db.add_all([company, register, disclaimer])
+    await db.flush()
+    return SimpleNamespace(company=company.id, register=register.id, disclaimer=disclaimer.id)
+
+
+async def _register_numbers(db, register_id: int) -> tuple[int, int, int]:
+    return tuple((await db.execute(
+        select(Register.deviz_numar, Register.factura_numar, Register.chitanta_numar)
+        .where(Register.id == register_id)
+    )).one())
+
+
+async def test_assign_number_treats_a_foreign_register_company_disclaimer_as_not_configured():
+    """Locatie veche a contului, legata de registrul/firma/disclaimerul altui cont."""
+    db, o, _ = await _fixture()
+    strain = await _numbering_rows(db, o.other, "strain")
+    loc = await db.get(Location, o.loc)
+    loc.register_id, loc.company_id, loc.disclaimer_id = strain.register, strain.company, strain.disclaimer
+    gol = Location(account_id=o.acc, name="Fara registru")
+    db.add(gol)
+    receipt = await make_receipt(db, await _account(db, o.acc))
+    numerotat = await make_receipt(
+        db, await _account(db, o.acc), factura_serie="FX", factura_nr=7,
+    )
+    await db.commit()
+    rid, numerotat_id, gol_id = receipt.id, numerotat.id, gol.id
+
+    for doc_type in ("deviz", "factura", "chitanta"):
+        detaliu = await raises_http(400, assign_number(
+            rid, AssignNumberRequest(doc_type=doc_type, location_id=o.loc), db, o.acc,
+        ))
+        # Acelasi mesaj ca pentru o locatie fara registru.
+        lipsa = await raises_http(400, assign_number(
+            rid, AssignNumberRequest(doc_type=doc_type, location_id=gol_id), db, o.acc,
+        ))
+        assert detaliu == lipsa, (detaliu, lipsa)
+    assert await _register_numbers(db, strain.register) == (200, 100, 300)
+    assert tuple((await db.execute(
+        select(Receipt.deviz_nr, Receipt.factura_nr, Receipt.chitanta_nr).where(Receipt.id == rid)
+    )).one()) == (0, 0, 0)
+
+    # Retiparirea unui document deja numerotat merge, fara datele celuilalt cont.
+    r = await assign_number(
+        numerotat_id, AssignNumberRequest(doc_type="factura", location_id=o.loc), db, o.acc,
+    )
+    assert (r.serie, r.nr) == ("FX", 7)
+    assert r.company is None and r.disclaimer is None
+
+
+async def test_assign_number_with_own_register_company_disclaimer_is_unchanged():
+    db, o, _ = await _fixture()
+    own = await _numbering_rows(db, o.acc, "propriu")
+    loc = await db.get(Location, o.loc)
+    loc.register_id, loc.company_id, loc.disclaimer_id = own.register, own.company, own.disclaimer
+    receipt = await make_receipt(db, await _account(db, o.acc))
+    await db.commit()
+    rid = receipt.id
+
+    r = await assign_number(rid, AssignNumberRequest(doc_type="deviz", location_id=o.loc), db, o.acc)
+    assert (r.serie, r.nr) == ("Dpropriu", 201)
+    assert r.company["name"] == "Firma propriu"
+    assert r.disclaimer == {"title": "Titlu propriu", "text": "Text propriu"}
+    assert await _register_numbers(db, own.register) == (201, 100, 300)
+    # A doua cerere retipareste acelasi numar, nu aloca altul.
+    r = await assign_number(rid, AssignNumberRequest(doc_type="deviz", location_id=o.loc), db, o.acc)
+    assert r.nr == 201 and r.company["name"] == "Firma propriu"
+    assert await _register_numbers(db, own.register) == (201, 100, 300)
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
