@@ -1,7 +1,8 @@
 """APScheduler jobs pentru eFactura.
 
 Job-uri:
-- efactura_upload_pending  (la 5 min)  -> upload facturi cu status=pending_upload
+- efactura_upload_pending  (la 5 min)  -> upload facturi ramase in coada (pending_upload
+                                          nepreluat) + expira trimiterile abandonate
 - efactura_poll_status     (la 10 min) -> verifica /stareMesaj pentru in_prelucrare
 - efactura_download_responses (la 30 min) -> descarca ZIP-urile pentru accepted
 - efactura_deadline_alert  (zilnic 08:00) -> trimite email pentru facturi cu deadline iminent
@@ -22,7 +23,8 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from app.efactura.mapping import today_local
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.broadcaster import broadcaster
@@ -114,34 +116,74 @@ def get_scheduler() -> AsyncIOScheduler | None:
 
 # ---------- Job: upload pending ----------
 
+# Task-ul pornit de request preia factura in cateva milisecunde; job-ul ia doar ce
+# a ramas in coada peste acest interval (task pierdut la o repornire a procesului).
+_QUEUE_GRACE = timedelta(minutes=2)
+
+
 async def job_upload_pending() -> None:
+    """Trimite facturile ramase in coada si expira trimiterile abandonate.
+
+    Ia DOAR 'pending_upload' in coada (anaf_stare=STARE_QUEUED): acolo se stie sigur
+    ca nimic nu a plecat la ANAF. Ce e preluat de alt apelant, ce a ramas fara
+    raspuns (timeout/5xx) si ce a ramas 'pending_upload' de la versiunea veche NU
+    se retrimite automat — ar putea dubla factura. Preluarea propriu-zisa e atomica
+    in `prepare_and_upload`, deci cursa cu task-ul din request nu poate dubla nimic.
+    """
     async with AsyncSessionLocal() as db:
+        now = datetime.now(timezone.utc)
+        # Doar coloane, nu obiecte ORM: un rollback pe un record nu le expira pe restul.
         rows = (
             await db.execute(
-                select(EFacturaRecord).where(
+                select(EFacturaRecord.id, EFacturaRecord.receipt_id).where(
                     EFacturaRecord.status == "pending_upload",
-                    EFacturaRecord.upload_attempts < 3,
+                    EFacturaRecord.anaf_stare == efactura_service.STARE_QUEUED,
+                    EFacturaRecord.last_attempt_at < now - _QUEUE_GRACE,
                 )
             )
-        ).scalars().all()
+        ).all()
         log.info("efactura_upload_pending: %d facturi de procesat", len(rows))
         accounts_to_notify: set[int] = set()
-        for rec in rows:
+        for rec_id, receipt_id in rows:
             try:
-                receipt = (
-                    await db.execute(select(Receipt).where(Receipt.id == rec.receipt_id))
-                ).scalar_one_or_none()
+                receipt = None
+                if receipt_id is not None:
+                    receipt = (
+                        await db.execute(select(Receipt).where(Receipt.id == receipt_id))
+                    ).scalar_one_or_none()
                 if receipt is None:
-                    rec.status = "error"
-                    rec.anaf_error_message = "Receipt-ul aferent a fost sters."
+                    await db.execute(
+                        update(EFacturaRecord)
+                        .where(
+                            EFacturaRecord.id == rec_id,
+                            EFacturaRecord.status == "pending_upload",
+                            EFacturaRecord.anaf_stare == efactura_service.STARE_QUEUED,
+                        )
+                        .values(
+                            status="error",
+                            anaf_stare=None,
+                            anaf_error_message="Receipt-ul aferent a fost sters.",
+                        )
+                        .execution_options(synchronize_session=False)
+                    )
                     await db.commit()
                     continue
                 accounts_to_notify.add(receipt.account_id)
                 await efactura_service.prepare_and_upload(db, receipt)
+            except efactura_service.UploadNotClaimed as exc:
+                log.info("Upload sarit pentru rec=%s: %s", rec_id, exc)
             except (AnafTokenMissing, AnafTokenExpired, AnafConfigError) as exc:
-                log.warning("Upload blocat pentru rec=%s: %s", rec.id, exc)
+                log.warning("Upload blocat pentru rec=%s: %s", rec_id, exc)
             except EFacturaError as exc:
-                log.warning("Upload esuat pentru rec=%s: %s", rec.id, exc)
+                log.warning("Upload esuat pentru rec=%s: %s", rec_id, exc)
+            except Exception as exc:  # noqa: BLE001 — o factura nu opreste restul cozii
+                log.exception("Upload esuat neasteptat pentru rec=%s: %s", rec_id, exc)
+                await db.rollback()
+        try:
+            await efactura_service.expire_stuck_uploads(db)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("expire_stuck_uploads a esuat: %s", exc)
+            await db.rollback()
         for aid in accounts_to_notify:
             try:
                 broadcaster.notify(aid)
@@ -331,7 +373,7 @@ async def job_subscription_lock_expired() -> None:
     from app.models.subscription import AccountSubscription
 
     async with AsyncSessionLocal() as db:
-        today = _date.today()
+        today = today_local()
         sub_rows = (
             await db.execute(
                 select(AccountSubscription.account_id).where(
@@ -366,7 +408,7 @@ async def job_subscription_renewal_email() -> None:
     from app.models.subscription import AccountSubscription
 
     async with AsyncSessionLocal() as db:
-        today = _date.today()
+        today = today_local()
         target = today + timedelta(days=7)
         rows = (
             await db.execute(
