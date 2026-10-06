@@ -5,7 +5,8 @@ Rulabil cu pytest sau direct:  python -m tests.test_receipts_list_cursor  (din b
 from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
-from app.routers.receipts import list_receipts
+from app.models.receipt import Receipt
+from app.routers.receipts import _activity_cursors, list_receipts
 from tests._harness import make_account, make_receipt, make_session, run
 
 T0 = datetime(2026, 9, 7, 9, 0, tzinfo=timezone.utc)
@@ -25,6 +26,9 @@ async def _fixture():
 
     Intoarce (db, acc_id, other_id, activity) unde activity = {id: activitate}.
     """
+    # Fiecare test porneste cu o baza noua in care id-urile se repeta; pozitiile
+    # de cursor tinute minte de testul anterior nu au ce cauta aici.
+    _activity_cursors.clear()
     db = await make_session()
     acc = await make_account(db)
     other = await make_account(db, username="alta", code="alta")
@@ -86,6 +90,81 @@ async def test_activity_cursor_on_old_recently_touched_receipt_skips_nothing():
     rest = await list_receipts(last_id=cursor, limit=20, sort="-activity", db=db, account_id=acc_id)
     assert {it["id"] for it in rest["items"]} == set(activity) - {cursor}
     assert rest["next_cursor"] is None
+
+
+async def _touch(db, receipt_id: int) -> None:
+    """Bonul e editat/incasat: activitatea lui devine cea mai recenta din lista."""
+    receipt = await db.get(Receipt, receipt_id)
+    receipt.updated_at = T0 + timedelta(minutes=1000)
+    await db.commit()
+    db.expunge_all()
+
+
+async def test_activity_cursor_touched_between_pages_continues_where_it_was():
+    """Ultimul rand al paginii e modificat inainte de „incarca mai mult": pagina
+    urmatoare continua de unde a ramas lista, nu o ia de la varf."""
+    db, acc_id, _, activity = await _fixture()
+    expected = sorted(activity, key=lambda i: (activity[i], i), reverse=True)
+    first = await list_receipts(limit=3, sort="-activity", db=db, account_id=acc_id)
+    assert [it["id"] for it in first["items"]] == expected[:3]
+    cursor = first["next_cursor"]
+    await _touch(db, cursor)
+
+    second = await list_receipts(last_id=cursor, limit=3, sort="-activity", db=db, account_id=acc_id)
+    assert [it["id"] for it in second["items"]] == expected[3:6]
+    # Restul listei: fiecare bon nemodificat o singura data, nimic deja afisat.
+    rest = await list_receipts(
+        last_id=second["next_cursor"], limit=20, sort="-activity", db=db, account_id=acc_id,
+    )
+    assert [it["id"] for it in rest["items"]] == expected[6:]
+    assert rest["next_cursor"] is None
+
+
+async def test_activity_asc_cursor_touched_between_pages_skips_nothing():
+    """Crescator, activitatea curenta a cursorului ar sari tot restul listei."""
+    db, acc_id, _, activity = await _fixture()
+    expected = sorted(activity, key=lambda i: (activity[i], -i))
+    first = await list_receipts(limit=3, sort="activity", db=db, account_id=acc_id)
+    assert [it["id"] for it in first["items"]] == expected[:3]
+    cursor = first["next_cursor"]
+    await _touch(db, cursor)
+
+    second = await list_receipts(last_id=cursor, limit=3, sort="activity", db=db, account_id=acc_id)
+    assert [it["id"] for it in second["items"]] == expected[3:6]
+
+
+async def test_activity_cursor_without_remembered_position_skips_no_unmodified_receipt():
+    """Dupa un restart pozitia nu mai e in memorie: se foloseste activitatea
+    curenta a cursorului. Se pot repeta randuri deja afisate, dar nu lipseste
+    niciun bon nemodificat."""
+    db, acc_id, _, activity = await _fixture()
+    expected = sorted(activity, key=lambda i: (activity[i], i), reverse=True)
+    first = await list_receipts(limit=3, sort="-activity", db=db, account_id=acc_id)
+    cursor = first["next_cursor"]
+    _activity_cursors.clear()
+    await _touch(db, cursor)
+
+    rest = await list_receipts(last_id=cursor, limit=20, sort="-activity", db=db, account_id=acc_id)
+    got = [it["id"] for it in rest["items"]]
+    assert set(expected[3:]) <= set(got), got
+    assert cursor not in got and len(got) == len(set(got))
+
+
+async def test_remembered_cursor_position_is_per_account():
+    """Pozitia tinuta minte pentru un cont nu deschide cursorul altui cont."""
+    db, acc_id, other_id, _ = await _fixture()
+    theirs = await list_receipts(limit=2, sort="-activity", db=db, account_id=other_id)
+    foreign_cursor = theirs["next_cursor"]
+    assert foreign_cursor is not None
+    page = await list_receipts(
+        last_id=foreign_cursor, limit=20, sort="-activity", db=db, account_id=acc_id,
+    )
+    assert page["items"] == [] and page["next_cursor"] is None
+    # Contul care a primit cursorul continua normal de la el.
+    more = await list_receipts(
+        last_id=foreign_cursor, limit=20, sort="-activity", db=db, account_id=other_id,
+    )
+    assert len(more["items"]) == 5 and more["next_cursor"] is None
 
 
 async def test_id_sorted_paging_is_unchanged():

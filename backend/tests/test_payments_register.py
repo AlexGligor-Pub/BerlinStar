@@ -13,9 +13,12 @@ from __future__ import annotations
 from decimal import Decimal
 
 from app.models.receipt import PayMethod
-from app.models.receipt_payment import PaymentKind, PaymentMethod
+from app.models.receipt_payment import PaymentKind, PaymentMethod, ReceiptPayment
+from app.routers.receipt_payments import list_payments as list_payments_route
 from app.services import payments_service as svc
-from tests._harness import make_account, make_receipt, make_session, raises_http, run
+from tests._harness import (
+    make_account, make_employee, make_receipt, make_session, raises_http, run,
+)
 
 
 async def _fixture(total="500.00"):
@@ -115,6 +118,27 @@ async def test_payment_of_another_account_is_invisible():
     await db.commit()
     payment, _ = await _add(db, other, other_receipt, PaymentKind.PLATA, "100.00")
     await raises_http(404, svc.delete_payment(db, acc.id, receipt.id, payment.id))
+
+
+async def test_legacy_payment_linked_to_a_foreign_employee_hides_the_name():
+    """Miscare salvata inainte de verificarea de apartenenta, cu angajatul altui
+    cont: id-ul ramane in raspuns, numele nu."""
+    db, acc, receipt = await _fixture("500.00")
+    other = await make_account(db, username="alta", code="alta")
+    own = await make_employee(db, acc, "Ion")
+    foreign = await make_employee(db, other, "Strain")
+    for emp in (own, foreign):
+        db.add(ReceiptPayment(
+            receipt_id=receipt.id, account_id=acc.id, kind=PaymentKind.AVANS,
+            amount=Decimal("10.00"), method=PaymentMethod.CASH, employee_id=emp.id,
+        ))
+        await db.flush()
+    await db.commit()
+
+    res = await list_payments_route(receipt.id, db=db, account_id=acc.id)
+    assert [(p["employee_id"], p["employee_name"]) for p in res["payments"]] == [
+        (own.id, "Ion"), (foreign.id, None),
+    ]
 
 
 # ─── Statusul dedus din registru ──────────────────────────────────────────────

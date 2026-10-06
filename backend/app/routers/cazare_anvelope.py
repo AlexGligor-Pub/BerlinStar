@@ -29,9 +29,17 @@ router = APIRouter()
 EDIT_GRACE_DAYS = 7
 
 
+def _own(account_id: int, rel):
+    # Legaturi salvate inainte de verificarea de apartenenta pot arata spre randuri
+    # ale altui cont: id-ul ramane pe cazare, dar datele acelui cont nu se afiseaza.
+    return rel if rel is not None and rel.account_id == account_id else None
+
+
 def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
     if a is None:
         return None
+    # Marca e nomenclator global (fara account_id); restul sunt per cont.
+    dimensiune, profil, dot = _own(a.account_id, a.dimensiune), _own(a.account_id, a.profil), _own(a.account_id, a.dot)
     return {
         "id": a.id,
         "account_id": a.account_id,
@@ -46,9 +54,9 @@ def _serialize_anvelopa(a: Anvelopa | None) -> dict | None:
         "indice_sarcina": a.indice_sarcina,
         "comments": a.comments,
         "marca_nume": a.marca.nume if a.marca else None,
-        "dimensiune_valoare": a.dimensiune.valoare if a.dimensiune else None,
-        "profil_valoare": a.profil.valoare if a.profil else None,
-        "dot_valoare": a.dot.valoare if a.dot else None,
+        "dimensiune_valoare": dimensiune.valoare if dimensiune else None,
+        "profil_valoare": profil.valoare if profil else None,
+        "dot_valoare": dot.valoare if dot else None,
         "created_at": a.created_at,
         "updated_at": a.updated_at,
         "is_deleted": a.is_deleted,
@@ -74,11 +82,23 @@ async def _fetch_successor_map(
     return {row[0]: (row[1], row[2]) for row in rows}
 
 
+def _serialize_items(account_id: int, items) -> list[dict]:
+    return [
+        {
+            "id": item.id,
+            "anvelopa_id": item.anvelopa_id,
+            "anvelopa": _serialize_anvelopa(_own(account_id, item.anvelopa)),
+        }
+        for item in items
+    ]
+
+
 def _serialize(c: CazareAnvelope, successor: tuple[int, bool] | None = None) -> dict:
-    client = c.client
-    emp = c.employee
-    loc = c.loc_cazare
-    location = c.location
+    client = _own(c.account_id, c.client)
+    emp = _own(c.account_id, c.employee)
+    loc = _own(c.account_id, c.loc_cazare)
+    location = _own(c.account_id, c.location)
+    referinta = _own(c.account_id, c.referinta_cazare)
     return {
         "id": c.id,
         "account_id": c.account_id,
@@ -100,11 +120,8 @@ def _serialize(c: CazareAnvelope, successor: tuple[int, bool] | None = None) -> 
         "successor_montate_pe_masina": successor[1] if successor else None,
         "numar_masina": c.numar_masina,
         "receipt_id": c.receipt_id,
-        "referinta_cazare_data_checkin": str(c.referinta_cazare.data_checkin) if c.referinta_cazare else None,
-        "referinta_cazare_items": [
-            {"id": item.id, "anvelopa_id": item.anvelopa_id, "anvelopa": _serialize_anvelopa(item.anvelopa)}
-            for item in (c.referinta_cazare.items if c.referinta_cazare else [])
-        ],
+        "referinta_cazare_data_checkin": str(referinta.data_checkin) if referinta else None,
+        "referinta_cazare_items": _serialize_items(c.account_id, referinta.items if referinta else []),
         "created_at": c.created_at,
         "updated_at": c.updated_at,
         "is_deleted": c.is_deleted,
@@ -116,14 +133,7 @@ def _serialize(c: CazareAnvelope, successor: tuple[int, bool] | None = None) -> 
         "employee_name": emp.name if emp else None,
         "loc_cazare_nume": loc.nume if loc else None,
         "location_name": location.name if location else None,
-        "items": [
-            {
-                "id": item.id,
-                "anvelopa_id": item.anvelopa_id,
-                "anvelopa": _serialize_anvelopa(item.anvelopa),
-            }
-            for item in c.items
-        ],
+        "items": _serialize_items(c.account_id, c.items),
     }
 
 
@@ -202,7 +212,12 @@ def _filtered(
         plate = _plate_key(term)
         if plate:
             conditions.append(_plate_sql().like(_like(plate), escape="\\"))
-        stmt = stmt.outerjoin(Client, Client.id == CazareAnvelope.client_id).where(or_(*conditions))
+        # Join doar pe clientii contului: o legatura veche spre clientul altui cont
+        # nu trebuie sa poata fi gasita dupa numele lui.
+        stmt = stmt.outerjoin(
+            Client,
+            and_(Client.id == CazareAnvelope.client_id, Client.account_id == CazareAnvelope.account_id),
+        ).where(or_(*conditions))
     if date_from:
         stmt = stmt.where(CazareAnvelope.data_checkin >= date_from)
     if date_to:
@@ -285,6 +300,30 @@ async def cazari_summary(
     return CazariSummary(cazari=cazari, anvelope=anvelope or 0, clienti=clienti)
 
 
+async def _assert_owned_or_reused(
+    db: AsyncSession, model, column, obj_id: int | None, account_id: int, *, what: str,
+) -> None:
+    """Ca `assert_owned`, dar un rand STERS al contului ramane acceptat daca apare
+    deja pe o cazare a contului.
+
+    „Scoatere + cazare noua" preia clientul, angajatul si locul de pe cazarea
+    veche; daca unul a fost sters intre timp, cazarea noua ar fi refuzata DUPA
+    ce scoaterea s-a salvat deja. Un id sters care nu e pe nicio cazare a
+    contului, si orice id al altui cont, raman refuzate.
+    """
+    try:
+        await assert_owned(db, model, obj_id, account_id, what=what)
+    except HTTPException:
+        reused = await db.scalar(
+            select(CazareAnvelope.id)
+            .where(CazareAnvelope.account_id == account_id, column == obj_id)
+            .limit(1)
+        )
+        if reused is None:
+            raise
+        await assert_owned(db, model, obj_id, account_id, what=what, allow_deleted=True)
+
+
 @router.post("", response_model=CazareRead, status_code=201)
 async def create_cazare(
     body: CazareCreate,
@@ -293,10 +332,19 @@ async def create_cazare(
 ):
     # Id-urile din body trebuie sa fie ale contului: relatiile nu filtreaza pe
     # account_id, deci un id strain ar fi salvat si apoi afisat in raspuns.
-    await assert_owned(db, Client, body.client_id, account_id, what="Clientul")
-    await assert_owned(db, Employee, body.employee_id, account_id, what="Angajatul")
-    await assert_owned(db, LocCazare, body.loc_cazare_id, account_id, what="Locul de cazare")
-    await assert_owned(db, Location, body.location_id, account_id, what="Locatia")
+    await _assert_owned_or_reused(
+        db, Client, CazareAnvelope.client_id, body.client_id, account_id, what="Clientul",
+    )
+    await _assert_owned_or_reused(
+        db, Employee, CazareAnvelope.employee_id, body.employee_id, account_id, what="Angajatul",
+    )
+    await _assert_owned_or_reused(
+        db, LocCazare, CazareAnvelope.loc_cazare_id, body.loc_cazare_id, account_id, what="Locul de cazare",
+    )
+    # Locatia vine de la dispozitiv, nu dintr-o alegere a utilizatorului, iar
+    # stergerea locatiei nu dezleaga dispozitivele: cea proprie ramane acceptata
+    # si dupa stergere, ca la bonuri. Filtrul pe cont se aplica oricum.
+    await assert_owned(db, Location, body.location_id, account_id, what="Locatia", allow_deleted=True)
     await assert_owned(db, CazareAnvelope, body.referinta_cazare_id, account_id, what="Cazarea de referinta")
     await assert_owned(db, Receipt, body.receipt_id, account_id, what="Bonul")
     await assert_all_owned(db, Anvelopa, body.anvelopa_ids, account_id, what="Anvelopele")

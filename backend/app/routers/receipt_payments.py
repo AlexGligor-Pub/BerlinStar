@@ -13,14 +13,15 @@ pe Neplatit din ecranul bonului redeschide registrul.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_actor_username
 from app.rate_limit import limiter
 from app.models.employee import Employee
-from app.models.receipt import PayMethod, Receipt
-from app.routers.receipts import _assert_not_locked
+from app.models.receipt import PayMethod, Receipt, ReceiptItem
+from app.routers.receipts import _assert_not_locked, _refresh_accumulations
 from app.schemas.receipt_payment import (
     PaymentCreate,
     PaymentRead,
@@ -49,7 +50,21 @@ async def _assert_open(db: AsyncSession, account_id: int, receipt_id: int) -> Re
     return receipt
 
 
+async def _refresh_receipt_accumulations(db: AsyncSession, receipt: Receipt) -> None:
+    """Bonul a trecut intre Neplatit si platit: acumularile angajatilor de pe
+    liniile lui se recalculeaza, ca la schimbarea statusului din ecranul bonului."""
+    emp_id_rows = (await db.execute(
+        select(ReceiptItem.employee_id).where(ReceiptItem.receipt_id == receipt.id)
+    )).scalars().all()
+    await _refresh_accumulations(db, receipt.account_id, {eid for eid in emp_id_rows if eid})
+
+
 def _serialize(p) -> dict:
+    # O miscare salvata inainte de verificarea de apartenenta poate arata spre
+    # angajatul altui cont: id-ul ramane, numele nu se afiseaza.
+    emp = getattr(p, "employee", None)
+    if emp is not None and emp.account_id != p.account_id:
+        emp = None
     return {
         "id": p.id,
         "receipt_id": p.receipt_id,
@@ -58,7 +73,7 @@ def _serialize(p) -> dict:
         "method": p.method,
         "paid_at": p.paid_at,
         "employee_id": p.employee_id,
-        "employee_name": p.employee.name if getattr(p, "employee", None) else None,
+        "employee_name": emp.name if emp else None,
         "note": p.note,
     }
 
@@ -89,6 +104,8 @@ async def add_payment(
     body: PaymentCreate,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
+    actor: str = Depends(get_actor_username),
 ):
     await _assert_open(db, account_id, receipt_id)
     # employee_id vine din body: fara verificare s-ar putea lega (si citi, prin
@@ -104,6 +121,8 @@ async def add_payment(
         paid_at=body.paid_at,
         employee_id=body.employee_id,
         note=body.note,
+        actor=actor,
+        on_paid_change=_refresh_receipt_accumulations,
     )
     return await _response(db, account_id, receipt_id)
 
@@ -114,6 +133,8 @@ async def delete_payment(
     payment_id: int,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    # Cine face actiunea — pentru jurnalul de stoc (SALE / SALE_REVERSE).
+    actor: str = Depends(get_actor_username),
 ):
     """Sterge (logic) o miscare gresita si recalculeaza statusul bonului.
 
@@ -121,5 +142,8 @@ async def delete_payment(
     deblocat si in query o plata de pe alt bon, ocolind verificarea de lock.
     """
     await _assert_open(db, account_id, receipt_id)
-    await svc.delete_payment(db, account_id, receipt_id, payment_id)
+    await svc.delete_payment(
+        db, account_id, receipt_id, payment_id,
+        actor=actor, on_paid_change=_refresh_receipt_accumulations,
+    )
     return await _response(db, account_id, receipt_id)

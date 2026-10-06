@@ -7,7 +7,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, extract, update, delete, or_, and_, tuple_
+from sqlalchemy import select, func, extract, update, delete, or_, and_, tuple_, literal
 from sqlalchemy.orm import aliased, selectinload
 from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -234,6 +234,14 @@ async def _sync_client_vehicol(
     if not plate:
         return
 
+    # Bonurile vechi pot fi inca legate de clientul altui cont (legatura nu se mai
+    # poate crea, dar nici nu a fost curatata). Pentru ele nu atingem garajul:
+    # altfel am scrie un rand al contului nostru pe clientul strain, iar cautarea
+    # dupa numar i-ar afisa numele. Clientul propriu sters logic ramane sincronizat.
+    client_account_id = await db.scalar(select(Client.account_id).where(Client.id == client_id))
+    if client_account_id != account_id:
+        return
+
     target = (await db.execute(
         select(ClientVehicol).where(
             ClientVehicol.account_id == account_id,
@@ -385,6 +393,22 @@ def _serialize(receipt: Receipt, efactura_rec: EFacturaRecord | None = None) -> 
 _LIST_TZ = ZoneInfo("Europe/Bucharest")
 
 
+# Pozitia (activitatea) pe care o avea randul-cursor cand a fost servit ca ultim
+# rand al unei pagini sortate dupa activitate: {(account_id, receipt_id): activitate}.
+# Vezi `list_receipts`. In memoria procesului, ca `broadcaster` (productia ruleaza
+# cu un singur worker); marginita, cele mai vechi intrari se arunca.
+_ACTIVITY_CURSOR_MAX = 4096
+_activity_cursors: dict[tuple[int, int], datetime] = {}
+
+
+def _remember_activity_cursor(account_id: int, receipt: Receipt) -> None:
+    key = (account_id, receipt.id)
+    _activity_cursors.pop(key, None)
+    _activity_cursors[key] = receipt.updated_at if receipt.updated_at is not None else receipt.created_at
+    while len(_activity_cursors) > _ACTIVITY_CURSOR_MAX:
+        del _activity_cursors[next(iter(_activity_cursors))]
+
+
 def _local_day_start(d: date) -> datetime:
     """Miezul noptii locale al zilei `d`, ca instant UTC."""
     return datetime(d.year, d.month, d.day, tzinfo=_LIST_TZ).astimezone(timezone.utc)
@@ -471,11 +495,31 @@ async def list_receipts(
         activity_col = func.coalesce(Receipt.updated_at, Receipt.created_at)
         if last_id is not None:
             # Keyset aliniat cu ORDER BY (activitate, id): cursorul ramane id-ul
-            # ultimului rand, iar activitatea lui se citeste din baza. Un simplu
-            # `id < last_id` sarea si dubla randuri, fiindca ordinea nu e pe id.
+            # ultimului rand. Un simplu `id < last_id` sarea si dubla randuri,
+            # fiindca ordinea nu e pe id.
+            #
+            # Activitatea cursorului e cea de la momentul in care pagina a fost
+            # servita, nu cea de acum: daca bonul-cursor e editat sau incasat
+            # intre doua pagini, activitatea lui devine „acum" si predicatul ar
+            # prinde din nou toata lista, de la varf. Contractul (last_id intreg)
+            # nu poate transporta pozitia, asa ca o tinem minte pe server.
+            #
+            # Ce ramane: daca pozitia nu mai e in memorie (restart, mai mult de
+            # _ACTIVITY_CURSOR_MAX cursoare intre timp) sau acelasi bon a fost
+            # servit ulterior ca ultim rand cu alta activitate (alt utilizator al
+            # contului), se foloseste activitatea curenta, ca inainte: la `-activity`
+            # se pot repeta randuri deja afisate (frontendul le elimina dupa id),
+            # dar niciun bon nemodificat nu e sarit. Bonurile modificate intre
+            # pagini urca la varf si apar la urmatoarea reincarcare a listei.
             cur = aliased(Receipt)
+            remembered = _activity_cursors.get((account_id, last_id))
+            # Subquery-ul ramane si cand pozitia e cunoscuta: un cursor strain sau
+            # inexistent trebuie sa dea in continuare NULL, adica pagina goala.
             last_activity = (
-                select(func.coalesce(cur.updated_at, cur.created_at))
+                select(
+                    literal(remembered, Receipt.created_at.type) if remembered is not None
+                    else func.coalesce(cur.updated_at, cur.created_at)
+                )
                 .where(cur.id == last_id, cur.account_id == account_id)
                 .scalar_subquery()
             )
@@ -497,6 +541,8 @@ async def list_receipts(
     rows = (await db.execute(stmt)).scalars().all()
     has_more = len(rows) > limit
     page = rows[:limit]
+    if has_more and sort in ("-activity", "activity"):
+        _remember_activity_cursor(account_id, page[-1])
     efactura_map = await _load_efactura_records_for(db, [r.id for r in page])
     return {
         "items": [_serialize(r, efactura_map.get(r.id)) for r in page],
@@ -974,10 +1020,15 @@ async def assign_number(
     if location is None:
         raise HTTPException(404, "Locația nu a fost găsită.")
 
+    # Registrul, firma si disclaimerul se iau doar daca sunt ale contului. O
+    # locatie veche poate arata inca spre randul altui cont; il tratam ca
+    # neconfigurat, altfel am consuma numere din registrul lui si i-am tipari datele.
     # Load register
     register = None
     if location.register_id:
         register = await db.get(Register, location.register_id)
+        if register is not None and register.account_id != account_id:
+            register = None
 
     if current_nr == 0:
         # Assign new number from register
@@ -989,7 +1040,7 @@ async def assign_number(
         # Incrementare atomica in DB: doua alocari concurente nu pot citi acelasi numar.
         new_nr = (await db.execute(
             update(Register)
-            .where(Register.id == register.id)
+            .where(Register.id == register.id, Register.account_id == account_id)
             .values({reg_numar_field: reg_numar_col + 1})
             .returning(reg_numar_col)
             .execution_options(synchronize_session=False)
@@ -1025,7 +1076,7 @@ async def assign_number(
     company_id = location.company_id
     if company_id:
         company = await db.get(Company, company_id)
-        if company:
+        if company and company.account_id == account_id:
             company_data = {
                 "id": company.id,
                 "name": company.name,
@@ -1046,7 +1097,7 @@ async def assign_number(
     disclaimer_data = None
     if location.disclaimer_id:
         disclaimer = await db.get(Disclaimer, location.disclaimer_id)
-        if disclaimer:
+        if disclaimer and disclaimer.account_id == account_id:
             disclaimer_data = {"title": disclaimer.title, "text": disclaimer.text}
 
     return AssignNumberResponse(

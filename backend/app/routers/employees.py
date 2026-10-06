@@ -117,7 +117,7 @@ async def upload_image(
     await db.commit()
     await db.refresh(employee)
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     return employee
 
 

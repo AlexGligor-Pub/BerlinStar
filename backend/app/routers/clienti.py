@@ -29,7 +29,9 @@ _INT4_MAX = 2_147_483_647
 @router.get("", response_model=Page[ClientRead])
 async def list_clienti(
     last_id: Annotated[int | None, Query(ge=0, le=_INT4_MAX)] = None,
-    limit: int = 100,
+    # Doar `ge`: peste 200 ramane plafonat mai jos, nu refuzat. Fara el, limit<=0
+    # ajungea LIMIT negativ in Postgres sau pagina goala cu `has_more` — 500.
+    limit: Annotated[int, Query(ge=1)] = 100,
     q: str | None = None,
     q_masina: str | None = None,
     tip: str | None = None,
@@ -151,6 +153,9 @@ async def search_vehicole_by_plate(
         .join(Client, Client.id == ClientVehicol.client_id)
         .where(
             ClientVehicol.account_id == account_id,
+            # Si clientul trebuie sa fie al contului: un rand vechi de garaj legat
+            # de clientul altui cont i-ar afisa aici numele si CUI-ul.
+            Client.account_id == account_id,
             ClientVehicol.is_deleted == False,
             Client.is_deleted == False,
             normalized_plate_column(ClientVehicol.numar_masina) == plate,

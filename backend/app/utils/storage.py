@@ -2,6 +2,7 @@ import asyncio
 import boto3
 import logging
 import os
+import re
 import uuid
 from botocore.client import Config
 from fastapi import HTTPException, UploadFile
@@ -110,14 +111,71 @@ async def upload_global_image(key: str, file_bytes: bytes, content_type: str, fo
     return f"{public_url}/{object_key}"
 
 
-async def delete_image_by_url(url: str) -> None:
-    """Delete an object from S3 given its full public URL."""
+# Folderele in care `upload_image` pune imaginile unui cont. Bucket-ul e comun
+# cu arhiva eFactura (accounts/{id}/efactura/...), facturile de abonament si
+# imaginile globale, deci orice alta cheie e in afara acestui modul.
+_IMAGE_FOLDERS = (
+    "items",
+    "departments",
+    "employees",
+    "locations",
+    "companies/logos",
+    "companies/backgrounds",
+    "accounts/avatars",
+)
+_IMAGE_NAME_RE = re.compile(r"[A-Za-z0-9_-]+\.[A-Za-z0-9]+")
+
+
+def own_image_key(url: str | None, account_id: int | None) -> str | None:
+    """Cheia S3 a unei imagini, doar daca URL-ul e in bucket-ul nostru si sub
+    accounts/{account_id}/<folder de imagini>/. Altfel None: URL extern, cale
+    locala veche, fisierul altui cont sau un obiect care nu e imagine."""
+    if not url or not isinstance(url, str):
+        return None
+    if not isinstance(account_id, int) or isinstance(account_id, bool):
+        return None
+    public_url = os.getenv("S3_PUBLIC_URL", "https://professorprimedev.nbg1.your-objectstorage.com").rstrip("/")
+    if not public_url or not url.startswith(public_url + "/"):
+        return None
+    key = url[len(public_url) + 1:]
+    for folder in _IMAGE_FOLDERS:
+        prefix = f"accounts/{account_id}/{folder}/"
+        if key.startswith(prefix) and _IMAGE_NAME_RE.fullmatch(key[len(prefix):]):
+            return key
+    return None
+
+
+def check_image_ref(value: str | None, current: str | None, account_id: int) -> None:
+    """Valideaza un camp de imagine venit in body (image_path, logo_path...).
+
+    Imaginile se schimba prin endpoint-urile de upload; din body acceptam doar
+    golirea, valoarea deja salvata (formularele o trimit inapoi, inclusiv in
+    formate vechi) sau un URL din folderele de imagini ale contului. Orice
+    altceva ar permite afisarea, si la urmatorul upload stergerea, fisierului
+    altui cont.
+    """
+    if value is None or not value.strip() or value == current:
+        return
+    if own_image_key(value, account_id) is None:
+        raise HTTPException(400, "Adresa imaginii nu este permisa. Incarca imaginea din aplicatie.")
+
+
+async def delete_image_by_url(url: str, account_id: int | None = None) -> None:
+    """Sterge din S3 imaginea de la URL-ul public dat, doar daca e a contului.
+
+    Nu arunca niciodata: un refuz sau o eroare S3 se logheaza si atat, ca sa
+    nu stricam salvarea care tocmai a reusit. Fara `account_id` nu stergem
+    nimic (nu avem cum verifica al cui e fisierul).
+    """
     try:
-        public_url = os.getenv("S3_PUBLIC_URL", "").rstrip("/")
-        bucket = os.getenv("S3_BUCKET", "professorprimedev")
-        if not public_url or not url.startswith(public_url + "/"):
+        # Fara S3_PUBLIC_URL configurat nu stergem nimic (comportamentul de pana acum).
+        if not url or not os.getenv("S3_PUBLIC_URL", "").strip():
             return
-        key = url[len(public_url) + 1:]
+        key = own_image_key(url, account_id)
+        if key is None:
+            log.warning("delete_image_by_url: refuzat pentru contul %s: %s", account_id, url)
+            return
+        bucket = os.getenv("S3_BUCKET", "professorprimedev")
         await asyncio.to_thread(_delete_object_sync, bucket, key)
     except Exception as exc:
         log.error("delete_image_by_url failed for %s: %s", url, exc)

@@ -167,7 +167,7 @@ async def upload_location_image(
     await db.commit()
     await db.refresh(location)
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     return location
 
 

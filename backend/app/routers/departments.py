@@ -16,7 +16,7 @@ from app.schemas.category import CategoryRead
 from app.schemas.common import Page
 from app.utils.filter import apply_filters
 from app.utils.paginate import paginate
-from app.utils.storage import upload_image, delete_image_by_url, validate_image
+from app.utils.storage import upload_image, delete_image_by_url, validate_image, check_image_ref
 from app.utils.soft_delete import soft_delete
 from app.utils.sort import apply_sort
 
@@ -58,6 +58,7 @@ async def create_department(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_settings_account_id),
 ):
+    check_image_ref(body.image_path, None, account_id)
     department = Department(**body.model_dump(), account_id=account_id)
     db.add(department)
     await db.commit()
@@ -87,6 +88,7 @@ async def update_department(
     department = await db.get(Department, department_id)
     if department is None or department.is_deleted or department.account_id != account_id:
         raise HTTPException(404, "Departamentul nu a fost găsit.")
+    check_image_ref(body.image_path, department.image_path, account_id)
     for k, v in body.model_dump().items():
         setattr(department, k, v)
     department.updated_at = datetime.now(timezone.utc)
@@ -105,6 +107,7 @@ async def patch_department(
     department = await db.get(Department, department_id)
     if department is None or department.is_deleted or department.account_id != account_id:
         raise HTTPException(404, "Departamentul nu a fost găsit.")
+    check_image_ref(body.image_path, department.image_path, account_id)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(department, k, v)
     department.updated_at = datetime.now(timezone.utc)
@@ -130,7 +133,7 @@ async def upload_department_image(
     await db.commit()
     await db.refresh(department)
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     return department
 
 

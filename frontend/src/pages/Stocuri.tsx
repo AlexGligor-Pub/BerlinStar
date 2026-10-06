@@ -475,36 +475,72 @@ function EditMetaModal(props: {
   onClose: () => void;
   onSave: (patch: { cost_price?: number | null; stoc_minim?: number }) => Promise<void>;
 }) {
-  const [costPrice, setCostPrice] = createSignal<string>(
-    props.row.cost_price == null ? "" : String(props.row.cost_price),
-  );
-  const [stocMinim, setStocMinim] = createSignal<string>(String(props.row.stoc_minim));
+  const initialCost = props.row.cost_price == null ? "" : String(props.row.cost_price);
+  const initialStocMinim = String(props.row.stoc_minim);
+  const [costPrice, setCostPrice] = createSignal<string>(initialCost);
+  const [stocMinim, setStocMinim] = createSignal<string>(initialStocMinim);
+  const [costErr, setCostErr] = createSignal("");
+  const [stocMinimErr, setStocMinimErr] = createSignal("");
   const [saving, setSaving] = createSignal(false);
   let costInput: HTMLInputElement | undefined;
+  let stocMinimInput: HTMLInputElement | undefined;
 
   async function save() {
-    // Un input type=number cu text neinterpretabil (ex. „1e", „--") raporteaza
-    // value "" — identic cu un camp golit intentionat, care sterge pretul.
-    if (costInput?.validity.badInput) {
-      notify("Prețul de cumpărare nu este un număr valid.", "error");
-      costInput.focus();
+    // Campurile sunt type=text: un type=number raporteaza value "" pentru orice
+    // text intermediar neinterpretabil (ex. „12." pe un Chrome cu virgula
+    // zecimala), iar semnalul scris inapoi stergea ce s-a tastat. Aici textul
+    // ramane neatins, iar interpretarea se face o singura data, la salvare.
+    setCostErr("");
+    setStocMinimErr("");
+    const patch: { cost_price?: number | null; stoc_minim?: number } = {};
+
+    // Text neschimbat = camp neatins: nu se valideaza si nu se trimite, ca o
+    // valoare veche (ex. cu 3 zecimale) sa nu blocheze editarea celuilalt camp.
+    const cpStr = costPrice().trim();
+    if (cpStr !== initialCost.trim()) {
+      let newCp: number | null = null;
+      if (cpStr !== "") {
+        if (!/^\d+([.,]\d+)?$/.test(cpStr)) {
+          setCostErr("Prețul de cumpărare nu este un număr valid (ex. 12,50 sau 12.50).");
+          costInput?.focus();
+          return;
+        }
+        if (!/^\d+([.,]\d{1,2})?$/.test(cpStr)) {
+          setCostErr("Prețul de cumpărare poate avea cel mult 2 zecimale.");
+          costInput?.focus();
+          return;
+        }
+        newCp = Number(cpStr.replace(",", "."));
+        // Coloana e Numeric(10, 2).
+        if (!Number.isFinite(newCp) || newCp > 99999999.99) {
+          setCostErr("Prețul de cumpărare este prea mare.");
+          costInput?.focus();
+          return;
+        }
+      }
+      const oldCp = props.row.cost_price == null ? null : Number(props.row.cost_price);
+      if (newCp !== oldCp) patch.cost_price = newCp;
+    }
+
+    const smStr = stocMinim().trim();
+    if (smStr !== initialStocMinim) {
+      // Gol = 0 (fara alerta), ca pana acum; orice alt text trebuie sa fie un
+      // intreg, altfel ar deveni 0 pe tacute.
+      if (smStr !== "" && !/^\d{1,9}$/.test(smStr)) {
+        setStocMinimErr("Stocul minim trebuie să fie un număr întreg, fără zecimale (0 = fără alertă).");
+        stocMinimInput?.focus();
+        return;
+      }
+      const newSm = smStr === "" ? 0 : Number(smStr);
+      if (newSm !== props.row.stoc_minim) patch.stoc_minim = newSm;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      props.onClose();
       return;
     }
     setSaving(true);
     try {
-      const patch: { cost_price?: number | null; stoc_minim?: number } = {};
-      const cpStr = costPrice().trim();
-      const newCp = cpStr === "" ? null : Number(cpStr);
-      const oldCp = props.row.cost_price == null ? null : Number(props.row.cost_price);
-      if (newCp !== oldCp) patch.cost_price = newCp;
-
-      const newSm = Number(stocMinim() || 0);
-      if (newSm !== props.row.stoc_minim) patch.stoc_minim = newSm;
-
-      if (Object.keys(patch).length === 0) {
-        props.onClose();
-        return;
-      }
       await props.onSave(patch);
     } finally {
       setSaving(false);
@@ -533,24 +569,32 @@ function EditMetaModal(props: {
       </div>
       <label style="font-size:13px;font-weight:500">Preț cumpărare</label>
       <input
-        type="number"
-        step="0.01"
-        min="0"
+        type="text"
+        inputmode="decimal"
+        autocomplete="off"
         class="input"
         ref={costInput}
         value={costPrice()}
-        placeholder="ex. 12.50 (gol = necunoscut)"
-        onInput={(e) => setCostPrice(e.currentTarget.value)}
+        placeholder="ex. 12,50 (gol = necunoscut)"
+        onInput={(e) => { setCostPrice(e.currentTarget.value); setCostErr(""); }}
       />
+      <Show when={costErr()}>
+        <div style="font-size:12px;color:var(--danger)">{costErr()}</div>
+      </Show>
       <label style="font-size:13px;font-weight:500">Stoc minim (alertă)</label>
       <input
-        type="number"
-        min="0"
+        type="text"
+        inputmode="numeric"
+        autocomplete="off"
         class="input"
+        ref={stocMinimInput}
         value={stocMinim()}
         placeholder="0 = fără alertă"
-        onInput={(e) => setStocMinim(e.currentTarget.value)}
+        onInput={(e) => { setStocMinim(e.currentTarget.value); setStocMinimErr(""); }}
       />
+      <Show when={stocMinimErr()}>
+        <div style="font-size:12px;color:var(--danger)">{stocMinimErr()}</div>
+      </Show>
       <div style="font-size:12px;color:var(--text-muted)">
         Setează stoc minim &gt; 0 pentru a evidenția automat produsul când stocul scade sub acest prag.
       </div>

@@ -598,6 +598,24 @@ export default function ShoppingList(
   const [vehicol, setVehicol] = createSignal<VehicolData | null>(null);
   const [showVehicolModal, setShowVehicolModal] = createSignal(false);
   const [vehicolDraft, setVehicolDraft] = createSignal<VehicolData>({ numarMasina: "" });
+  // Aceleași limite ca VehicolCreate din backend. Atributele min/max de pe
+  // input-uri nu opresc nimic (nu sunt într-un form), iar o valoare în afara
+  // lor ajungea la server abia la Montare Roți / Finalizare, ca 422.
+  const vehicolDraftErr = createMemo<string | null>(() => {
+    const d = vehicolDraft();
+    const an = d.anFabricatie;
+    if (an != null && (!Number.isFinite(an) || an < 1900 || an > 2100)) {
+      return "Anul fabricației trebuie să fie între 1900 și 2100.";
+    }
+    const km = d.numarKilometrii;
+    if (km != null && (!Number.isFinite(km) || km < 0)) {
+      return "Numărul de kilometri nu poate fi negativ.";
+    }
+    if (d.numarMasina.trim().length > 50) return "Numărul mașinii poate avea cel mult 50 de caractere.";
+    if ((d.marca ?? "").length > 100) return "Marca poate avea cel mult 100 de caractere.";
+    if ((d.model ?? "").length > 100) return "Modelul poate avea cel mult 100 de caractere.";
+    return null;
+  });
   const [obsUppercase, setObsUppercase] = createSignal(true);
 
   const [loadedReceiptId, setLoadedReceiptId] = createSignal<string | null>(null);
@@ -1064,6 +1082,34 @@ export default function ShoppingList(
     return `Devizul a fost salvat, dar ${what} nu a putut fi asociat${detail}. Încercați din nou.`;
   }
 
+  /** Vehiculul nu s-a salvat pe deviz. Fluxul se oprește oricum (altfel datele
+   *  mașinii ar rămâne doar în formular și s-ar pierde la finalizare), dar
+   *  „încercați din nou" e adevărat doar pentru rețea / eroare de server. La un
+   *  refuz al serverului arătăm motivul lui, ca operatorul să corecteze câmpul. */
+  function vehicolFailMsg(e: unknown): string {
+    const PREFIX = "Devizul a fost salvat, dar vehiculul nu a fost salvat";
+    const msg = e instanceof Error ? e.message : "";
+    const retea = e instanceof TypeError
+      || (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError"));
+    // saveReceiptVehicol pune „Eroare <status>" când răspunsul nu are detaliu.
+    if (retea || msg === "" || /^Eroare 5\d\d$/.test(msg)) {
+      const detail = !retea && msg ? ` (${msg})` : "";
+      return `${PREFIX}${detail}. Apăsați din nou Montare Roți; dacă se repetă, verificați conexiunea.`;
+    }
+    // Câmpurile din 422 vin cu numele din API; le numim ca în fereastra „Masina".
+    // parseApiError le formatează „camp: mesaj", despărțite prin „; ".
+    const are = (camp: string) => msg.startsWith(`${camp}: `) || msg.includes(`; ${camp}: `);
+    const campuri: string[] = [];
+    if (are("an_fabricatie")) campuri.push("anul fabricației trebuie să fie între 1900 și 2100");
+    if (are("numar_kilometrii")) campuri.push("numărul de kilometri trebuie să fie un număr întreg pozitiv");
+    if (are("numar_masina")) campuri.push("numărul mașinii poate avea cel mult 50 de caractere");
+    if (are("marca")) campuri.push("marca poate avea cel mult 100 de caractere");
+    if (are("model")) campuri.push("modelul poate avea cel mult 100 de caractere");
+    if (are("vin")) campuri.push("VIN-ul poate avea cel mult 17 caractere");
+    const motiv = campuri.length > 0 ? campuri.join("; ") : msg.replace(/[.\s]+$/, "");
+    return `${PREFIX}: ${motiv}. Corectați datele din „Masina" și apăsați din nou Montare Roți.`;
+  }
+
   async function handleMontareRoti() {
     const client = selectedClient();
     if (!titlu().trim()) {
@@ -1121,7 +1167,7 @@ export default function ShoppingList(
       if (veh !== null) {
         try { await saveReceiptVehicol(linkId, veh); }
         catch (e: unknown) {
-          setErrorMsg(linkFailMsg("vehiculul", e));
+          setErrorMsg(vehicolFailMsg(e));
           setOpeningMontareRoti(false);
           return;
         }
@@ -2014,7 +2060,7 @@ export default function ShoppingList(
             <button class="btn btn-ghost btn-sm" onClick={() => setShowVehicolModal(false)}>Anulează</button>
             <button
               class="btn btn-primary btn-sm"
-              disabled={vehicolDraft().numarMasina.trim() === ""}
+              disabled={vehicolDraft().numarMasina.trim() === "" || vehicolDraftErr() !== null}
               onClick={() => { setVehicol({ ...vehicolDraft() }); setShowVehicolModal(false); }}
             >
               Salvează
@@ -2025,18 +2071,21 @@ export default function ShoppingList(
             <input
               class="input"
               placeholder="Număr mașină *"
+              maxlength={50}
               value={vehicolDraft().numarMasina}
               onInput={(e) => setVehicolDraft((d) => ({ ...d, numarMasina: e.currentTarget.value.toUpperCase() }))}
             />
             <input
               class="input"
               placeholder="Marcă"
+              maxlength={100}
               value={vehicolDraft().marca ?? ""}
               onInput={(e) => setVehicolDraft((d) => ({ ...d, marca: e.currentTarget.value || null }))}
             />
             <input
               class="input"
               placeholder="Model"
+              maxlength={100}
               value={vehicolDraft().model ?? ""}
               onInput={(e) => setVehicolDraft((d) => ({ ...d, model: e.currentTarget.value || null }))}
             />
@@ -2057,6 +2106,9 @@ export default function ShoppingList(
               value={vehicolDraft().numarKilometrii ?? ""}
               onInput={(e) => setVehicolDraft((d) => ({ ...d, numarKilometrii: e.currentTarget.value ? parseInt(e.currentTarget.value) : null }))}
             />
+            <Show when={vehicolDraftErr()}>
+              <div style="font-size:12px;color:var(--danger)">{vehicolDraftErr()}</div>
+            </Show>
             <input
               class="input"
               placeholder="VIN"

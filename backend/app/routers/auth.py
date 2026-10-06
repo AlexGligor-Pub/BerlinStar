@@ -25,7 +25,7 @@ from app.services.auth_service import (
     revoke_session,
 )
 from app.utils.security import hash_password, is_legacy_hash, verify_password
-from app.utils.storage import delete_image_by_url, upload_image, validate_image
+from app.utils.storage import check_image_ref, delete_image_by_url, upload_image, validate_image
 
 log = logging.getLogger("berlinstar")
 
@@ -321,6 +321,7 @@ async def update_me(
         account.email = patch["email"] or None
     if "image_url" in patch:
         url = patch["image_url"]
+        check_image_ref(url, account.image_url, account.id)
         account.image_url = (url.strip() or None) if isinstance(url, str) else url
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
@@ -351,7 +352,7 @@ async def upload_me_image(
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account.id)
     return _me_response(ctx)
 
 
@@ -370,7 +371,7 @@ async def delete_me_image(
     account.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account.id)
     return _me_response(ctx)
 
 

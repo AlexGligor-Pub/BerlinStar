@@ -8,9 +8,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 
 import app.efactura.router as ef
+from app.auth_context import AuthContext
 from app.models.company import Company
 from app.models.location import Location
-from tests._harness import make_account, make_client, make_receipt, make_session, raises_http, run
+from app.models.user import UserRole
+from tests._harness import (
+    make_account, make_client, make_receipt, make_session, make_user, raises_http, run,
+)
 
 
 async def _company(db, account, name: str, cui: int) -> Company:
@@ -34,6 +38,13 @@ async def _fixture():
     comp = await _company(db, acc, "Firma SRL", 111)
     foreign_comp = await _company(db, other, "Straina SRL", 222)
     return db, acc, other, comp, foreign_comp
+
+
+async def _ctx(db, account, role: UserRole = UserRole.ADMIN) -> AuthContext:
+    """Contextul unui utilizator cu rolul dat din `account`. Handlerele sunt apelate
+    direct, deci il construim de mana; `session` nu e citita de aceste rute."""
+    user = await make_user(db, account, f"{account.username}-{role.value}", role)
+    return AuthContext(user=user, session=None, account=account)
 
 
 async def _reload(db) -> None:
@@ -71,26 +82,87 @@ def _capture(calls: list):
 
 async def test_company_access_own_company_works():
     db, acc, _, comp, _ = await _fixture()
-    got = await ef._require_company_access(db, comp.id, acc.id)
+    got = await ef._require_company_access(db, comp.id, await _ctx(db, acc))
+    assert got.id == comp.id
+    # Managerul contului are acelasi acces la companiile PROPRII ca adminul.
+    got = await ef._require_company_access(db, comp.id, await _ctx(db, acc, UserRole.MANAGER))
     assert got.id == comp.id
 
 
 async def test_company_access_same_answer_for_foreign_missing_deleted():
     db, acc, _, comp, foreign_comp = await _fixture()
-    foreign = await raises_http(404, ef._require_company_access(db, foreign_comp.id, acc.id))
-    missing = await raises_http(404, ef._require_company_access(db, 99999, acc.id))
+    ctx = await _ctx(db, acc)
+    foreign = await raises_http(404, ef._require_company_access(db, foreign_comp.id, ctx))
+    missing = await raises_http(404, ef._require_company_access(db, 99999, ctx))
     comp.is_deleted = True
     await db.commit()
-    deleted = await raises_http(404, ef._require_company_access(db, comp.id, acc.id))
+    deleted = await raises_http(404, ef._require_company_access(db, comp.id, ctx))
     assert foreign == missing == deleted == "Compania nu exista."
 
 
-async def test_company_access_platform_account_keeps_bypass():
+async def test_company_access_platform_admin_keeps_bypass():
     db, _, _, _, foreign_comp = await _fixture()
     platform = await make_account(db, username="admin", code="admin")
-    got = await ef._require_company_access(db, foreign_comp.id, platform.id)
+    ctx = await _ctx(db, platform)
+    got = await ef._require_company_access(db, foreign_comp.id, ctx)
     assert got.id == foreign_comp.id
-    await raises_http(404, ef._require_company_access(db, 99999, platform.id))
+    await raises_http(404, ef._require_company_access(db, 99999, ctx))
+
+
+async def test_company_access_platform_manager_and_worker_stay_isolated():
+    # Contul de platforma nu ajunge: fara rolul `admin`, filtrul pe cont ramane.
+    db, _, _, _, foreign_comp = await _fixture()
+    platform = await make_account(db, username="admin", code="admin")
+    own = await _company(db, platform, "Platforma SRL", 444)
+    for role in (UserRole.MANAGER, UserRole.WORKER):
+        ctx = await _ctx(db, platform, role)
+        detail = await raises_http(404, ef._require_company_access(db, foreign_comp.id, ctx))
+        assert detail == "Compania nu exista."
+        assert (await ef._require_company_access(db, own.id, ctx)).id == own.id
+
+
+async def test_company_access_admin_role_in_ordinary_account_stays_isolated():
+    db, acc, _, _, foreign_comp = await _fixture()
+    ctx = await _ctx(db, acc, UserRole.ADMIN)
+    await raises_http(404, ef._require_company_access(db, foreign_comp.id, ctx))
+
+
+async def test_company_routes_platform_manager_gets_404_on_foreign_company():
+    db, _, _, _, foreign_comp = await _fixture()
+    platform = await make_account(db, username="admin", code="admin")
+    manager = await _ctx(db, platform, UserRole.MANAGER)
+    admin = await _ctx(db, platform, UserRole.ADMIN)
+    revoked: list[int] = []
+
+    async def _revoke(_db, company_id):
+        revoked.append(company_id)
+        return True
+
+    with _patched(ef.oauth_service, revoke=_revoke):
+        await raises_http(404, ef.get_my_company_settings(
+            company_id=foreign_comp.id, account_id=platform.id, ctx=manager, db=db))
+        await raises_http(404, ef.disconnect_company(
+            company_id=foreign_comp.id, account_id=platform.id, ctx=manager, db=db))
+        assert revoked == []
+        # Super-adminul platformei (AdminV2) isi pastreaza accesul.
+        got = await ef.get_my_company_settings(
+            company_id=foreign_comp.id, account_id=platform.id, ctx=admin, db=db)
+        assert got.company_id == foreign_comp.id
+        res = await ef.disconnect_company(
+            company_id=foreign_comp.id, account_id=platform.id, ctx=admin, db=db)
+    assert res == {"ok": True, "removed": True} and revoked == [foreign_comp.id]
+
+
+async def test_company_routes_tenant_keeps_access_to_own_company():
+    db, acc, _, comp, foreign_comp = await _fixture()
+    for role in (UserRole.ADMIN, UserRole.MANAGER):
+        ctx = await _ctx(db, acc, role)
+        got = await ef.get_my_company_settings(company_id=comp.id, account_id=acc.id, ctx=ctx, db=db)
+        assert got.company_id == comp.id
+        status = await ef.get_company_status(company_id=comp.id, account_id=acc.id, ctx=ctx, db=db)
+        assert (status.company_id, status.state) == (comp.id, "disconnected")
+        await raises_http(404, ef.get_company_status(
+            company_id=foreign_comp.id, account_id=acc.id, ctx=ctx, db=db))
 
 
 # ─── _resolve_supplier_company ────────────────────────────────────────────────
@@ -201,10 +273,11 @@ async def test_audit_reports_foreign_client_as_missing():
     own = await make_client(db, acc, "Client Propriu")
     polluted = await make_receipt(db, acc, client_id=foreign_client.id, factura_serie="F", factura_nr=1)
     clean = await make_receipt(db, acc, client_id=own.id, factura_serie="F", factura_nr=2)
+    ctx = await _ctx(db, acc)
     await _reload(db)
     calls: list = []
     with _patched(ef, build_invoice_payload=_capture(calls)):
-        out = await ef.audit_mapping(company_id=comp.id, account_id=acc.id, limit=50, db=db)
+        out = await ef.audit_mapping(company_id=comp.id, account_id=acc.id, ctx=ctx, limit=50, db=db)
     assert all(client is None or client.id == own.id for _, client in calls)
     by_id = {e.receipt_id: e.issues for e in out}
     assert "Client lipseste pe factura." in by_id[polluted.id]

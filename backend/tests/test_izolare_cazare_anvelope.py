@@ -12,12 +12,13 @@ from sqlalchemy import func, select, update
 
 from app.models.anvelopa import Anvelopa, TipAnvelopa
 from app.models.cazare_anvelope import CazareAnvelopaItem, CazareAnvelope
+from app.models.client import Client
 from app.models.employee import Employee
 from app.models.loc_cazare import LocCazare
 from app.models.location import Location
 from app.models.receipt import Receipt
 from app.routers.cazare_anvelope import (
-    checkout_cazare, create_cazare, get_cazare, update_cazare,
+    cazari_summary, checkout_cazare, create_cazare, get_cazare, list_cazari, update_cazare,
 )
 from app.schemas.cazare_anvelope import CazareCheckoutBody, CazareCreate, CazareUpdateBody
 from tests._harness import (
@@ -138,6 +139,138 @@ async def test_create_rejects_soft_deleted_rows():
     await raises_http(400, create_cazare(_body(employee_id=a.emp), db=db, account_id=a.acc))
     await raises_http(400, create_cazare(_body(anvelopa_ids=a.tyres[:2]), db=db, account_id=a.acc))
     assert await _count(db, CazareAnvelope, a.acc) == 1
+
+
+async def test_create_accepts_deleted_own_location_but_not_foreign():
+    """Locatia vine de la dispozitiv, iar stergerea ei nu dezleaga dispozitivele:
+    statia trebuie sa poata caza in continuare. A altui cont ramane refuzata."""
+    db, a, b = await _fixture()
+    await _soft_delete(db, Location, a.location, b.location)
+    c = await create_cazare(_body(client_id=a.client, location_id=a.location), db=db, account_id=a.acc)
+    assert c["location_id"] == a.location
+    strain = await raises_http(
+        400, create_cazare(_body(client_id=a.client, location_id=b.location), db=db, account_id=a.acc)
+    )
+    assert strain == await raises_http(
+        400, create_cazare(_body(client_id=a.client, location_id=99999), db=db, account_id=a.acc)
+    )
+    assert await _count(db, CazareAnvelope, a.acc) == 2
+
+
+async def test_checkout_then_new_accepts_deleted_ids_copied_from_old_cazare():
+    """„Scoatere + cazare noua": clientul, angajatul si locul vin de pe cazarea
+    veche. Sterse intre timp, nu au voie sa blocheze cazarea noua dupa ce
+    scoaterea s-a salvat deja."""
+    db, a, b = await _fixture()
+    old = (await create_cazare(_full(a), db=db, account_id=a.acc))["id"]
+    await _soft_delete(db, Client, a.client)
+    await _soft_delete(db, Employee, a.emp, b.emp)
+    await _soft_delete(db, LocCazare, a.loc, b.loc)
+    await checkout_cazare(old, CazareCheckoutBody(data_checkout=date(2026, 4, 1)), db=db, account_id=a.acc)
+    new = await create_cazare(
+        _body(
+            client_id=a.client, employee_id=a.emp, loc_cazare_id=a.loc,
+            referinta_cazare_id=old, anvelopa_ids=[a.tyres[2]],
+        ),
+        db=db, account_id=a.acc,
+    )
+    assert (new["client_id"], new["employee_id"], new["loc_cazare_id"], new["referinta_cazare_id"]) == (
+        a.client, a.emp, a.loc, old,
+    )
+    # Randurile sterse ale altui cont raman refuzate, cu acelasi raspuns ca un id inexistent.
+    for field, value in (("employee_id", b.emp), ("loc_cazare_id", b.loc), ("client_id", b.client)):
+        strain = await raises_http(400, create_cazare(_body(**{field: value}), db=db, account_id=a.acc))
+        assert strain == await raises_http(
+            400, create_cazare(_body(**{field: 99999}), db=db, account_id=a.acc)
+        ), field
+    assert await _count(db, CazareAnvelope, a.acc) == 3
+
+
+async def test_create_rejects_deleted_own_rows_never_used_on_a_cazare():
+    db, a, _ = await _fixture()
+    acc = SimpleNamespace(id=a.acc)
+    emp = await make_employee(db, acc, "Plecat")
+    client = await make_client(db, acc, "Client sters")
+    loc = LocCazare(account_id=a.acc, nume="Raft desfiintat")
+    db.add(loc)
+    await db.flush()
+    ids = {"employee_id": emp.id, "client_id": client.id, "loc_cazare_id": loc.id}
+    await db.commit()
+    await _soft_delete(db, Employee, ids["employee_id"])
+    await _soft_delete(db, Client, ids["client_id"])
+    await _soft_delete(db, LocCazare, ids["loc_cazare_id"])
+    for field, value in ids.items():
+        await raises_http(400, create_cazare(_body(**{field: value}), db=db, account_id=a.acc))
+    assert await _count(db, CazareAnvelope, a.acc) == 1
+
+
+# ─── Legaturi vechi spre alt cont ────────────────────────────────────────────
+
+async def _legacy_foreign(db, a, b) -> int:
+    """Cazare a contului A scrisa direct in baza, legata de randuri ale contului
+    B, ca cele salvate inainte de verificarea de apartenenta."""
+    db.add(CazareAnvelopaItem(account_id=b.acc, cazare_id=b.ref, anvelopa_id=b.tyres[1]))
+    cazare = CazareAnvelope(
+        account_id=a.acc, client_id=b.client, employee_id=b.emp, loc_cazare_id=b.loc,
+        location_id=b.location, referinta_cazare_id=b.ref, data_checkin=D0, numar_masina="B 99 OLD",
+    )
+    db.add(cazare)
+    await db.flush()
+    cid = cazare.id
+    db.add(CazareAnvelopaItem(account_id=a.acc, cazare_id=cid, anvelopa_id=b.tyres[0]))
+    db.add(CazareAnvelopaItem(account_id=a.acc, cazare_id=cid, anvelopa_id=a.tyres[0]))
+    await db.commit()
+    return cid
+
+
+def _assert_foreign_blank(c: dict, b: SimpleNamespace, own_tyre: int) -> None:
+    # Id-urile raman pe cazare; datele celuilalt cont nu se afiseaza.
+    assert (c["client_id"], c["employee_id"], c["loc_cazare_id"], c["location_id"], c["referinta_cazare_id"]) == (
+        b.client, b.emp, b.loc, b.location, b.ref,
+    )
+    for field in (
+        "client_nume", "client_cui", "client_telefon", "client_adresa", "client_reprezentant",
+        "employee_name", "loc_cazare_nume", "location_name", "referinta_cazare_data_checkin",
+    ):
+        assert c[field] is None, field
+    assert c["referinta_cazare_items"] == []
+    by_tyre = {i["anvelopa_id"]: i["anvelopa"] for i in c["items"]}
+    assert set(by_tyre) == {b.tyres[0], own_tyre}
+    assert by_tyre[b.tyres[0]] is None
+    assert by_tyre[own_tyre]["id"] == own_tyre
+
+
+async def test_legacy_foreign_links_are_rendered_blank():
+    db, a, b = await _fixture()
+    cid = await _legacy_foreign(db, a, b)
+    _assert_foreign_blank(await get_cazare(cid, db=db, account_id=a.acc), b, a.tyres[0])
+    page = await list_cazari(db=db, account_id=a.acc)
+    _assert_foreign_blank(next(i for i in page.items if i["id"] == cid), b, a.tyres[0])
+    # Raman editabila si scoasa din depozit, tot fara datele celuilalt cont.
+    c = await update_cazare(
+        cid,
+        CazareUpdateBody(employee_id=b.emp, loc_cazare_id=b.loc, referinta_cazare_id=b.ref, comments="corectat"),
+        db=db, account_id=a.acc,
+    )
+    assert c["comments"] == "corectat"
+    _assert_foreign_blank(c, b, a.tyres[0])
+    c = await checkout_cazare(cid, CazareCheckoutBody(data_checkout=date(2026, 4, 1)), db=db, account_id=a.acc)
+    _assert_foreign_blank(c, b, a.tyres[0])
+
+
+async def test_search_does_not_match_foreign_client_name():
+    db, a, b = await _fixture()
+    cid = await _legacy_foreign(db, a, b)
+    own = (await create_cazare(_body(client_id=a.client), db=db, account_id=a.acc))["id"]
+    assert (await list_cazari(q="Client B", db=db, account_id=a.acc)).items == []
+    assert (await cazari_summary(q="Client B", db=db, account_id=a.acc)).cazari == 0
+    # Cautarea dupa clientul propriu si dupa numarul de masina merge in continuare.
+    # („Client A" e si pe cazarea de referinta din fixture.)
+    assert sorted(i["id"] for i in (await list_cazari(q="Client A", db=db, account_id=a.acc)).items) == sorted(
+        [a.ref, own]
+    )
+    assert [i["id"] for i in (await list_cazari(q="B99OLD", db=db, account_id=a.acc)).items] == [cid]
+    assert (await cazari_summary(q="B99OLD", db=db, account_id=a.acc)).cazari == 1
 
 
 # ─── Editare ─────────────────────────────────────────────────────────────────

@@ -93,6 +93,19 @@ async def _resolve_company_for_receipt(
     ).scalar_one_or_none()
 
 
+def own_client(receipt: Receipt) -> Client | None:
+    """Clientul bonului, doar daca e al aceluiasi cont.
+
+    `Receipt.client` nu filtreaza pe cont: un bon ramas legat de clientul altui
+    cont (inainte de verificarea de la scriere) i-ar pune numele, CUI/CNP-ul si
+    adresa in XML. Clientul sters intre timp ramane valabil — factura lui exista.
+    """
+    client = receipt.client
+    if client is None or client.account_id != receipt.account_id:
+        return None
+    return client
+
+
 async def _get_settings(db: AsyncSession, company_id: int) -> AnafSettings:
     row = (
         await db.execute(select(AnafSettings).where(AnafSettings.company_id == company_id))
@@ -187,8 +200,10 @@ async def prepare_and_upload(
     rec = await get_or_create_record(db, receipt, company)
 
     try:
+        # Si job-ul de auto-upload ajunge aici, fara verificarile din router: clientul
+        # altui cont e tratat ca lipsa, deci validarea pica si nu pleaca nimic la ANAF.
         payload = build_invoice_payload(
-            receipt, company, receipt.client, payment_terms_days=settings.payment_terms_days
+            receipt, company, own_client(receipt), payment_terms_days=settings.payment_terms_days
         )
         xml = build_xml(payload)
 

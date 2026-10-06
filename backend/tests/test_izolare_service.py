@@ -4,19 +4,22 @@ rezolva doar din contul bonului, chiar daca locatia sau compania legata e strain
 Rulabil cu pytest sau direct:  python -m tests.test_izolare_service  (din backend/)
 """
 from __future__ import annotations
+from contextlib import contextmanager
 
 from sqlalchemy import select
 
 # Harness-ul importa `app.main`; fara el, `app.efactura.models` intra intr-un
 # import circular cu `app.models`.
-from tests._harness import make_account, make_receipt, make_session, run
-from app.efactura.exceptions import AnafConfigError
-from app.efactura.models import EFacturaRecord
+from tests._harness import make_account, make_client, make_receipt, make_session, run
+import app.efactura.service as svc
+from app.efactura.exceptions import AnafConfigError, AnafValidationError
+from app.efactura.models import AnafSettings, EFacturaRecord
 from app.efactura.service import (
     _resolve_company_for_receipt, get_or_create_record, mark_pending_upload, prepare_and_upload,
 )
 from app.models.company import Company
 from app.models.location import Location
+from app.models.receipt import Receipt
 
 
 async def _company(db, acc, name: str, cui: int) -> Company:
@@ -147,6 +150,105 @@ async def test_existing_record_on_other_own_company_is_kept():
     rec = await get_or_create_record(db, receipt, own)
     assert rec.id == first.id
     assert (rec.company_id, rec.cui) == (own2.id, "222")
+
+
+# ─── prepare_and_upload: clientul bonului ─────────────────────────────────────
+
+class _Payload:
+    invoice_type_code = "380"
+    invoice_number = "F1"
+
+
+@contextmanager
+def _anaf_stubs(clients: list, uploads: list):
+    """Inlocuieste tot ce ar iesi din proces. `clients` retine clientul primit de
+    build_invoice_payload, `uploads` XML-urile care ar fi plecat la ANAF."""
+    def _build(receipt, company, client, **_kw):
+        clients.append(client)
+        if client is None:
+            # Ca `_validate_customer` din mapping.
+            raise AnafValidationError(["Clientul facturii lipseste."])
+        return _Payload()
+
+    async def _token(_db, _company_id):
+        return "tok"
+
+    class _Client:
+        def __init__(self, access_token, cui, use_test=False):
+            pass
+
+        async def upload_invoice(self, xml, standard="UBL", extern=False):
+            uploads.append(xml)
+            return {"index_incarcare": 42, "data_creare": "202609011200"}
+
+    patches = [
+        (svc, "build_invoice_payload", _build),
+        (svc, "build_xml", lambda payload: "<Invoice/>"),
+        (svc, "AnafEFacturaClient", _Client),
+        (svc.oauth_service, "get_valid_access_token", _token),
+    ]
+    old = [(obj, name, getattr(obj, name)) for obj, name, _ in patches]
+    for obj, name, new in patches:
+        setattr(obj, name, new)
+    try:
+        yield
+    finally:
+        for obj, name, orig in old:
+            setattr(obj, name, orig)
+
+
+async def _reloaded(db, receipt_id: int) -> Receipt:
+    """Bonul incarcat ca in job-ul de upload: cu SELECT, ca `Receipt.client`
+    (selectin) sa vina din baza, nu din obiectele testului."""
+    await db.commit()
+    db.expunge_all()
+    return (await db.execute(select(Receipt).where(Receipt.id == receipt_id))).scalar_one()
+
+
+async def test_prepare_and_upload_treats_foreign_client_as_missing():
+    db, acc, other, own, _, _ = await _fixture()
+    db.add(AnafSettings(company_id=own.id))
+    foreign_client = await make_client(db, other, "Client Strain")
+    created = await make_receipt(db, acc, client_id=foreign_client.id)
+    receipt = await _reloaded(db, created.id)
+    assert receipt.client is not None and receipt.client.account_id == other.id
+    clients: list = []
+    uploads: list = []
+    with _anaf_stubs(clients, uploads):
+        try:
+            await prepare_and_upload(db, receipt, archive_xml=False)
+        except AnafValidationError:
+            pass
+        else:
+            raise AssertionError("astept AnafValidationError, dar apelul a reusit")
+    assert clients == [None]
+    assert uploads == []
+    rec, = await _records(db)
+    assert rec.status == "error"
+    assert "Clientul facturii lipseste." in rec.anaf_error_message
+    assert rec.index_incarcare is None and not rec.xml_content
+
+
+async def test_prepare_and_upload_with_own_client_still_uploads():
+    db, acc, _, own, _, _ = await _fixture()
+    db.add(AnafSettings(company_id=own.id))
+    client = await make_client(db, acc, "Client Propriu")
+    # Clientul sters intre timp ramane valabil: factura lui trebuie sa plece.
+    deleted_client = await make_client(db, acc, "Client Sters")
+    deleted_client.is_deleted = True
+    first = await make_receipt(db, acc, client_id=client.id)
+    second = await make_receipt(db, acc, client_id=deleted_client.id)
+    receipt_ids = [first.id, second.id]
+    expected = [client.id, deleted_client.id]
+    clients: list = []
+    uploads: list = []
+    with _anaf_stubs(clients, uploads):
+        for receipt_id in receipt_ids:
+            receipt = await _reloaded(db, receipt_id)
+            rec = await prepare_and_upload(db, receipt, archive_xml=False)
+            assert (rec.status, rec.index_incarcare, rec.company_id) == ("in_prelucrare", 42, own.id)
+    assert [c.id for c in clients] == expected
+    assert uploads == ["<Invoice/>", "<Invoice/>"]
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

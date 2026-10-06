@@ -16,7 +16,7 @@ from app.schemas.common import Page
 from app.utils.anaf import fetch_anaf_raw, parse_anaf_entry, ANAF_DEFAULT_TIMEOUT
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
-from app.utils.storage import upload_image, delete_image_by_url, validate_image
+from app.utils.storage import upload_image, delete_image_by_url, validate_image, check_image_ref
 
 router = APIRouter()
 
@@ -98,6 +98,8 @@ async def update_company(
     company = await db.get(Company, company_id)
     if company is None or company.account_id != account_id or company.is_deleted:
         raise HTTPException(404, "Compania nu a fost găsită.")
+    check_image_ref(body.logo_path, company.logo_path, account_id)
+    check_image_ref(body.background_path, company.background_path, account_id)
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(company, k, v)
     company.updated_at = datetime.now(timezone.utc)
@@ -123,7 +125,7 @@ async def upload_logo(
     company.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     await db.refresh(company)
     return company
 
@@ -145,7 +147,7 @@ async def upload_background(
     company.updated_at = datetime.now(timezone.utc)
     await db.commit()
     if old_url:
-        await delete_image_by_url(old_url)
+        await delete_image_by_url(old_url, account_id)
     await db.refresh(company)
     return company
 

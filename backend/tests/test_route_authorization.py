@@ -18,8 +18,15 @@ import os
 
 os.environ.setdefault("BERLINSTAR_DEV_SQLITE", "1")
 
-from fastapi.dependencies.utils import get_flat_dependant
 from fastapi.routing import APIRoute
+
+# `get_flat_dependant` e un helper privat, scos din FastAPI-urile noi. Testul
+# trebuie sa ruleze pe versiunea care ajunge efectiv in productie, asa ca fara
+# el aplatizam singuri arborele de dependinte (vezi `_dep_names`).
+try:
+    from fastapi.dependencies.utils import get_flat_dependant
+except ImportError:  # FastAPI nou
+    get_flat_dependant = None
 
 from app.main import app
 
@@ -88,7 +95,12 @@ ROLE_REQUIRED_PREFIXES = (
     "/api/users",
     "/api/admin",
     "/api/import",
+    "/api/email-settings",
+    "/api/global-settings",
 )
+
+# Dependinta care atesta contul de PLATFORMA (noi), nu un cont de client.
+PLATFORM_DEP = "get_platform_admin_account"
 
 # Scrieri operationale, permise tuturor rolurilor, in prefixe care altfel cer rol.
 # Fiecare exceptie e o decizie de business, nu o scapare.
@@ -104,20 +116,92 @@ OPERATIONAL_EXCEPTIONS = {
 # prefixelor de mai sus tocmai ca sa fie evident ca e o decizie, nu o omisiune.
 
 
-def _routes():
-    for route in app.routes:
-        if isinstance(route, APIRoute):
+def _expand(route, seen: set[int]):
+    """Rutele HTTP efective din spatele unei intrari din `app.routes`.
+
+    FastAPI-urile vechi tin acolo direct `APIRoute`. Cele noi tin cate un
+    `_IncludedRouter` per `include_router(...)`, iar rutele reale (cu prefixul
+    si dependintele routerului deja aplicate) se obtin din
+    `effective_candidates` — obiecte cu `.path`, `.methods`, `.dependant`, sau
+    alte `_IncludedRouter` imbricate. Nu importam clasele private: ne uitam doar
+    dupa atribute, ca sa nu depindem de inca un nume intern.
+    """
+    if isinstance(route, APIRoute):
+        if id(route) not in seen:
+            seen.add(id(route))
             yield route
+        return
+    candidates = getattr(route, "effective_candidates", None)
+    if candidates is None:
+        return
+    if callable(candidates):
+        candidates = candidates()
+    for candidate in candidates:
+        if id(candidate) in seen:
+            continue
+        if getattr(candidate, "effective_candidates", None) is not None:
+            yield from _expand(candidate, seen)
+        elif (
+            getattr(candidate, "dependant", None) is not None
+            and getattr(candidate, "methods", None)
+            and getattr(candidate, "path", None)
+        ):
+            # Rutele Starlette simple / WebSocket n-au `dependant`: le sarim,
+            # la fel cum `isinstance(route, APIRoute)` le sarea inainte.
+            seen.add(id(candidate))
+            yield candidate
 
 
-def _dep_names(route: APIRoute) -> set[str]:
-    flat = get_flat_dependant(route.dependant, skip_repeats=True)
-    names = set()
-    for dep in flat.dependencies:
+# Lista se construieste o singura data: obiectele efective trebuie sa ramana in
+# viata cat timp le deduplicam dupa `id(...)`.
+_ROUTES: list = []
+
+
+def _routes():
+    if not _ROUTES:
+        seen: set[int] = set()
+        for route in app.routes:
+            _ROUTES.extend(_expand(route, seen))
+    return _ROUTES
+
+
+def _walk_dependant(dependant, names: set[str], visited: set[int]) -> None:
+    for dep in getattr(dependant, "dependencies", None) or []:
+        if id(dep) in visited:
+            continue
+        visited.add(id(dep))
         call = getattr(dep, "call", None)
         if call is not None:
             names.add(getattr(call, "__name__", str(call)))
+        _walk_dependant(dep, names, visited)
+
+
+def _dep_names(route) -> set[str]:
+    names: set[str] = set()
+    if get_flat_dependant is not None:
+        flat = get_flat_dependant(route.dependant, skip_repeats=True)
+        for dep in flat.dependencies:
+            call = getattr(dep, "call", None)
+            if call is not None:
+                names.add(getattr(call, "__name__", str(call)))
+        return names
+    _walk_dependant(route.dependant, names, set())
     return names
+
+
+def test_route_discovery_sees_the_real_routes():
+    """Fara asta, o schimbare de structura in FastAPI ar face `_routes()` sa
+    intoarca nimic, iar toate verificarile de mai jos ar trece in gol."""
+    found = {(m, r.path) for r in _routes() for m in r.methods}
+    for expected in (
+        ("POST", "/api/auth/login"),
+        ("GET", "/api/email-settings/smtp"),
+        ("GET", "/api/global-settings/hotel-anvelope"),
+    ):
+        assert expected in found, f"{expected} nu apare printre cele {len(found)} rute gasite"
+    # Dependintele puse pe ROUTER (nu pe handler) se vad si ele.
+    smtp = [r for r in _routes() if r.path == "/api/email-settings/smtp"]
+    assert all(_dep_names(r) & AUTH_DEPS for r in smtp), "dependintele routerului nu se vad"
 
 
 def test_every_api_route_is_authenticated():
@@ -161,10 +245,52 @@ def test_accounts_router_belongs_to_the_platform_admin():
         if not route.path.startswith("/api/accounts"):
             continue
         seen += 1
-        assert "get_platform_admin_account" in _dep_names(route), (
+        assert PLATFORM_DEP in _dep_names(route), (
             f"{sorted(route.methods)} {route.path} nu cere contul de platforma"
         )
     assert seen > 0, "nu am gasit rutele /api/accounts — s-a schimbat prefixul?"
+
+
+def test_email_settings_belongs_to_the_platform_admin():
+    """SMTP-ul platformei, sabloanele si jurnalul de email al TUTUROR conturilor:
+    nici macar citirea nu e a unui client."""
+    seen = 0
+    for route in _routes():
+        if not route.path.startswith("/api/email-settings"):
+            continue
+        seen += 1
+        assert PLATFORM_DEP in _dep_names(route), (
+            f"{sorted(route.methods)} {route.path} nu cere contul de platforma"
+        )
+    assert seen > 0, "nu am gasit rutele /api/email-settings — s-a schimbat prefixul?"
+
+
+def test_global_settings_writes_belong_to_the_platform_admin():
+    """Randul GlobalSettings e comun tuturor conturilor. Clientii il CITESC
+    (imaginile din POS / Hotel), dar numai platforma il scrie."""
+    writes = 0
+    open_reads = set()
+    for route in _routes():
+        if not route.path.startswith("/api/global-settings"):
+            continue
+        names = _dep_names(route)
+        if route.methods & WRITE_METHODS:
+            writes += 1
+            assert PLATFORM_DEP in names, (
+                f"{sorted(route.methods)} {route.path} nu cere contul de platforma"
+            )
+        elif PLATFORM_DEP not in names:
+            open_reads.add(route.path)
+    assert writes > 0, "nu am gasit scrieri sub /api/global-settings — s-a schimbat prefixul?"
+    # Cealalta jumatate a regulii: citirile de care are nevoie aplicatia normala
+    # NU trebuie inchise din greseala odata cu scrierile.
+    for path in (
+        "/api/global-settings/hotel-anvelope",
+        "/api/global-settings/montare-roti",
+        "/api/global-settings/hotel-anvelope/image/{key}",
+        "/api/global-settings/montare-roti/image/{pozitie}",
+    ):
+        assert path in open_reads, f"GET {path} a ajuns sa ceara contul de platforma"
 
 
 def test_reports_are_admin_only():

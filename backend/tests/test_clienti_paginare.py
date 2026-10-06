@@ -196,6 +196,37 @@ async def test_offset_and_last_id_are_bounded_in_signature():
     assert _query_bounds("last_id") == (0, int4_max)
 
 
+async def test_limit_has_lower_bound_but_no_upper_rejection():
+    # limit=0 / negativ dadea 500 (pagina goala cu has_more, respectiv LIMIT negativ
+    # in Postgres). `ge=1` il face 422; fara `le`, ca valorile mari sa ramana
+    # plafonate la 200, nu refuzate.
+    assert _query_bounds("limit") == (1, None)
+
+
+async def test_limit_default_is_a_real_int():
+    # Apel direct, fara `limit`: default-ul trebuie sa fie 100, nu un obiect Query.
+    db, acc, _ = await _fixture()
+    page = await list_clienti(db=db, account_id=acc.id)
+    assert len(page.items) == len(NUME) and page.next_cursor is None
+
+
+async def test_limit_above_cap_is_capped_not_an_error():
+    db, acc, _ = await _fixture()
+    for i in range(205):
+        await make_client(db, acc, f"Extra {i:03d}")
+    await db.commit()
+    page = await list_clienti(limit=100000, offset=0, db=db, account_id=acc.id)
+    assert len(page.items) == 200 and page.next_cursor == page.items[-1].id
+    assert page.total == len(NUME) + 205
+
+
+async def test_limit_one_is_the_smallest_valid_page():
+    db, acc, _ = await _fixture()
+    full = await _all_ids(db, acc)
+    page = await list_clienti(limit=1, db=db, account_id=acc.id)
+    assert [c.id for c in page.items] == full[:1] and page.next_cursor == full[0]
+
+
 async def test_offset_at_upper_bound_is_empty_not_an_error():
     # Cea mai mare valoare admisa trebuie sa treaca prin interogare, nu doar prin validare.
     db, acc, _ = await _fixture()

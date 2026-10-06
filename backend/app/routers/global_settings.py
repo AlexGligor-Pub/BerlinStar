@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_account_id, get_platform_admin_account
+from app.models.account import Account
 from app.models.global_settings import GlobalSettings
 from app.schemas.global_settings import GlobalSettingsRead, MontareRotiImagesRead
 from app.utils.storage import validate_image, upload_global_image
@@ -15,6 +16,10 @@ from app.utils.storage import validate_image, upload_global_image
 _MONTARE_POZITII = {"stanga_fata", "dreapta_fata", "stanga_spate", "dreapta_spate", "rezerva", "nespecificat"}
 
 router = APIRouter()
+
+# Randul GlobalSettings e unul singur, comun tuturor conturilor: citirile raman
+# deschise oricarui utilizator autentificat (POS / Hotel le afiseaza), dar orice
+# SCRIERE cere contul de platforma (`get_platform_admin_account`).
 
 
 async def _get_or_create(db: AsyncSession) -> GlobalSettings:
@@ -40,7 +45,7 @@ async def get_hotel_images(
 async def upload_cazare_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
+    _admin: Account = Depends(get_platform_admin_account),
 ):
     data = await validate_image(file)
     url = await upload_global_image("cazare", data, file.content_type)
@@ -54,7 +59,7 @@ async def upload_cazare_image(
 async def upload_scoatere_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
+    _admin: Account = Depends(get_platform_admin_account),
 ):
     data = await validate_image(file)
     url = await upload_global_image("scoatere", data, file.content_type)
@@ -68,7 +73,7 @@ async def upload_scoatere_image(
 async def upload_montare_image(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
+    _admin: Account = Depends(get_platform_admin_account),
 ):
     data = await validate_image(file)
     url = await upload_global_image("montare", data, file.content_type)
@@ -91,7 +96,7 @@ async def upload_montare_roti_image(
     pozitie: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _account_id: int = Depends(get_account_id),
+    _admin: Account = Depends(get_platform_admin_account),
 ):
     if pozitie not in _MONTARE_POZITII:
         raise HTTPException(400, "Pozitie invalida")

@@ -5,7 +5,7 @@ from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id
+from app.dependencies import get_platform_admin_account
 from app.models.email_log import EmailLog
 from app.models.email_template import EmailTemplate
 from app.models.global_settings import GlobalSettings
@@ -18,7 +18,11 @@ from app.schemas.email_settings import (
 from app.schemas.global_settings import SmtpSettingsRead, SmtpSettingsPatch
 from app.utils.email_service import send_test_email
 
-router = APIRouter(dependencies=[Depends(get_account_id)])
+# Tot routerul lucreaza pe date de PLATFORMA (SMTP-ul nostru, sabloanele si
+# jurnalul de email al tuturor conturilor), deci apartine exclusiv contului de
+# platforma — acelasi gate ca /api/accounts si /api/admin. Cu `get_account_id`
+# orice utilizator al oricarui client putea schimba host-ul SMTP.
+router = APIRouter(dependencies=[Depends(get_platform_admin_account)])
 
 
 async def _get_or_create_global(db: AsyncSession) -> GlobalSettings:
