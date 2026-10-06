@@ -7,21 +7,23 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+import httpx
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.efactura import oauth_service
 from app.efactura.anaf_client import AnafEFacturaClient
 from app.efactura.exceptions import (
     AnafConfigError,
-    AnafTokenMissing,
+    AnafRateLimited,
     AnafUploadError,
     AnafValidationError,
     EFacturaError,
 )
-from app.efactura.mapping import build_invoice_payload
+from app.efactura.mapping import build_invoice_payload, invoice_issue_date
 from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFacturaReceivedIndex
 from app.efactura.xml_builder import build_xml
 from app.efactura.xml_validator import validate_schematron
@@ -29,8 +31,69 @@ from app.models.client import Client
 from app.models.company import Company
 from app.models.location import Location
 from app.models.receipt import Receipt
+from app.models.register import Register
 
 log = logging.getLogger("berlinstar.efactura.service")
+
+# ---------- Masina de stari a unei facturi trimise ----------
+#
+# `status` ramane cel cunoscut de UI si de blocarea bonului (routers/receipts.py).
+# Sub-starile lui 'pending_upload' se tin in `anaf_stare`, fara coloana noua:
+#   STARE_QUEUED    — pusa in coada de mark_pending_upload, inca nepreluata
+#   STARE_UPLOADING — preluata de UN apelant; trimiterea catre ANAF e in curs
+# Trecerile se fac cu UPDATE conditionat (compare-and-set): request-ul, task-ul
+# din fundal si job-ul nu pot prelua amandoi aceeasi factura, deci nu o pot
+# trimite de doua ori.
+STARE_QUEUED = "in coada"
+STARE_UPLOADING = "se trimite"
+# status='error' + anaf_stare=STARE_UNKNOWN: cererea a plecat, dar raspunsul nu a
+# ajuns (timeout, conexiune rupta, 5xx). NU se retrimite automat.
+STARE_UNKNOWN = "necunoscut"
+# Peste acest interval un 'pending_upload' e considerat abandonat (proces repornit).
+# Acopera cu mult timeout-urile reale: 30s refresh token + 60s POST.
+CLAIM_TIMEOUT = timedelta(minutes=15)
+
+MSG_UNKNOWN = (
+    "Rezultat necunoscut: ANAF nu a confirmat primirea facturii. Verifica in SPV "
+    "daca factura apare inainte de a o retrimite."
+)
+# O retrimitere inlocuieste incarcarea respinsa: indexul, id-ul de descarcare si
+# arhiva raspunsului ei se sterg din record. Altfel un esec al noii incercari ar lasa
+# 'error' CU index vechi — bon blocat la editare si fara „Trimite in SPV" — iar
+# raspunsul unei retrimiteri acceptate nu s-ar mai arhiva (cheia veche l-ar opri).
+_SUPERSEDED = {"index_incarcare": None, "download_id": None, "response_zip_s3_key": None}
+
+MSG_NOT_STARTED = (
+    "Trimiterea nu a pornit (serverul a fost repornit). Nimic nu a plecat la ANAF — "
+    "trimite din nou."
+)
+
+
+class EFacturaStateError(EFacturaError):
+    """Tranzitia ceruta nu e permisa din starea curenta a facturii."""
+
+
+class UploadNotClaimed(EFacturaStateError):
+    """Factura e deja preluata de alt apelant sau nu mai e in coada; nu s-a trimis nimic."""
+
+
+class UploadOutcomeUnknown(EFacturaError):
+    """Cererea a plecat spre ANAF, dar nu stim daca a fost primita."""
+
+
+def _resendable():
+    """Starile din care o (re)trimitere e corecta.
+
+    'in_prelucrare' fara index e record-ul blocat de versiunile vechi (nepollabil).
+    Restul — in coada, in curs, in prelucrare cu index, acceptata — ar dubla factura.
+    """
+    return or_(
+        EFacturaRecord.status.in_(("draft", "error", "rejected")),
+        and_(
+            EFacturaRecord.status == "in_prelucrare",
+            EFacturaRecord.index_incarcare.is_(None),
+        ),
+    )
 
 
 def _serialize_raw(value: object) -> str | None:
@@ -58,7 +121,7 @@ def _add_business_days(start: date, days: int) -> date:
     return current
 
 
-async def _resolve_company_for_receipt(
+async def _company_from_location(
     db: AsyncSession, receipt: Receipt
 ) -> Company | None:
     # Locatia si compania se cauta DOAR in contul bonului: cu un location_id sau
@@ -91,6 +154,65 @@ async def _resolve_company_for_receipt(
             .limit(1)
         )
     ).scalar_one_or_none()
+
+
+async def resolve_supplier(
+    db: AsyncSession, receipt: Receipt
+) -> tuple[Company | None, str | None]:
+    """Compania emitenta a facturii + motivul pentru care nu e sigura (None = e sigura).
+
+    Numarul, seria si antetul PDF-ului vin din locatia de pe care s-a facturat
+    (`receipts.assign_number`), care poate fi alta decat locatia bonului. Bonul nu
+    retine acea locatie, dar ii retine seria: daca seria apartine registrului unei
+    singure firme a contului, aceea e emitentul — altfel XML-ul ar pleca la ANAF cu
+    alt CUI (si alt token) decat cel tiparit pe factura.
+
+    Regula veche (firma locatiei bonului, apoi prima firma a contului) ramane
+    valabila ori de cate ori seria nu o contrazice: serie negasita in registre
+    (schimbata intre timp) sau folosita si de firma bonului.
+    """
+    base = await _company_from_location(db, receipt)
+    if base is None or not receipt.factura_nr or not receipt.factura_serie:
+        return base, None
+    company_ids = set(
+        (
+            await db.execute(
+                select(Location.company_id)
+                .join(Register, Register.id == Location.register_id)
+                .where(
+                    Location.account_id == receipt.account_id,
+                    Register.account_id == receipt.account_id,
+                    Register.factura_serie == receipt.factura_serie,
+                    Location.company_id.isnot(None),
+                )
+            )
+        ).scalars().all()
+    )
+    if not company_ids or base.id in company_ids:
+        return base, None
+    owners = (
+        await db.execute(
+            select(Company)
+            .where(Company.id.in_(company_ids), Company.account_id == receipt.account_id)
+            .order_by(Company.id)
+        )
+    ).scalars().all()
+    if not owners:
+        return base, None
+    if len(owners) == 1:
+        return owners[0], None
+    return base, (
+        f"Seria facturii ({receipt.factura_serie}) este folosita de mai multe firme ale "
+        "contului, iar locatia bonului nu apartine niciuneia dintre ele. Nu pot stabili "
+        "firma emitenta — verifica locatia si registrul bonului."
+    )
+
+
+async def _resolve_company_for_receipt(
+    db: AsyncSession, receipt: Receipt
+) -> Company | None:
+    company, _problem = await resolve_supplier(db, receipt)
+    return company
 
 
 def own_client(receipt: Receipt) -> Client | None:
@@ -144,7 +266,8 @@ async def get_or_create_record(
                 rec.cui = str(company.cui)
         return rec
 
-    issue_date = receipt.created_at.date() if hasattr(receipt.created_at, "date") else date.today()
+    # Ziua din Romania, aceeasi ca in XML (mapping.invoice_issue_date), nu ziua UTC.
+    issue_date = invoice_issue_date(receipt)
     deadline = _add_business_days(issue_date, 5)
 
     rec = EFacturaRecord(
@@ -163,6 +286,57 @@ async def get_or_create_record(
     return rec
 
 
+# Refuzul obisnuit al /upload: HTTP 200 cu XML
+#   <header ... ExecutionStatus="1"><Errors errorMessage="..."/></header>
+_XML_REFUSAL = re.compile(r'<Errors\b|ExecutionStatus\s*=\s*"1"')
+
+
+def _is_4xx(value: object) -> bool:
+    try:
+        return 400 <= int(value) < 500  # type: ignore[call-overload]
+    except (TypeError, ValueError):
+        return False
+
+
+def _refused_by_anaf(exc: AnafUploadError) -> bool:
+    """ANAF a raspuns explicit ca NU a primit factura.
+
+    Refuz = eroare in corp (JSON `eroare`/`Errors` sau XML-ul de mai sus) ori HTTP 4xx
+    (statusul cererii sau campul `status` din corpul JSON al gateway-ului).
+    Un 2xx neparsabil sau fara index_incarcare nu e refuz: factura poate fi inregistrata.
+    """
+    raw = exc.raw
+    if not isinstance(raw, dict):
+        return False
+    if "eroare" in raw or "Errors" in raw:
+        return True
+    if _is_4xx(raw.get("http_status")) or _is_4xx(raw.get("status")):
+        return True
+    return bool(_XML_REFUSAL.search(str(raw.get("body") or "")))
+
+
+async def _mark_not_sent(db: AsyncSession, rec: EFacturaRecord, message: str) -> None:
+    """Esec inainte ca ceva sa ajunga la ANAF: 'error' fara index (sters la punerea
+    in coada / la preluare), deci bonul redevine editabil si retrimiterea e sigura."""
+    rec.status = "error"
+    rec.anaf_stare = None
+    rec.anaf_error_message = message[:2000]
+    rec.anaf_raw_response = None  # eroare locala — fara raspuns ANAF
+    rec.last_attempt_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+async def _mark_unknown(
+    db: AsyncSession, rec: EFacturaRecord, detail: str, raw: object = None
+) -> None:
+    rec.status = "error"
+    rec.anaf_stare = STARE_UNKNOWN
+    rec.anaf_error_message = f"{MSG_UNKNOWN} Detaliu: {detail}"[:2000]
+    rec.anaf_raw_response = _serialize_raw(raw)
+    rec.last_attempt_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
 async def prepare_and_upload(
     db: AsyncSession,
     receipt: Receipt,
@@ -171,35 +345,77 @@ async def prepare_and_upload(
 ) -> EFacturaRecord:
     """Genereaza XML, valideaza, urca la ANAF si actualizeaza EFacturaRecord.
 
-    Inainte de a apela acest helper, recomandam apelarea `mark_pending_upload(...)` care
-    creeaza/actualizeaza EFacturaRecord cu status='pending_upload' si permite UI-ului sa
-    afiseze instant statusul. Acest helper ramane re-entrant prin `get_or_create_record`.
-
-    In caz de eroare la validare/build XML, status='error' este scris pe record inainte de
-    a re-arunca exceptia, ca sa nu lasam record-ul blocat in pending_upload.
+    Preia mai intai factura (UPDATE conditionat): doar din 'pending_upload' in coada
+    sau din 'draft'. Daca alt apelant a preluat-o deja, ridica `UploadNotClaimed`
+    fara sa trimita nimic. Dupa preluare functia NU lasa record-ul in
+    'pending_upload': se termina in 'in_prelucrare' (cu index) sau in 'error' — fie
+    sigur netrimis, fie cu rezultat necunoscut (`UploadOutcomeUnknown`).
     """
-    company = await _resolve_company_for_receipt(db, receipt)
-    if company is None:
-        # Daca exista deja un record pending_upload, marcheaza-l ca error ca sa se deblocheze UI-ul.
-        existing = (await db.execute(
-            select(EFacturaRecord).where(
+    company, problem = await resolve_supplier(db, receipt)
+    if company is None or problem:
+        message = problem or "Nu am gasit compania emitenta a facturii."
+        # Record-ul din coada nu are cum sa plece: il scoatem ca sa se deblocheze UI-ul.
+        await db.execute(
+            update(EFacturaRecord)
+            .where(
                 EFacturaRecord.receipt_id == receipt.id,
                 EFacturaRecord.direction == "sent",
+                EFacturaRecord.status == "pending_upload",
+                or_(
+                    EFacturaRecord.anaf_stare.is_(None),
+                    EFacturaRecord.anaf_stare != STARE_UPLOADING,
+                ),
             )
-        )).scalar_one_or_none()
-        if existing is not None and existing.status == "pending_upload":
-            existing.status = "error"
-            existing.anaf_error_message = "Nu am gasit compania emitenta a facturii."
-            existing.last_attempt_at = datetime.now(timezone.utc)
-            await db.commit()
-        raise AnafConfigError("Nu am gasit compania emitenta a facturii.")
+            .values(
+                status="error",
+                anaf_stare=None,
+                anaf_error_message=message,
+                last_attempt_at=datetime.now(timezone.utc),
+                **_SUPERSEDED,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        await db.commit()
+        raise AnafConfigError(message)
 
-    settings = await _get_settings(db, company.id)
-
-    # Asiguram ca record-ul exista inainte de validare, ca sa-l putem actualiza pe error path.
     rec = await get_or_create_record(db, receipt, company)
+    await db.flush()
 
+    # Draft-ul si coada nu au index; il stergem si aici ca orice stare de dupa
+    # preluare sa fie sigur „fara index" (vezi `_SUPERSEDED`).
+    claimed = await db.execute(
+        update(EFacturaRecord)
+        .where(
+            EFacturaRecord.id == rec.id,
+            or_(
+                EFacturaRecord.status == "draft",
+                and_(
+                    EFacturaRecord.status == "pending_upload",
+                    EFacturaRecord.anaf_stare == STARE_QUEUED,
+                ),
+            ),
+        )
+        .values(
+            status="pending_upload",
+            anaf_stare=STARE_UPLOADING,
+            anaf_error_message=None,
+            last_attempt_at=datetime.now(timezone.utc),
+            **_SUPERSEDED,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    got_claim = claimed.rowcount == 1
+    await db.commit()
+    await db.refresh(rec)
+    if not got_claim:
+        raise UploadNotClaimed(
+            f"Factura receipt_id={receipt.id} nu e in coada de trimitere "
+            f"(status: {rec.status}, stare: {rec.anaf_stare}); nu am trimis nimic."
+        )
+
+    # --- Pregatire: pana la POST nimic nu ajunge la ANAF, deci orice esec e sigur. ---
     try:
+        settings = await _get_settings(db, company.id)
         # Si job-ul de auto-upload ajunge aici, fara verificarile din router: clientul
         # altui cont e tratat ca lipsa, deci validarea pica si nu pleaca nimic la ANAF.
         payload = build_invoice_payload(
@@ -212,55 +428,58 @@ async def prepare_and_upload(
             if issues:
                 raise AnafValidationError(issues)
     except AnafValidationError as exc:
-        rec.status = "error"
-        rec.anaf_error_message = ("Validare esuata: " + "; ".join(exc.issues))[:2000]
-        rec.anaf_raw_response = None  # eroare locala, inainte de ANAF — fara raspuns ANAF
-        rec.last_attempt_at = datetime.now(timezone.utc)
-        await db.commit()
+        await _mark_not_sent(db, rec, "Validare esuata: " + "; ".join(exc.issues))
+        raise
+    except AnafConfigError as exc:
+        await _mark_not_sent(db, rec, str(exc))
         raise
     except Exception as exc:  # noqa: BLE001
-        rec.status = "error"
-        rec.anaf_error_message = f"Eroare la generarea XML: {exc}"[:2000]
-        rec.anaf_raw_response = None  # eroare locala, inainte de ANAF — fara raspuns ANAF
-        rec.last_attempt_at = datetime.now(timezone.utc)
-        await db.commit()
+        await _mark_not_sent(db, rec, f"Eroare la generarea XML: {exc}")
         raise
 
     rec.invoice_type = payload.invoice_type_code
-    rec.upload_attempts = (rec.upload_attempts or 0) + 1
-    rec.last_attempt_at = datetime.now(timezone.utc)
-    rec.status = "pending_upload"
-    rec.anaf_error_message = None
-
     if archive_xml:
         rec.xml_s3_key = await _archive_xml_to_s3(receipt.account_id, payload.invoice_number, xml)
     else:
         rec.xml_content = xml
-
     await db.commit()
-    await db.refresh(rec)
 
-    # Upload
     try:
         access_token = await oauth_service.get_valid_access_token(db, company.id)
-    except AnafTokenMissing as exc:
-        rec.status = "error"
-        rec.anaf_error_message = str(exc)
-        rec.anaf_raw_response = None  # eroare locala (token lipsa), inainte de ANAF
-        await db.commit()
+    except Exception as exc:  # noqa: BLE001
+        # Token lipsa/expirat sau refresh esuat: POST-ul nu s-a facut.
+        message = (
+            str(exc) if isinstance(exc, EFacturaError)
+            else f"Nu am putut obtine tokenul ANAF: {exc}"
+        )
+        await _mark_not_sent(db, rec, message)
         raise
 
+    # Record-ul urmeaza firma cu care pleaca efectiv XML-ul: statusul se interogheaza
+    # apoi cu tokenul si CUI-ul din record.
+    rec.company_id = company.id
+    rec.cui = str(company.cui)
+    rec.upload_attempts = (rec.upload_attempts or 0) + 1
+    rec.last_attempt_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    # --- Upload ---
     client = AnafEFacturaClient(access_token, str(company.cui), use_test=settings.use_test_env)
     try:
         result = await client.upload_invoice(xml, standard="UBL", extern=receipt.is_extern)
     except AnafUploadError as exc:
+        if not _refused_by_anaf(exc):
+            # 2xx fara index / corp neparsabil: ANAF poate sa fi inregistrat factura.
+            await _mark_unknown(db, rec, str(exc), getattr(exc, "raw", None))
+            log.warning("ANAF upload cu rezultat necunoscut receipt_id=%s: %s", receipt.id, exc)
+            raise UploadOutcomeUnknown(str(exc)) from exc
         # Contract status:
         #   - "rejected" = ANAF a procesat asincron si a respins (rec.index_incarcare != None,
         #     download_id setat, /stareMesaj a returnat "nok"). Set in `poll_status`.
-        #   - "error"    = upload-ul nu a ajuns sa primeasca index_incarcare (HTTP error,
-        #     timeout, parse error la response). Bonul redevine editabil pentru ca nimic
-        #     nu ramane in flux ANAF; cron-ul `job_download_responses` nu picks-up error.
-        # Aici suntem in al doilea caz: ANAF nu a returnat index_incarcare.
+        #   - "error"    = upload-ul nu a ajuns sa primeasca index_incarcare. Bonul redevine
+        #     editabil pentru ca nimic nu ramane in flux ANAF; cron-ul
+        #     `job_download_responses` nu picks-up error.
+        # Aici suntem in al doilea caz: ANAF a refuzat explicit incarcarea.
         rec.status = "error"
         rec.anaf_stare = "nok"
         rec.anaf_error_message = str(exc)[:2000]
@@ -268,29 +487,53 @@ async def prepare_and_upload(
         await db.commit()
         log.warning("ANAF upload rejected for receipt_id=%s: %s", receipt.id, exc)
         raise
+    except AnafRateLimited as exc:
+        await _mark_not_sent(
+            db, rec,
+            "ANAF a refuzat temporar cererea (limita de cereri). Nimic nu a fost "
+            "transmis — reincearca peste cateva minute.",
+        )
+        log.warning("ANAF rate limit la upload receipt_id=%s: %s", receipt.id, exc)
+        raise
+    except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+        # Conexiunea nu s-a stabilit: corpul cererii nu a plecat.
+        message = (
+            f"Nu m-am putut conecta la ANAF ({type(exc).__name__}). Nimic nu a fost "
+            "transmis — reincearca."
+        )
+        await _mark_not_sent(db, rec, message)
+        log.warning("ANAF indisponibil la upload receipt_id=%s: %r", receipt.id, exc)
+        raise EFacturaError(message) from exc
+    except Exception as exc:  # noqa: BLE001
+        # Timeout la raspuns, conexiune rupta, HTTP 5xx: cererea a plecat si nu stim
+        # daca ANAF a inregistrat-o. O retrimitere automata ar putea dubla factura.
+        detail = f"{type(exc).__name__}: {exc}"
+        await _mark_unknown(db, rec, detail)
+        log.warning("ANAF upload cu rezultat necunoscut receipt_id=%s: %s", receipt.id, detail)
+        raise UploadOutcomeUnknown(detail) from exc
 
-    rec.anaf_raw_response = _serialize_raw(result)
     index = int(result.get("index_incarcare") or 0) or None
     if index is None:
         # Plasa de siguranta: nu marcam NICIODATA 'in_prelucrare' fara index_incarcare.
         # (upload_invoice ridica deja AnafUploadError in acest caz; pastram verificarea aici
         # pentru robustete — un 'in_prelucrare' fara index ar fi nepollabil si captiv.)
-        rec.status = "error"
-        rec.anaf_stare = "nok"
-        rec.anaf_error_message = (
-            "ANAF nu a returnat index_incarcare (raspuns neasteptat). Vezi anaf_raw_response."
-        )[:2000]
-        await db.commit()
-        log.warning("ANAF upload fara index pentru receipt_id=%s; marcat 'error'.", receipt.id)
+        await _mark_unknown(
+            db, rec, "ANAF nu a returnat index_incarcare (raspuns neasteptat).", result
+        )
+        log.warning("ANAF upload fara index pentru receipt_id=%s; rezultat necunoscut.", receipt.id)
         raise AnafUploadError(
             "ANAF nu a returnat index_incarcare",
             raw=result if isinstance(result, dict) else None,
         )
 
+    # Logat INAINTE de commit: daca scrierea pica, indexul ramane macar in log.
+    log.info("ANAF a primit receipt_id=%s index_incarcare=%s", receipt.id, index)
+    rec.anaf_raw_response = _serialize_raw(result)
     rec.index_incarcare = index
     rec.data_creare_anaf = str(result.get("data_creare") or "")[:20]
     rec.status = "in_prelucrare"
     rec.anaf_stare = "in prelucrare"
+    rec.anaf_error_message = None
     rec.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=15)
     await db.commit()
     await db.refresh(rec)
@@ -307,17 +550,96 @@ async def mark_pending_upload(db: AsyncSession, receipt: Receipt) -> EFacturaRec
 
     Folosit ca sa marcam imediat bonul ca "in coada" cand userul apasa Trimite in SPV;
     upload-ul efectiv se face apoi asincron prin `upload_to_anaf_async`.
+
+    Tranzitia e un UPDATE conditionat: reuseste doar din starile din `_resendable()`.
+    Altfel ridica `EFacturaStateError` — o factura acceptata, in prelucrare sau deja
+    in coada nu poate fi repusa in coada (ar pleca a doua oara la ANAF).
     """
-    company = await _resolve_company_for_receipt(db, receipt)
+    company, problem = await resolve_supplier(db, receipt)
     if company is None:
         raise AnafConfigError("Nu am gasit compania emitenta a facturii.")
+    if problem:
+        raise AnafConfigError(problem)
     rec = await get_or_create_record(db, receipt, company)
-    rec.status = "pending_upload"
-    rec.anaf_error_message = None
-    rec.last_attempt_at = datetime.now(timezone.utc)
+    await db.flush()
+    old_index = rec.index_incarcare
+    queued = await db.execute(
+        update(EFacturaRecord)
+        .where(EFacturaRecord.id == rec.id, _resendable())
+        .values(
+            status="pending_upload",
+            anaf_stare=STARE_QUEUED,
+            anaf_error_message=None,
+            last_attempt_at=datetime.now(timezone.utc),
+            **_SUPERSEDED,
+        )
+        .execution_options(synchronize_session=False)
+    )
+    was_queued = queued.rowcount == 1
     await db.commit()
     await db.refresh(rec)
+    if not was_queued:
+        raise EFacturaStateError(
+            f"Factura este deja in flux ANAF (status: {rec.status}) si nu poate fi retrimisa."
+        )
+    if old_index is not None:
+        # Indexul sters din record ramane macar in log.
+        log.info(
+            "Retrimitere receipt_id=%s: inlocuieste incarcarea index_incarcare=%s",
+            receipt.id, old_index,
+        )
     return rec
+
+
+async def expire_stuck_uploads(
+    db: AsyncSession, *, company_id: int | None = None, record_id: int | None = None
+) -> int:
+    """Scoate din 'pending_upload' facturile abandonate de peste CLAIM_TIMEOUT.
+
+    Fara asta, un proces repornit in timpul trimiterii lasa bonul blocat pe
+    „Se trimite..." fara nicio cale de iesire din UI. Nu retrimite nimic: muta
+    record-ul in 'error', de unde operatorul decide.
+      - in coada si nepreluat -> sigur netrimis (MSG_NOT_STARTED)
+      - preluat si abandonat, sau ramas de la versiunea veche (fara sub-stare)
+        -> rezultat necunoscut (MSG_UNKNOWN)
+    """
+    now = datetime.now(timezone.utc)
+    scope = [
+        EFacturaRecord.status == "pending_upload",
+        EFacturaRecord.direction == "sent",
+        or_(
+            EFacturaRecord.last_attempt_at.is_(None),
+            EFacturaRecord.last_attempt_at < now - CLAIM_TIMEOUT,
+        ),
+    ]
+    if company_id is not None:
+        scope.append(EFacturaRecord.company_id == company_id)
+    if record_id is not None:
+        scope.append(EFacturaRecord.id == record_id)
+
+    not_started = (
+        await db.execute(
+            update(EFacturaRecord)
+            .where(*scope, EFacturaRecord.anaf_stare == STARE_QUEUED)
+            .values(status="error", anaf_stare=None, anaf_error_message=MSG_NOT_STARTED)
+            .execution_options(synchronize_session=False)
+        )
+    ).rowcount or 0
+    unknown = (
+        await db.execute(
+            update(EFacturaRecord)
+            .where(*scope)
+            .values(status="error", anaf_stare=STARE_UNKNOWN, anaf_error_message=MSG_UNKNOWN)
+            .execution_options(synchronize_session=False)
+        )
+    ).rowcount or 0
+    if not_started or unknown:
+        await db.commit()
+        log.warning(
+            "expire_stuck_uploads: %d netrimise, %d cu rezultat necunoscut",
+            not_started, unknown,
+        )
+    return not_started + unknown
 
 
 async def upload_to_anaf_async(receipt_id: int, account_id: int) -> None:
@@ -342,8 +664,7 @@ async def upload_to_anaf_async(receipt_id: int, account_id: int) -> None:
                 return
             try:
                 await prepare_and_upload(db, receipt)
-            except (AnafConfigError, AnafTokenMissing, AnafValidationError,
-                    AnafUploadError, EFacturaError) as exc:
+            except EFacturaError as exc:
                 log.info(
                     "upload_to_anaf_async: receipt=%s terminat cu eroare (%s)",
                     receipt_id, exc,

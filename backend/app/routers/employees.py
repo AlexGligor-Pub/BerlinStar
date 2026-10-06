@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_account_id, get_advanced_account_id
+from app.dependencies import get_account_id, get_advanced_account_id, get_settings_account_id
 from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
@@ -69,11 +69,16 @@ async def get_employee(
     return employee
 
 
+# Scrierile de mai jos (creare, editare, poza, stergere) cer rol de Setari
+# (admin + manager): pagina lor e Configurari > Angajati, iar `target` si
+# `annual_vacation_days` decid targetul din rapoarte si soldul de concediu.
+# Citirile raman pe `get_account_id`: POS, Programari, Hotel si Concedii
+# incarca lista de angajati pentru orice rol.
 @router.post("", response_model=EmployeeRead, status_code=201)
 async def create_employee(
     body: EmployeeCreate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     employee = Employee(**body.model_dump(), account_id=account_id)
     db.add(employee)
@@ -87,7 +92,7 @@ async def update_employee(
     employee_id: int,
     body: EmployeeUpdate,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     employee = await db.get(Employee, employee_id)
     if employee is None or employee.account_id != account_id or employee.is_deleted:
@@ -105,7 +110,7 @@ async def upload_image(
     employee_id: int,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     employee = await db.get(Employee, employee_id)
     if employee is None or employee.account_id != account_id or employee.is_deleted:
@@ -125,7 +130,7 @@ async def upload_image(
 async def delete_employee(
     employee_id: int,
     db: AsyncSession = Depends(get_db),
-    account_id: int = Depends(get_account_id),
+    account_id: int = Depends(get_settings_account_id),
 ):
     employee = await db.get(Employee, employee_id)
     if employee is None or employee.account_id != account_id:

@@ -2,15 +2,18 @@
 
 Flux (acelasi ca in history-ul de pe server, plus verificari si rollback):
   1. git fetch; daca origin/MainProd are commit-uri noi -> git pull (ff sau merge)
-  2. backup DB: deploy/backup_Productie_<ts>.sqlplus (pentru git, ca pana acum)
+  2. backup DB: deploy/backup_Productie_<ts>.sqlplus (ramane DOAR pe server)
      + /root/db_backups/auto_update_<ts>.dump (format custom, pentru restore)
-  3. cd deploy && git add . && git commit -m "backup <zi> <luna>" && git push
+  3. imaginile Docker care ruleaza (backend, frontend) primesc tag-ul :rollback.
+     Dump-urile NU se mai comit si NU se mai urca pe GitHub: contin date de
+     productie (vezi docs/deploy_backup_si_rollback.md).
   4. agent Claude (Opus 5, auto mode, read/write) citeste instructiunile din
      commit-uri/docs, face update-ul (rebuild, alembic, .env, ...) si verifica
   5. verificari independente: containere healthy, alembic la head, HTTP 200
   6. esec -> mesaj pe Telegram cu situatia + cerere de sfat; un raspuns text de
      la un admin reia agentul cu sfatul; /rollback sau 1h fara raspuns ->
-     revenire la starea initiala (cod, .env, DB daca s-a migrat, containere).
+     revenire la starea initiala (cod, .env, DB daca s-a migrat, containere pe
+     imaginile :rollback; rebuild din sursa doar daca imaginile lipsesc).
 
 Pasii 1-3 nu ating sistemul care ruleaza, asa ca un esec acolo e anulat imediat
 (fara asteptare). Starea e persistata in update_state.json, deci o repornire a
@@ -31,7 +34,6 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable
-from urllib.parse import urlsplit
 
 from claude_agent_sdk import (
     AssistantMessage,
@@ -82,8 +84,9 @@ DISALLOWED_TOOLS = [
 ]
 
 STATE_FILE = BOT_DIR / "update_state.json"
-LUNI = ["ian", "feb", "mar", "apr", "mai", "iun", "iul", "aug", "sept", "oct", "nov", "dec"]
 ROLLBACK = object()  # sentinel: rollback cerut explicit
+# Serviciile construite local (au `build:` in compose); restul folosesc imagini publice.
+ROLLBACK_SERVICES = ("backend", "frontend")
 
 AGENT_SYSTEM_APPEND = f"""
 Esti agentul de deploy al productiei BerlinStar (server Hetzner, rulezi ca root).
@@ -96,6 +99,9 @@ Reguli stricte:
   commit/stash/clean le face updater-ul). Poti citi liber (git log/diff/show).
 - NU sterge volume Docker, NU face `docker compose down -v`, NU sterge/recrea baza de date,
   NU sterge backup-uri.
+- NU sterge imagini Docker (`docker rmi`, `docker image prune -a`): imaginile
+  `berlinstar-backend:rollback` si `berlinstar-frontend:rollback` sunt folosite de
+  updater la rollback.
 - NU reporni si NU opri serviciul {BOT_SERVICE} (e chiar procesul care te ruleaza).
 - deploy/.env contine secrete: poti ADAUGA chei noi cerute de instructiuni (backup-ul
   e facut deja), dar nu schimba/sterge valori existente fara o instructiune explicita,
@@ -190,14 +196,17 @@ def esc(text: str) -> str:
     return html.escape(text, quote=False)
 
 
-def push_url() -> str | None:
-    if not PUSH_TOKEN:
+def running_image(svc: str) -> tuple[str, str] | None:
+    """(id imagine, nume imagine) pentru containerul care ruleaza acum serviciul `svc`."""
+    rc, out = dc("ps", "-q", svc, timeout=60)
+    cids = re.findall(r"^[0-9a-f]{12,64}$", out, re.M) if rc == 0 else []
+    if len(cids) != 1:
         return None
-    rc, url = git("remote", "get-url", "origin")
-    if rc != 0 or not url.startswith("https://"):
+    rc, out = run(["docker", "inspect", "-f", "{{.Image}}|{{.Config.Image}}", cids[0]], timeout=60)
+    m = re.search(r"^(sha256:[0-9a-f]{64})\|([A-Za-z0-9][A-Za-z0-9._/:-]*)$", out, re.M) if rc == 0 else None
+    if not m or m.group(2).startswith("sha256:"):
         return None
-    parts = urlsplit(url)
-    return f"https://{PUSH_TOKEN}@{parts.hostname}{parts.path}"
+    return m.group(1), m.group(2)
 
 
 # --------------------------------------------------------------------------- #
@@ -367,11 +376,13 @@ class Updater:
         more = f"\n• … încă {len(commit_list) - 10}" if len(commit_list) > 10 else ""
         self.notify(f"🔄 <b>Update pe {BRANCH}</b>: {len(commit_list)} commit-uri noi "
                     f"(<code>{pre[:8]}</code> → <code>{remote[:8]}</code>)\n{shown}{more}\n\n"
-                    f"Fac pull, backup DB, commit+push, apoi update cu {esc(MODEL)}.")
+                    f"Fac pull, backup DB (doar pe server, fără commit/push), apoi update "
+                    f"cu {esc(MODEL)}.")
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         self._save(phase="updating", pre_sha=pre, remote_sha=remote, ts=ts,
                    started_at=time.time(), session_id=None, alembic_before=alembic_revision(),
-                   backup_dump=None, env_backup=None, skip_candidate=None, deadline=None)
+                   backup_dump=None, env_backup=None, skip_candidate=None, deadline=None,
+                   rollback_images=None)
 
         # 1. pull (ff daca se poate, altfel merge ca un `git pull` normal)
         rc, out = git("merge", "--ff-only", f"origin/{BRANCH}")
@@ -401,27 +412,25 @@ class Updater:
             return self._abort_early("backup-ul bazei de date (pg_dump -Fc) a eșuat", err, pre)
         self._save(backup_dump=str(dump_file))
         self._prune_dumps()
+        self._prune_sql_dumps()
 
-        # 3. commit + push (ca in history: din deploy/, `git add .`)
-        now = datetime.now()
-        msg = f"backup {now.day} {LUNI[now.month - 1]} (auto-update {new[:8]})"
-        run(["git", "add", "."], cwd=DEPLOY)
-        rc, out = run(["git", "commit", "-m", msg], cwd=DEPLOY)
-        if rc != 0:
-            sql_file.unlink(missing_ok=True)
-            return self._abort_early("git commit a eșuat", out, pre)
-        rc, out = git("push", push_url() or "origin", f"HEAD:{BRANCH}", timeout=600)
-        push_note = "push OK" if rc == 0 else f"⚠️ push eșuat: <code>{esc(tail(out, 250))}</code>"
-        if rc == 0:
-            git("fetch", "origin", BRANCH, timeout=180)
-        self._save(skip_candidate=git("rev-parse", f"origin/{BRANCH}")[1])
+        # 3. Dump-urile NU se mai comit si NU se mai urca pe GitHub (contin date de
+        #    productie). Raman neurmarite in deploy/: `git status --untracked-files=no`,
+        #    merge-ul si `reset --hard` nu se uita la fisiere neurmarite.
 
         # 4. backup .env (agentul poate adauga chei)
         env_backup = DEPLOY / f".env.bak_autoupdate_{ts}"
         shutil.copy2(DEPLOY / ".env", env_backup)
         self._save(env_backup=str(env_backup))
-        self.notify(f"💾 Backup: <code>{sql_file.name}</code> + <code>{dump_file}</code>\n"
-                    f"📝 Commit <i>{esc(msg)}</i> · {push_note}\n"
+
+        # 4b. retine imaginile care ruleaza acum, ca rollback-ul sa nu depinda de un rebuild
+        images = self._tag_rollback_images()
+        self._save(rollback_images=images or None)
+        img_note = ("imaginile curente marcate <code>:rollback</code>" if images else
+                    "⚠️ n-am putut marca imaginile curente — un rollback ar face rebuild din sursă")
+        self.notify(f"💾 Backup: <code>{sql_file.name}</code> + <code>{dump_file}</code> "
+                    f"(doar pe server, fără commit/push)\n"
+                    f"🏷 {img_note}\n"
                     f"🤖 Pornesc agentul de update ({esc(MODEL)}, {esc(PERMISSION_MODE)} mode)…")
 
         # 5. agent + verificari
@@ -450,7 +459,7 @@ class Updater:
                    last_result=f"OK {new[:8]} ({datetime.now():%Y-%m-%d %H:%M})")
         self.notify(f"✅ <b>Update reușit</b> în ~{mins} min (<code>{pre[:8]}</code> → "
                     f"<code>{new[:8]}</code>)\n\n{self._fmt(report)}\n\n<b>Verificări</b>\n"
-                    + "\n".join(checks))
+                    + "\n".join(checks + self._same_image_lines()))
         if pre:
             self._restart_bot_if_changed(pre, new)
 
@@ -557,21 +566,35 @@ class Updater:
         # DB — doar daca migrarile au schimbat schema (altfel s-ar pierde date reale degeaba)
         before, now_rev = s.get("alembic_before"), alembic_revision()
         dump = s.get("backup_dump")
+        db_ok = True
         if before and now_rev and before != now_rev and dump and Path(dump).exists():
-            notes.append(self._restore_db(dump, s.get("ts") or datetime.now().strftime("%Y%m%d_%H%M%S")))
+            db_ok, db_note = self._restore_db(
+                dump, s.get("ts") or datetime.now().strftime("%Y%m%d_%H%M%S"))
+            notes.append(db_note)
         elif before and before == now_rev:
             notes.append(f"• DB: schema neschimbată (alembic <code>{esc(before)}</code>), n-am restaurat")
         else:
             notes.append(f"• DB: ⚠️ nu pot compara alembic ({esc(str(before))} → {esc(str(now_rev))}); "
                          f"n-am restaurat. Backup: <code>{esc(str(dump))}</code>")
 
-        # containere pe codul vechi
-        rc, out = dc("build", "--no-cache", timeout=3600)
-        if rc == 0:
-            rc, out = dc("up", "-d", "--remove-orphans", timeout=900)
-        notes.append("• rebuild + up: " + ("OK" if rc == 0 else f"❌ <code>{esc(tail(out, 300))}</code>"))
+        # containere pe codul vechi: intai imaginile retinute inainte de update (fara
+        # rebuild — un rebuild al codului vechi poate iesi altfel decat ce rula);
+        # rebuild din sursa doar daca imaginile lipsesc.
+        img_ok, img_note = self._restore_rollback_images()
+        if img_ok is None:
+            rc, out = dc("build", "--no-cache", timeout=3600)
+            if rc == 0:
+                rc, out = dc("up", "-d", "--remove-orphans", timeout=900)
+            notes.append(f"• rebuild + up ({esc(img_note)}): "
+                         + ("OK" if rc == 0 else f"❌ <code>{esc(tail(out, 300))}</code>"))
+        else:
+            notes.append("• imaginile de dinainte + up (fără rebuild): "
+                         + ("OK" if img_ok else f"❌ <code>{esc(tail(img_note, 300))}</code>"))
 
         ok, checks = self.verify()
+        # Un restore esuat sau containere ramase pe imaginea noua nu sunt un rollback reusit,
+        # chiar daca verificarile trec (ex. backend pornit pe o baza goala).
+        ok = ok and db_ok and img_ok is not False
         skip = s.get("skip_candidate") or s.get("remote_sha")
         self._save(phase="idle", skip_remote_sha=skip,
                    last_result=f"rollback {'OK' if ok else 'cu probleme'} ({datetime.now():%Y-%m-%d %H:%M})")
@@ -583,8 +606,79 @@ class Updater:
         if pre:
             self._restart_bot_if_changed(cur, pre)
 
-    def _restore_db(self, dump: str, ts: str) -> str:
-        """Pastreaza DB-ul migrat sub alt nume si restaureaza backup-ul intr-un DB nou."""
+    def _tag_rollback_images(self) -> dict:
+        """Pune tag-ul :rollback pe imaginile containerelor care ruleaza acum.
+
+        Orice problema -> {} (rollback-ul face atunci rebuild din sursa, ca inainte).
+        """
+        images: dict = {}
+        try:
+            for svc in ROLLBACK_SERVICES:
+                img = running_image(svc)
+                if not img:
+                    return {}
+                rc, _ = run(["docker", "image", "tag", img[0], f"berlinstar-{svc}:rollback"],
+                            timeout=60)
+                if rc != 0:
+                    return {}
+                images[svc] = {"id": img[0], "name": img[1]}
+        except Exception:
+            log.exception("Nu pot marca imaginile pentru rollback")
+            return {}
+        return images
+
+    def _restore_rollback_images(self) -> tuple[bool | None, str]:
+        """Repune imaginile de dinaintea update-ului si porneste stack-ul fara build.
+
+        None = imaginile lipsesc (apelantul face rebuild); True = OK; False = imaginile
+        au fost repuse, dar stack-ul nu a pornit pe ele (un rebuild n-ar ajuta).
+        """
+        saved = self.state.get("rollback_images") or {}
+        try:
+            for svc in ROLLBACK_SERVICES:
+                if svc not in saved or run(["docker", "image", "inspect", "-f", "{{.Id}}",
+                                            saved[svc]["id"]], timeout=60)[0] != 0:
+                    return None, f"imaginea de dinainte pentru {svc} lipsește"
+            for svc in ROLLBACK_SERVICES:
+                rc, _ = run(["docker", "image", "tag", saved[svc]["id"], saved[svc]["name"]],
+                            timeout=60)
+                if rc != 0:
+                    return None, f"nu pot repune imaginea pentru {svc}"
+        except Exception:
+            log.exception("Nu pot repune imaginile de rollback")
+            return None, "eroare la repunerea imaginilor"
+        rc, out = dc("up", "-d", "--no-build", "--remove-orphans", timeout=900)
+        if rc != 0:
+            return False, out
+        for svc in ROLLBACK_SERVICES:
+            cur = running_image(svc)
+            if not cur or cur[0] != saved[svc]["id"]:
+                return False, f"{svc} nu rulează imaginea de dinainte"
+        return True, ""
+
+    def _same_image_lines(self) -> list[str]:
+        """Avertisment (nu blocheaza): un serviciu care ruleaza tot imaginea de dinaintea
+        update-ului inseamna ca build-ul sau `up` nu s-au facut pentru el."""
+        saved = self.state.get("rollback_images") or {}
+        try:
+            same = []
+            for svc in ROLLBACK_SERVICES:
+                cur = running_image(svc) if svc in saved else None
+                if cur and cur[0] == saved[svc]["id"]:
+                    same.append(svc)
+        except Exception:
+            log.exception("Nu pot compara imaginile dupa update")
+            return []
+        if not same:
+            return []
+        return [f"• ⚠️ {esc(', '.join(same))}: rulează ACEEAȘI imagine ca înainte de update "
+                "— verifică dacă s-au făcut build + up"]
+
+    def _restore_db(self, dump: str, ts: str) -> tuple[bool, str]:
+        """Pastreaza DB-ul migrat sub alt nume si restaureaza backup-ul intr-un DB nou.
+
+        Intoarce (reusit, nota); reusit=False daca vreun pas sau pg_restore a esuat.
+        """
         user, name = db_user(), db_name()
         failed_name = f"{name}_failed_{ts}"
         dc("stop", "backend", timeout=300)
@@ -597,15 +691,17 @@ class Updater:
         for sql in steps:
             rc, out = psql(sql, db="postgres")
             if rc != 0:
-                return (f"• DB: ❌ restore oprit la <code>{esc(sql[:60])}</code>: "
-                        f"<code>{esc(tail(out, 200))}</code>")
+                return False, (f"• DB: ❌ restore oprit la <code>{esc(sql[:60])}</code>: "
+                               f"<code>{esc(tail(out, 200))}</code>")
         with open(dump, "rb") as f:
             rc, out = dc("exec", "-T", "db", "pg_restore", "-U", user, "-d", name, "--no-owner",
                          f"--role={user}", timeout=3600, stdin=f)
         rev = alembic_revision()
-        status = "OK" if rc == 0 else f"⚠️ cu avertismente (<code>{esc(tail(out, 200))}</code>)"
-        return (f"• DB: restaurat din <code>{esc(Path(dump).name)}</code> — {status}; alembic "
-                f"<code>{esc(str(rev))}</code>. DB-ul migrat e păstrat ca <code>{failed_name}</code>")
+        status = "OK" if rc == 0 else (f"❌ pg_restore a ieșit cu cod {rc} "
+                                       f"(<code>{esc(tail(out, 200))}</code>) — verifică datele")
+        return rc == 0, (f"• DB: restaurat din <code>{esc(Path(dump).name)}</code> — {status}; "
+                         f"alembic <code>{esc(str(rev))}</code>. DB-ul migrat e păstrat ca "
+                         f"<code>{failed_name}</code>")
 
     # ----- verificari independente -----
     def verify(self) -> tuple[bool, list[str]]:
@@ -766,6 +862,25 @@ Ce ai de facut:
             return
         for old in sorted(BACKUP_DIR.glob("auto_update_*.dump"))[:-KEEP_DUMPS]:
             old.unlink(missing_ok=True)
+
+    def _prune_sql_dumps(self) -> None:
+        """Pastreaza ultimele KEEP_DUMPS dump-uri .sqlplus NEURMARITE din deploy/.
+
+        Cele urmarite de git nu se ating: stergerea lor ar lasa repo-ul cu modificari
+        necomise, iar updater-ul s-ar opri la verificarea de la inceput.
+        """
+        if KEEP_DUMPS <= 0:
+            return
+        rc, out = git("ls-files", "--others", "--", "deploy/backup_Productie_*.sqlplus")
+        if rc != 0:
+            return
+        names = sorted({ln.strip()[len("deploy/"):] for ln in out.splitlines() if re.fullmatch(
+            r"deploy/backup_Productie_\d{8}_\d{6}\.sqlplus", ln.strip())})
+        for name in names[:-KEEP_DUMPS]:
+            try:
+                (DEPLOY / name).unlink(missing_ok=True)
+            except OSError:
+                log.exception("Nu pot sterge %s", name)
 
     def _restart_bot_if_changed(self, a: str, b: str) -> None:
         paths = [p.relative_to(REPO).as_posix() for p in (BOT_DIR, BOT_DIR.parent / "telegram-common")]

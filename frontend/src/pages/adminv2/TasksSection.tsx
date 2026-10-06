@@ -3,7 +3,7 @@ import {
   createSolidTable, flexRender, getCoreRowModel, getSortedRowModel,
   type ColumnDef, type SortingState,
 } from "@tanstack/solid-table";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
 import { fmtDate, statusDisplay } from "./shared";
@@ -80,7 +80,7 @@ export default function TasksSection() {
       if (res.ok && body.ok) {
         setActionMsg({ id: j.job_id, ok: true, text: "Job rulat cu succes." });
       } else {
-        setActionMsg({ id: j.job_id, ok: false, text: body.detail ?? "Eroare la rulare." });
+        setActionMsg({ id: j.job_id, ok: false, text: parseApiError(body.detail, "Eroare la rulare.") });
       }
       await loadJobs();
     } catch {
@@ -123,7 +123,7 @@ export default function TasksSection() {
       });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setEditErr(d.detail ?? "Eroare la salvare.");
+        setEditErr(parseApiError(d.detail, "Eroare la salvare."));
         return;
       }
       closeEdit();
@@ -146,7 +146,7 @@ export default function TasksSection() {
       });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setEditErr(d.detail ?? "Eroare.");
+        setEditErr(parseApiError(d.detail, "Eroare."));
         return;
       }
       closeEdit();

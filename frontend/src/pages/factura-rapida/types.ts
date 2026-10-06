@@ -27,7 +27,8 @@ export interface QuickInvoiceLine {
   vatPercent: number;
 }
 
-export const VAT_OPTIONS = [0, 5, 9, 19] as const;
+// Aceleasi cote ca ALLOWED_VAT_PERCENTS din backend/app/efactura/mapping.py.
+export const VAT_OPTIONS = [0, 5, 9, 11, 19, 21] as const;
 
 export function lineTotalNet(l: QuickInvoiceLine): number {
   return l.price * l.qty;
@@ -50,13 +51,13 @@ export function todayPlusDaysISO(days: number): string {
   return `${y}-${m}-${dd}`;
 }
 
-export function newLine(): QuickInvoiceLine {
+export function newLine(vatPercent = 21): QuickInvoiceLine {
   return {
     lineId: `l_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     name: "",
     qty: 1,
     unit: "buc",
     price: 0,
-    vatPercent: 19,
+    vatPercent,
   };
 }

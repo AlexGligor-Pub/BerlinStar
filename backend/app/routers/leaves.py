@@ -5,14 +5,17 @@ from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth_context import AuthContext
 from app.database import get_db
-from app.dependencies import get_account_id, get_reports_account_id, get_settings_account_id
+from app.dependencies import (
+    get_account_id, get_auth_context, get_reports_account_id, get_settings_account_id,
+)
 from app.models.employee import Employee
 from app.models.employee_detail import EmployeeDetail
 from app.models.company import Company
-from app.models.account import Account
 from app.models.leave import Leave, LeaveType, LeaveStatus, HOUR_BASED_TYPES
 from app.models.location import Location
+from app.permissions import Resource
 from app.schemas.leave import (
     LeaveCreate, LeavePatch, LeaveRead, LeaveBalance, LeaveTypeBreakdown, RomanianHoliday,
     LeaveConsent, LeaveApprove,
@@ -202,6 +205,30 @@ async def _check_vacation_balance(
             f"deja folosite/in asteptare: {used}, disponibile: {remaining}, "
             f"cerute: {working_days}.",
         )
+
+
+def _assert_can_change(l: Leave, ctx: AuthContext) -> None:
+    """O cerere deja aprobata sau respinsa poarta decizia (si acordul) unui
+    manager: de acolo incolo o mai pot modifica sau sterge doar rolurile care
+    aproba. Cat e in asteptare, o poate corecta oricine din cont — cererile se
+    introduc de la statia comuna, pentru orice angajat, deci nu exista un
+    „proprietar" pe care sa-l putem verifica."""
+    if l.status != LeaveStatus.PENDING and not ctx.can(Resource.SETTINGS):
+        raise HTTPException(
+            403,
+            "Cererea a fost deja procesata; doar un manager sau administratorul o mai poate modifica.",
+        )
+
+
+def _approver_name(ctx: AuthContext) -> str | None:
+    """Numele celui care decide, pentru snapshot-ul de pe cerere si din PDF.
+
+    `approved_by` e FK catre `accounts`, deci nu poate tine utilizatorul; numele
+    lui este singura urma a persoanei care a aprobat. Daca userul nu are nume,
+    ramane numele firmei, ca inainte."""
+    user = ctx.user
+    name = (user.name or "").strip() or (user.username or "").strip()
+    return (name or ctx.account.name or "")[:200] or None
 
 
 async def _validate_employee(db: AsyncSession, account_id: int, employee_id: int) -> Employee:
@@ -443,10 +470,12 @@ async def update_leave(
     body: LeavePatch,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ) -> LeaveRead:
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:
         raise HTTPException(404, "Cererea nu a fost gasita.")
+    _assert_can_change(l, ctx)
 
     data = body.model_dump(exclude_unset=True)
     # Doar o locatie NOUA se verifica: o cerere veche, legata de o locatie stearsa
@@ -486,10 +515,12 @@ async def delete_leave(
     leave_id: int,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ) -> None:
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id:
         raise HTTPException(404, "Cererea nu a fost gasita.")
+    _assert_can_change(l, ctx)
     await soft_delete(db, Leave, leave_id)
 
 
@@ -499,11 +530,13 @@ async def consent_leave(
     body: LeaveConsent,
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ) -> LeaveRead:
     """Acordul digital al angajatului pentru cerere (bifare)."""
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:
         raise HTTPException(404, "Cererea nu a fost gasita.")
+    _assert_can_change(l, ctx)
     l.employee_consent = body.employee_consent
     l.employee_consent_at = datetime.now(timezone.utc) if body.employee_consent else None
     l.updated_at = datetime.now(timezone.utc)
@@ -522,6 +555,7 @@ async def approve_leave(
     # Aprobarea, respingerea si resetarea sunt decizii de management: butonul
     # apare doar pentru admin/manager in UI, iar aici o impunem si pe server.
     account_id: int = Depends(get_settings_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ) -> LeaveRead:
     # Acordul digital al aprobatorului este obligatoriu — altfel "acord aprobator"
     # ar fi inregistrat ca bifat fara consimtamant real (record legal eronat).
@@ -535,8 +569,7 @@ async def approve_leave(
     l.approved_by = account_id
     l.approved_at = now
     l.approver_consent = True
-    approver = await db.get(Account, account_id)
-    l.approver_name_snapshot = getattr(approver, "name", None) if approver else None
+    l.approver_name_snapshot = _approver_name(ctx)
     l.updated_at = now
     await db.commit()
     loaded = await _load(db, l.id)
@@ -593,6 +626,7 @@ async def reject_leave(
     # Aprobarea, respingerea si resetarea sunt decizii de management: butonul
     # apare doar pentru admin/manager in UI, iar aici o impunem si pe server.
     account_id: int = Depends(get_settings_account_id),
+    ctx: AuthContext = Depends(get_auth_context),
 ) -> LeaveRead:
     l = await db.get(Leave, leave_id)
     if l is None or l.account_id != account_id or l.is_deleted:
@@ -600,6 +634,11 @@ async def reject_leave(
     l.status = LeaveStatus.REJECTED
     l.approved_by = account_id
     l.approved_at = datetime.now(timezone.utc)
+    # Numele celui care respinge inlocuieste snapshot-ul unei aprobari
+    # anterioare; odata cu el cade si acordul de aprobare, care altfel ar
+    # ramane bifat sub numele altcuiva.
+    l.approver_name_snapshot = _approver_name(ctx)
+    l.approver_consent = False
     l.updated_at = datetime.now(timezone.utc)
     await db.commit()
     loaded = await _load(db, l.id)

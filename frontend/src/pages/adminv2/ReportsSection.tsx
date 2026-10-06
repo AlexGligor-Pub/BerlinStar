@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onMount, onCleanup } from "solid-js";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import type { ApiMessageBody } from "../../types";
 import { adminFetch } from "./admin-auth";
@@ -111,7 +111,7 @@ export default function ReportsSection() {
       });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        notify(`Eroare ${res.status}: ${d.detail ?? "Rulare bulk eșuată."}`, "error");
+        notify(`Eroare ${res.status}: ${parseApiError(d.detail, "Rulare bulk eșuată.")}`, "error");
         return false;
       }
       const msg = opts?.periodStart && opts?.periodEnd
@@ -152,13 +152,13 @@ export default function ReportsSection() {
       });
       if (res.status === 429) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        notify(`${REPORT_LABELS[reportType]?.title ?? reportType}: ${d.detail ?? "Cooldown activ."}`, "warn");
+        notify(`${REPORT_LABELS[reportType]?.title ?? reportType}: ${parseApiError(d.detail, "Cooldown activ.")}`, "warn");
         await loadReports();
         return;
       }
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        notify(`Eroare ${res.status}: ${d.detail ?? "Trigger eșuat."}`, "error");
+        notify(`Eroare ${res.status}: ${parseApiError(d.detail, "Trigger eșuat.")}`, "error");
         return;
       }
       notify(`${REPORT_LABELS[reportType]?.title ?? reportType}: rulare pornită.`, "success");

@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onCleanup } from "solid-js";
-import { API_BASE, readJsonSafe } from "../../utils/api";
+import { API_BASE, parseApiError, readJsonSafe } from "../../utils/api";
 import { adminFetch } from "./admin-auth";
 import { renderMarkdown } from "../../utils/markdown";
 
@@ -82,7 +82,7 @@ export default function AssistantSection() {
       const res = await adminFetch(path, { method: "POST", body: JSON.stringify({ prompt }) });
       if (!res.ok) {
         const d = await readJsonSafe<{ detail?: string }>(res);
-        setError(d.detail ?? `Eroare ${res.status}`);
+        setError(parseApiError(d.detail, `Eroare ${res.status}`));
         return;
       }
       const d = await readJsonSafe<{ chat_id?: string; stream_token?: string }>(res);

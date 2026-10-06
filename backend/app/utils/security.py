@@ -6,10 +6,25 @@ import bcrypt
 
 BCRYPT_ROUNDS = 12
 
+# bcrypt foloseste doar primii 72 de octeti ai parolei.
+BCRYPT_MAX_BYTES = 72
+
+
+def _bcrypt_bytes(plain: str) -> bytes:
+    """Parola ca octeti, taiata la limita bcrypt.
+
+    bcrypt < 5 taia in tacere la 72 de octeti; bcrypt 5 arunca ValueError. Taiem
+    noi, la fel ca versiunile vechi (pe octeti, nu pe caractere): hash-urile
+    facute atunci din parole mai lungi se verifica in continuare, iar o parola
+    lunga noua nu mai produce 500. Consecinta, aceeasi ca inainte: tot ce trece
+    de octetul 72 nu conteaza la verificare.
+    """
+    return plain.encode("utf-8")[:BCRYPT_MAX_BYTES]
+
 
 def hash_password_sync(plain: str) -> str:
     """Return a bcrypt hash (utf-8 string) for the given plaintext password."""
-    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
+    return bcrypt.hashpw(_bcrypt_bytes(plain), bcrypt.gensalt(rounds=BCRYPT_ROUNDS)).decode("utf-8")
 
 
 async def hash_password(plain: str) -> str:
@@ -32,7 +47,7 @@ def verify_password_sync(plain: str, stored: str) -> bool:
         return False
     if _looks_like_bcrypt(stored):
         try:
-            return bcrypt.checkpw(plain.encode("utf-8"), stored.encode("utf-8"))
+            return bcrypt.checkpw(_bcrypt_bytes(plain), stored.encode("utf-8"))
         except ValueError:
             return False
     expected = base64.b64encode(plain.encode("utf-8")).decode("utf-8")

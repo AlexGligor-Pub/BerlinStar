@@ -1,3 +1,4 @@
+import { parseApiError } from "../utils/api";
 import { ApiError, ensureOk, http } from "./client";
 
 /** Tipurile de import (vezi backend/app/routers/import_data.py :: KINDS). */
@@ -262,7 +263,7 @@ async function startImport(
   const res = await http.raw(`${base}/${kind}`, { method: "POST", body: upload(file, false, force, locationId) });
   if (res.status === 409) {
     const data = await res.json().catch(() => ({})) as { detail?: string; session_id?: number; reason?: "in_progress" | "same_file" };
-    throw new ImportConflictError(data.detail ?? "Importul nu a putut porni.", data.session_id ?? 0, data.reason ?? "in_progress");
+    throw new ImportConflictError(parseApiError(data.detail, "Importul nu a putut porni."), data.session_id ?? 0, data.reason ?? "in_progress");
   }
   await ensureOk(res, "Importul a eșuat.");
   return res.json() as Promise<ImportSession>;
@@ -302,7 +303,7 @@ export const importApi = {
     });
     if (res.status === 409) {
       const data = await res.json().catch(() => ({})) as { detail?: string; row?: R };
-      throw new RowImportError<R>(409, data.detail ?? "Rândul nu poate fi importat.", data.row ?? null);
+      throw new RowImportError<R>(409, parseApiError(data.detail, "Rândul nu poate fi importat."), data.row ?? null);
     }
     await ensureOk(res, "Rândul nu a putut fi importat.");
     return res.json() as Promise<R>;

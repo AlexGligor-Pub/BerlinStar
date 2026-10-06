@@ -1,6 +1,6 @@
 import { Show, createSignal, onMount } from "solid-js";
 import { adminFetch } from "./admin-auth";
-import { readJsonSafe } from "../../utils/api";
+import { parseApiError, readJsonSafe } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 
 interface SubSettings {
@@ -81,7 +81,7 @@ export default function SubscriptionSettingsSection() {
       });
       if (!res.ok) {
         const d = await readJsonSafe<{ detail?: string }>(res);
-        notify(d.detail || "Eroare la salvare.", "error");
+        notify(parseApiError(d.detail, "Eroare la salvare."), "error");
         return;
       }
       setS(await res.json());
@@ -95,7 +95,7 @@ export default function SubscriptionSettingsSection() {
     const res = await adminFetch("/api/admin/subscription/anaf/auth-url");
     if (!res.ok) {
       const d = await readJsonSafe<{ detail?: string }>(res);
-      notify(d.detail || "Eroare ANAF.", "error");
+      notify(parseApiError(d.detail, "Eroare ANAF."), "error");
       return;
     }
     const d = (await res.json()) as { auth_url: string };

@@ -1589,6 +1589,7 @@ export default function HotelAnvelope() {
     if (!newClient()) { setSaveErr("Selectați un client."); return; }
     if (selectedAnvIds().size === 0) { setSaveErr("Selectați cel puțin o anvelopă."); return; }
     setSaving(true);
+    let saved = false;
     try {
       // Creăm mai întâi anvelopele draft (ID negativ temporar)
       const draftIds = Array.from(selectedAnvIds()).filter((id) => id < 0);
@@ -1650,12 +1651,24 @@ export default function HotelAnvelope() {
         setSaveErr(reason + dropRefusedNewRefs(res.status, reason));
         return;
       }
+      saved = true;
       setShowNewModal(false);
       await fetchCazari();
       if (ctx) {
         const wasCombo = scoatereFollowedByCazare();
         setScoatereFollowedByCazare(false);
         returnToPos(wasCombo ? "scoatere_si_cazare" : "cazare");
+      }
+    } catch {
+      // Cerere intrerupta (retea, timeout): fara mesaj, operatorul nu stie daca
+      // s-a salvat si apasa din nou. Raspunsul pierdut nu spune daca serverul a
+      // apucat sa creeze cazarea, de aceea trimitem la lista inainte de reincercare.
+      if (saved) {
+        notify("Cazarea a fost salvată, dar lista nu s-a putut reîncărca. Reîncărcați pagina.", "error");
+      } else {
+        const msg = "Conexiune întreruptă. Verificați în listă dacă s-a salvat cazarea înainte de a reîncerca.";
+        setSaveErr(msg);
+        notify(msg, "error");
       }
     } finally { setSaving(false); }
   }
@@ -1901,6 +1914,7 @@ export default function HotelAnvelope() {
     setEditErr("");
     if (editSelectedIds().size === 0) { setEditErr("Selectați cel puțin o anvelopă."); return; }
     setEditSaving(true);
+    let saved = false;
     try {
       // creează draft-uri (ID negativ) dacă există
       const draftIds = Array.from(editSelectedIds()).filter((id) => id < 0);
@@ -1950,8 +1964,18 @@ export default function HotelAnvelope() {
         }),
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(parseApiError(err.detail, "Eroare la salvare.")); return; }
+      saved = true;
       setEditCazare(null);
       await fetchCazari();
+    } catch {
+      // Vezi saveCazare: o cerere intrerupta trebuie sa lase un mesaj vizibil.
+      if (saved) {
+        notify("Modificările au fost salvate, dar lista nu s-a putut reîncărca. Reîncărcați pagina.", "error");
+      } else {
+        const msg = "Conexiune întreruptă. Verificați cazarea în listă înainte de a reîncerca.";
+        setEditErr(msg);
+        notify(msg, "error");
+      }
     } finally { setEditSaving(false); }
   }
 

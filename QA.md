@@ -16,7 +16,7 @@ Acest fișier e referința de start pentru orice sesiune nouă (chat) care lucre
 | IP (LAN) | **192.168.1.136** (rezervat pe router prin DHCP) |
 | User SSH | `berlinqa` |
 | OS | Ubuntu 24.04, kernel 6.17 |
-| Parolă consolă / sudo | `alexgligor` |
+| Parolă consolă / sudo | cere parola / manager de parole (nu se ține în repo) |
 
 **Cheia SSH** e în repo la `QA_ENV/id_ed25519_siemens` (folder **gitignored** — nu intră în git).
 Pe mount-ul Windows are permisiuni 777, iar SSH refuză cheia prea permisivă, deci se copiază întâi:

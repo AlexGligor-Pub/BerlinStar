@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import { For, Index, Show, createMemo, createSignal, onMount } from "solid-js";
 import { apiFetch, API_BASE, readJsonSafe, readApiError } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 import SearchableSelect from "./SearchableSelect";
@@ -18,6 +18,8 @@ import {
 } from "../store/montajRotiStore";
 import { generalSettings, type GeneralSettingsData } from "../store/generalSettingsStore";
 import Modal from "./ui/Modal";
+import DecimalInput from "./ui/DecimalInput";
+import { parseDecimal } from "../utils/decimal";
 
 const TIP_LABELS: Record<TipAnvelopa, string> = {
   iarna: "Iarnă",
@@ -74,6 +76,7 @@ export default function MontareRotiModal(props: {
   const [rows, setRows] = createSignal<RowDraft[]>(seed);
   const [saving, setSaving] = createSignal(false);
   const [err, setErr] = createSignal("");
+  let bodyRef: HTMLDivElement | undefined;
   // Confirmare propunere marca noua (devine pending pana o aproba adminul).
   // Tinem si uid-ul randului care a declansat propunerea: daca marca exista
   // deja aprobata (409 status='approved'), o auto-selectam in randul corect.
@@ -198,6 +201,26 @@ export default function MontareRotiModal(props: {
   }
 
   async function doSave() {
+    // Un camp numeric cu text invalid (ex. „2,") are valoarea null in rand;
+    // salvarea l-ar goli pe tacute. Oprim si aratam campul.
+    // DecimalInput marcheaza un text neterminat abia la blur, iar pe tablete
+    // (iOS Safari) atingerea butonului nu scoate focusul din camp: scoatem noi
+    // focusul si recitim textul fiecarui camp numeric, fara sa ne bazam doar
+    // pe aria-invalid.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && bodyRef?.contains(active)) active.blur();
+    const numericInputs = Array.from(
+      bodyRef?.querySelectorAll<HTMLInputElement>('input[inputmode="decimal"], input[inputmode="numeric"]') ?? [],
+    );
+    const badInput = numericInputs.find((inp) =>
+      inp.getAttribute("aria-invalid") === "true"
+      || !parseDecimal(inp.value, { integer: inp.getAttribute("inputmode") === "numeric" }).valid,
+    );
+    if (badInput) {
+      setErr("Un câmp numeric nu conține un număr valid. Corectează-l sau golește-l înainte de salvare.");
+      badInput.focus();
+      return;
+    }
     setSaving(true);
     setErr("");
     try {
@@ -279,18 +302,24 @@ export default function MontareRotiModal(props: {
         </button>
       </>}
     >
-      <div style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
+      <div ref={bodyRef} style="flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px">
         <div style="display:grid;grid-template-columns:repeat(2, minmax(0, 1fr));gap:10px;align-items:start">
-          <For each={rows()}>
+          {/* <Index>, nu <For>: patchRow inlocuieste obiectul randului la fiecare
+              tasta, iar <For> (cheie = referinta) reconstruia tot randul si
+              campul pierdea focusul dupa primul caracter. */}
+          <Index each={rows()}>
             {(row, idx) => {
-              const placement = () => imagePlacement(row.pozitie);
+              // Memo: imaginea rotii si asezarea se refac doar cand se schimba
+              // pozitia, nu la orice modificare a randului.
+              const pozitie = createMemo(() => row().pozitie);
+              const placement = () => imagePlacement(pozitie());
               return (
                 <div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">
                   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;gap:6px">
-                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx() + 1}</span>
+                    <span style="font-size:12px;font-weight:600;color:var(--text-muted)">Roată #{idx + 1}</span>
                     <div style="display:flex;gap:6px">
-                      <button class="btn btn-ghost btn-sm" onClick={() => copyRow(row.uid)}>Copiază</button>
-                      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onClick={() => deleteRow(row.uid)}>✕</button>
+                      <button class="btn btn-ghost btn-sm" onClick={() => copyRow(row().uid)}>Copiază</button>
+                      <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onClick={() => deleteRow(row().uid)}>✕</button>
                     </div>
                   </div>
 
@@ -303,12 +332,12 @@ export default function MontareRotiModal(props: {
                           <select
                             class="input"
                             style="width:100%"
-                            value={row.pozitie}
+                            value={row().pozitie}
                             onChange={(e) => {
                               const newPoz = e.currentTarget.value as PozitieRoata;
                               const patch: Partial<RowDraft> = { pozitie: newPoz };
                               if (pozitieFaraCuplu(newPoz)) patch.cupluStrangere = 0;
-                              patchRow(row.uid, patch);
+                              patchRow(row().uid, patch);
                             }}
                           >
                             <For each={POZITII_ORDONATE}>
@@ -321,17 +350,11 @@ export default function MontareRotiModal(props: {
                         <Show when={showField("montareRotiShowPresiune")}>
                           <div>
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Presiune (bar)</label>
-                            <input
+                            <DecimalInput
                               class="input"
                               style="width:100%"
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={row.presiune ?? ""}
-                              onInput={(e) => {
-                                const v = e.currentTarget.value;
-                                patchRow(row.uid, { presiune: v === "" ? null : parseFloat(v) });
-                              }}
+                              value={row().presiune}
+                              onInput={(_raw, v) => patchRow(row().uid, { presiune: v })}
                             />
                             <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                               <For each={PRESIUNE_SHORTCUTS}>
@@ -339,7 +362,7 @@ export default function MontareRotiModal(props: {
                                   <button
                                     type="button"
                                     style={SHORTCUT_BTN_STYLE}
-                                    onClick={() => patchRow(row.uid, { presiune: val })}
+                                    onClick={() => patchRow(row().uid, { presiune: val })}
                                   >
                                     {val.toFixed(1)}
                                   </button>
@@ -355,11 +378,11 @@ export default function MontareRotiModal(props: {
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Marcă</label>
                             <SearchableSelect
                               items={marci()}
-                              value={row.marcaId ?? ""}
-                              onSelect={(id) => patchRow(row.uid, { marcaId: id === "" ? null : id })}
+                              value={row().marcaId ?? ""}
+                              onSelect={(id) => patchRow(row().uid, { marcaId: id === "" ? null : id })}
                               getLabel={(m) => m.nume}
                               placeholder="Marcă"
-                              onAddNew={(name) => addMarca(row.uid, name)}
+                              onAddNew={(name) => addMarca(row().uid, name)}
                             />
                           </div>
                         </Show>
@@ -370,8 +393,8 @@ export default function MontareRotiModal(props: {
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Profil</label>
                             <SearchableSelect
                               items={profiluri()}
-                              value={row.profilId ?? ""}
-                              onSelect={(id) => patchRow(row.uid, { profilId: id === "" ? null : id })}
+                              value={row().profilId ?? ""}
+                              onSelect={(id) => patchRow(row().uid, { profilId: id === "" ? null : id })}
                               getLabel={(p) => p.valoare}
                               placeholder="Profil"
                               onAddNew={addProfil}
@@ -387,8 +410,8 @@ export default function MontareRotiModal(props: {
                                 <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Dimensiune</label>
                                 <SearchableSelect
                                   items={dimensiuni()}
-                                  value={row.dimensiuneId ?? ""}
-                                  onSelect={(id) => patchRow(row.uid, { dimensiuneId: id === "" ? null : id })}
+                                  value={row().dimensiuneId ?? ""}
+                                  onSelect={(id) => patchRow(row().uid, { dimensiuneId: id === "" ? null : id })}
                                   getLabel={(d) => d.valoare}
                                   placeholder="Dimensiune"
                                   onAddNew={addDim}
@@ -400,8 +423,8 @@ export default function MontareRotiModal(props: {
                                 <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">DOT</label>
                                 <SearchableSelect
                                   items={coduriDot()}
-                                  value={row.dotId ?? ""}
-                                  onSelect={(id) => patchRow(row.uid, { dotId: id === "" ? null : id })}
+                                  value={row().dotId ?? ""}
+                                  onSelect={(id) => patchRow(row().uid, { dotId: id === "" ? null : id })}
                                   getLabel={(d) => d.valoare}
                                   placeholder="DOT"
                                   onAddNew={addDot}
@@ -414,8 +437,8 @@ export default function MontareRotiModal(props: {
                                 <select
                                   class="input"
                                   style="width:100%"
-                                  value={row.tip}
-                                  onChange={(e) => patchRow(row.uid, { tip: e.currentTarget.value as TipAnvelopa })}
+                                  value={row().tip}
+                                  onChange={(e) => patchRow(row().uid, { tip: e.currentTarget.value as TipAnvelopa })}
                                 >
                                   <option value="iarna">{TIP_LABELS.iarna}</option>
                                   <option value="vara">{TIP_LABELS.vara}</option>
@@ -430,23 +453,17 @@ export default function MontareRotiModal(props: {
                         {/* Adancime + Cuplu — span pe toata latimea controalelor. */}
                         <Show when={(() => {
                           const adVisible = showField("montareRotiShowAdancime");
-                          const cupluVisible = showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie);
+                          const cupluVisible = showField("montareRotiShowCuplu") && !pozitieFaraCuplu(pozitie());
                           return adVisible && cupluVisible;
                         })()}>
                           <div style="grid-column:1 / -1;display:grid;grid-template-columns:0.7fr 1.3fr;gap:5px;align-items:start">
                             <div>
                               <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                              <input
+                              <DecimalInput
                                 class="input"
                                 style="width:100%"
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                value={row.adancime ?? ""}
-                                onInput={(e) => {
-                                  const v = e.currentTarget.value;
-                                  patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                                }}
+                                value={row().adancime}
+                                onInput={(_raw, v) => patchRow(row().uid, { adancime: v })}
                               />
                               <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                                 <For each={ADANCIME_SHORTCUTS}>
@@ -454,7 +471,7 @@ export default function MontareRotiModal(props: {
                                     <button
                                       type="button"
                                       style={SHORTCUT_BTN_STYLE}
-                                      onClick={() => patchRow(row.uid, { adancime: val })}
+                                      onClick={() => patchRow(row().uid, { adancime: val })}
                                     >
                                       {val}
                                     </button>
@@ -464,17 +481,12 @@ export default function MontareRotiModal(props: {
                             </div>
                             <div>
                               <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                              <input
+                              <DecimalInput
                                 class="input"
                                 style="width:100%"
-                                type="number"
-                                step="1"
-                                min="0"
-                                value={row.cupluStrangere ?? ""}
-                                onInput={(e) => {
-                                  const v = e.currentTarget.value;
-                                  patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                                }}
+                                integer
+                                value={row().cupluStrangere}
+                                onInput={(_raw, v) => patchRow(row().uid, { cupluStrangere: v })}
                               />
                               <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                                 <For each={CUPLU_SHORTCUTS}>
@@ -482,7 +494,7 @@ export default function MontareRotiModal(props: {
                                     <button
                                       type="button"
                                       style={SHORTCUT_BTN_STYLE}
-                                      onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                      onClick={() => patchRow(row().uid, { cupluStrangere: val })}
                                     >
                                       {val}
                                     </button>
@@ -493,20 +505,14 @@ export default function MontareRotiModal(props: {
                           </div>
                         </Show>
 
-                        <Show when={showField("montareRotiShowAdancime") && (!showField("montareRotiShowCuplu") || pozitieFaraCuplu(row.pozitie))}>
+                        <Show when={showField("montareRotiShowAdancime") && (!showField("montareRotiShowCuplu") || pozitieFaraCuplu(pozitie()))}>
                           <div>
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Adâncime (mm)</label>
-                            <input
+                            <DecimalInput
                               class="input"
                               style="width:100%"
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              value={row.adancime ?? ""}
-                              onInput={(e) => {
-                                const v = e.currentTarget.value;
-                                patchRow(row.uid, { adancime: v === "" ? null : parseFloat(v) });
-                              }}
+                              value={row().adancime}
+                              onInput={(_raw, v) => patchRow(row().uid, { adancime: v })}
                             />
                             <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                               <For each={ADANCIME_SHORTCUTS}>
@@ -514,7 +520,7 @@ export default function MontareRotiModal(props: {
                                   <button
                                     type="button"
                                     style={SHORTCUT_BTN_STYLE}
-                                    onClick={() => patchRow(row.uid, { adancime: val })}
+                                    onClick={() => patchRow(row().uid, { adancime: val })}
                                   >
                                     {val}
                                   </button>
@@ -524,20 +530,15 @@ export default function MontareRotiModal(props: {
                           </div>
                         </Show>
 
-                        <Show when={!showField("montareRotiShowAdancime") && showField("montareRotiShowCuplu") && !pozitieFaraCuplu(row.pozitie)}>
+                        <Show when={!showField("montareRotiShowAdancime") && showField("montareRotiShowCuplu") && !pozitieFaraCuplu(pozitie())}>
                           <div>
                             <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Cuplu strângere (Nm)</label>
-                            <input
+                            <DecimalInput
                               class="input"
                               style="width:100%"
-                              type="number"
-                              step="1"
-                              min="0"
-                              value={row.cupluStrangere ?? ""}
-                              onInput={(e) => {
-                                const v = e.currentTarget.value;
-                                patchRow(row.uid, { cupluStrangere: v === "" ? null : parseInt(v, 10) });
-                              }}
+                              integer
+                              value={row().cupluStrangere}
+                              onInput={(_raw, v) => patchRow(row().uid, { cupluStrangere: v })}
                             />
                             <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                               <For each={CUPLU_SHORTCUTS}>
@@ -545,7 +546,7 @@ export default function MontareRotiModal(props: {
                                   <button
                                     type="button"
                                     style={SHORTCUT_BTN_STYLE}
-                                    onClick={() => patchRow(row.uid, { cupluStrangere: val })}
+                                    onClick={() => patchRow(row().uid, { cupluStrangere: val })}
                                   >
                                     {val}
                                   </button>
@@ -566,10 +567,10 @@ export default function MontareRotiModal(props: {
                                   style="width:100%"
                                   type="text"
                                   maxLength={4}
-                                  value={row.indiceViteza ?? ""}
+                                  value={row().indiceViteza ?? ""}
                                   onInput={(e) => {
                                     const v = e.currentTarget.value.toUpperCase();
-                                    patchRow(row.uid, { indiceViteza: v === "" ? null : v });
+                                    patchRow(row().uid, { indiceViteza: v === "" ? null : v });
                                   }}
                                 />
                                 <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
@@ -578,7 +579,7 @@ export default function MontareRotiModal(props: {
                                       <button
                                         type="button"
                                         style={SHORTCUT_BTN_STYLE}
-                                        onClick={() => patchRow(row.uid, { indiceViteza: val })}
+                                        onClick={() => patchRow(row().uid, { indiceViteza: val })}
                                       >
                                         {val}
                                       </button>
@@ -590,17 +591,12 @@ export default function MontareRotiModal(props: {
                             <Show when={showField("montareRotiShowIndiceSarcina")}>
                               <div>
                                 <label style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Indice Sarcină</label>
-                                <input
+                                <DecimalInput
                                   class="input"
                                   style="width:100%"
-                                  type="number"
-                                  step="1"
-                                  min="0"
-                                  value={row.indiceSarcina ?? ""}
-                                  onInput={(e) => {
-                                    const v = e.currentTarget.value;
-                                    patchRow(row.uid, { indiceSarcina: v === "" ? null : parseInt(v, 10) });
-                                  }}
+                                  integer
+                                  value={row().indiceSarcina}
+                                  onInput={(_raw, v) => patchRow(row().uid, { indiceSarcina: v })}
                                 />
                                 <div style="display:flex;gap:4px;margin-top:2px;flex-wrap:wrap">
                                   <For each={INDICE_SARCINA_SHORTCUTS}>
@@ -608,7 +604,7 @@ export default function MontareRotiModal(props: {
                                       <button
                                         type="button"
                                         style={SHORTCUT_BTN_STYLE}
-                                        onClick={() => patchRow(row.uid, { indiceSarcina: val })}
+                                        onClick={() => patchRow(row().uid, { indiceSarcina: val })}
                                       >
                                         {val}
                                       </button>
@@ -626,13 +622,13 @@ export default function MontareRotiModal(props: {
                       <Show when={placement() === "bottom"} fallback={
                         <div style="display:flex;gap:6px;align-items:stretch">
                           <Show when={placement() === "left"}>
-                            {renderWheelImage(row.pozitie, "flex:0 0 32%;min-width:140px")}
+                            {renderWheelImage(pozitie(), "flex:0 0 32%;min-width:140px")}
                           </Show>
                           <div style="flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:start">
                             {renderControls()}
                           </div>
                           <Show when={placement() === "right"}>
-                            {renderWheelImage(row.pozitie, "flex:0 0 32%;min-width:140px")}
+                            {renderWheelImage(pozitie(), "flex:0 0 32%;min-width:140px")}
                           </Show>
                         </div>
                       }>
@@ -640,7 +636,7 @@ export default function MontareRotiModal(props: {
                           <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;align-items:start">
                             {renderControls()}
                           </div>
-                          {renderWheelImage(row.pozitie)}
+                          {renderWheelImage(pozitie())}
                         </div>
                       </Show>
                     );
@@ -648,7 +644,7 @@ export default function MontareRotiModal(props: {
                 </div>
               );
             }}
-          </For>
+          </Index>
         </div>
 
         <button class="btn btn-ghost btn-sm" style="align-self:flex-start" onClick={addRow}>

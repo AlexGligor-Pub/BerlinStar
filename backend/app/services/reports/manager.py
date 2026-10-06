@@ -7,10 +7,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from zoneinfo import ZoneInfo
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
+from app.models.cazare_anvelope import CazareAnvelope
+from app.models.programare import Programare
+from app.models.receipt import Receipt
 from app.models.report_run import ReportRun
 from .builder import BUILDERS, BUCHAREST_TZ
 
@@ -29,6 +32,21 @@ SUPPORTED_REPORTS = (
     "stock_movements_daily",
 )
 RunMode = Literal["incremental", "weekly_refresh"]
+
+# „Vindecarea" zilelor vechi: la fiecare rulare reconstruim si zilele din afara
+# perioadei care au randuri-sursa modificate de la ultima rulare reusita (bon
+# incasat, editat sau sters tarziu). Fara asta, o zi mai veche decat prima zi a
+# lunii precedente nu mai era reconstruita niciodata.
+#
+# `last_run_at` se scrie la SFARSITUL rularii; ne uitam cu o ora mai in urma ca
+# sa prindem si modificarile facute in timpul rularii precedente. Suprapunerea
+# costa doar o reconstruire in plus (builderii sunt idempotenti).
+HEAL_OVERLAP = timedelta(hours=1)
+# Plafon pe rulare. Peste el (ex. o actualizare in masa) raman cele mai recente
+# zile, iar restul se semnaleaza in log pentru un rebuild pe interval din admin.
+MAX_HEAL_DAYS = 62
+# Plafon pe randurile-sursa citite la cautarea zilelor modificate.
+HEAL_SCAN_ROWS = 20000
 
 _BUCHAREST = ZoneInfo(BUCHAREST_TZ)
 
@@ -79,6 +97,102 @@ def _compute_period(
     # Catch-up daca exista gap (last < azi-1), altfel doar reprocesam azi.
     start = min(last_period_end + timedelta(days=1), today_buc)
     return start, today_buc
+
+
+def _bucharest_date(ts: datetime) -> date:
+    """Ziua locala in care builderii pun un timestamp (`AT TIME ZONE` in SQL)."""
+    if ts.tzinfo is None:
+        # timestamptz vine mereu cu fus din Postgres; fara fus doar pe SQLite (teste).
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(_BUCHAREST).date()
+
+
+async def _find_dirty_days(db: AsyncSession, report_type: str, since: datetime) -> set[date]:
+    """Zilele de raport ale randurilor-sursa modificate sau sterse dupa `since`.
+
+    `updated_at` e scris la editare, incasare si alocare de numar, iar stergerea
+    scrie doar `deleted_at` — de aceea le verificam pe amandoua. Miscarile de stoc
+    nu se modifica dupa creare, deci raportul lor nu are ce vindeca.
+    """
+    if report_type in ("receipts_daily", "employee_daily", "clients_daily"):
+        model, day_cols, is_ts = Receipt, (Receipt.created_at,), True
+    elif report_type == "cazari_daily":
+        model, day_cols, is_ts = CazareAnvelope, (CazareAnvelope.data_checkin, CazareAnvelope.data_checkout), False
+    elif report_type == "programari_daily":
+        model, day_cols, is_ts = Programare, (Programare.start_time,), True
+    else:
+        return set()
+
+    rows = (await db.execute(
+        select(*day_cols)
+        .where(or_(model.updated_at >= since, model.deleted_at >= since))
+        .order_by(day_cols[0].desc())
+        .limit(HEAL_SCAN_ROWS)
+    )).all()
+    if len(rows) >= HEAL_SCAN_ROWS:
+        log.warning(
+            "Raport %s: peste %d randuri-sursa modificate de la ultima rulare; zilele mai vechi "
+            "decat cele citite NU se reconstruiesc automat. Ruleaza un rebuild pe interval din admin.",
+            report_type, HEAL_SCAN_ROWS,
+        )
+    days: set[date] = set()
+    for row in rows:
+        for value in row:
+            if value is not None:
+                days.add(_bucharest_date(value) if is_ts else value)
+    return days
+
+
+def _heal_ranges(
+    dirty_days: set[date],
+    period_start: date,
+    period_end: date,
+    today: date,
+    max_days: int = MAX_HEAL_DAYS,
+) -> tuple[list[tuple[date, date]], list[date]]:
+    """Alege zilele de reconstruit in afara perioadei si le grupeaza in intervale.
+
+    Intoarce (intervale consecutive [start, end], zile ramase peste plafon).
+    Zilele din perioada se reconstruiesc oricum; cele viitoare (programari) intra
+    in raport abia cand le vine ziua.
+    """
+    outside = sorted(
+        (d for d in dirty_days if d <= today and not (period_start <= d <= period_end)),
+        reverse=True,
+    )
+    chosen, skipped = sorted(outside[:max_days]), outside[max_days:]
+    ranges: list[tuple[date, date]] = []
+    for d in chosen:
+        if ranges and d - ranges[-1][1] == timedelta(days=1):
+            ranges[-1] = (ranges[-1][0], d)
+        else:
+            ranges.append((d, d))
+    return ranges, skipped
+
+
+async def _plan_heal(
+    report_type: str, prev_run_at: datetime | None, period_start: date, period_end: date,
+) -> list[tuple[date, date]]:
+    """Intervalele vechi de reconstruit la aceasta rulare (lista goala = nimic)."""
+    if prev_run_at is None:
+        # Prima rulare porneste de la cea mai veche zi: nu exista zile ramase in urma.
+        return []
+    try:
+        # Sesiune separata: o eroare aici nu are voie sa strice tranzactia
+        # builderului si nici sa opreasca raportul obisnuit.
+        async with AsyncSessionLocal() as scan_db:
+            dirty = await _find_dirty_days(scan_db, report_type, prev_run_at - HEAL_OVERLAP)
+    except Exception:
+        log.exception("Cautarea zilelor modificate a esuat pentru %s; continuam fara ele.", report_type)
+        return []
+    ranges, skipped = _heal_ranges(dirty, period_start, period_end, _bucharest_today())
+    if skipped:
+        log.warning(
+            "Raport %s: %d zile vechi modificate depasesc plafonul de %d pe rulare si NU au fost "
+            "reconstruite (%s..%s). Ruleaza un rebuild pe interval din admin.",
+            report_type, len(skipped), MAX_HEAL_DAYS, skipped[-1], skipped[0],
+        )
+    return ranges
 
 
 async def _get_oldest_source_date(db: AsyncSession, report_type: str) -> date | None:
@@ -229,6 +343,8 @@ async def run_report(
             return {"skipped": True, "reason": "nothing_to_do"}
 
         period_start, period_end = period
+        # Citit inainte de commit: reperul „de la ultima rulare reusita".
+        prev_run_at = run.last_run_at
 
         run.status = "running"
         run.last_period_start = period_start
@@ -239,8 +355,13 @@ async def run_report(
 
     # Rulează builder-ul într-o sesiune separată (commit explicit la sfârșit)
     try:
+        heal_ranges = await _plan_heal(report_type, prev_run_at, period_start, period_end)
         async with AsyncSessionLocal() as build_db:
             inserted = await BUILDERS[report_type](build_db, period_start, period_end)
+            # In aceeasi tranzactie: daca o zi veche nu se poate reconstrui, rularea
+            # esueaza intreaga si `last_run_at` nu avanseaza, deci se reia data viitoare.
+            for heal_start, heal_end in heal_ranges:
+                inserted += await BUILDERS[report_type](build_db, heal_start, heal_end)
             await build_db.commit()
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -261,6 +382,11 @@ async def run_report(
             "Raport %s finalizat în %dms (%s..%s, %d rânduri).",
             report_type, duration_ms, period_start, period_end, inserted,
         )
+        if heal_ranges:
+            log.info(
+                "Raport %s: reconstruite si zilele vechi modificate: %s.",
+                report_type, ", ".join(f"{s}..{e}" for s, e in heal_ranges),
+            )
         return {
             "ok": True,
             "report_type": report_type,

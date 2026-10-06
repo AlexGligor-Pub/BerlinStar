@@ -122,6 +122,22 @@ class RegisterRequest(BaseModel):
     cui_firma: int = Field(..., gt=0)
     phone: str = Field(..., min_length=1, max_length=50)
 
+    @field_validator("username")
+    @classmethod
+    def _clean_username(cls, v: str) -> str:
+        # Aceleasi reguli ca la UserCreate: valoarea ajunge username-ul
+        # utilizatorului admin al contului, iar login-ul compara exact.
+        v = v.strip()
+        if not v:
+            raise ValueError("Utilizatorul este obligatoriu.")
+        if any(c.isspace() for c in v):
+            raise ValueError("Utilizatorul nu poate conține spații.")
+        # "admin" e contul de platforma; variantele lui ("Admin", "ADMIN") n-ar
+        # avea niciun drept in plus, dar ar induce in eroare in listele din AdminV2.
+        if v.casefold() == "admin":
+            raise ValueError("Acest nume de utilizator este rezervat.")
+        return v
+
     @field_validator("email")
     @classmethod
     def _no_crlf_in_email(cls, v: str | None) -> str | None:
@@ -170,13 +186,18 @@ async def _send_client_nou(account_name: str, account_email: str, account_id: in
 @router.post("/register", response_model=RegisterResponse, status_code=201)
 @limiter.limit("5/hour")
 async def register(request: Request, body: RegisterRequest, background_tasks: BackgroundTasks, db: AsyncSession = Depends(get_db)):
-    # Raspuns generic identic indiferent daca username-ul exista (no user enumeration)
+    # Acelasi status si acelasi mesaj fie ca username-ul exista, fie ca nu. NU e
+    # insa protectie completa la enumerare: `code` vine doar cand contul s-a
+    # creat, fiindca ecranul de succes il afiseaza (fara el nu te poti loga).
     GENERIC_OK = RegisterResponse(
         message="Daca informatiile sunt corecte, vei primi un email cu detalii de acces."
     )
 
+    # Fara filtru pe `is_deleted`: indexul unic pe username numara si conturile
+    # sterse, deci un nume purtat de un cont sters ar pica la INSERT cu 409 in
+    # loc de raspunsul generic.
     existing = (await db.execute(
-        select(Account).where(Account.username == body.username, Account.is_deleted == False)
+        select(Account).where(Account.username == body.username)
     )).scalar_one_or_none()
     if existing is not None:
         log.info("Register: username already exists (%s)", body.username)

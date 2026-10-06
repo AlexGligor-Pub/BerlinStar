@@ -1,4 +1,5 @@
 import { For, Show, createSignal, onMount } from "solid-js";
+import { readApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import { adminFetch } from "./admin-auth";
 
@@ -326,8 +327,7 @@ function ConfigTab(props: { dashboard: DashboardData | null; onReload: () => voi
         await loadGlobal();
         props.onReload();
       } else {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Eroare la salvare.", "error");
+        notify(await readApiError(res, "Eroare la salvare."), "error");
       }
     } catch {
       notify("Eroare de rețea.", "error");
@@ -756,8 +756,7 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
         notify("Setări ANAF salvate.", "success");
         props.onSaved();
       } else {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Eroare la salvare.", "error");
+        notify(await readApiError(res, "Eroare la salvare."), "error");
       }
     } catch {
       notify("Eroare de rețea.", "error");
@@ -773,8 +772,7 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
         { method: "POST" }
       );
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Nu am putut iniția conectarea la ANAF.", "error");
+        notify(await readApiError(res, "Nu am putut iniția conectarea la ANAF."), "error");
         return;
       }
       const d = await res.json();
@@ -814,8 +812,7 @@ function CompanyEditor(props: { company: CompanySummary; onSaved: () => void }) 
       if (res.ok) {
         notify("Conexiune OK — token-ul este valid.", "success");
       } else {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Test eșuat.", "error");
+        notify(await readApiError(res, "Test eșuat."), "error");
       }
     } catch {
       notify("Eroare de rețea la test.", "error");
@@ -1008,8 +1005,7 @@ function StatusTab(props: { companies: CompanySummary[] }) {
         notify("Status actualizat.", "success");
         void loadRecords();
       } else {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Status refresh eșuat.", "error");
+        notify(await readApiError(res, "Status refresh eșuat."), "error");
       }
     } catch {
       notify("Eroare de rețea.", "error");
@@ -1021,8 +1017,7 @@ function StatusTab(props: { companies: CompanySummary[] }) {
     try {
       const res = await adminFetch(`/api/efactura/receipts/${receiptId}/download`);
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        notify(d.detail ?? "Nu am putut descărca ZIP-ul.", "error");
+        notify(await readApiError(res, "Nu am putut descărca ZIP-ul."), "error");
         return;
       }
       const blob = await res.blob();

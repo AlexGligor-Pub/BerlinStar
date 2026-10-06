@@ -1,6 +1,6 @@
 import { For, Show, createEffect, createSignal, Switch, Match } from "solid-js";
 import Modal from "../ui/Modal";
-import { apiFetch } from "../../utils/api";
+import { apiFetch, readApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import { printInvoiceReceivedPdf, type InvoiceDetailsReceived } from "../../utils/pdf/invoiceReceived";
 
@@ -139,8 +139,7 @@ function ReceivedDetails(props: PropsReceived) {
         `/api/efactura/companies/${props.companyId}/received/${row().id}/details`,
       );
       if (!r.ok) {
-        const data = await r.json().catch(() => ({} as any));
-        setError(data.detail ?? `Eroare ${r.status}`);
+        setError(await readApiError(r, `Eroare ${r.status}`));
         return;
       }
       const d = (await r.json()) as InvoiceDetailsReceived;

@@ -18,6 +18,19 @@ log = logging.getLogger("berlinstar.reports")
 BUCHAREST_TZ = "Europe/Bucharest"
 MANUAL_LABEL = "Introducere Manuala"
 
+# „Neplătit" = ce mai e de incasat: tot bonul neplatit plus restul bonurilor
+# platite partial (total - partial_pay, ca „Rest de plata" din Receptie/PDF).
+# Fara rest, Platit + Neplatit nu dadeau Venitul total. Restul nu coboara sub 0
+# (bonuri vechi cu partial_pay peste total). CASE in loc de GREATEST ca expresia
+# sa ramana SQL standard (testabila si pe SQLite, fara cast-ul `::text`).
+UNPAID_SQL = """
+                CASE
+                    WHEN r.pay_method::text = 'NEPLATIT' THEN r.total
+                    WHEN r.pay_method::text = 'PARTIAL' AND r.total > COALESCE(r.partial_pay, 0)
+                        THEN r.total - COALESCE(r.partial_pay, 0)
+                    ELSE 0
+                END"""
+
 
 def _ts_bounds(period_start: date, period_end: date) -> dict:
     """[start_ts, end_ts) in timestamptz = zilele locale [period_start, period_end]
@@ -69,7 +82,8 @@ async def build_receipts_daily(
                     ELSE 0
                 END
             ), 0) AS sum_paid,
-            COALESCE(SUM(r.total) FILTER (WHERE r.pay_method::text = 'NEPLATIT'), 0) AS sum_unpaid,
+            COALESCE(SUM({UNPAID_SQL}
+            ), 0) AS sum_unpaid,
             NOW(), NOW()
         FROM receipts r
         WHERE r.is_deleted = false

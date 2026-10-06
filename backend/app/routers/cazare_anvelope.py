@@ -19,6 +19,7 @@ from app.schemas.cazare_anvelope import (
 )
 from app.schemas.common import Page
 from app.utils.ownership import assert_all_owned, assert_owned
+from app.utils.paginate import checked_limit
 from app.utils.soft_delete import soft_delete
 
 router = APIRouter()
@@ -243,7 +244,7 @@ async def list_cazari(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    limit = min(limit, 200)
+    limit = min(checked_limit(limit), 200)
     stmt = _filtered(
         _load_stmt(account_id), activa=activa, client_id=client_id, receipt_id=receipt_id,
         location_id=location_id, loc_cazare_id=loc_cazare_id, numar_masina=numar_masina, q=q,
@@ -324,6 +325,36 @@ async def _assert_owned_or_reused(
         await assert_owned(db, model, obj_id, account_id, what=what, allow_deleted=True)
 
 
+async def _assert_not_in_active_cazare(
+    db: AsyncSession, account_id: int, anvelopa_ids: list[int],
+) -> None:
+    """O anvelopa poate sta intr-o singura cazare activa (fara checkout)."""
+    if not anvelopa_ids:
+        return
+    # Blocam randurile anvelopelor (in ordinea id-urilor, ca doua cereri sa nu se
+    # astepte reciproc): fara asta, doua salvari simultane trec amandoua de
+    # verificare si aceeasi anvelopa ajunge in doua cazari active.
+    await db.execute(
+        select(Anvelopa.id)
+        .where(Anvelopa.account_id == account_id, Anvelopa.id.in_(anvelopa_ids))
+        .order_by(Anvelopa.id)
+        .with_for_update()
+    )
+    active_item = await db.scalar(
+        select(CazareAnvelopaItem.id)
+        .join(CazareAnvelope, CazareAnvelope.id == CazareAnvelopaItem.cazare_id)
+        .where(
+            CazareAnvelopaItem.anvelopa_id.in_(anvelopa_ids),
+            CazareAnvelope.account_id == account_id,
+            CazareAnvelope.is_deleted == False,
+            CazareAnvelope.data_checkout.is_(None),
+        )
+        .limit(1)
+    )
+    if active_item is not None:
+        raise HTTPException(400, "Una sau mai multe anvelope sunt deja în cazare activă.")
+
+
 @router.post("", response_model=CazareRead, status_code=201)
 async def create_cazare(
     body: CazareCreate,
@@ -350,19 +381,7 @@ async def create_cazare(
     await assert_all_owned(db, Anvelopa, body.anvelopa_ids, account_id, what="Anvelopele")
 
     # validare: anvelopele nu trebuie să fie în cazare activă
-    if body.anvelopa_ids:
-        active_items = (await db.execute(
-            select(CazareAnvelopaItem)
-            .join(CazareAnvelope, CazareAnvelope.id == CazareAnvelopaItem.cazare_id)
-            .where(
-                CazareAnvelopaItem.anvelopa_id.in_(body.anvelopa_ids),
-                CazareAnvelope.account_id == account_id,
-                CazareAnvelope.is_deleted == False,
-                CazareAnvelope.data_checkout.is_(None),
-            )
-        )).scalars().all()
-        if active_items:
-            raise HTTPException(400, "Una sau mai multe anvelope sunt deja în cazare activă.")
+    await _assert_not_in_active_cazare(db, account_id, body.anvelopa_ids)
 
     cazare = CazareAnvelope(
         account_id=account_id,
@@ -449,9 +468,13 @@ async def update_cazare(
         existing = set((await db.execute(
             select(CazareAnvelopaItem.anvelopa_id).where(CazareAnvelopaItem.cazare_id == cazare_id)
         )).scalars().all())
-        await assert_all_owned(
-            db, Anvelopa, [i for i in body.anvelopa_ids if i not in existing], account_id, what="Anvelopele",
-        )
+        added = [i for i in body.anvelopa_ids if i not in existing]
+        await assert_all_owned(db, Anvelopa, added, account_id, what="Anvelopele")
+        # Ca la creare, dar doar pentru anvelopele ADAUGATE si doar pe o cazare
+        # activa: dupa „scoatere + cazare noua", cazarea veche (inchisa) are
+        # aceleasi anvelope ca cea noua si trebuie sa ramana editabila.
+        if cazare.data_checkout is None:
+            await _assert_not_in_active_cazare(db, account_id, added)
     cazare.employee_id = body.employee_id
     cazare.loc_cazare_id = body.loc_cazare_id
     if body.data_checkin is not None:

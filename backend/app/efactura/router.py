@@ -79,6 +79,11 @@ def _spawn_bg(coro) -> asyncio.Task:
     return task
 
 
+# Problemele de token ANAF NU se raporteaza cu 401: frontend-ul trateaza orice 401
+# ca sesiune expirata, deconecteaza utilizatorul si ii goleste cosul.
+_ANAF_TOKEN_STATUS = 409
+
+
 def _append_query(base: str, extra: str) -> str:
     """Append `extra` (key=val&key=val) to `base`, picking the right separator."""
     sep = "&" if "?" in base else "?"
@@ -426,21 +431,27 @@ async def validate_receipt(
     if receipt is None:
         raise HTTPException(404, "Receipt-ul nu exista.")
 
-    company = await _resolve_supplier_company(db, account_id, receipt)
+    company, supplier_problem = await efactura_service.resolve_supplier(db, receipt)
     if company is None:
         raise HTTPException(400, "Nu am gasit compania emitenta pentru aceasta factura.")
 
     client = _own_client(receipt)
 
-    errors: list[ValidationIssue] = []
-    warnings: list[ValidationIssue] = []
+    # Aceeasi validare ca la trimitere (raise_on_error=True): ce blocheaza upload-ul
+    # apare ca eroare aici. Cu raise_on_error=False erorile veneau amestecate in
+    # `issues` si endpoint-ul raspundea mereu is_valid=true.
+    error_msgs: list[str] = [supplier_problem] if supplier_problem else []
     try:
-        payload = build_invoice_payload(receipt, company, client, raise_on_error=False)
-        for issue in payload.issues:
-            warnings.append(ValidationIssue(field="—", message=issue, severity="warning"))
+        payload = build_invoice_payload(receipt, company, client, raise_on_error=True)
+        warning_msgs = list(payload.issues)
     except AnafValidationError as exc:
-        for msg in exc.issues:
-            errors.append(ValidationIssue(field="—", message=msg, severity="error"))
+        error_msgs.extend(exc.issues)
+        # A doua trecere doar pentru avertismente (issues = erori + avertismente).
+        payload = build_invoice_payload(receipt, company, client, raise_on_error=False)
+        warning_msgs = [m for m in payload.issues if m not in exc.issues]
+
+    errors = [ValidationIssue(field="—", message=m, severity="error") for m in error_msgs]
+    warnings = [ValidationIssue(field="—", message=m, severity="warning") for m in warning_msgs]
 
     return ValidationResult(
         receipt_id=receipt_id,
@@ -540,45 +551,17 @@ async def audit_mapping(
 async def _resolve_supplier_company(
     db: AsyncSession, account_id: int, receipt: Receipt
 ) -> Company | None:
-    """Gaseste Company pentru receipt.
+    """Gaseste Company pentru receipt — aceeasi regula ca la trimitere
+    (`efactura_service.resolve_supplier`), ca preview-ul si validarea sa nu arate
+    alta firma decat cea cu care pleaca XML-ul.
 
-    Logica:
-    - Daca receipt.location_id e setat -> Location.company_id
-    - Altfel prima companie a account-ului
-
-    Locatia si compania se cauta DOAR in contul apelantului: cu un location_id sau
+    Locatia si compania se cauta DOAR in contul bonului: cu un location_id sau
     company_id strain, XML-ul ar contine CUI-ul, adresa si IBAN-ul altui cont.
     """
-    if receipt.location_id:
-        from app.models.location import Location
-
-        loc = (
-            await db.execute(
-                select(Location).where(
-                    Location.id == receipt.location_id,
-                    Location.account_id == account_id,
-                )
-            )
-        ).scalar_one_or_none()
-        if loc and loc.company_id:
-            comp = (
-                await db.execute(
-                    select(Company).where(
-                        Company.id == loc.company_id,
-                        Company.account_id == account_id,
-                    )
-                )
-            ).scalar_one_or_none()
-            if comp is not None:
-                return comp
-    return (
-        await db.execute(
-            select(Company)
-            .where(Company.account_id == account_id, Company.is_deleted == False)
-            .order_by(Company.id)
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    if receipt.account_id != account_id:
+        return None
+    company, _problem = await efactura_service.resolve_supplier(db, receipt)
+    return company
 
 
 @router.post("/receipts/{receipt_id}/upload", response_model=EFacturaRecordOut)
@@ -640,6 +623,9 @@ async def upload_receipt(
         rec = await efactura_service.mark_pending_upload(db, receipt)
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
+    except efactura_service.EFacturaStateError as exc:
+        # Alt request a pus-o in coada intre verificarea de mai sus si marcare.
+        raise HTTPException(409, str(exc))
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
 
@@ -668,6 +654,10 @@ async def get_receipt_status(
     if rec is None or not await _record_company_allowed(db, rec, ctx):
         raise HTTPException(404, "Aceasta factura nu a fost transmisa la ANAF.")
 
+    if rec.status == "pending_upload":
+        if await efactura_service.expire_stuck_uploads(db, record_id=rec.id):
+            await db.refresh(rec)
+
     if rec.status == "in_prelucrare" and rec.index_incarcare:
         try:
             rec = await efactura_service.poll_status(db, rec)
@@ -682,14 +672,23 @@ async def retry_receipt(
     account_id: int = Depends(get_account_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reincearca uploadul unei facturi respinse/erronate (asincron in background)."""
+    """Reincearca uploadul unei facturi respinse/erronate (asincron in background).
+
+    Permis doar din draft / error / rejected (sau 'in_prelucrare' fara index — record
+    blocat de versiunile vechi). Pentru o factura in coada, in curs de trimitere, in
+    prelucrare sau acceptata raspunde 409: o retrimitere ar dubla factura la ANAF si
+    ar pierde index_incarcare al primei transmiteri. Garda e in
+    `mark_pending_upload` (UPDATE conditionat), deci tine si la dublu-click.
+    """
     receipt = (
         await db.execute(
             select(Receipt).where(Receipt.id == receipt_id, Receipt.account_id == account_id)
         )
     ).scalar_one_or_none()
-    if receipt is None:
+    if receipt is None or receipt.is_deleted:
         raise HTTPException(404, "Receipt-ul nu exista.")
+    if receipt.factura_nr == 0:
+        raise HTTPException(400, "Bonul nu are numar de factura alocat. Apasa 'Factureaza' mai intai.")
     if receipt.client_id is not None and _own_client(receipt) is None:
         raise HTTPException(400, "Bonul nu are client asociat. Aloca un client inainte de trimitere.")
 
@@ -697,6 +696,8 @@ async def retry_receipt(
         rec = await efactura_service.mark_pending_upload(db, receipt)
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
+    except efactura_service.EFacturaStateError as exc:
+        raise HTTPException(409, str(exc))
     except EFacturaError as exc:
         raise HTTPException(500, str(exc))
 
@@ -766,6 +767,9 @@ async def list_company_records(
     from sqlalchemy import func, or_, cast, String
 
     await _require_company_access(db, company_id, ctx)
+    # Job-ul face acelasi lucru la 5 minute, dar scheduler-ul poate fi oprit: aici e
+    # locul unde operatorul vede lista, deci nimic nu ramane agatat pe „pending".
+    await efactura_service.expire_stuck_uploads(db, company_id=company_id)
     base = select(EFacturaRecord).where(EFacturaRecord.company_id == company_id)
 
     if status_filter:
@@ -967,9 +971,9 @@ async def get_received_details(
     try:
         zip_bytes = await efactura_service.ensure_received_downloaded(db, idx)
     except AnafTokenMissing:
-        raise HTTPException(401, "Token ANAF inexistent.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token ANAF inexistent.")
     except AnafTokenExpired:
-        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token expirat. Reconnect cu USB necesar.")
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
     except EFacturaError as exc:
@@ -1086,7 +1090,7 @@ async def download_received_xml(
         zip_bytes = await efactura_service.ensure_received_downloaded(db, idx)
         xml_bytes = extract_invoice_xml_from_zip(zip_bytes)
     except (AnafTokenMissing, AnafTokenExpired) as exc:
-        raise HTTPException(401, str(exc))
+        raise HTTPException(_ANAF_TOKEN_STATUS, str(exc))
     except UBLParseError as exc:
         raise HTTPException(422, str(exc))
     except EFacturaError as exc:
@@ -1131,9 +1135,9 @@ async def sync_received_for_company(
     try:
         access_token = await oauth_service.get_valid_access_token(db, company_id)
     except AnafTokenMissing:
-        raise HTTPException(401, "Token ANAF inexistent.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token ANAF inexistent.")
     except AnafTokenExpired:
-        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token expirat. Reconnect cu USB necesar.")
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
 
@@ -1206,9 +1210,9 @@ async def sync_sent_for_company(
     try:
         access_token = await oauth_service.get_valid_access_token(db, company_id)
     except AnafTokenMissing:
-        raise HTTPException(401, "Token ANAF inexistent.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token ANAF inexistent.")
     except AnafTokenExpired:
-        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token expirat. Reconnect cu USB necesar.")
     except AnafConfigError as exc:
         raise HTTPException(400, str(exc))
 
@@ -1296,7 +1300,8 @@ async def list_pending_deadlines(
     await _require_company_access(db, company_id, ctx)
     from datetime import date as _date, timedelta as _td
 
-    today = _date.today()
+    from app.efactura.mapping import today_local
+    today = today_local()
     end = today + _td(days=days_ahead)
     rows = (
         await db.execute(
@@ -1326,7 +1331,7 @@ async def refresh_company_token(
     except AnafTokenMissing:
         raise HTTPException(404, "Nu exista token pentru aceasta companie.")
     except AnafTokenExpired:
-        raise HTTPException(401, "Token expirat. Reconnect cu USB necesar.")
+        raise HTTPException(_ANAF_TOKEN_STATUS, "Token expirat. Reconnect cu USB necesar.")
     except AnafAuthError as exc:
         raise HTTPException(502, str(exc))
     return {"ok": True}

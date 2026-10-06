@@ -11,6 +11,7 @@ Rulabil cu pytest sau direct:  python -m tests.test_payments_stock  (din backend
 from __future__ import annotations
 from decimal import Decimal
 
+from fastapi import HTTPException
 from sqlalchemy import select
 
 import app.routers.receipt_payments as router_mod
@@ -25,7 +26,8 @@ from app.schemas.receipt_payment import PaymentCreate
 from app.services import payments_service as svc
 from app.services.stock import apply_sale_for_receipt, reverse_sale_for_receipt
 from tests._harness import (
-    add_line, make_account, make_employee, make_item, make_receipt, make_session, run,
+    add_line, make_account, make_employee, make_item, make_receipt, make_session,
+    raises_http, run,
 )
 
 SALE, REVERSE = StockMovementType.SALE, StockMovementType.SALE_REVERSE
@@ -162,6 +164,68 @@ async def test_full_refund_returns_the_stock():
     assert receipt.pay_method == PayMethod.NEPLATIT
     assert await _qty(db, item) == 10
     assert await _movs(db, receipt) == [(SALE, -3), (REVERSE, 3)]
+
+
+# ─── Cereri simultane ─────────────────────────────────────────────────────────
+
+async def test_rejected_duplicate_full_payment_leaves_stock_and_hook_alone():
+    """A doua plata integrala (trimisa simultan cu prima) e refuzata sub lock:
+    nicio miscare de stoc in plus, niciun recalcul de acumulari."""
+    db, acc, item, _, receipt = await _fixture()
+    seen: list[PayMethod] = []
+
+    async def hook(_db, r):
+        seen.append(r.pay_method)
+
+    await _add(db, acc, receipt, PaymentKind.PLATA, "300.00", on_paid_change=hook)
+    await raises_http(409, _add(db, acc, receipt, PaymentKind.PLATA, "300.00", on_paid_change=hook))
+    assert seen == [PayMethod.CASH]
+    assert await _qty(db, item) == 7
+    assert await _movs(db, receipt) == [(SALE, -3)]
+    assert len(await svc.list_payments(db, acc.id, receipt.id)) == 1
+
+
+async def test_router_guard_rejects_what_slipped_past_the_unlocked_check():
+    """Cererea a trecut de verificarea fara lock cat bonul era deschis; pana sa
+    ia lock-ul, alta statie l-a incasat integral. Garda routerului ruleaza in
+    serviciu, pe bonul recitit, si opreste restituirea si stergerea."""
+    db, acc, item, _, receipt = await _fixture()
+    await router_mod._assert_open(db, acc.id, receipt.id)  # trece: Neplatit
+
+    payment, _ = await _add(db, acc, receipt, PaymentKind.PLATA, "300.00")  # cealalta statie
+
+    await _unlocked(lambda: raises_http(409, svc.add_payment(
+        db, account_id=acc.id, receipt_id=receipt.id, kind=PaymentKind.RESTITUIRE,
+        amount=Decimal("50.00"), method=PaymentMethod.CASH, guard=router_mod._guard_open,
+    )))
+    await _unlocked(lambda: raises_http(409, svc.delete_payment(
+        db, acc.id, receipt.id, payment.id, guard=router_mod._guard_open,
+    )))
+    assert receipt.pay_method == PayMethod.CASH
+    assert await _qty(db, item) == 7
+    assert await _movs(db, receipt) == [(SALE, -3)]
+
+
+async def test_router_checks_the_anaf_lock_under_the_receipt_lock():
+    """Bonul ajunge la ANAF intre verificarea rapida si lock: handlerul raspunde
+    423 si nu scrie nimic."""
+    db, acc, item, _, receipt = await _fixture()
+    original = router_mod._assert_not_locked
+
+    async def _sent(*_a, **_kw):
+        raise HTTPException(423, "Bonul a fost trimis la ANAF.")
+
+    router_mod._assert_not_locked = _sent
+    try:
+        body = PaymentCreate(kind=PaymentKind.AVANS, amount=Decimal("100.00"))
+        await raises_http(423, _route_add_payment(
+            request=None, receipt_id=receipt.id, body=body, db=db, account_id=acc.id, actor="casier",
+        ))
+    finally:
+        router_mod._assert_not_locked = original
+    assert receipt.pay_method == PayMethod.NEPLATIT
+    assert await _qty(db, item) == 10
+    assert await svc.list_payments(db, acc.id, receipt.id) == []
 
 
 # ─── Date existente ───────────────────────────────────────────────────────────

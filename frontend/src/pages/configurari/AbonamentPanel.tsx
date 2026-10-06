@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal, onMount } from "solid-js";
 import { useSearchParams } from "@solidjs/router";
-import { readJsonSafe } from "../../utils/api";
+import { readApiError } from "../../utils/api";
 import { notify } from "../../store/notificationsStore";
 import { paymentMethodLabel, subscriptionApi, type PaymentItem } from "../../api/subscription";
 import SubscriptionCheckoutModal from "../../components/subscription/SubscriptionCheckoutModal";
@@ -119,8 +119,7 @@ export default function AbonamentPanel() {
     // PDF/ZIP endpoint-urile cer Authorization header — fetch in JS si saveAs
     void subscriptionApi.download(url).then(async (res) => {
       if (!res.ok) {
-        const d = await readJsonSafe<{ detail?: string }>(res);
-        notify(d.detail || "Eroare la descărcare.", "error");
+        notify(await readApiError(res, "Eroare la descărcare."), "error");
         return;
       }
       const blob = await res.blob();

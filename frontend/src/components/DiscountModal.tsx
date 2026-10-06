@@ -14,10 +14,12 @@
  */
 import { For, Show, createEffect, createMemo, createSignal } from "solid-js";
 import Modal from "./ui/Modal";
+import DecimalInput from "./ui/DecimalInput";
 import type { CartItem } from "../store/cartStore";
 import type { Receipt } from "../store/receiptsStore";
 import { updateReceiptContent } from "../store/receiptsStore";
 import { notify } from "../store/notificationsStore";
+import { decimalValue, parseDecimal } from "../utils/decimal";
 
 export type DiscountScope = "produse" | "servicii" | "ambele";
 
@@ -137,21 +139,23 @@ export default function DiscountModal(props: {
     ),
   );
 
+  // Textul e citit cu decimalValue, nu cu parseFloat: parseFloat("10,5") da 10,
+  // iar un text invalid nu trebuie sa devina o reducere „aproximativa".
   const amountValue = createMemo(() => {
-    const v = parseFloat(amount());
-    return Number.isFinite(v) ? round2(v) : 0;
+    const v = decimalValue(amount(), { maxDecimals: 2 });
+    return v != null ? round2(v) : 0;
   });
 
   function syncFromPercent(v: string, b = base()) {
     setPercent(v);
-    const p = parseFloat(v);
-    setAmount(Number.isFinite(p) ? round2((b * p) / 100).toFixed(2) : "");
+    const p = decimalValue(v);
+    setAmount(p != null ? round2((b * p) / 100).toFixed(2) : "");
   }
 
   function syncFromAmount(v: string, b = base()) {
     setAmount(v);
-    const a = parseFloat(v);
-    setPercent(b > 0 && Number.isFinite(a) ? round2((a / b) * 100).toFixed(2) : "");
+    const a = decimalValue(v, { maxDecimals: 2 });
+    setPercent(b > 0 && a != null ? round2((a / b) * 100).toFixed(2) : "");
   }
 
   function changeScope(s: DiscountScope) {
@@ -213,6 +217,14 @@ export default function DiscountModal(props: {
   const problem = createMemo(() => {
     if (isPaid()) return "Bonul e încasat integral. Reducerea se poate aplica doar cât timp statusul e Neplătit sau Plătit parțial.";
     if (base() <= 0) return "Bonul nu are linii în categoria aleasă.";
+    // Text care nu e numar in campul completat de operator: spunem de ce
+    // butonul e inactiv. Un text neterminat („12,") nu e inca o greseala.
+    const typed = mode() === "procent" ? parseDecimal(percent()) : parseDecimal(amount(), { maxDecimals: 2 });
+    if (!typed.valid && !typed.incomplete) {
+      return mode() === "procent"
+        ? "Procentul nu este un număr valid (ex. 10 sau 12,5)."
+        : "Suma nu este un număr valid. Folosește cel mult 2 zecimale (ex. 50 sau 12,50).";
+    }
     if (amountValue() <= 0) return null;
     if (amountValue() > base()) return `Reducerea depășește baza de calcul (${lei(base())}).`;
     return null;
@@ -314,16 +326,12 @@ export default function DiscountModal(props: {
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Procent</label>
           <div style="display:flex;align-items:center;gap:6px">
-            <input
+            <DecimalInput
               class="input"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
               placeholder="0"
               value={percent()}
               onFocus={() => setMode("procent")}
-              onInput={(e) => syncFromPercent(e.currentTarget.value)}
+              onInput={(raw) => syncFromPercent(raw)}
             />
             <span style="font-size:0.9rem">%</span>
           </div>
@@ -345,15 +353,13 @@ export default function DiscountModal(props: {
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">Sumă</label>
           <div style="display:flex;align-items:center;gap:6px">
-            <input
+            <DecimalInput
               class="input"
-              type="number"
-              min="0"
-              step="10"
+              maxDecimals={2}
               placeholder="0.00"
               value={amount()}
               onFocus={() => setMode("suma")}
-              onInput={(e) => syncFromAmount(e.currentTarget.value)}
+              onInput={(raw) => syncFromAmount(raw)}
             />
             <span style="font-size:0.9rem">lei</span>
           </div>

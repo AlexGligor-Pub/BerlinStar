@@ -1,5 +1,5 @@
 import { For, Show, createSignal, onMount } from "solid-js";
-import { apiFetch } from "../utils/api";
+import { apiFetch, parseApiError } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 
 interface CompanySummary {
@@ -85,7 +85,7 @@ export default function EFacturaPrimite() {
         notify(`Sincronizare OK — ${d.messages ?? 0} mesaje (${d.inserted ?? 0} noi).`, "success");
         await loadRows();
       } else {
-        notify(d.detail ?? "Sync eșuat.", "error");
+        notify(parseApiError(d.detail, "Sync eșuat."), "error");
       }
     } catch {
       notify("Eroare de rețea la sync.", "error");

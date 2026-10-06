@@ -40,6 +40,8 @@ async def _assert_marca_aprobata(db: AsyncSession, marca_id: int | None) -> None
     if row is None:
         raise HTTPException(400, "Marca selectată nu este aprobată sau a fost ștearsă.")
 
+from app.utils.paginate import checked_limit
+
 router = APIRouter()
 
 
@@ -83,7 +85,7 @@ async def list_anvelope(
     db: AsyncSession = Depends(get_db),
     account_id: int = Depends(get_account_id),
 ):
-    limit = min(limit, 500)
+    limit = min(checked_limit(limit), 500)
     stmt = (
         select(Anvelopa)
         .options(selectinload(Anvelopa.marca), selectinload(Anvelopa.dimensiune), selectinload(Anvelopa.profil), selectinload(Anvelopa.dot))

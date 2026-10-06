@@ -27,8 +27,14 @@ router = APIRouter()
 
 def _with_category_name(item: Item) -> ItemRead:
     data = ItemRead.model_validate(item)
-    data.category_name = item.category.name if item.category else None
-    data.department_id = item.category.department_id if item.category else None
+    # Un articol salvat inainte de verificarea de apartenenta poate arata spre
+    # categoria altui cont: articolul ramane in lista (se vinde in continuare),
+    # dar numele si departamentul acelei categorii nu se afiseaza.
+    category = item.category
+    if category is not None and category.account_id != item.account_id:
+        category = None
+    data.category_name = category.name if category else None
+    data.department_id = category.department_id if category else None
     return data
 
 

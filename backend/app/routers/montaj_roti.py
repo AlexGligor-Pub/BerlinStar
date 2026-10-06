@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, update, func
+from sqlalchemy import and_, select, update, func
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,10 +119,12 @@ async def latest_montaj_by_plate(
     normalized_db = func.upper(func.replace(Vehicol.numar_masina, " ", ""))
 
     stmt = (
-        select(MontajRota, Receipt.client_id, Receipt.created_at, Vehicol.numar_masina, Client.nume)
+        select(MontajRota, Client.id, Receipt.created_at, Vehicol.numar_masina, Client.nume)
         .join(Receipt, Receipt.id == MontajRota.receipt_id)
         .join(Vehicol, Vehicol.receipt_id == Receipt.id)
-        .outerjoin(Client, Client.id == Receipt.client_id)
+        # Doar clientii contului: un bon vechi legat de clientul altui cont nu
+        # trebuie sa-i afiseze numele (si nici id-ul, luat tot din join).
+        .outerjoin(Client, and_(Client.id == Receipt.client_id, Client.account_id == account_id))
         .where(
             MontajRota.account_id == account_id,
             MontajRota.is_deleted == False,

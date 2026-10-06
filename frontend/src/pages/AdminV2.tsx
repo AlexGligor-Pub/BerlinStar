@@ -1,9 +1,9 @@
 import { For, Show, Suspense, createSignal, lazy, type Component } from "solid-js";
 import { Dynamic } from "solid-js/web";
-import { readJsonSafe } from "../utils/api";
+import { parseApiError, readJsonSafe } from "../utils/api";
 import type { ApiMessageBody } from "../types";
 import logo from "../assets/logo-nav.webp";
-import { adminFetch, setAdminToken } from "./adminv2/admin-auth";
+import { adminFetch, hasValidAdminToken, revokeAdminToken, setAdminToken } from "./adminv2/admin-auth";
 
 const AssistantSection = lazy(() => import("./adminv2/AssistantSection"));
 
@@ -76,13 +76,9 @@ const NAV_CATEGORIES: NavCategory[] = [
 
 
 // La mount, daca avem un token persistat valid (<24h) sarim peste ecranul de logare.
+// Un token expirat este si revocat pe server in acest moment (vezi admin-auth.ts).
 function initialVerified(): boolean {
-  try {
-    const exp = Number(localStorage.getItem("adminv2_token_exp") ?? 0);
-    return !!exp && Date.now() < exp && !!localStorage.getItem("adminv2_token");
-  } catch {
-    return false;
-  }
+  return hasValidAdminToken();
 }
 
 export default function AdminV2() {
@@ -93,7 +89,9 @@ export default function AdminV2() {
   const [verifying, setVerifying] = createSignal(false);
 
   function doLogout() {
-    setAdminToken(null);
+    // Nu doar stergem tokenul din browser: sesiunea de platforma se inchide si
+    // pe server, altfel ar ramane valabila 30 de zile.
+    revokeAdminToken();
     setVerified(false);
   }
 
@@ -108,7 +106,7 @@ export default function AdminV2() {
       });
       if (!res.ok) {
         const d = await readJsonSafe<ApiMessageBody>(res);
-        setVerifyErr(d.detail ?? "Parole incorecte.");
+        setVerifyErr(parseApiError(d.detail, "Parole incorecte."));
         return;
       }
       const d = await readJsonSafe<{ access_token?: string }>(res);

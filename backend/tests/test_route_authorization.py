@@ -89,6 +89,7 @@ ROLE_REQUIRED_PREFIXES = (
     "/api/departments",
     "/api/locations",
     "/api/companies",
+    "/api/employees",
     "/api/disclaimers",
     "/api/registers",
     "/api/stocuri",
