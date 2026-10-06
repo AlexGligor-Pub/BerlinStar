@@ -18,6 +18,8 @@ import {
   type PaymentsResponse,
 } from "../store/paymentsStore";
 import { notify } from "../store/notificationsStore";
+import { parseDecimal } from "../utils/decimal";
+import DecimalInput from "./ui/DecimalInput";
 
 const KINDS: PaymentKind[] = ["avans", "plata", "restituire"];
 const METHODS: PaymentMethod[] = ["Cash", "Card", "OP", "Alta"];
@@ -86,7 +88,13 @@ export default function PaymentsSection(props: {
   }, { defer: true }));
 
   async function handleAdd() {
-    const val = parseFloat(amount());
+    const parsed = parseDecimal(amount(), { maxDecimals: 2 });
+    if (!parsed.valid) {
+      // Nu ghicim si nu rotunjim: o suma citita gresit ajunge in registru.
+      notify("Suma nu este un număr valid. Folosește cel mult 2 zecimale (ex. 150,50).", "error");
+      return;
+    }
+    const val = parsed.value;
     if (!val || val <= 0) {
       notify("Introdu o sumă mai mare decât zero.", "error");
       return;
@@ -229,16 +237,14 @@ export default function PaymentsSection(props: {
               </For>
             </div>
             <div class="pay-form-row">
-              {/* Increment de 10 lei (ca la avansul din Status plata); se pot
-                  scrie si sume exacte de la tastatura. */}
-              <input
+              {/* Camp text, nu type=number: acela stergea suma la tastarea
+                  separatorului zecimal. Se accepta „," si „.". */}
+              <DecimalInput
                 class="input"
-                type="number"
-                step="10"
-                min="0"
+                maxDecimals={2}
                 placeholder="Suma"
                 value={amount()}
-                onInput={(e) => setAmount(e.currentTarget.value)}
+                onInput={(raw) => setAmount(raw)}
               />
               <select class="input" value={method()} onChange={(e) => setMethod(e.currentTarget.value as PaymentMethod)}>
                 <For each={METHODS}>{(m) => <option value={m}>{m}</option>}</For>

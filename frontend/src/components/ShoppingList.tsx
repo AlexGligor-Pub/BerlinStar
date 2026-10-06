@@ -16,6 +16,8 @@ import SplitName from "./SplitName";
 import { loadMontajRotiByReceipt, bulkUpsertMontajRoti, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import { loadActiveCazariByPlate, type TipAnvelopa } from "../store/hotelAnvelopeStore";
 import Modal from "./ui/Modal";
+import DecimalInput from "./ui/DecimalInput";
+import { decimalValue, parseDecimal } from "../utils/decimal";
 
 type ModalType = "descriere" | "dateTehn" | null;
 
@@ -590,6 +592,7 @@ export default function ShoppingList(
   const [editQty, setEditQty] = createSignal("1");
   const [editPrice, setEditPrice] = createSignal("0");
   const [editEmpId, setEditEmpId] = createSignal<number | null>(null);
+  const [editErr, setEditErr] = createSignal("");
   // Lista de angajați se afișează doar după apăsarea butonului „Schimbă angajatul"
   const [showEmpPicker, setShowEmpPicker] = createSignal(false);
 
@@ -710,8 +713,10 @@ export default function ShoppingList(
   const [manualPrice, setManualPrice] = createSignal("");
   const [manualTip, setManualTip] = createSignal("Produs");
   const [manualUnit, setManualUnit] = createSignal("buc");
+  const [manualErr, setManualErr] = createSignal("");
 
   function openManual() {
+    setManualErr("");
     setManualName("");
     setManualQty("1");
     setManualPrice("");
@@ -724,8 +729,20 @@ export default function ShoppingList(
   function confirmManual() {
     const name = manualName().trim();
     if (!name) return;
-    const qty = parseInt(manualQty()) || 1;
-    const price = parseFloat(manualPrice()) || 0;
+    // Un text care nu e numar opreste adaugarea; nu il transformam pe tacute
+    // in 1 bucata sau 0 lei. Campul gol ramane ca pana acum: 1 buc, 0 lei.
+    const qtyP = parseDecimal(manualQty(), { integer: true });
+    if (!qtyP.valid) {
+      setManualErr("Cantitatea trebuie să fie un număr întreg.");
+      return;
+    }
+    const priceP = parseDecimal(manualPrice(), { maxDecimals: 2 });
+    if (!priceP.valid) {
+      setManualErr("Prețul nu este un număr valid. Folosește cel mult 2 zecimale (ex. 12,50).");
+      return;
+    }
+    const qty = qtyP.value || 1;
+    const price = priceP.value ?? 0;
     // Tipul ales de operator trebuie sa ajunga pe linie: altfel reducerea
     // pe categorii nu vede linia manuala. Enum-ul serverului e Produs/Service.
     addManualItem(
@@ -739,6 +756,7 @@ export default function ShoppingList(
     setEditItem(item);
     setEditQty(String(item.qty));
     setEditPrice(String(item.price));
+    setEditErr("");
     setEditEmpId(item.employeeId);
     setShowEmpPicker(false);
   }
@@ -803,8 +821,22 @@ export default function ShoppingList(
   function confirmEditItem() {
     const item = editItem();
     if (!item) return;
-    const qty = parseInt(editQty()) || 0;
-    const price = parseFloat(editPrice()) || 0;
+    // Un text care nu e numar opreste salvarea; nu il transformam pe tacute in
+    // 0 (cantitatea 0 sterge linia). Campul gol ramane ca pana acum: 0.
+    const qtyP = parseDecimal(editQty(), { integer: true });
+    if (!qtyP.valid) {
+      setEditErr("Cantitatea trebuie să fie un număr întreg.");
+      return;
+    }
+    // Pret cu text neschimbat = camp neatins: nu se valideaza si nu se rescrie,
+    // ca o valoare veche sa nu blocheze schimbarea cantitatii sau a angajatului.
+    const priceTouched = editPrice().trim() !== String(item.price);
+    const priceP = parseDecimal(editPrice(), { maxDecimals: 2 });
+    if (priceTouched && !priceP.valid) {
+      setEditErr("Prețul nu este un număr valid. Folosește cel mult 2 zecimale (ex. 12,50).");
+      return;
+    }
+    const qty = qtyP.value ?? 0;
     const empId = editEmpId();
     const emp = empId != null ? employees().find((e) => e.id === empId) ?? null : null;
     // Daca angajatul s-a schimbat fata de original, actualizam — altfel sarim
@@ -812,7 +844,7 @@ export default function ShoppingList(
     if (empId !== item.employeeId) {
       updateItemEmployee(item.lineId, empId, emp?.name ?? null);
     }
-    updateItemPrice(item.lineId, price);
+    if (priceTouched) updateItemPrice(item.lineId, priceP.value ?? 0);
     setItemQty(item.lineId, qty);
     setEditItem(null);
   }
@@ -1063,14 +1095,14 @@ export default function ShoppingList(
    *    baza de date, deși aici pleacă null). */
   function fdlReceiptFields(receiptId: string | null) {
     const isFdl = fdlMode();
-    const timpRaw = parseFloat(timpEstimatOre());
+    const timpRaw = decimalValue(timpEstimatOre());
     return {
       // La un bon EXISTENT trimitem sursa explicit ca să poată comuta în ambele
       // sensuri (FDL <-> deviz). La bon nou lăsăm backend-ul cu sursa implicită.
       source: isFdl ? "fdl" : (receiptId !== null ? "pos" : undefined),
       constatari: isFdl ? (constatari().trim() || null) : null,
       sugestii: isFdl ? (sugestii().trim() || null) : null,
-      timpEstimatOre: isFdl && !isNaN(timpRaw) && timpRaw > 0 ? timpRaw : null,
+      timpEstimatOre: isFdl && timpRaw != null && timpRaw > 0 ? timpRaw : null,
     };
   }
 
@@ -1434,6 +1466,10 @@ export default function ShoppingList(
 
     clearCart();
     clearCartMeta();
+    // Devizul e inchis: un context POS-Hotel ramas (utilizatorul a iesit din
+    // Hotel prin meniu, fara sa termine) ar lega urmatoarea cazare/scoatere de
+    // acest bon vechi.
+    clearPosHotelCtx();
     selectEmployee(null);
     setTitlu("");
     setDescriere("");
@@ -1761,13 +1797,11 @@ export default function ShoppingList(
           <div class="sl-edit-item-body">
             <div class="sl-edit-item-row">
               <label class="sl-edit-label">Cantitate</label>
-              <input
+              <DecimalInput
                 class="input sl-edit-input"
-                type="number"
-                min="1"
-                step="1"
+                integer
                 value={editQty()}
-                onInput={(e) => setEditQty(e.currentTarget.value)}
+                onInput={(raw) => { setEditQty(raw); setEditErr(""); }}
                 autofocus
               />
             </div>
@@ -1778,17 +1812,18 @@ export default function ShoppingList(
             </div>
             <div class="sl-edit-item-row">
               <label class="sl-edit-label">Pret (lei)</label>
-              <input
+              <DecimalInput
                 class="input sl-edit-input"
-                type="number"
-                min="0"
-                step="0.01"
+                maxDecimals={2}
                 value={editPrice()}
-                onInput={(e) => setEditPrice(e.currentTarget.value)}
+                onInput={(raw) => { setEditPrice(raw); setEditErr(""); }}
               />
             </div>
+            <Show when={editErr()}>
+              <div style="font-size:12px;color:var(--danger)">{editErr()}</div>
+            </Show>
             <div class="sl-edit-item-total">
-              Total: {((parseFloat(editPrice()) || 0) * (parseInt(editQty()) || 0)).toFixed(2)} lei
+              Total: {((decimalValue(editPrice()) ?? 0) * (decimalValue(editQty(), { integer: true }) ?? 0)).toFixed(2)} lei
             </div>
 
             {/* Angajat — picker interactiv: poza + nume, click pentru a schimba */}
@@ -1972,13 +2007,11 @@ export default function ShoppingList(
             </div>
             <div class="sl-edit-item-row">
               <label class="sl-edit-label">Cantitate</label>
-              <input
+              <DecimalInput
                 class="input sl-edit-input"
-                type="number"
-                min="1"
-                step="1"
+                integer
                 value={manualQty()}
-                onInput={(e) => setManualQty(e.currentTarget.value)}
+                onInput={(raw) => { setManualQty(raw); setManualErr(""); }}
               />
             </div>
             <div class="sl-qty-presets">
@@ -1988,18 +2021,19 @@ export default function ShoppingList(
             </div>
             <div class="sl-edit-item-row">
               <label class="sl-edit-label">Pret (lei)</label>
-              <input
+              <DecimalInput
                 class="input sl-edit-input"
-                type="number"
-                min="0"
-                step="0.01"
+                maxDecimals={2}
                 placeholder="0.00"
                 value={manualPrice()}
-                onInput={(e) => setManualPrice(e.currentTarget.value)}
+                onInput={(raw) => { setManualPrice(raw); setManualErr(""); }}
               />
             </div>
+            <Show when={manualErr()}>
+              <div style="font-size:12px;color:var(--danger)">{manualErr()}</div>
+            </Show>
             <div class="sl-edit-item-total">
-              Total: {((parseFloat(manualPrice()) || 0) * (parseInt(manualQty()) || 0)).toFixed(2)} lei
+              Total: {((decimalValue(manualPrice()) ?? 0) * (decimalValue(manualQty(), { integer: true }) ?? 0)).toFixed(2)} lei
             </div>
           </div>
         </Modal>
@@ -2313,21 +2347,18 @@ export default function ShoppingList(
               <div class="sl-fdl-right">
                 <div class="sl-fdl-field">
                   <label class="sl-fdl-label">Timp estimat manoperă (ore)</label>
-                  <input
+                  <DecimalInput
                     class="input sl-fdl-time-input"
-                    type="number"
-                    min="0"
-                    step="0.5"
                     placeholder="Ex: 2.5"
                     value={timpEstimatOre()}
-                    onInput={(e) => setTimpEstimatOre(e.currentTarget.value)}
+                    onInput={(raw) => setTimpEstimatOre(raw)}
                   />
                   <div class="sl-fdl-time-presets">
                     <For each={[0.5, 1, 1.5, 2, 2.5, 3, 4, 5]}>
                       {(v) => (
                         <button
                           class="btn btn-ghost btn-xs sl-fdl-time-preset-btn"
-                          classList={{ "sl-fdl-time-preset-btn--active": parseFloat(timpEstimatOre()) === v }}
+                          classList={{ "sl-fdl-time-preset-btn--active": decimalValue(timpEstimatOre()) === v }}
                           onClick={() => setTimpEstimatOre(String(v))}
                           type="button"
                         >

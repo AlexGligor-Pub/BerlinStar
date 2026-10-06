@@ -27,10 +27,38 @@ interface CartState {
 
 const STORAGE_KEY = "bs_cart";
 
+/**
+ * Fiecare linie din cos e adresata prin `lineId` (pret, cantitate, angajat,
+ * stergere). Doua linii cu acelasi `lineId` inseamna ca editarea uneia o
+ * modifica pe cealalta, iar stergerea le scoate pe amandoua. Liniile sunt
+ * pastrate toate; duplicatele primesc un sufix, prima aparitie ramane neatinsa.
+ */
+function withUniqueLineIds(items: CartItem[]): CartItem[] {
+  const seen = new Set<string>();
+  let changed = false;
+  const out = items.map((item) => {
+    let lineId = item.lineId;
+    if (seen.has(lineId)) {
+      let n = 2;
+      while (seen.has(`${item.lineId}#${n}`)) n++;
+      lineId = `${item.lineId}#${n}`;
+      changed = true;
+    }
+    seen.add(lineId);
+    return lineId === item.lineId ? item : { ...item, lineId };
+  });
+  return changed ? out : items;
+}
+
 function loadCart(): CartState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Cosurile salvate inainte de corectia id-urilor manuale pot contine
+      // deja duplicate; le reparam la incarcare.
+      if (parsed && Array.isArray(parsed.items)) return { items: withUniqueLineIds(parsed.items) };
+    }
   } catch {}
   return { items: [] };
 }
@@ -88,7 +116,7 @@ export function clearCart() {
 }
 
 export function replaceCart(items: CartItem[]) {
-  setCart("items", [...items]);
+  setCart("items", [...withUniqueLineIds(items)]);
 }
 
 export function updateItemPrice(lineId: string, price: number) {
@@ -121,8 +149,6 @@ export function updateItemEmployee(
   setCart("items", idx, "employeeName", employeeName);
 }
 
-let _manualCounter = 0;
-
 export function addManualItem(
   name: string,
   qty: number,
@@ -132,8 +158,16 @@ export function addManualItem(
 ) {
   const empId = selectedEmployeeId();
   const empName = selectedEmployeeName();
-  const uniqueId = -(++_manualCounter);
-  const lineId = `manual_${uniqueId}_${empId ?? ""}`;
+  // Id-ul se deduce din cosul curent, nu dintr-un contor de modul: contorul
+  // reporneste de la 0 la reincarcarea paginii, pe cand cosul vine din
+  // localStorage cu id-urile vechi — si doua linii manuale ajungeau cu acelasi
+  // lineId. Ramane negativ (id > 0 inseamna produs din catalog).
+  let uniqueId = Math.min(0, ...cart.items.map((i) => i.id).filter((id) => Number.isFinite(id))) - 1;
+  let lineId = `manual_${uniqueId}_${empId ?? ""}`;
+  while (cart.items.some((i) => i.lineId === lineId)) {
+    uniqueId -= 1;
+    lineId = `manual_${uniqueId}_${empId ?? ""}`;
+  }
   setCart("items", (items) => [
     ...items,
     { id: uniqueId, lineId, name, price, unit, qty, employeeId: empId, employeeName: empName, employeeTargetPct: null, itemId: null, itemType },

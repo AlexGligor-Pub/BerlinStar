@@ -4,6 +4,9 @@ export type { ButtonProps, ButtonVariant, ButtonSize } from "./Button";
 export { default as Input } from "./Input";
 export type { InputProps } from "./Input";
 
+export { default as DecimalInput } from "./DecimalInput";
+export type { DecimalInputProps } from "./DecimalInput";
+
 export { default as Select } from "./Select";
 export type { SelectProps, SelectOption } from "./Select";
 
