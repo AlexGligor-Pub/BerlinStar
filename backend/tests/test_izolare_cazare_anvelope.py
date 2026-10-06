@@ -341,6 +341,64 @@ async def test_update_keeps_unchanged_legacy_ids():
     assert _tyre_ids(c) == sorted(a.tyres[:2])
 
 
+async def test_update_rejects_adding_tyre_from_another_active_cazare():
+    db, a, _ = await _fixture()
+    first = (await create_cazare(_body(client_id=a.client, anvelopa_ids=[a.tyres[0]]), db=db, account_id=a.acc))["id"]
+    second = (await create_cazare(_body(client_id=a.client, anvelopa_ids=[a.tyres[1]]), db=db, account_id=a.acc))["id"]
+    # La creare era deja refuzat; la editare trecea si anvelopa ajungea in doua cazari active.
+    detail = await raises_http(400, update_cazare(
+        second, _patch(a, anvelopa_ids=[a.tyres[1], a.tyres[0]]), db=db, account_id=a.acc,
+    ))
+    assert "cazare activă" in detail
+    assert _tyre_ids(await get_cazare(second, db=db, account_id=a.acc)) == [a.tyres[1]]
+    assert _tyre_ids(await get_cazare(first, db=db, account_id=a.acc)) == [a.tyres[0]]
+
+
+async def test_update_keeps_own_tyres_and_adds_free_ones():
+    db, a, _ = await _fixture()
+    cid = (await create_cazare(_body(client_id=a.client, anvelopa_ids=a.tyres[:2]), db=db, account_id=a.acc))["id"]
+    # Anvelopele aflate deja pe cazare nu se lovesc de propria cazare activa.
+    c = await update_cazare(cid, _patch(a, comments="corectat"), db=db, account_id=a.acc)
+    assert _tyre_ids(c) == sorted(a.tyres[:2])
+    c = await update_cazare(cid, _patch(a, anvelopa_ids=a.tyres), db=db, account_id=a.acc)
+    assert _tyre_ids(c) == sorted(a.tyres)
+
+
+async def test_update_accepts_tyre_freed_by_checkout_or_delete():
+    db, a, _ = await _fixture()
+    closed = (await create_cazare(_body(client_id=a.client, anvelopa_ids=[a.tyres[0]]), db=db, account_id=a.acc))["id"]
+    deleted = (await create_cazare(_body(client_id=a.client, anvelopa_ids=[a.tyres[1]]), db=db, account_id=a.acc))["id"]
+    target = (await create_cazare(_body(client_id=a.client), db=db, account_id=a.acc))["id"]
+    await checkout_cazare(closed, CazareCheckoutBody(data_checkout=D0), db=db, account_id=a.acc)
+    await _soft_delete(db, CazareAnvelope, deleted)
+    c = await update_cazare(target, _patch(a, anvelopa_ids=a.tyres[:2]), db=db, account_id=a.acc)
+    assert _tyre_ids(c) == sorted(a.tyres[:2])
+
+
+async def test_update_closed_cazare_may_share_tyres_with_its_successor():
+    # „Scoatere + cazare noua": cazarea veche (inchisa) si cea noua au aceleasi
+    # anvelope; corectarea celei vechi in fereastra de gratie nu trebuie blocata.
+    db, a, _ = await _fixture()
+    old = (await create_cazare(_body(client_id=a.client, anvelopa_ids=[a.tyres[0]]), db=db, account_id=a.acc))["id"]
+    await checkout_cazare(old, CazareCheckoutBody(data_checkout=date.today()), db=db, account_id=a.acc)
+    await create_cazare(
+        _body(client_id=a.client, referinta_cazare_id=old, anvelopa_ids=a.tyres[:2]), db=db, account_id=a.acc,
+    )
+    c = await update_cazare(
+        old, _patch(a, referinta_cazare_id=None, anvelopa_ids=a.tyres[:2]), db=db, account_id=a.acc,
+    )
+    assert _tyre_ids(c) == sorted(a.tyres[:2])
+
+
+async def test_list_rejects_non_positive_limit():
+    db, a, _ = await _fixture()
+    await create_cazare(_body(client_id=a.client), db=db, account_id=a.acc)
+    for bad in (0, -1):
+        await raises_http(422, list_cazari(limit=bad, db=db, account_id=a.acc))
+    page = await list_cazari(limit=1, db=db, account_id=a.acc)
+    assert len(page.items) == 1
+
+
 # ─── Checkout ────────────────────────────────────────────────────────────────
 
 async def test_checkout_with_own_receipt_works():
