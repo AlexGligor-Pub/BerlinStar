@@ -937,6 +937,30 @@ export default function HotelAnvelope() {
   // reincercare (dupa ce a esuat cazarea noua) scoaterea nu se mai repeta.
   const [combinedCheckoutDoneId, setCombinedCheckoutDoneId] = createSignal<number | null>(null);
 
+  /** Cazarea nouă preia angajatul / locul de cazare de la cea veche. Dacă între
+   *  timp au fost șterse, selectorul apare gol, dar id-ul vechi se trimite în
+   *  continuare, iar operatorul nu are cum să vadă de ce e refuzată salvarea.
+   *  Când serverul refuză exact acel câmp, golim id-ul ascuns și întoarcem un
+   *  îndemn de afișat lângă motivul serverului. Un id care se vede în selector
+   *  rămâne neatins. */
+  function dropRefusedNewRefs(status: number, reason: string): string {
+    if (status !== 400 && status !== 404) return "";
+    const r = reason.toLowerCase();
+    const dropped: string[] = [];
+    const emp = newEmpId();
+    if (emp !== "" && r.includes("angajat") && !employees().some((e) => e.id === emp)) {
+      setNewEmpId("");
+      dropped.push("angajatul");
+    }
+    const loc = newLocId();
+    if (loc !== "" && r.includes("loc") && r.includes("cazare") && !locuriCazare().some((l) => l.id === loc)) {
+      setNewLocId("");
+      dropped.push("locul de cazare");
+    }
+    if (dropped.length === 0) return "";
+    return ` Câmpul preluat de la cazarea veche (${dropped.join(", ")}) nu mai este disponibil și a fost golit: alegeți altul sau lăsați-l gol, apoi salvați din nou.`;
+  }
+
   // ── Modal Sugestie Anvelope (din istoricul montajelor) ────────────────────
   const [montajSuggestion, setMontajSuggestion] = createSignal<MontajSuggestion | null>(null);
 
@@ -1622,8 +1646,8 @@ export default function HotelAnvelope() {
       if (ctx) body.receipt_id = parseInt(ctx.receiptId);
       const res = await apiFetch("/api/cazare-anvelope", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setSaveErr(parseApiError(err.detail, "Eroare la salvare."));
+        const reason = await readApiError(res, "Eroare la salvare.");
+        setSaveErr(reason + dropRefusedNewRefs(res.status, reason));
         return;
       }
       setShowNewModal(false);
@@ -1797,7 +1821,14 @@ export default function HotelAnvelope() {
         body: JSON.stringify(newBody),
       });
       if (!newCazareRes.ok) {
-        setCombinedErr(PREFIX_SCOASA + await readApiError(newCazareRes, "Eroare la salvare cazare nouă."));
+        const reason = await readApiError(newCazareRes, "Eroare la salvare cazare nouă.");
+        // Fereastra ramane deschisa pe cazarea noua; la reincercare scoaterea
+        // nu se repeta (combinedCheckoutDoneId).
+        const hint = dropRefusedNewRefs(newCazareRes.status, reason);
+        setCombinedErr(
+          PREFIX_SCOASA + reason
+          + (hint ? hint + " Scoaterea nu se repetă." : " Corectați datele cazării noi și apăsați din nou — scoaterea nu se repetă."),
+        );
         // Lista din spate trebuie sa arate deja scoaterea facuta.
         await fetchCazari();
         return;
@@ -1809,7 +1840,9 @@ export default function HotelAnvelope() {
       if (ctx) returnToPos("scoatere_si_cazare");
     } catch (e: any) {
       const msg = e?.message ?? "Eroare necunoscută.";
-      setCombinedErr(combinedCheckoutDoneId() === c.id ? PREFIX_SCOASA + msg : msg);
+      setCombinedErr(combinedCheckoutDoneId() === c.id
+        ? PREFIX_SCOASA + msg + " Apăsați din nou — scoaterea nu se repetă."
+        : msg);
     } finally {
       setCombinedSaving(false);
     }
@@ -3084,7 +3117,9 @@ export default function HotelAnvelope() {
               footer={<>
                 <button class="btn btn-ghost btn-sm" onClick={() => setCombinedCazare(null)}>Anulează</button>
                 <button class="btn btn-primary btn-sm" onClick={doCombinedCheckoutNew} disabled={combinedSaving()}>
-                  {combinedSaving() ? "Se procesează..." : "Confirmă Scoaterea și Introducerea"}
+                  {combinedSaving()
+                    ? "Se procesează..."
+                    : combinedCheckoutDoneId() === c.id ? "Salvează cazarea nouă" : "Confirmă Scoaterea și Introducerea"}
                 </button>
               </>}
             >
