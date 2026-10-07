@@ -5,7 +5,8 @@
  * deci fișierul ăsta e singura ocazie de a o preda clientului. De aceea poartă
  * și avertismentul de confidențialitate.
  */
-import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
+import roFontUrl from "../assets/fonts/NotoSans-Pdf.ttf";
+import { guardPdfText, inStandardFont, isPdfTextExact } from "./pdf/fontText";
 
 let _roFontB64: string | null | false = false;
 
@@ -82,13 +83,19 @@ export async function generateAccountCredentialsPdf(cred: AccountCredentials): P
   const b64 = await loadRoFontBase64();
   let font = "helvetica";
   if (b64) {
-    doc.addFileToVFS("NotoSans-Ro.ttf", b64);
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+    doc.addFileToVFS("NotoSans-Pdf.ttf", b64);
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "normal");
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "bold");
     font = "NotoSans";
+    // Parola se tipareste exact sau deloc: un caracter inlocuit ar da o parola gresita.
+    if (!isPdfTextExact(cred.password)) {
+      throw new Error("Parola contine caractere care nu se pot tipari in PDF.");
+    }
   } else if (!DOAR_ASCII.test(cred.password) || !DOAR_ASCII.test(cred.name)) {
     throw new Error("Fontul cu diacritice nu s-a incarcat, iar datele contin diacritice.");
   }
+  // Un caracter pe care fontul nu il are ar taia restul liniei: il inlocuim.
+  guardPdfText(doc, b64 ? undefined : inStandardFont);
   // Fara font: textele fixe pierd diacriticele, dar raman corecte.
   const tx = (s: string) => (b64 ? s : ascii(s));
 

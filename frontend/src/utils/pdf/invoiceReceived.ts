@@ -5,7 +5,8 @@
  * un PDF A4 portret cu: header, parti (emitent/beneficiar), meta, linii produs,
  * breakdown TVA, totaluri.
  */
-import roFontUrl from "../../assets/fonts/NotoSans-Ro.ttf";
+import roFontUrl from "../../assets/fonts/NotoSans-Pdf.ttf";
+import { guardPdfText, inStandardFont } from "./fontText";
 import { COLORS, PAGE, CONTENT_WIDTH } from "./constants";
 import { lastTableY } from "./types";
 
@@ -113,11 +114,13 @@ export async function printInvoiceReceivedPdf(d: InvoiceDetailsReceived): Promis
   const fontB64 = await loadFont();
   let FONT = "helvetica";
   if (fontB64) {
-    doc.addFileToVFS("NotoSans-Ro.ttf", fontB64);
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+    doc.addFileToVFS("NotoSans-Pdf.ttf", fontB64);
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "normal");
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "bold");
     FONT = "NotoSans";
   }
+  // Un caracter pe care fontul nu il are ar taia restul liniei: il inlocuim.
+  guardPdfText(doc, fontB64 ? undefined : inStandardFont);
 
   const ML = PAGE.marginLeft;
   const MR = PAGE.marginRight;

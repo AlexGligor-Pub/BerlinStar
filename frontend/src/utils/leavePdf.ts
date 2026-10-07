@@ -1,4 +1,5 @@
-import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
+import roFontUrl from "../assets/fonts/NotoSans-Pdf.ttf";
+import { guardPdfText, inStandardFont } from "./pdf/fontText";
 import { fetchLeaveSnapshot, type Leave, type LeaveType } from "../store/leavesStore";
 
 // ── Romanian font (NotoSans) — reutilizam acelasi asset ca generateDocuments ──
@@ -64,11 +65,13 @@ export async function generateLeaveRequestPdf(leave: Leave): Promise<void> {
   const b64 = await loadRoFontBase64();
   let font = "helvetica";
   if (b64) {
-    doc.addFileToVFS("NotoSans-Ro.ttf", b64);
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
-    doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+    doc.addFileToVFS("NotoSans-Pdf.ttf", b64);
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "normal");
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "bold");
     font = "NotoSans";
   }
+  // Un caracter pe care fontul nu il are ar taia restul liniei: il inlocuim.
+  guardPdfText(doc, b64 ? undefined : inStandardFont);
 
   // Snapshot-ul cu datele legale e protejat de gate-ul Rapoarte; il aducem la
   // cerere. Daca nu exista token Rapoarte valid, PDF-ul se genereaza fara
