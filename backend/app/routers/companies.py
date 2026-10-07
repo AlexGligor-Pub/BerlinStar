@@ -1,6 +1,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import httpx
@@ -16,7 +17,7 @@ from app.schemas.common import Page
 from app.utils.anaf import fetch_anaf_raw, parse_anaf_entry, ANAF_DEFAULT_TIMEOUT
 from app.utils.paginate import paginate
 from app.utils.soft_delete import soft_delete
-from app.utils.storage import upload_image, delete_image_by_url, validate_image, check_image_ref
+from app.utils.storage import upload_image, delete_image_by_url, validate_image, check_image_ref, own_image_key
 
 router = APIRouter()
 
@@ -43,6 +44,39 @@ async def list_companies(
     stmt = stmt.order_by(Company.id).limit(limit + 1)
 
     return await paginate(db, stmt, limit)
+
+
+@router.get("/image-proxy")
+async def proxy_company_image(
+    url: str,
+    account_id: int = Depends(get_account_id),
+):
+    """Imaginea unei firme (logo / fundal), livrata prin server.
+
+    PDF-urile deseneaza logo-ul pe un canvas, deci browserul cere acces CORS la
+    fisier. Bucket-ul il da doar adresei de productie: de pe orice alta adresa
+    (QA, IP local) imaginea era refuzata si documentul iesea fara logo. Aici
+    aceeasi imagine vine de pe adresa aplicatiei.
+
+    Se livreaza doar fisiere din folderele de imagini ale contului apelantului
+    (`own_image_key`): nici URL-uri externe, nici fisierele altui cont.
+    """
+    if own_image_key(url, account_id) is None:
+        raise HTTPException(404, "Imaginea nu a fost găsită.")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.get(url)
+    except httpx.HTTPError:
+        raise HTTPException(502, "Eroare de rețea la descărcarea imaginii.")
+    if res.status_code != 200:
+        raise HTTPException(404 if res.status_code == 404 else 502, "Imaginea nu a putut fi descărcată.")
+    content_type = res.headers.get("content-type", "image/png")
+    if not content_type.startswith("image/"):
+        raise HTTPException(502, "Fișierul nu este o imagine.")
+    return Response(
+        content=res.content, media_type=content_type,
+        headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"},
+    )
 
 
 @router.post("", response_model=CompanyRead, status_code=201)
