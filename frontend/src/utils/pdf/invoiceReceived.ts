@@ -117,6 +117,9 @@ export async function printInvoiceReceivedPdf(d: InvoiceDetailsReceived): Promis
     doc.addFileToVFS("NotoSans-Pdf.ttf", fontB64);
     doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "normal");
     doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "bold");
+    // Mentiunile se scriu cu „italic”: fara stilul inregistrat, jsPDF ar cadea pe
+    // Times-Italic, care nu are ș/ț/ő si ar taia textul.
+    doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "italic");
     FONT = "NotoSans";
   }
   // Un caracter pe care fontul nu il are ar taia restul liniei: il inlocuim.
