@@ -2062,6 +2062,43 @@ export default function HotelAnvelope() {
     } finally { setCheckoutSaving(false); }
   }
 
+  // Stergerea unei anvelope din listele de introducere / editare, in doi pasi:
+  // butonul „Șterge” doar cere confirmarea. Copia nesalvata („(nou)”) dispare din
+  // lista; anvelopa salvata se sterge pe server (refuzata daca e acum in depozit).
+  const [anvDeleteTarget, setAnvDeleteTarget] = createSignal<Anvelopa | null>(null);
+  const [anvDeleting, setAnvDeleting] = createSignal(false);
+
+  function dropAnvLocally(id: number) {
+    const without = (prev: Set<number>) => { const next = new Set(prev); next.delete(id); return next; };
+    setClientAnvelope((l) => l.filter((x) => x.id !== id));
+    setSelectedAnvIds(without);
+    setEditAnvelope((l) => l.filter((x) => x.id !== id));
+    setEditSelectedIds(without);
+    if (anvEditId() === id) { setShowAnvForm(false); setAnvEditId(null); }
+    if (editAnvEditId() === id) { setShowEditAnvForm(false); setEditAnvEditId(null); }
+  }
+
+  async function confirmAnvDelete() {
+    const a = anvDeleteTarget();
+    if (!a || anvDeleting()) return;
+    if (a.id < 0) { dropAnvLocally(a.id); setAnvDeleteTarget(null); return; }
+    setAnvDeleting(true);
+    try {
+      const res = await apiFetch(`/api/anvelope/${a.id}`, { method: "DELETE" });
+      // 404: stearsa deja (alt tab / alt coleg) — o scoatem si de aici.
+      if (res.ok || res.status === 404) {
+        dropAnvLocally(a.id);
+        setAnvDeleteTarget(null);
+        if (res.status === 404) notify("Anvelopa fusese deja ștearsă.", "info");
+      } else {
+        notify(await readApiError(res, "Anvelopa nu s-a putut șterge."), "error");
+        setAnvDeleteTarget(null);
+      }
+    } catch (e: unknown) {
+      notify(e instanceof Error ? e.message : "Eroare de conexiune.", "error");
+    } finally { setAnvDeleting(false); }
+  }
+
   async function doDelete() {
     const t = deleteTarget();
     if (!t) return;
@@ -2616,6 +2653,12 @@ export default function HotelAnvelope() {
                             setEditSelectedIds((prev) => new Set([...prev, tempId]));
                           }}
                         >Copy</button>
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
+                          title="Șterge anvelopa"
+                          onClick={() => setAnvDeleteTarget(a)}
+                        >Șterge</button>
                       </div>
                     )}
                   </For>
@@ -2903,6 +2946,12 @@ export default function HotelAnvelope() {
                               setSelectedAnvIds((prev) => new Set([...prev, tempId]));
                             }}
                           >Copy</button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
+                            title="Șterge anvelopa"
+                            onClick={() => setAnvDeleteTarget(a)}
+                          >Șterge</button>
                         </div>
                         <Show when={showAnvForm() && anvEditId() === a.id}>
                           <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
@@ -3330,6 +3379,12 @@ export default function HotelAnvelope() {
                                   }}
                                 >{anvEditId() === a.id ? "▾ Edit" : "Edit"}</button>
                                 <button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:11px" onClick={() => { const tempId = -Date.now(); setClientAnvelope(p => [...p, {...a, id: tempId}]); setSelectedAnvIds(p => new Set([...p, tempId])); }}>Copy</button>
+                                <button
+                                  class="btn btn-ghost btn-sm"
+                                  style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
+                                  title="Șterge anvelopa"
+                                  onClick={() => setAnvDeleteTarget(a)}
+                                >Șterge</button>
                               </div>
                               <Show when={showAnvForm() && anvEditId() === a.id}>
                                 <div style="margin:4px 0 4px 24px;padding:10px;border-left:2px solid var(--primary);background:var(--surface2,rgba(99,102,241,.04));border-radius:0 8px 8px 0">
@@ -3731,6 +3786,34 @@ export default function HotelAnvelope() {
               </div>
             </Show>
 
+          </Modal>
+        )}
+      </Show>
+
+      {/* Modal: Confirmare ștergere anvelopă (ultimul, peste ferestrele de cazare) */}
+      <Show when={anvDeleteTarget()}>
+        {(a) => (
+          <Modal
+            open
+            title="Șterge anvelopa"
+            onClose={() => { if (!anvDeleting()) setAnvDeleteTarget(null); }}
+            bodyClass="sl-modal-body--stack"
+            footer={<>
+              <button class="btn btn-ghost btn-sm" onClick={() => setAnvDeleteTarget(null)} disabled={anvDeleting()}>Anulează</button>
+              <button class="btn btn-danger btn-sm" onClick={confirmAnvDelete} disabled={anvDeleting()}>
+                {anvDeleting() ? "..." : "Da, șterge"}
+              </button>
+            </>}
+          >
+            <div style="padding:16px 24px;font-size:14px;display:flex;flex-direction:column;gap:10px">
+              <span>Ești sigur că vrei să ștergi această anvelopă?</span>
+              <div style="padding:6px 10px;border-radius:6px;background:var(--bg)"><AnvelopaLine a={a()} /></div>
+              <span style="color:var(--text-muted);font-size:13px">
+                {a().id < 0
+                  ? "Anvelopa nu a fost încă salvată; dispare doar din această listă."
+                  : "Anvelopa se șterge din lista clientului. Cazările vechi o păstrează în istoric."}
+              </span>
+            </div>
           </Modal>
         )}
       </Show>
