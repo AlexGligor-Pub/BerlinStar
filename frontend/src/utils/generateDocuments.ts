@@ -18,7 +18,8 @@ import {
 import { sumaInLitere } from "./sumaInLitere";
 // Importat ca asset Vite → primeste hash in nume la build, deci nu mai sufera de
 // cache stale la nivel de nginx/CDN cand schimbam continutul fontului.
-import roFontUrl from "../assets/fonts/NotoSans-Ro.ttf";
+import roFontUrl from "../assets/fonts/NotoSans-Pdf.ttf";
+import { guardPdfText, inStandardFont } from "./pdf/fontText";
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
@@ -57,7 +58,9 @@ const MT = PAGE.marginTop;
 
 // ─── Encoding helper ──────────────────────────────────────────────────────────
 // jsPDF standard (Helvetica) = Latin-1; diacriticele romanesti nu sunt in Latin-1.
-// Folosim NotoSans-Regular.ttf de pe jsDelivr (cu cache localStorage) pentru suport complet.
+// Folosim NotoSans-Pdf.ttf (alfabetele latine, greaca, chirilica) pentru suport complet;
+// caracterele pe care fontul nu le are sunt inlocuite de guardPdfText (pdf/fontText.ts),
+// altfel jsPDF ar taia tot restul liniei de la primul dintre ele.
 
 // Flag module-level: cand un generator a inregistrat NotoSans pe doc si l-a
 // alias-at peste "helvetica", lasam diacriticele neschimbate.
@@ -77,8 +80,13 @@ function ro(s: string | null | undefined): string {
  */
 async function enableRomanianFont(doc: any): Promise<() => void> {
   const b64 = await loadRoFontBase64();
-  if (!b64) return () => {};
+  if (!b64) {
+    // Fara font raman Helvetica si ro(): orice caracter din afara Latin-1 e inlocuit.
+    guardPdfText(doc, inStandardFont);
+    return () => {};
+  }
   registerRoFont(doc, b64);
+  guardPdfText(doc);
   // Alias "helvetica" -> NotoSans astfel incat tot codul existent care apeleaza
   // doc.setFont("helvetica", "bold|normal|italic") sa foloseasca glyph-urile cu
   // diacritice. "italic" cade pe "normal" cand nu exista variants italic.
@@ -132,11 +140,11 @@ async function loadRoFontBase64(): Promise<string | null> {
 }
 
 function registerRoFont(doc: any, base64: string): void {
-  doc.addFileToVFS("NotoSans-Ro.ttf", base64);
-  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "normal");
+  doc.addFileToVFS("NotoSans-Pdf.ttf", base64);
+  doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "normal");
   // Folosim acelasi fisier si pentru bold (fontul nu are variant bold separat,
   // dar nu apare spatiat — singura diferenta vizibila e ca "bold" e mai subtire decat Helvetica Bold).
-  doc.addFont("NotoSans-Ro.ttf", "NotoSans", "bold");
+  doc.addFont("NotoSans-Pdf.ttf", "NotoSans", "bold");
 }
 
 // t() — text helper: lasa textul neschimbat daca avem font roman, altfel ro()

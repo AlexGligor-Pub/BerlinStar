@@ -9,6 +9,7 @@
 export { COLORS, PAGE, CONTENT_WIDTH } from "./constants";
 export { ext, lastTableY, pageCount, type JsPdfExt } from "./types";
 export { fmtDate, fmtNow, lei, docFilename, asciifyDiacritics } from "./format";
+export { pdfSafeText, isPdfTextExact, guardPdfText, inPdfFont, inStandardFont } from "./fontText";
 export {
   hline, drawBackground, drawSideImage,
   qrDataUrl, drawFooterWithBranding,
