@@ -1064,6 +1064,9 @@ export default function HotelAnvelope() {
   const [editComments, setEditComments] = createSignal("");
   const [editAnvelope, setEditAnvelope] = createSignal<Anvelopa[]>([]);
   const [editSelectedIds, setEditSelectedIds] = createSignal<Set<number>>(new Set());
+  // Anvelopele cazarii editate pentru care s-a confirmat „Șterge”: ies din cazare
+  // si se sterg abia la Salvează (inchiderea ferestrei fara salvare nu schimba nimic).
+  const [editRemovedIds, setEditRemovedIds] = createSignal<Set<number>>(new Set());
   const [showEditAnvForm, setShowEditAnvForm] = createSignal(false);
   const [editAnvEditId, setEditAnvEditId] = createSignal<number | null>(null);
   const [editDepAnvelope, setEditDepAnvelope] = createSignal(true);
@@ -1906,6 +1909,7 @@ export default function HotelAnvelope() {
       .map((i) => i.anvelopa!);
     setEditAnvelope(anvs);
     setEditSelectedIds(new Set(anvs.map((a) => a.id)));
+    setEditRemovedIds(new Set<number>());
   }
 
   async function doEdit() {
@@ -1965,6 +1969,13 @@ export default function HotelAnvelope() {
       });
       if (!res.ok) { const err = await res.json().catch(() => ({})); setEditErr(parseApiError(err.detail, "Eroare la salvare.")); return; }
       saved = true;
+      // Anvelopele sterse din lista nu mai sunt in cazare: le stergem acum si din
+      // evidenta. Un refuz (ex. anvelopa e intre timp in alta cazare) nu anuleaza salvarea.
+      for (const id of editRemovedIds()) {
+        if (finalIds.includes(id)) continue;
+        try { await apiFetch(`/api/anvelope/${id}`, { method: "DELETE", handleUnauthorized: false }); } catch { /* ramane in evidenta */ }
+      }
+      setEditRemovedIds(new Set<number>());
       setEditCazare(null);
       await fetchCazari();
     } catch {
@@ -2078,10 +2089,23 @@ export default function HotelAnvelope() {
     if (editAnvEditId() === id) { setShowEditAnvForm(false); setEditAnvEditId(null); }
   }
 
+  // Anvelopa face parte din cazarea deschisa acum la editare.
+  function isOfEditedCazare(a: Anvelopa): boolean {
+    return a.id > 0 && !!editCazare()?.items.some((i) => i.anvelopa?.id === a.id);
+  }
+
   async function confirmAnvDelete() {
     const a = anvDeleteTarget();
     if (!a || anvDeleting()) return;
     if (a.id < 0) { dropAnvLocally(a.id); setAnvDeleteTarget(null); return; }
+    // Anvelopa cazarii editate: iese din lista acum, iar din cazare si din evidenta
+    // la Salvează. Pe server nu se sterge inainte: ar ramane in cazare, stearsa.
+    if (isOfEditedCazare(a)) {
+      setEditRemovedIds((prev) => new Set([...prev, a.id]));
+      dropAnvLocally(a.id);
+      setAnvDeleteTarget(null);
+      return;
+    }
     setAnvDeleting(true);
     try {
       const res = await apiFetch(`/api/anvelope/${a.id}`, { method: "DELETE" });
@@ -2653,17 +2677,12 @@ export default function HotelAnvelope() {
                             setEditSelectedIds((prev) => new Set([...prev, tempId]));
                           }}
                         >Copy</button>
-                        {/* Anvelopele cazarii editate nu se sterg de aici: salvarea ar scoate-o si
-                            din cazare (si din istoricul ei). Se debifeaza; Șterge ramane pentru
-                            copiile noi si anvelopele adaugate acum. */}
-                        <Show when={!editCazare()?.items.some((i) => i.anvelopa?.id === a.id)}>
-                          <button
-                            class="btn btn-ghost btn-sm"
-                            style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
-                            title="Șterge anvelopa"
-                            onClick={() => setAnvDeleteTarget(a)}
-                          >Șterge</button>
-                        </Show>
+                        <button
+                          class="btn btn-ghost btn-sm"
+                          style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
+                          title="Șterge anvelopa"
+                          onClick={() => setAnvDeleteTarget(a)}
+                        >Șterge</button>
                       </div>
                     )}
                   </For>
@@ -3816,7 +3835,9 @@ export default function HotelAnvelope() {
               <span style="color:var(--text-muted);font-size:13px">
                 {a().id < 0
                   ? "Anvelopa nu a fost încă salvată; dispare doar din această listă."
-                  : "Anvelopa se șterge din lista clientului. Cazările vechi o păstrează în istoric."}
+                  : isOfEditedCazare(a())
+                    ? "Anvelopa iese din această cazare și se șterge când apeși „Salvează”. Dacă închizi fără să salvezi, rămâne."
+                    : "Anvelopa se șterge din lista clientului. Cazările vechi o păstrează în istoric."}
               </span>
             </div>
           </Modal>
