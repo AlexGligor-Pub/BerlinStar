@@ -7,20 +7,21 @@
 import type { jsPDF } from "jspdf";
 import { COLORS, PAGE } from "./constants";
 import { pageCount } from "./types";
+import { apiFetch } from "../api";
 
 type RGB = readonly [number, number, number];
 
 // ─── Image helpers ────────────────────────────────────────────────────────────
 
-/** Incarca o imagine remote ca dataURL (via Image + canvas, fara CORS fetch). */
-export async function loadImageAsDataUrl(url: string): Promise<string | null> {
+/** Deseneaza imaginea de la `src` pe un canvas si o intoarce ca dataURL PNG. */
+async function imageToPngDataUrl(src: string, crossOrigin: boolean): Promise<string | null> {
   try {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    if (crossOrigin) img.crossOrigin = "anonymous";
     await new Promise<void>((resolve, reject) => {
       img.onload = () => resolve();
       img.onerror = () => reject(new Error("load failed"));
-      img.src = url;
+      img.src = src;
     });
     const canvas = document.createElement("canvas");
     canvas.width = img.naturalWidth || 300;
@@ -30,6 +31,39 @@ export async function loadImageAsDataUrl(url: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/** Aceeasi imagine, adusa prin server (/api/companies/image-proxy), ca dataURL. */
+async function fetchViaServerAsDataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await apiFetch(`/api/companies/image-proxy?url=${encodeURIComponent(url)}`, { handleUnauthorized: false });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Incarca o imagine remote (logo / fundal de firma) ca dataURL PNG.
+ *
+ * Intai direct din bucket (Image + canvas). Bucket-ul permite accesul CORS doar
+ * adresei de productie, deci de pe alta adresa (QA, IP local) incarcarea directa
+ * esueaza; atunci imaginea se aduce prin server, de pe adresa aplicatiei. Fara
+ * asta documentul iesea, fara niciun mesaj, fara logo.
+ */
+export async function loadImageAsDataUrl(url: string): Promise<string | null> {
+  const direct = await imageToPngDataUrl(url, true);
+  if (direct) return direct;
+  if (!/^https?:\/\//i.test(url)) return null;
+  const viaServer = await fetchViaServerAsDataUrl(url);
+  return viaServer ? imageToPngDataUrl(viaServer, false) : null;
 }
 
 /**
