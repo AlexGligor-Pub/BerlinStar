@@ -10,6 +10,7 @@ services:
       - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy-sites:/etc/caddy/sites:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
@@ -42,6 +43,36 @@ services:
       # rand, containerul autoheal restarteaza serviciul. `unless-stopped`
       # SINGUR nu acopera cazul asta — el restarteaza doar la exit non-zero,
       # nu si cand procesul ramane "in viata" dar healthcheck-ul cade.
+      autoheal: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Site-ul public de programari online (public-calendar/). Porneste doar cu
+  # profilul `public-calendar` (COMPOSE_PROFILES=public-calendar in .env), ca un
+  # server fara cheie configurata sa nu ruleze un site care ar raspunde doar cu
+  # erori. Caddy il serveste la /public-calendar/.
+  public-calendar:
+    profiles:
+      - public-calendar
+    build:
+      context: ..
+      dockerfile: deploy/public-calendar.Dockerfile
+    environment:
+      BERLINSTAR_URL: http://backend:8000
+      BERLINSTAR_API_KEY: ${PUBLIC_CALENDAR_API_KEY:-}
+      SITE_NAME: ${PUBLIC_CALENDAR_SITE_NAME:-}
+    expose:
+      - "80"
+    networks:
+      - web
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
       autoheal: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1"]

@@ -18,11 +18,12 @@ from app.logging_config import setup_logging
 from app.middleware import RequestLoggingMiddleware, PathNormalizationMiddleware
 from app.database import engine
 from app.rate_limit import limiter
+from app.mcp_server import McpDispatchMiddleware, session_manager as mcp_session_manager
 
 setup_logging()
 log = logging.getLogger("berlinstar")
 
-from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant, users, admin_users, receipt_payments, import_data
+from app.routers import auth, accounts, departments, categories, items, receipts, employees, devices, locations, clienti, companies, disclaimers, registers, marci_anvelope, admin_marci_anvelope, dimensiuni_anvelope, profiluri_anvelope, coduri_dot_anvelope, anvelope, loc_cazare, cazare_anvelope, montaj_roti, admin, programare, general_settings, global_settings, email_settings, admin_reports, reports, stocuri, admin_legacy_import, subscription, subscription_webhook, admin_subscription, factura_rapida, leaves, admin_assistant, users, admin_users, receipt_payments, import_data, public_booking, booking_settings
 from app.services.reports import start_scheduler, stop_scheduler
 from app.efactura import router_admin as efactura_admin
 from app.efactura import router as efactura_user
@@ -66,7 +67,10 @@ async def lifespan(app: FastAPI):
     await start_scheduler()
     await start_efactura_scheduler()
     log.info("BerlinStar POS API starting up")
-    yield
+    # Serverul MCP (programari prin asistenti AI) are nevoie de task group-ul
+    # managerului de sesiuni pe toata durata aplicatiei.
+    async with mcp_session_manager.run():
+        yield
     log.info("BerlinStar POS API shutting down")
     await stop_efactura_scheduler()
     await stop_scheduler()
@@ -107,6 +111,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
+# /mcp/<garaj> -> serverul MCP al programarilor online (app/mcp_server.py).
+app.add_middleware(McpDispatchMiddleware)
 # Adaugat ULTIMUL => devine OUTERMOST middleware, deci normalizeaza path-ul
 # inainte ca orice altceva (CORS, TrustedHost, RequestLogging, routing) sa-l
 # vada. Critic pentru cazurile cu // la inceput din edge proxy.
@@ -154,6 +160,8 @@ app.include_router(admin.router,           prefix="/api/admin",               ta
 app.include_router(admin_legacy_import.router, prefix="/api/admin/legacy-import", tags=["admin-legacy-import"])
 app.include_router(admin_marci_anvelope.router, prefix="/api/admin/marci-anvelope", tags=["admin-marci-anvelope"])
 app.include_router(programare.router,      prefix="/api/programari",           tags=["programari"])
+app.include_router(booking_settings.router, prefix="/api/programari-online",   tags=["programari-online"])
+app.include_router(public_booking.router,   prefix="/api/public/v1",           tags=["public"])
 app.include_router(leaves.router,           prefix="/api/leaves",               tags=["leaves"])
 app.include_router(general_settings.router, prefix="/api/general-settings",    tags=["general-settings"])
 app.include_router(global_settings.router,  prefix="/api/global-settings",     tags=["global-settings"])

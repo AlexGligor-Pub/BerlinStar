@@ -3525,6 +3525,44 @@ img.pos-theme-preview {
   margin: 4px 0 0;
 }
 
+/* ── Programari online panel ── */
+.po-section { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+.po-section h3 { margin: 0; font-size: 1rem; }
+.po-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.9rem; }
+.po-hours { display: flex; flex-direction: column; gap: 6px; }
+.po-day { display: flex; align-items: flex-start; gap: 10px; }
+.po-day-name { flex: 0 0 90px; padding-top: 6px; font-weight: 600; font-size: 0.9rem; }
+.po-intervals { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.po-interval { display: inline-flex; align-items: center; gap: 4px; }
+.po-interval .input { width: 110px; }
+.po-number { flex: 0 1 220px; }
+.po-row-hint { margin: -4px 0 0 170px; }
+.po-service { display: flex; align-items: center; gap: 8px; }
+.po-service > .input { flex: 1; min-width: 0; }
+.po-duration { flex: 0 0 110px; }
+.po-actions { display: flex; justify-content: flex-end; }
+.po-created { padding: 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: var(--surface2); }
+.po-created p { margin: 0 0 8px; }
+.po-key { display: block; padding: 8px; word-break: break-all; background: var(--surface); border-radius: var(--radius-sm); user-select: all; }
+.po-created-actions { display: flex; gap: 8px; margin-top: 8px; }
+.po-keys { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.po-keys th, .po-keys td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.po-keys th { color: var(--text-muted); font-weight: 600; }
+.po-revoked td { color: var(--text-muted); }
+.po-newkey { display: flex; gap: 8px; max-width: 420px; }
+.po-mcp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface2); }
+.po-mcp-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.po-mcp .po-newkey { max-width: none; align-items: center; }
+.po-mcp .po-key { flex: 1; min-width: 0; }
+@media (max-width: 640px) {
+  .po-day { flex-direction: column; gap: 4px; }
+  .po-day-name { flex: none; padding: 0; }
+  .po-row-hint { margin-left: 0; }
+  .po-service { flex-wrap: wrap; }
+  .po-keys th:nth-child(3), .po-keys td:nth-child(3),
+  .po-keys th:nth-child(4), .po-keys td:nth-child(4) { display: none; }
+}
+
 /* ── Companies panel ── */
 .cfg-anaf-row {
   display: flex;
@@ -4572,6 +4610,20 @@ img.pos-theme-preview {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .prgm-appt-time { font-size: 10px; line-height: 1.25; opacity: .9; }
+.prgm-online-badge {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .85);
+  color: #1f5f99;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 .prgm-appt-client {
   font-size: 10px; line-height: 1.25; opacity: .85;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;

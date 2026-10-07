@@ -40,6 +40,9 @@ AUTH_DEPS = {
     "_require_super_admin",
     "_require_assistant_admin_from_query",
     "_dep",  # closure-ul intors de require_resource(...)
+    # Cheia API a unui site public de programari (/api/public/v1): atesta
+    # garajul si locatia, nu un utilizator.
+    "get_public_context",
 }
 
 # Dependintele care implica un ROL peste simpla autentificare.

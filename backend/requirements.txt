@@ -1,7 +1,8 @@
 fastapi>=0.115.5
 uvicorn[standard]>=0.32.1
 gunicorn>=23.0.0
-sqlalchemy>=2.0.36
+# [asyncio] aduce greenlet, obligatoriu pentru AsyncSession (din 2.1 nu mai vine implicit).
+sqlalchemy[asyncio]>=2.0.36,<2.1
 aiosqlite>=0.20.0
 alembic>=1.14.0
 pydantic>=2.11.0
@@ -23,3 +24,5 @@ Faker>=24.0.0
 stripe>=11.0.0
 reportlab>=4.2.0
 openpyxl>=3.1.0
+# Serverul MCP al programarilor online (v2: MCPServer)
+mcp==2.2.0

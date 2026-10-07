@@ -21,6 +21,12 @@ export interface Programare {
   createdAt: string;
   updatedAt: string | null;
   isDeleted: boolean;
+  // Programari online (site public / asistent AI). `intern` = introdusa aici.
+  source: "intern" | "web" | "mcp";
+  publicRef: string | null;
+  contactNume: string | null;
+  contactTelefon: string | null;
+  vehicul: string | null;
 }
 
 export interface ProgramareInput {
@@ -53,6 +59,13 @@ interface RawProgramare {
   created_at: string;
   updated_at?: string | null;
   is_deleted?: boolean;
+  source?: string;
+  public_ref?: string | null;
+  contact_nume?: string | null;
+  contact_telefon?: string | null;
+  vehicul_marca?: string | null;
+  vehicul_model?: string | null;
+  vehicul_an?: number | null;
 }
 
 function mapFromApi(r: RawProgramare): Programare {
@@ -74,6 +87,11 @@ function mapFromApi(r: RawProgramare): Programare {
     createdAt: r.created_at,
     updatedAt: r.updated_at ?? null,
     isDeleted: r.is_deleted ?? false,
+    source: r.source === "web" || r.source === "mcp" ? r.source : "intern",
+    publicRef: r.public_ref ?? null,
+    contactNume: r.contact_nume ?? null,
+    contactTelefon: r.contact_telefon ?? null,
+    vehicul: [r.vehicul_marca, r.vehicul_model, r.vehicul_an].filter(Boolean).join(" ") || null,
   };
 }
 
