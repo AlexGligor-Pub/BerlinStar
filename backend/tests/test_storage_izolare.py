@@ -167,6 +167,73 @@ async def test_update_company_rejects_foreign_logo_and_accepts_echo():
         assert (out.name, out.logo_path, out.background_path) == ("Firma Noua SRL", logo, None)
 
 
+class _FakeHttp:
+    """Inlocuieste httpx.AsyncClient din routerul de firme; retine URL-urile cerute."""
+
+    def __init__(self, status=200, content=b"PNGDATA", content_type="image/png"):
+        self.status, self.content, self.content_type, self.calls = status, content, content_type, []
+
+    def __enter__(self):
+        from types import SimpleNamespace
+        from app.routers import companies as mod
+        outer = self
+
+        class _Client:
+            def __init__(self, **kw): pass
+            async def __aenter__(self): return self
+            async def __aexit__(self, *exc): return False
+            async def get(self, url):
+                outer.calls.append(url)
+                return SimpleNamespace(status_code=outer.status, content=outer.content,
+                                       headers={"content-type": outer.content_type})
+
+        self._mod = mod
+        import httpx
+        mod.httpx = SimpleNamespace(AsyncClient=_Client, HTTPError=httpx.HTTPError)
+        return self
+
+    def __exit__(self, *exc):
+        import httpx
+        self._mod.httpx = httpx
+
+
+async def test_image_proxy_serves_own_company_images():
+    from app.routers.companies import proxy_company_image
+    with _FakeS3(), _FakeHttp() as http:
+        logo = _url("accounts/6/companies/logos/a.png")
+        res = await proxy_company_image(url=logo, account_id=6)
+        assert res.body == b"PNGDATA" and res.media_type == "image/png"
+        assert http.calls == [logo]
+        fundal = _url("accounts/6/companies/backgrounds/b.png")
+        assert (await proxy_company_image(url=fundal, account_id=6)).status_code == 200
+
+
+async def test_image_proxy_refuses_foreign_external_and_non_image_urls():
+    from app.routers.companies import proxy_company_image
+    with _FakeS3(), _FakeHttp() as http:
+        for url in (
+            _url("accounts/7/companies/logos/a.png"),                 # alt cont
+            "https://alt-server.example/accounts/6/companies/logos/a.png",  # alt server (SSRF)
+            "http://localhost:8000/api/health",
+            _url("accounts/6/efactura/sent/2026/FACT0012.xml"),       # fisier care nu e imagine
+            _url("accounts/6/companies/logos/../../../7/companies/logos/a.png"),
+            "",
+        ):
+            await raises_http(404, proxy_company_image(url=url, account_id=6))
+        assert http.calls == [], "nicio cerere nu pleaca pentru un URL refuzat"
+
+
+async def test_image_proxy_does_not_pass_on_errors_or_non_images():
+    from app.routers.companies import proxy_company_image
+    logo = _url("accounts/6/companies/logos/a.png")
+    with _FakeS3(), _FakeHttp(status=404):
+        await raises_http(404, proxy_company_image(url=logo, account_id=6))
+    with _FakeS3(), _FakeHttp(status=500):
+        await raises_http(502, proxy_company_image(url=logo, account_id=6))
+    with _FakeS3(), _FakeHttp(content_type="text/html"):
+        await raises_http(502, proxy_company_image(url=logo, account_id=6))
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 if __name__ == "__main__":
