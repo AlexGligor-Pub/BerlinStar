@@ -2653,12 +2653,17 @@ export default function HotelAnvelope() {
                             setEditSelectedIds((prev) => new Set([...prev, tempId]));
                           }}
                         >Copy</button>
-                        <button
-                          class="btn btn-ghost btn-sm"
-                          style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
-                          title="Șterge anvelopa"
-                          onClick={() => setAnvDeleteTarget(a)}
-                        >Șterge</button>
+                        {/* Anvelopele cazarii editate nu se sterg de aici: salvarea ar scoate-o si
+                            din cazare (si din istoricul ei). Se debifeaza; Șterge ramane pentru
+                            copiile noi si anvelopele adaugate acum. */}
+                        <Show when={!editCazare()?.items.some((i) => i.anvelopa?.id === a.id)}>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            style="padding:1px 6px;font-size:11px;flex-shrink:0;color:var(--danger,#dc2626)"
+                            title="Șterge anvelopa"
+                            onClick={() => setAnvDeleteTarget(a)}
+                          >Șterge</button>
+                        </Show>
                       </div>
                     )}
                   </For>
