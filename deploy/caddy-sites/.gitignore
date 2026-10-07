@@ -1,0 +1,2 @@
+# Configurari locale ale unui server (ex. numele public al QA) — nu intra in git.
+*.caddy

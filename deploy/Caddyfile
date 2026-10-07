@@ -5,8 +5,28 @@
     email contact@professorprime.ro
 }
 
+# Site-ul public de programari (containerul `public-calendar`), sub
+# /public-calendar/. Prefixul se taie: aplicatia foloseste doar cai relative.
+# Serverul MCP al programarilor online (/mcp/<garaj>), direct la backend.
+(mcp) {
+    handle /mcp/* {
+        reverse_proxy backend:8000
+    }
+}
+
+(public_calendar) {
+    redir /public-calendar /public-calendar/ 308
+    handle_path /public-calendar/* {
+        reverse_proxy public-calendar:80
+    }
+}
+
 professorprime.ro {
-    reverse_proxy frontend:80
+    import mcp
+    import public_calendar
+    handle {
+        reverse_proxy frontend:80
+    }
 }
 
 # www → redirect 301 la apex (acoperit si el de certificat)
@@ -17,5 +37,13 @@ www.professorprime.ro {
 # Fallback HTTP pentru fereastra de tranzitie DNS (acces direct pe IP sau
 # request-uri proxy-ate de RockHost cu Host = IP). Serveste acelasi frontend.
 :80 {
-    reverse_proxy frontend:80
+    import mcp
+    import public_calendar
+    handle {
+        reverse_proxy frontend:80
+    }
 }
+
+# Site-uri locale ale serverului (deploy/caddy-sites/*.caddy, in afara git-ului),
+# ex. numele public al QA. Pe un server fara ele, importul nu face nimic.
+import /etc/caddy/sites/*.caddy

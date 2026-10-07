@@ -50,6 +50,13 @@ def _serialize(p: Programare) -> ProgramareRead:
         updated_at=p.updated_at,
         is_deleted=p.is_deleted,
         deleted_at=p.deleted_at,
+        source=p.source,
+        public_ref=p.public_ref,
+        contact_nume=p.contact_nume,
+        contact_telefon=p.contact_telefon,
+        vehicul_marca=p.vehicul_marca,
+        vehicul_model=p.vehicul_model,
+        vehicul_an=p.vehicul_an,
     )
 
 

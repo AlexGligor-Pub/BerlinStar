@@ -29,6 +29,8 @@ Faker==40.39.0
 stripe==15.6.1
 reportlab==5.0.1
 openpyxl==3.1.5
+# Serverul MCP al programarilor online (v2: MCPServer).
+mcp==2.2.0
 # Dependinte indirecte de care depinde pornirea; fixate ca sa nu se schimbe pe nevazute.
 greenlet==3.5.6
 starlette==1.7.0
@@ -36,3 +38,8 @@ pydantic_core==2.46.5
 anyio==4.15.1
 h11==0.16.0
 botocore==1.43.103
+mcp-types==2.2.0
+sse-starlette==3.4.11
+jsonschema==4.26.0
+httpx2==2.13.1
+httpcore2==2.13.1

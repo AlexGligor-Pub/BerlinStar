@@ -1,0 +1,24 @@
+# Exemplu: nume public pentru mediul QA (DDNS). Copiat ca `berlinqa.caddy` in
+# acelasi director, Caddy il incarca la pornire si obtine singur certificatul.
+
+# HTTPS: DOAR serverul MCP si site-ul public de programari. Aplicatia Berlin
+# Star ramane pe HTTP / in reteaua locala.
+https://berlinqa.go.ro {
+    import mcp
+    import public_calendar
+    redir / /public-calendar/ 302
+    handle {
+        respond "Not found" 404
+    }
+}
+
+# HTTP: ca inainte (toata aplicatia). Blocul explicit opreste redirectarea
+# automata HTTP -> HTTPS, care ar strica accesul cat timp portul 443 nu e
+# deschis in router.
+http://berlinqa.go.ro {
+    import mcp
+    import public_calendar
+    handle {
+        reverse_proxy frontend:80
+    }
+}

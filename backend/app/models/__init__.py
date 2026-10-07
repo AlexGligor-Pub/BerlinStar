@@ -22,7 +22,8 @@ from .profil_anvelopa import ProfilAnvelopa
 from .loc_cazare import LocCazare
 from .cazare_anvelope import CazareAnvelope, CazareAnvelopaItem
 from .montaj_rota import MontajRota, PozitieRoata
-from .programare import Programare, ProgramareStatus
+from .programare import Programare, ProgramareStatus, ProgramareSource
+from .booking import BookingSettings, BookingHours, BookingService, PublicApiKey
 from .vehicol import Vehicol
 from .general_settings import GeneralSettings
 from .global_settings import GlobalSettings
@@ -43,4 +44,4 @@ from app.efactura.models import AnafSettings, AnafToken, EFacturaRecord, EFactur
 from .subscription import PlatformAnafToken, AccountSubscription, SubscriptionPayment
 from .import_session import ImportSession, ImportRow
 
-__all__ = ["Base", "Account", "User", "UserRole", "UserSession", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "ReceiptPayment", "PaymentKind", "PaymentMethod", "Employee", "EmployeeDetail", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "CodDotAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "TaskRun", "ScheduledJobOverride", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment", "ImportSession", "ImportRow",]
+__all__ = ["Base", "Account", "User", "UserRole", "UserSession", "Department", "Category", "Item", "ItemType", "Receipt", "ReceiptItem", "ReceiptPayment", "PaymentKind", "PaymentMethod", "Employee", "EmployeeDetail", "Location", "employee_locations", "Device", "Client", "Company", "Disclaimer", "Register", "MarcaAnvelopa", "DimensiuneAnvelopa", "CodDotAnvelopa", "Anvelopa", "TipAnvelopa", "ProfilAnvelopa", "LocCazare", "CazareAnvelope", "CazareAnvelopaItem", "MontajRota", "PozitieRoata", "Programare", "ProgramareStatus", "ProgramareSource", "BookingSettings", "BookingHours", "BookingService", "PublicApiKey", "Vehicol", "GeneralSettings", "GlobalSettings", "ClientVehicol", "EmailTemplate", "EmailLog", "ReportReceiptsDaily", "ReportReceiptsBreakdownDaily", "ReportEmployeeDaily", "ReportCazariDaily", "ReportClientsDaily", "ReportProgramariDaily", "ReportRun", "Stock", "StockMovement", "StockMovementType", "ReportStockMovementsDaily", "AnafSettings", "AnafToken", "EFacturaRecord", "EFacturaReceivedIndex", "EFacturaGlobalSettings", "TaskRun", "ScheduledJobOverride", "PlatformAnafToken", "AccountSubscription", "SubscriptionPayment", "ImportSession", "ImportRow",]

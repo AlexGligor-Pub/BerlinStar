@@ -23,6 +23,7 @@ const TOPIC_GROUPS = [
       { id: "produse",     label: "Produse și Servicii" },
       { id: "disclaimers", label: "Disclaimers"         },
       { id: "registre",    label: "Registre"            },
+      { id: "programari-online", label: "Programări online" },
     ],
   },
   {
@@ -64,6 +65,7 @@ const PANELS: Record<TopicId, Component> = {
   produse: lazy(() => import("./configurari/ProduseSiServiciiPanel")),
   disclaimers: lazy(() => import("./configurari/DisclaimersPanel")),
   registre: lazy(() => import("./configurari/RegisterPanel")),
+  "programari-online": lazy(() => import("./configurari/ProgramariOnlinePanel")),
   "setari-generale": lazy(() => import("./configurari/SetariGeneralePanel")),
   dispozitiv: lazy(() => import("./configurari/DispozitivulMeuPanel")),
   efactura: lazy(() => import("./configurari/EFacturaPanel")),

@@ -1,0 +1,53 @@
+# Generat din template la pornirea containerului (envsubst).
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+    server_tokens off;
+
+    # IP-ul real al clientului, din X-Forwarded-For pus de Caddy — doar cand
+    # cererea vine din reteaua proxy-ului.
+    set_real_ip_from ${REAL_IP_FROM};
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
+
+    # Numele site-ului setat pe instalare (gol = cel din Berlin Star).
+    location = /env.json {
+        default_type application/json;
+        expires -1;
+        return 200 '{"siteName":"${SITE_NAME}"}';
+    }
+
+    # Proxy catre API-ul public Berlin Star. Cheia se adauga AICI: browserul
+    # nu o vede niciodata. IP-ul clientului pleaca in X-Client-IP.
+    location /api/ {
+        proxy_pass ${BERLINSTAR_URL}/api/public/v1/;
+        proxy_set_header X-Api-Key "${BERLINSTAR_API_KEY}";
+        proxy_set_header X-Client-IP $remote_addr;
+        proxy_set_header X-Forwarded-For "";
+        proxy_set_header Authorization "";
+        proxy_set_header Cookie "";
+        proxy_ssl_server_name on;
+        proxy_read_timeout 30s;
+        client_max_body_size 16k;
+    }
+
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location = /index.html {
+        expires -1;
+    }
+
+    location / {
+        try_files $uri /index.html;
+    }
+}

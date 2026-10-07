@@ -32,6 +32,9 @@ const OFF_BOT_H   = (CAL_END   - WORK_END)   / 60 * PX_PER_HOUR; // 144px (17–
 
 function minToTop(min: number)  { return (min - CAL_START) / 60 * PX_PER_HOUR; }
 
+// Insigna pe programarile venite din afara (site public / asistent AI).
+const SOURCE_LABEL: Record<Programare["source"], string> = { intern: "", web: "Online", mcp: "AI" };
+
 const STATUS_COLORS: Record<ProgramareStatus, string> = {
   "Programat": "#3b82f6",
   "In lucru":  "#f59e0b",
@@ -1030,10 +1033,15 @@ export default function Programari() {
                       aria-label={`${appt.titlu}, ${formatTime(appt.startTime)}–${formatTime(appt.endTime)}, ${appt.employeeName ?? "neasignat"}, ${appt.status}${isLocked(appt) ? ", needitabilă" : ""}`}
                     >
                       <div class="prgm-appt-main">
-                        <div class="prgm-appt-title">{appt.titlu}</div>
+                        <div class="prgm-appt-title">
+                          <Show when={appt.source !== "intern"}>
+                            <span class="prgm-online-badge" title="Programare făcută online de client">{SOURCE_LABEL[appt.source]}</span>
+                          </Show>
+                          {appt.titlu}
+                        </div>
                         <div class="prgm-appt-time">{formatTime(appt.startTime)}–{formatTime(appt.endTime)}</div>
-                        <Show when={appt.clientNume}>
-                          <div class="prgm-appt-client">{appt.clientNume}</div>
+                        <Show when={appt.clientNume ?? appt.contactNume}>
+                          <div class="prgm-appt-client">{appt.clientNume ?? appt.contactNume}</div>
                         </Show>
                       </div>
 
@@ -1159,6 +1167,21 @@ export default function Programari() {
               <div>
                 <span style="color:var(--text-muted);font-size:12px">Client</span><br />
                 {appt().clientNume}
+              </div>
+            </Show>
+            <Show when={appt().source !== "intern"}>
+              <div>
+                <span style="color:var(--text-muted);font-size:12px">
+                  Programare {appt().source === "mcp" ? "prin asistent AI" : "online"}
+                  {appt().publicRef ? ` · cod ${appt().publicRef}` : ""}
+                </span><br />
+                {appt().contactNume}
+                <Show when={appt().contactTelefon}>
+                  {" · "}<a href={`tel:${appt().contactTelefon!.replace(/\s/g, "")}`}>{appt().contactTelefon}</a>
+                </Show>
+                <Show when={appt().vehicul}>
+                  <br />Mașina: {appt().vehicul}
+                </Show>
               </div>
             </Show>
             <Show when={appt().notite}>

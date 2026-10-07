@@ -48,3 +48,11 @@ class ProgramareRead(BaseModel):
     updated_at:      datetime | None
     is_deleted:      bool
     deleted_at:      datetime | None
+    # Programari online (site public / asistent AI).
+    source:          str = "intern"
+    public_ref:      str | None = None
+    contact_nume:    str | None = None
+    contact_telefon: str | None = None
+    vehicul_marca:   str | None = None
+    vehicul_model:   str | None = None
+    vehicul_an:      int | None = None
