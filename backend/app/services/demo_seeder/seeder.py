@@ -255,7 +255,7 @@ async def _create_account_and_company(ctx: _Ctx) -> None:
         phone="021 555 0123",
         postal_code="010091",
         is_vat_payer=True,
-        tva_percentage=19.0,
+        tva_percentage=21.0,
         bank_name="Banca Transilvania",
         iban="RO12BTRL12345678901234567",
         street="Calea Victoriei 100",
@@ -886,7 +886,10 @@ async def _flush_receipts_batch(
                 "qty": qty,
                 "unit": it["unit"],
                 "vat_category": "S",
-                "vat_percent": Decimal("19.00"),
+                # Fara cota pe linie: pretul contine TVA-ul firmei, ca la bonurile din
+                # POS/receptie. Cu cota pe linie pretul ar fi citit ca NET (Factura rapida)
+                # si totalul bonului nu ar mai corespunde cu liniile.
+                "vat_percent": None,
             })
         if p["numar_masina"]:
             # ~ 60% din receipt-urile cu numar_masina genereaza si Vehicol
