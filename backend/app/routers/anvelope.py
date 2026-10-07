@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_account_id
 from app.models.anvelopa import Anvelopa
+from app.models.cazare_anvelope import CazareAnvelopaItem, CazareAnvelope
 from app.models.client import Client
 from app.models.cod_dot_anvelopa import CodDotAnvelopa
 from app.models.dimensiune_anvelopa import DimensiuneAnvelopa
@@ -185,4 +186,22 @@ async def delete_anvelopa(
     anv = await db.get(Anvelopa, anvelopa_id)
     if anv is None or anv.account_id != account_id:
         raise HTTPException(404, "Anvelopa nu a fost găsită.")
+    # O anvelopa aflata acum in depozit nu se sterge: ar disparea din cazarea activa
+    # si nu ar mai putea fi predata la scoatere. Cazarile inchise o pastreaza in istoric.
+    cazare_id = await db.scalar(
+        select(CazareAnvelope.id)
+        .join(CazareAnvelopaItem, CazareAnvelopaItem.cazare_id == CazareAnvelope.id)
+        .where(
+            CazareAnvelopaItem.anvelopa_id == anvelopa_id,
+            CazareAnvelope.account_id == account_id,
+            CazareAnvelope.is_deleted == False,
+            CazareAnvelope.data_checkout.is_(None),
+        )
+        .limit(1)
+    )
+    if cazare_id is not None:
+        raise HTTPException(
+            409,
+            f"Anvelopa este în depozit (cazarea #{cazare_id}). Scoate-o întâi din cazare, apoi o poți șterge.",
+        )
     await soft_delete(db, Anvelopa, anvelopa_id)
