@@ -17,6 +17,22 @@ function lei(n: number): string {
  * o suma mai mare decat restul e aproape sigur o greseala de tastare. Un deviz
  * inca fara linii (total 0) accepta orice suma pozitiva.
  */
+/** Sumele rotunde oferite ca scurtaturi in fereastra de avans din POS. */
+export const AVANS_SHORTCUTS = [100, 200, 300, 400, 500] as const;
+
+/**
+ * Scurtaturile care au sens pentru devizul curent: doar sumele mai mici decat
+ * totalul si care incap in restul de plata (dupa un avans anterior, o suma peste
+ * rest ar fi oricum refuzata). Un deviz inca fara linii (total 0) nu are plafon,
+ * deci le arata pe toate.
+ */
+export function avansShortcuts(deviz: { total: number; rest: number }): number[] {
+  if (!(deviz.total > 0)) return [...AVANS_SHORTCUTS];
+  return AVANS_SHORTCUTS.filter(
+    (v) => v < deviz.total && Math.round(v * 100) <= Math.round(deviz.rest * 100),
+  );
+}
+
 export function validateAvans(text: string, deviz: { total: number; rest: number }): AvansCheck {
   const parsed = parseDecimal(text, { maxDecimals: 2 });
   if (!parsed.valid) {

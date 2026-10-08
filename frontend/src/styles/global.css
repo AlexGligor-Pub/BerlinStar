@@ -7661,3 +7661,5 @@ img.pos-theme-preview {
 .sl-header-emp-name { font-size: 0.85rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-header-emp-pct { font-size: 0.72rem; font-weight: 700; opacity: 0.85; white-space: nowrap; flex-shrink: 0; }
 .sl-header-emp-crown { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }
+.pos-avans-shortcuts { display: flex; gap: 6px; }
+.pos-avans-shortcuts .btn { flex: 1 1 0; min-width: 0; font-weight: 700; }

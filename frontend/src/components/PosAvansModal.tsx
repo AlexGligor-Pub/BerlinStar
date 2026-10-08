@@ -7,7 +7,7 @@ import {
   type PaymentMethod, type PaymentsResponse,
 } from "../store/paymentsStore";
 import { notify } from "../store/notificationsStore";
-import { validateAvans } from "../utils/avans";
+import { avansShortcuts, validateAvans } from "../utils/avans";
 
 const METHODS: PaymentMethod[] = ["Cash", "Card", "OP", "Alta"];
 
@@ -51,6 +51,11 @@ export default function PosAvansModal(props: {
 
   const s = () => data()?.summary;
   const ready = () => !loading() && !loadErr() && !!s();
+  /** Sume rotunde, doar cele mai mici decat totalul devizului (vezi avansShortcuts). */
+  const shortcuts = () => {
+    const sum = s();
+    return sum ? avansShortcuts({ total: parseFloat(sum.total_bon), rest: parseFloat(sum.rest_de_plata) }) : [];
+  };
 
   async function handleAdd() {
     const sum = s();
@@ -128,6 +133,24 @@ export default function PosAvansModal(props: {
           onInput={(raw) => { setAmount(raw); setErr(""); }}
           onKeyDown={(e: KeyboardEvent) => { if (e.key === "Enter") void handleAdd(); }}
         />
+
+        <Show when={ready() && shortcuts().length > 0}>
+          <div class="pos-avans-shortcuts" role="group" aria-label="Sume rapide">
+            <For each={shortcuts()}>
+              {(v) => (
+                <button
+                  type="button"
+                  class="btn btn-sm"
+                  classList={{ "btn-primary": amount() === String(v), "btn-ghost": amount() !== String(v) }}
+                  disabled={busy()}
+                  onClick={() => { setAmount(String(v)); setErr(""); amountEl?.focus(); }}
+                >
+                  {v}
+                </button>
+              )}
+            </For>
+          </div>
+        </Show>
 
         <div class="pos-avans-label">Metodă</div>
         <div class="pos-avans-methods" role="group" aria-label="Metodă de încasare">
