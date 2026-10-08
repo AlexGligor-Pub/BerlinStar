@@ -2075,7 +2075,7 @@ export default function ShoppingList(
                 type="text"
                 placeholder="Ex: Transport, Consultanta..."
                 value={manualName()}
-                onInput={(e) => setManualName(e.currentTarget.value.toUpperCase())}
+                onInput={(e) => setManualName(e.currentTarget.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") confirmManual(); }}
                 autofocus
               />
@@ -2085,12 +2085,12 @@ export default function ShoppingList(
               <div class="sl-tip-toggle">
                 <button
                   class={`btn btn-sm${manualTip() === "Produs" ? " btn-primary" : " btn-ghost"}`}
-                  onClick={() => { setManualTip("Produs"); setManualUnit("buc"); }}
+                  onClick={() => setManualTip("Produs")}
                   type="button"
                 >Produs</button>
                 <button
                   class={`btn btn-sm${manualTip() === "Serviciu" ? " btn-primary" : " btn-ghost"}`}
-                  onClick={() => { setManualTip("Serviciu"); setManualUnit("ora"); }}
+                  onClick={() => setManualTip("Serviciu")}
                   type="button"
                 >Serviciu</button>
               </div>
