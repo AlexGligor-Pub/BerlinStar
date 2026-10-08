@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broadcaster import broadcaster
 from app.database import get_db
 from app.dependencies import get_account_id, get_actor_username
 from app.rate_limit import limiter
@@ -141,6 +142,10 @@ async def add_payment(
         on_paid_change=_refresh_receipt_accumulations,
         guard=_guard_open,
     )
+    # Statusul si avansul bonului s-au schimbat: Recepția si POS-ul deschise pe
+    # alte dispozitive trebuie sa reciteasca bonul (un avans pus din POS altfel
+    # aparea in Recepție abia dupa reincarcarea paginii).
+    broadcaster.notify(account_id)
     return await _response(db, account_id, receipt_id)
 
 
@@ -164,4 +169,5 @@ async def delete_payment(
         actor=actor, on_paid_change=_refresh_receipt_accumulations,
         guard=_guard_open,
     )
+    broadcaster.notify(account_id)
     return await _response(db, account_id, receipt_id)
