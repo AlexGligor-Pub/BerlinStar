@@ -1104,6 +1104,13 @@ export default function ShoppingList(
     if (id !== null) void loadPayments(id).catch(() => { /* subsolul ramane fara avans */ });
   }));
 
+  function badgeKeyDown(ev: KeyboardEvent) {
+    if (props.onEmployeeBadgeClick && (ev.key === "Enter" || ev.key === " ")) {
+      ev.preventDefault();
+      props.onEmployeeBadgeClick();
+    }
+  }
+
   async function handleAvans() {
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
     if (openingAvans() || finalizing()) return;
@@ -1566,48 +1573,29 @@ export default function ShoppingList(
 
   return (
     <div class="shopping-list">
+      {/* Antet pe doua randuri: sus poza angajatului si cele doua butoane, jos
+          numele si procentul din target pe toata latimea (in panoul de 320px,
+          pe un singur rand, numele era taiat). */}
       <div class="shopping-list-header">
-        <div class="sl-header-left">
-          <Show when={selectedEmployee() !== null}>
-            {(() => {
-              const e = selectedEmployee()!;
-              return (
-                <span
-                  class="sl-employee-badge"
-                  role={props.onEmployeeBadgeClick ? "button" : undefined}
-                  tabIndex={props.onEmployeeBadgeClick ? 0 : undefined}
-                  style={props.onEmployeeBadgeClick ? "cursor:pointer" : undefined}
-                  onClick={props.onEmployeeBadgeClick}
-                  onKeyDown={(ev) => {
-                    if (props.onEmployeeBadgeClick && (ev.key === "Enter" || ev.key === " ")) {
-                      ev.preventDefault();
-                      props.onEmployeeBadgeClick();
-                    }
-                  }}
-                >
-                  <Show when={e.imagePath}>
-                    <img src={e.imagePath!} class="sl-employee-badge-avatar" alt={e.name} />
-                  </Show>
-                  <span class="sl-employee-badge-info">
-                    <SplitName name={e.name} class="sl-employee-badge-name" />
-                    <Show when={e.target > 0}>
-                      <span class="sl-employee-badge-pct">
-                        {Math.round(e.currentTargetAccumulation / e.target * 100)}%
-                      </span>
-                    </Show>
-                  </span>
-                  <Show when={e.target > 0 && Math.round(e.currentTargetAccumulation / e.target * 100) > 100}>
-                    <span class="sl-employee-badge-crown" title="Target depasit">👑</span>
-                  </Show>
-                </span>
-              );
-            })()}
+        <div class="sl-header-row">
+          <Show when={selectedEmployee()?.imagePath}>
+            {(src) => (
+              <span
+                class="sl-employee-badge"
+                role={props.onEmployeeBadgeClick ? "button" : undefined}
+                tabIndex={props.onEmployeeBadgeClick ? 0 : undefined}
+                style={props.onEmployeeBadgeClick ? "cursor:pointer" : undefined}
+                title="Schimbă angajatul"
+                onClick={props.onEmployeeBadgeClick}
+                onKeyDown={badgeKeyDown}
+              >
+                <img src={src()} class="sl-employee-badge-avatar" alt={selectedEmployee()?.name ?? ""} />
+              </span>
+            )}
           </Show>
-        </div>
-        <div class="sl-header-right">
           <button class="btn btn-ghost btn-sm sl-extra-btn sl-extra-btn--stacked" onClick={openManual} title="Adaugă produs/serviciu manual">
-            <span class="sl-extra-btn-sub">Introducere manuala</span>
-            <span class="sl-extra-btn-main">Produs/Serviciu</span>
+            <span class="sl-extra-btn-sub">Adaugă manual</span>
+            <span class="sl-extra-btn-main">Produs / Serviciu</span>
           </button>
           {/* Fișa de Lucru e doar o estimare: nu are registru de plati. */}
           <Show when={!fdlMode()}>
@@ -1625,6 +1613,28 @@ export default function ShoppingList(
             </button>
           </Show>
         </div>
+        <Show when={selectedEmployee()}>
+          {(e) => (
+            <div
+              class="sl-header-emp"
+              role={props.onEmployeeBadgeClick ? "button" : undefined}
+              tabIndex={props.onEmployeeBadgeClick ? 0 : undefined}
+              style={props.onEmployeeBadgeClick ? "cursor:pointer" : undefined}
+              onClick={props.onEmployeeBadgeClick}
+              onKeyDown={badgeKeyDown}
+            >
+              <span class="sl-header-emp-name">{e().name}</span>
+              <Show when={e().target > 0}>
+                <span class="sl-header-emp-pct">
+                  {Math.round(e().currentTargetAccumulation / e().target * 100)}% din target
+                </span>
+                <Show when={Math.round(e().currentTargetAccumulation / e().target * 100) > 100}>
+                  <span class="sl-header-emp-crown" title="Target depasit">👑</span>
+                </Show>
+              </Show>
+            </div>
+          )}
+        </Show>
       </div>
 
       <div class="shopping-list-titlu">

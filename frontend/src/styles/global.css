@@ -7651,3 +7651,13 @@ img.pos-theme-preview {
 .pos-avans-err { color: #dc2626; font-size: 0.82rem; }
 .pos-avans-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; white-space: nowrap; }
 .pos-avans-hint { font-size: 0.72rem; opacity: 0.6; }
+
+/* Antetul cosului pe doua randuri: poza + butoane, apoi numele angajatului. */
+.shopping-list-header { flex-direction: column; align-items: stretch; gap: 6px; }
+.sl-header-row { display: flex; align-items: stretch; gap: 6px; min-width: 0; }
+.sl-header-row .sl-employee-badge { padding: 3px; flex-shrink: 0; }
+.sl-header-row .sl-extra-btn--stacked { flex: 1 1 0; min-width: 0; padding: 4px 6px; white-space: normal; text-align: center; }
+.sl-header-emp { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: #2563eb; line-height: 1.2; }
+.sl-header-emp-name { font-size: 0.85rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-header-emp-pct { font-size: 0.72rem; font-weight: 700; opacity: 0.85; white-space: nowrap; flex-shrink: 0; }
+.sl-header-emp-crown { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }

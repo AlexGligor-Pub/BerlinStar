@@ -68,9 +68,11 @@ export default function PosAvansModal(props: {
         amount: check.amount.toFixed(2),
         method: method(),
       }));
-      setAmount("");
       props.onChanged?.();
       notify(`Avans de ${lei(check.amount)} înregistrat.`, "success");
+      // Avansul e luat: operatorul se intoarce la cos. Pentru inca un avans sau
+      // pentru a sterge unul gresit, fereastra se redeschide din acelasi buton.
+      props.onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Eroare la înregistrarea avansului.");
     } finally {
