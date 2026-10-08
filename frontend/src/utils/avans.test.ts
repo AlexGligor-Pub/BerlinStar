@@ -1,7 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { validateAvans } from "./avans";
+import { avansShortcuts, validateAvans } from "./avans";
 
 const deviz = { total: 850, rest: 850 };
+
+describe("avansShortcuts", () => {
+  it("offers only the amounts below the receipt total", () => {
+    expect(avansShortcuts({ total: 850, rest: 850 })).toEqual([100, 200, 300, 400, 500]);
+    expect(avansShortcuts({ total: 350, rest: 350 })).toEqual([100, 200, 300]);
+    // egal cu totalul nu e „mai mic”: 300 nu apare pe un deviz de 300
+    expect(avansShortcuts({ total: 300, rest: 300 })).toEqual([100, 200]);
+    expect(avansShortcuts({ total: 100, rest: 100 })).toEqual([]);
+    expect(avansShortcuts({ total: 99.5, rest: 99.5 })).toEqual([]);
+  });
+
+  it("drops the amounts that no longer fit after an earlier advance", () => {
+    expect(avansShortcuts({ total: 850, rest: 250 })).toEqual([100, 200]);
+    expect(avansShortcuts({ total: 850, rest: 300 })).toEqual([100, 200, 300]);
+    expect(avansShortcuts({ total: 850, rest: 0 })).toEqual([]);
+  });
+
+  it("offers all of them on a receipt without lines yet", () => {
+    expect(avansShortcuts({ total: 0, rest: 0 })).toEqual([100, 200, 300, 400, 500]);
+  });
+
+  it("every offered amount passes validation", () => {
+    for (const deviz of [{ total: 850, rest: 850 }, { total: 850, rest: 250 }, { total: 120, rest: 120 }, { total: 0, rest: 0 }]) {
+      for (const v of avansShortcuts(deviz)) expect(validateAvans(String(v), deviz).ok).toBe(true);
+    }
+  });
+});
 
 describe("validateAvans", () => {
   it("accepts comma or dot and returns the amount", () => {
