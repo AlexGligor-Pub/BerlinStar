@@ -1024,6 +1024,7 @@ async def patch_receipt_client(
     )
     receipt = result.scalar_one()
     rec = await _load_efactura_record_for(db, receipt_id)
+    broadcaster.notify(account_id)
     return _serialize(receipt, rec)
 
 
