@@ -17,7 +17,9 @@ describe("avansShortcuts", () => {
     expect(avansShortcuts({ total: 850, rest: 250 })).toEqual([100, 200]);
     // 300 ar inchide bonul ca platit integral
     expect(avansShortcuts({ total: 850, rest: 300 })).toEqual([100, 200]);
-    expect(avansShortcuts({ total: 850, rest: 300.01 })).toEqual([100, 200, 300]);
+    // la 1 ban de rest serverul inchide deja bonul
+    expect(avansShortcuts({ total: 850, rest: 300.01 })).toEqual([100, 200]);
+    expect(avansShortcuts({ total: 850, rest: 300.02 })).toEqual([100, 200, 300]);
     expect(avansShortcuts({ total: 850, rest: 0 })).toEqual([]);
     expect(avansShortcuts({ total: 850, rest: -50 })).toEqual([]);
   });
@@ -55,19 +57,23 @@ describe("validateAvans", () => {
     expect(egal.ok === false && egal.message).toContain("850.00 lei");
     expect(egal.ok === false && egal.message).toContain("Recepție");
     expect(validateAvans("850,01", deviz).ok).toBe(false);
-    expect(validateAvans("849,99", deviz).ok).toBe(true);
+    // serverul inchide bonul si cand mai ramane 1 ban: trebuie sa ramana cel putin 2
+    expect(validateAvans("849,99", deviz).ok).toBe(false);
+    expect(validateAvans("849,98", deviz).ok).toBe(true);
     // dupa un avans de 200, restul e 650
     expect(validateAvans("650", { total: 850, rest: 650 }).ok).toBe(false);
-    expect(validateAvans("649,99", { total: 850, rest: 650 }).ok).toBe(true);
+    expect(validateAvans("649,99", { total: 850, rest: 650 }).ok).toBe(false);
+    expect(validateAvans("649,98", { total: 850, rest: 650 }).ok).toBe(true);
   });
 
   it("compares in whole bani, not in floating point", () => {
     // 0.7 - 0.4 = 0.29999999999999993: fara rotunjire, 0,29 ar trece si 0,30 ar parea „peste”
     const rest = 0.7 - 0.4;
-    expect(validateAvans("0,29", { total: 1, rest }).ok).toBe(true);
-    expect(validateAvans("0,30", { total: 1, rest }).ok).toBe(false);
-    // 0.1 + 0.2 = 0.30000000000000004: 0,30 nu e „sub” rest
-    expect(validateAvans("0,30", { total: 1, rest: 0.1 + 0.2 }).ok).toBe(false);
+    expect(validateAvans("0,28", { total: 1, rest }).ok).toBe(true);
+    expect(validateAvans("0,29", { total: 1, rest }).ok).toBe(false);
+    // 0.1 + 0.2 = 0.30000000000000004: tot 30 de bani, nu 31
+    expect(validateAvans("0,28", { total: 1, rest: 0.1 + 0.2 }).ok).toBe(true);
+    expect(validateAvans("0,29", { total: 1, rest: 0.1 + 0.2 }).ok).toBe(false);
   });
 
   it("refuses an advance on a fully collected or over-collected receipt", () => {
