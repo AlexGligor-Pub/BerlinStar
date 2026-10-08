@@ -109,6 +109,58 @@ async def test_linking_the_client_notifies_the_account():
         assert own.events() == ["receipts_changed"]
 
 
+async def test_refused_delete_notifies_nobody():
+    db, acc, other, receipt = await _fixture()
+    res = await _unlocked(pay_router, lambda: _route_add_payment(
+        request=None, receipt_id=receipt.id,
+        body=PaymentCreate(kind=PaymentKind.AVANS, amount=Decimal("100.00")),
+        db=db, account_id=acc.id, actor="casier",
+    ))
+    payment_id = res["payments"][0]["id"]
+    with _Listen(acc.id) as own, _Listen(other.id) as foreign:
+        # plata altui cont / inexistenta
+        await _unlocked(pay_router, lambda: raises_http(404, pay_router.delete_payment(
+            receipt.id, payment_id, db=db, account_id=other.id, actor="x",
+        )))
+        await _unlocked(pay_router, lambda: raises_http(404, pay_router.delete_payment(
+            receipt.id, 999999, db=db, account_id=acc.id, actor="casier",
+        )))
+        assert own.events() == [] and foreign.events() == []
+
+
+async def test_fise_de_lucru_have_no_payments_ledger():
+    db, acc, _, _ = await _fixture()
+    fdl = await make_receipt(db, acc, "300.00", source="fdl")
+    await db.commit()
+    with _Listen(acc.id) as own:
+        await _unlocked(pay_router, lambda: raises_http(409, _route_add_payment(
+            request=None, receipt_id=fdl.id,
+            body=PaymentCreate(kind=PaymentKind.AVANS, amount=Decimal("100.00")),
+            db=db, account_id=acc.id, actor="casier",
+        )))
+        assert own.events() == []
+    assert fdl.pay_method == PayMethod.NEPLATIT
+
+
+async def test_receipt_with_an_advance_cannot_become_a_fisa_de_lucru():
+    from app.models.user import UserRole
+    from app.schemas.receipt import ReceiptContentPatch
+    from tests._harness import FakeCtx
+    db, acc, _, receipt = await _fixture()
+    await _unlocked(pay_router, lambda: _route_add_payment(
+        request=None, receipt_id=receipt.id,
+        body=PaymentCreate(kind=PaymentKind.AVANS, amount=Decimal("100.00")),
+        db=db, account_id=acc.id, actor="casier",
+    ))
+    # fara linii, ca totalul trimis sa fie coerent cu liniile (verificat inaintea comutarii)
+    body = ReceiptContentPatch(titlu="Bon test", total=Decimal("0.00"), items=[], source="fdl")
+    await raises_http(400, receipts_router.patch_receipt_content(
+        receipt.id, body, db=db, account_id=acc.id, actor="casier", ctx=FakeCtx(UserRole.ADMIN),
+    ))
+    await db.refresh(receipt)
+    assert receipt.source != "fdl" and receipt.pay_method == PayMethod.PARTIAL
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 if __name__ == "__main__":

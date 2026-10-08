@@ -80,6 +80,8 @@ export default function PosAvansModal(props: {
       props.onClose();
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Eroare la înregistrarea avansului.");
+      // Campul a fost dezactivat cat a durat cererea, deci a pierdut focusul.
+      queueMicrotask(() => amountEl?.focus());
     } finally {
       setBusy(false);
     }
@@ -96,6 +98,9 @@ export default function PosAvansModal(props: {
     } catch (e: unknown) {
       setErr(e instanceof Error ? e.message : "Eroare la ștergerea avansului.");
       setConfirmDelId(null);
+      // Lista poate fi invechita (avans sters deja de pe alt dispozitiv): o recitim,
+      // altfel randul ar ramane afisat si fiecare incercare ar da aceeasi eroare.
+      try { setData(await loadPayments(props.receiptId)); } catch { /* ramane lista veche */ }
     } finally {
       setBusy(false);
     }
@@ -214,7 +219,8 @@ export default function PosAvansModal(props: {
                       fallback={
                         <button
                           class="btn btn-ghost btn-xs pay-row-del"
-                          disabled={busy()}
+                          // Nu se sterge de pe o lista inca neincarcata (cea din cache poate fi veche).
+                          disabled={busy() || !ready()}
                           title="Șterge avansul"
                           onClick={() => setConfirmDelId(p.id)}
                         >
@@ -224,7 +230,7 @@ export default function PosAvansModal(props: {
                     >
                       <span class="pos-avans-confirm">
                         Ștergi avansul?
-                        <button class="btn btn-danger btn-xs" disabled={busy()} onClick={() => void handleDelete(p.id)}>Da, șterge</button>
+                        <button class="btn btn-danger btn-xs" disabled={busy() || !ready()} onClick={() => void handleDelete(p.id)}>Da, șterge</button>
                         <button class="btn btn-ghost btn-xs" disabled={busy()} onClick={() => setConfirmDelId(null)}>Nu</button>
                       </span>
                     </Show>

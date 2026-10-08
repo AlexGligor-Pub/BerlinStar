@@ -912,6 +912,15 @@ async def patch_receipt_content(
         if to_fdl or to_deviz:
             if to_fdl and (receipt.deviz_nr or receipt.factura_nr or receipt.chitanta_nr):
                 raise HTTPException(400, "Devizul are deja numere alocate; nu mai poate redeveni Fișă de Lucru.")
+            # O Fișă de Lucru e o estimare: Recepția nu-i arata nici statusul, nici
+            # registrul de plati. Un deviz cu avans devenit FDL si-ar ascunde banii
+            # (si stocul ramas scazut) pana cand cineva l-ar transforma inapoi.
+            if to_fdl and receipt.pay_method != PayMethod.NEPLATIT:
+                raise HTTPException(
+                    400,
+                    "Devizul are încasări înregistrate; nu poate deveni Fișă de Lucru. "
+                    "Șterge sau restituie întâi încasările.",
+                )
             if to_fdl:
                 # FDL pornit dintr-un deviz: resetăm marcajul de finalizare, altfel un
                 # FDL finalizat în trecut -> deviz -> FDL ar rămâne ascuns din lista
@@ -1190,6 +1199,8 @@ async def assign_number(
                 await _sync_client_vehicol(db, account_id, receipt.client_id, vehicol)
 
         await db.commit()
+        # Numarul nou (si scadenta facturii) trebuie sa apara si pe celelalte dispozitive.
+        broadcaster.notify(account_id)
         serie = reg_serie
         nr = new_nr
     else:

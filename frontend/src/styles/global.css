@@ -7663,3 +7663,7 @@ img.pos-theme-preview {
 .sl-header-emp-crown { font-size: 0.9rem; line-height: 1; flex-shrink: 0; }
 .pos-avans-shortcuts { display: flex; gap: 6px; }
 .pos-avans-shortcuts .btn { flex: 1 1 0; min-width: 0; font-weight: 700; }
+/* In fereastra de avans randul nu are coloana de data din Recepție. */
+.pos-avans .pay-row { grid-template-columns: auto 1fr auto auto; }
+.pos-avans .pos-avans-confirm { grid-column: 1 / -1; justify-content: flex-end; }
+.pos-avans .pos-avans-confirm .btn { padding: 2px 8px; font-size: 0.74rem; }

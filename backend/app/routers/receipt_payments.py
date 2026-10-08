@@ -39,6 +39,14 @@ _LEDGER_OPEN_STATUSES = (PayMethod.NEPLATIT, PayMethod.PARTIAL)
 
 
 def _assert_status_open(receipt: Receipt) -> None:
+    # Fișa de Lucru e o estimare, fara registru de plati: Recepția nici nu il
+    # afiseaza, deci o incasare pusa aici ar ramane invizibila.
+    if receipt.source == "fdl":
+        raise HTTPException(
+            409,
+            "Fișa de Lucru este o estimare și nu are registru de plăți. "
+            "Transform-o întâi în deviz.",
+        )
     if receipt.pay_method not in _LEDGER_OPEN_STATUSES:
         raise HTTPException(
             409,
@@ -142,9 +150,10 @@ async def add_payment(
         on_paid_change=_refresh_receipt_accumulations,
         guard=_guard_open,
     )
-    # Statusul si avansul bonului s-au schimbat: Recepția si POS-ul deschise pe
-    # alte dispozitive trebuie sa reciteasca bonul (un avans pus din POS altfel
-    # aparea in Recepție abia dupa reincarcarea paginii).
+    # Statusul si avansul bonului s-au schimbat: Recepția deschisa pe alte
+    # dispozitive trebuie sa reciteasca bonul (un avans pus din POS altfel aparea
+    # acolo abia dupa reincarcarea paginii). Anuntul pleaca dupa commit-ul din
+    # serviciu, deci cine reincarca imediat vede deja starea noua.
     broadcaster.notify(account_id)
     return await _response(db, account_id, receipt_id)
 

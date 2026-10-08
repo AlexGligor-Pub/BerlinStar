@@ -1104,6 +1104,22 @@ export default function ShoppingList(
     if (id !== null) void loadPayments(id).catch(() => { /* subsolul ramane fara avans */ });
   }));
 
+  // POS-ul nu primeste evenimentele de bon (conexiunea lui tine doar evidenta
+  // statiilor POS). Avansul poate fi sters sau restituit intre timp din Recepție,
+  // asa ca il recitim cand operatorul revine in fereastra.
+  function refreshAvansOnReturn() {
+    const id = loadedReceiptId();
+    if (id !== null && document.visibilityState === "visible") void loadPayments(id).catch(() => {});
+  }
+  onMount(() => {
+    window.addEventListener("focus", refreshAvansOnReturn);
+    document.addEventListener("visibilitychange", refreshAvansOnReturn);
+  });
+  onCleanup(() => {
+    window.removeEventListener("focus", refreshAvansOnReturn);
+    document.removeEventListener("visibilitychange", refreshAvansOnReturn);
+  });
+
   function badgeKeyDown(ev: KeyboardEvent) {
     if (props.onEmployeeBadgeClick && (ev.key === "Enter" || ev.key === " ")) {
       ev.preventDefault();
@@ -1112,15 +1128,21 @@ export default function ShoppingList(
   }
 
   async function handleAvans() {
-    if (titlu().trim() === "") { triggerTitluWarn(); return; }
-    if (openingAvans() || finalizing()) return;
+    if (titlu().trim() === "") {
+      setWarnMsg("Mai este un pas — introduceți numărul mașinii (titlul devizului) înainte de Avans.");
+      return;
+    }
+    // O singura salvare a devizului odata: altfel Avans + Finalizeaza apasate
+    // aproape simultan pe un deviz nou ar crea doua bonuri.
+    if (openingAvans() || finalizing() || openingMontareRoti() || goingToHotel()) return;
     setOpeningAvans(true);
     let rId = loadedReceiptId();
     try {
       // Avansul se leaga de un deviz, deci il salvam acum (chiar gol), ca la
-      // Montare Roți. Liniile din cos se salveaza INAINTE de avans: primul avans
-      // scade stocul pentru liniile aflate atunci pe deviz.
-      if (cart.items.length > 0 || rId === null) {
+      // Montare Roți. Cosul se salveaza INTOTDEAUNA inainte de avans, si cand e
+      // gol pe un deviz existent: primul avans scade stocul pentru liniile aflate
+      // atunci pe server, iar fereastra valideaza suma fata de totalul de pe server.
+      {
         const receiptData = {
           date: new Date().toISOString(),
           titlu: titlu().trim(),
@@ -1230,7 +1252,7 @@ export default function ShoppingList(
       setWarnMsg("Mai este un pas — adăugați un client înainte de Montare Roți.");
       return;
     }
-    if (openingMontareRoti()) return;
+    if (openingMontareRoti() || openingAvans()) return;
     setOpeningMontareRoti(true);
 
     let rId = loadedReceiptId();
@@ -1373,7 +1395,7 @@ export default function ShoppingList(
       setWarnMsg("Mai este un pas — adăugați un client înainte de a merge la Hotel Anvelope.");
       return;
     }
-    if (goingToHotel()) return;
+    if (goingToHotel() || openingAvans()) return;
 
     // Pre-flight: daca placuta are deja cazari active (la acest client sau la altul),
     // ducem utilizatorul direct in pagina Hotel Anvelope cu lista filtrata dupa
@@ -1495,7 +1517,7 @@ export default function ShoppingList(
   async function handleFinalize() {
     if (cart.items.length === 0) return;
     if (titlu().trim() === "") { triggerTitluWarn(); return; }
-    if (finalizing()) return;
+    if (finalizing() || openingAvans()) return;
     setFinalizing(true);
     const receiptId = loadedReceiptId();
     const receiptData = {
@@ -1761,7 +1783,7 @@ export default function ShoppingList(
             <button
               class="sl-square-btn"
               classList={{ "sl-square-btn--done": linkedCazari().length > 0 }}
-              disabled={goingToHotel()}
+              disabled={goingToHotel() || openingAvans()}
               onClick={handleGoToHotel}
             >
               {goingToHotel() ? "..." : "Cazare Anvelope"}
@@ -1771,11 +1793,13 @@ export default function ShoppingList(
             <button
               class="sl-square-btn"
               classList={{ "sl-square-btn--fdl-active": fdlMode() }}
-              disabled={!fdlMode() && loadedHasDocNumber()}
+              disabled={!fdlMode() && (loadedHasDocNumber() || incasatNet() > 0)}
               onClick={() => { setFdlMode(true); setShowFdlModal(true); }}
               title={
                 !fdlMode() && loadedHasDocNumber()
                   ? "Devizul are deja numere alocate; nu mai poate deveni Fișă de Lucru."
+                  : !fdlMode() && incasatNet() > 0
+                  ? "Devizul are avans încasat; nu poate deveni Fișă de Lucru."
                   : fdlMode()
                   ? "Fișa de Lucru activă — apasă pentru a edita"
                   : "Activează mod Fișa de Lucru"
@@ -1788,7 +1812,7 @@ export default function ShoppingList(
             <button
               class="sl-square-btn"
               classList={{ "sl-square-btn--done": linkedMontaje().length > 0 }}
-              disabled={openingMontareRoti()}
+              disabled={openingMontareRoti() || openingAvans()}
               onClick={handleMontareRoti}
             >
               {openingMontareRoti() ? "..." : "Montare Roți"}
@@ -1812,7 +1836,7 @@ export default function ShoppingList(
         <button
           class="btn btn-primary w-full"
           classList={{ "btn-fdl": fdlMode() }}
-          disabled={cart.items.length === 0 || finalizing()}
+          disabled={cart.items.length === 0 || finalizing() || openingAvans()}
           onClick={handleFinalize}
         >
           {finalizing()
