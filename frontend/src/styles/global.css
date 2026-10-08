@@ -7635,3 +7635,19 @@ img.pos-theme-preview {
 .import-candidates { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
 .import-candidate { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border: 1px solid var(--border, #e0e0e0); border-radius: 6px; cursor: pointer; }
 .import-candidate--active { border-color: var(--accent, #5b7cfa); background: rgba(91, 124, 250, 0.08); }
+
+/* ── Avans din POS ───────────────────────────────────────────────────────── */
+.sl-extra-btn--avans { background: #2563eb; border-color: #2563eb; }
+.sl-extra-btn--avans-done { background: #1e40af; border-color: #1e40af; }
+.total-row--avans,
+.total-row--rest { font-weight: 500; font-size: 0.85rem; margin-top: -6px; margin-bottom: 8px; }
+.total-row--avans { color: #16a34a; }
+.total-row--rest { font-weight: 700; }
+.deviz-modal-row-avans { font-size: 0.72rem; font-weight: 600; color: #2563eb; white-space: nowrap; }
+.pos-avans { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px; }
+.pos-avans-label { font-size: 0.8rem; font-weight: 600; }
+.pos-avans-input { font-size: 1.3rem; font-weight: 700; text-align: right; }
+.pos-avans-methods { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.pos-avans-err { color: #dc2626; font-size: 0.82rem; }
+.pos-avans-confirm { display: inline-flex; align-items: center; gap: 4px; font-size: 0.74rem; white-space: nowrap; }
+.pos-avans-hint { font-size: 0.72rem; opacity: 0.6; }
