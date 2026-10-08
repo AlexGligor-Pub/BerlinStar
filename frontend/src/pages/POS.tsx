@@ -74,7 +74,9 @@ export default function POS() {
   const unpaidFiltered = createMemo(() => {
     const q = devizSearch().toLowerCase().trim();
     return receipts()
-      .filter((r) => r.metodaPlata === undefined && !r.efacturaLocked)
+      // Un deviz cu avans („Platit Partial”) e inca in lucru: trebuie sa poata fi
+      // redeschis si finalizat. Cele incasate integral raman in Recepție.
+      .filter((r) => (r.metodaPlata === undefined || r.metodaPlata === "Platit Partial") && !r.efacturaLocked)
       .filter((r) => !q || r.titlu.toLowerCase().includes(q));
   });
 
@@ -537,6 +539,9 @@ export default function POS() {
                       {isFdl ? "FDL" : "DEVIZ"}
                     </span>
                     <span class="deviz-modal-row-title">{r.titlu}</span>
+                    <Show when={r.metodaPlata === "Platit Partial"}>
+                      <span class="deviz-modal-row-avans">avans {(r.partialPay ?? 0).toFixed(2)} lei</span>
+                    </Show>
                     <span class="deviz-modal-row-time">{formatDevizTime(r.date)}</span>
                   </button>
                 );

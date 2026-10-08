@@ -12,6 +12,8 @@ import { notify } from "../store/notificationsStore";
 import { CNP_PLACEHOLDER, cnpError, cnpForSave } from "../types/client";
 import { generalSettings } from "../store/generalSettingsStore";
 import MontareRotiModal from "./MontareRotiModal";
+import PosAvansModal from "./PosAvansModal";
+import { cachedPayments, loadPayments } from "../store/paymentsStore";
 import SplitName from "./SplitName";
 import { loadMontajRotiByReceipt, bulkUpsertMontajRoti, defaultPozitieForIndex, type MontajRotaDraft, type MontajRota } from "../store/montajRotiStore";
 import { loadActiveCazariByPlate, type TipAnvelopa } from "../store/hotelAnvelopeStore";
@@ -1084,6 +1086,75 @@ export default function ShoppingList(
   const [montareRotiReceiptId, setMontareRotiReceiptId] = createSignal<number | null>(null);
   const [openingMontareRoti, setOpeningMontareRoti] = createSignal(false);
 
+  // ─── Avans din POS ──────────────────────────────────────────────────────────
+  // Doar avans (fara plata, fara restituire): vezi PosAvansModal.
+  const [openingAvans, setOpeningAvans] = createSignal(false);
+  const [avansReceiptId, setAvansReceiptId] = createSignal<string | null>(null);
+
+  /** Cat s-a incasat pana acum pe devizul deschis (0 daca nu e salvat / fara miscari). */
+  const incasatNet = createMemo(() => {
+    const id = loadedReceiptId();
+    if (id === null) return 0;
+    const net = parseFloat(cachedPayments(id)?.summary.incasat_net ?? "0");
+    return Number.isFinite(net) && net > 0 ? net : 0;
+  });
+
+  // Un deviz redeschis poate avea deja avans (pus aici sau in Recepție).
+  createEffect(on(loadedReceiptId, (id) => {
+    if (id !== null) void loadPayments(id).catch(() => { /* subsolul ramane fara avans */ });
+  }));
+
+  async function handleAvans() {
+    if (titlu().trim() === "") { triggerTitluWarn(); return; }
+    if (openingAvans() || finalizing()) return;
+    setOpeningAvans(true);
+    let rId = loadedReceiptId();
+    try {
+      // Avansul se leaga de un deviz, deci il salvam acum (chiar gol), ca la
+      // Montare Roți. Liniile din cos se salveaza INAINTE de avans: primul avans
+      // scade stocul pentru liniile aflate atunci pe deviz.
+      if (cart.items.length > 0 || rId === null) {
+        const receiptData = {
+          date: new Date().toISOString(),
+          titlu: titlu().trim(),
+          clientId: null,
+          clientNume: null, clientCui: null, clientAdresa: null, clientTelefon: null, clientTip: null, clientReprezentant: null, clientNumarMasina: null,
+          descriere: descriere().trim() || undefined,
+          dateTehn: dateTehn().trim() || undefined,
+          items: [...cart.items],
+          total: cartTotal(),
+          devizSerie: "", devizNr: 0,
+          facturaSerie: "", facturaNr: 0,
+          chitantaSerie: "", chitantaNr: 0,
+          programareId: loadedProgramareId(),
+          locationId: device()?.locationId ?? null,
+          ...fdlReceiptFields(rId),
+        };
+        const saved = rId !== null
+          ? await updateReceiptContent(rId, receiptData)
+          : await saveReceipt(receiptData);
+        rId = saved.id;
+        setLoadedReceiptId(rId);
+      }
+    } catch (e: unknown) {
+      setErrorMsg(e instanceof Error && e.message ? e.message : "Eroare la salvarea devizului.");
+      setOpeningAvans(false);
+      return;
+    }
+    // Clientul si masina se leaga la fel ca la Finalizeaza; un esec aici nu
+    // opreste incasarea (devizul exista), dar operatorul trebuie sa-l vada.
+    const client = selectedClient();
+    if (client !== null) {
+      try { await updateReceiptClient(rId, client.id); }
+      catch (e: unknown) { notify(linkFailMsg("clientul", e), "error"); }
+    }
+    const veh = vehicol() ?? { numarMasina: titlu().trim() };
+    try { await saveReceiptVehicol(rId, veh); }
+    catch (e: unknown) { notify(linkFailMsg("vehiculul", e), "error"); }
+    setAvansReceiptId(rId);
+    setOpeningAvans(false);
+  }
+
   /** Câmpurile FDL din payload-ul de bon, comune tuturor salvărilor din POS.
    *  - Finalizează în mod FDL: trimite source="fdl" + constatări/sugestii/timp
    *    (PATCH /content le suprascrie pe un bon cu source="fdl").
@@ -1538,6 +1609,21 @@ export default function ShoppingList(
             <span class="sl-extra-btn-sub">Introducere manuala</span>
             <span class="sl-extra-btn-main">Produs/Serviciu</span>
           </button>
+          {/* Fișa de Lucru e doar o estimare: nu are registru de plati. */}
+          <Show when={!fdlMode()}>
+            <button
+              class="btn btn-ghost btn-sm sl-extra-btn sl-extra-btn--stacked sl-extra-btn--avans"
+              classList={{ "sl-extra-btn--avans-done": incasatNet() > 0 }}
+              disabled={openingAvans() || finalizing()}
+              onClick={handleAvans}
+              title="Încasează un avans pe acest deviz"
+            >
+              <span class="sl-extra-btn-sub">{incasatNet() > 0 ? "Avans încasat" : "Încasare"}</span>
+              <span class="sl-extra-btn-main">
+                {openingAvans() ? "..." : incasatNet() > 0 ? `${incasatNet().toFixed(2)} lei` : "Avans"}
+              </span>
+            </button>
+          </Show>
         </div>
       </div>
 
@@ -1703,6 +1789,16 @@ export default function ShoppingList(
           <span>{fdlMode() ? "Total estimat" : "Total"}</span>
           <span class="text-accent">{cartTotal().toFixed(2)} lei</span>
         </div>
+        <Show when={!fdlMode() && incasatNet() > 0}>
+          <div class="total-row total-row--avans">
+            <span>Avans încasat</span>
+            <span>−{incasatNet().toFixed(2)} lei</span>
+          </div>
+          <div class="total-row total-row--rest">
+            <span>Rest de plată</span>
+            <span>{Math.max(0, cartTotal() - incasatNet()).toFixed(2)} lei</span>
+          </div>
+        </Show>
         <button
           class="btn btn-primary w-full"
           classList={{ "btn-fdl": fdlMode() }}
@@ -1722,6 +1818,10 @@ export default function ShoppingList(
           onSaved={() => { setMontareRotiOpen(false); refreshLinkedMontaje(); }}
           onClose={() => setMontareRotiOpen(false)}
         />
+      </Show>
+
+      <Show when={avansReceiptId()}>
+        {(id) => <PosAvansModal receiptId={id()} onClose={() => setAvansReceiptId(null)} />}
       </Show>
 
       {/* Resume modal */}
