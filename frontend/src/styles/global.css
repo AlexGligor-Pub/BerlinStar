@@ -7683,3 +7683,12 @@ img.pos-theme-preview {
 
 .manual-table-scroll th { position: sticky; top: 0; z-index: 1; background: var(--surface, #fff); }
 .manual-badge--later { color: #2563eb; border-color: #93c5fd; background: #eff6ff; }
+
+/* Recepție: deviz cu avans — restul de plata in fata, totalul si avansul dedesubt. */
+.rcard-rest { white-space: nowrap; }
+.rcard-avans-detail {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
