@@ -998,7 +998,8 @@ function ReceiptCard(props: { receipt: Receipt }) {
               <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !live().metodaPlata }}>
                 {displayMetoda(live().metodaPlata)}
                 <Show when={areAvans()}>
-                  {` · Total ${live().total.toFixed(2)} · Avans ${(live().partialPay ?? 0).toFixed(2)}`}
+                  {` · Total ${live().total.toFixed(2)} · `}
+                  <span class="rcard-avans">Avans {(live().partialPay ?? 0).toFixed(2)}</span>
                 </Show>
               </span>
             </Show>
