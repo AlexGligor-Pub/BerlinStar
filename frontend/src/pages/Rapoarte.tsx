@@ -3950,7 +3950,10 @@ function IntroduseManualPanel() {
               </div>
               <div class="locatii-kpi">
                 <span class="locatii-kpi__label">Din vânzările perioadei</span>
-                <span class="locatii-kpi__value">{d().kpi.pondere_pct.toFixed(1)}%</span>
+                <span class="locatii-kpi__value">
+                  {/* Sub 0,1% nu e zero: o pondere mica, dar reala, nu trebuie sa para „nimic”. */}
+                  {d().kpi.pondere_pct > 0 && d().kpi.pondere_pct < 0.1 ? "< 0,1%" : `${d().kpi.pondere_pct.toFixed(1)}%`}
+                </span>
               </div>
               <div class="locatii-kpi">
                 <span class="locatii-kpi__label">Linii manuale</span>
