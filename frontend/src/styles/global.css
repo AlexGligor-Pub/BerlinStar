@@ -7667,3 +7667,16 @@ img.pos-theme-preview {
 .pos-avans .pay-row { grid-template-columns: auto 1fr auto auto; }
 .pos-avans .pos-avans-confirm { grid-column: 1 / -1; justify-content: flex-end; }
 .pos-avans .pos-avans-confirm .btn { padding: 2px 8px; font-size: 0.74rem; }
+
+/* ── Rapoarte › Introduse manual ─────────────────────────────────────────── */
+.manual-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; }
+.manual-tip { display: flex; flex-wrap: wrap; gap: 6px; }
+.manual-cauta { flex: 1 1 220px; max-width: 360px; }
+.manual-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.manual-table-scroll { max-height: 520px; overflow-y: auto; }
+.manual-badge {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  font-size: 0.68rem; font-weight: 600; color: #b45309; border: 1px solid #f0b400; background: #fff4e5;
+  vertical-align: middle; white-space: nowrap;
+}
+.manual-empty { padding: 24px; text-align: center; color: var(--text-muted, #8b90a0); font-size: 0.85rem; }

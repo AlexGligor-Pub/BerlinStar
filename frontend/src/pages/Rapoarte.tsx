@@ -4,7 +4,7 @@ import { apiFetch } from "../utils/api";
 import { notify } from "../store/notificationsStore";
 import { useIsMobile } from "../hooks/createMediaQuery";
 import { generalSettings } from "../store/generalSettingsStore";
-import { toNumber, fmtMoney, todayISO, fmtRoDate, toLocalISO } from "./rapoarte/format";
+import { toNumber, fmtMoney, fmtMoneyInt, todayISO, fmtRoDate, toLocalISO } from "./rapoarte/format";
 import {
   persistedSignal,
   periodFrom,
@@ -60,6 +60,7 @@ const SECTION_GROUPS = [
       { id: "locatii",          label: "Locații"            },
       { id: "comparare-yoy",    label: "Comparare YoY"      },
       { id: "produse-servicii", label: "Produse / Servicii" },
+      { id: "introduse-manual", label: "Introduse manual"   },
     ],
   },
   {
@@ -3781,6 +3782,390 @@ function fmtHoursReport(h: number | null | undefined): string {
   return mins === 0 ? `${sign}${whole}h` : `${sign}${whole}h ${mins}m`;
 }
 
+// ───── INTRODUSE MANUAL PANEL ─────────────────────────────────────────────────
+// Liniile de bon fara produs din catalog: ce s-a vandut „pe loc”, cat de des, la
+// ce preturi si cine le introduce — ca sa se vada ce merita adaugat in catalog.
+
+interface ManualKpi {
+  valoare_totala: string;
+  linii: number;
+  devize: number;
+  denumiri: number;
+  valoare_produse: string;
+  valoare_servicii: string;
+  valoare_nespecificat: string;
+  vanzari_totale: string;
+  pondere_pct: number;
+}
+
+interface ManualGroup {
+  denumire: string;
+  tip: string;
+  aparitii: number;
+  devize: number;
+  cantitate: string;
+  valoare: string;
+  pret_min: string;
+  pret_max: string;
+  pret_mediu: string;
+  ultima_data: string;
+  in_catalog_alta_scriere: boolean;
+}
+
+interface ManualEmployee {
+  employee_id: number | null;
+  employee_name: string;
+  linii: number;
+  valoare: string;
+}
+
+interface ManualLine {
+  receipt_id: number;
+  data: string;
+  titlu: string;
+  deviz: string | null;
+  denumire: string;
+  tip: string;
+  cantitate: string;
+  um: string;
+  pret: string;
+  valoare: string;
+  angajat: string | null;
+  status_plata: string;
+  locatie: string | null;
+}
+
+interface ManualReport {
+  kpi: ManualKpi;
+  grupuri: ManualGroup[];
+  angajati: ManualEmployee[];
+  linii: ManualLine[];
+  linii_total: number;
+  period_start: string;
+  period_end: string;
+}
+
+const MANUAL_TIPURI = ["Toate", "Produs", "Serviciu", "Nespecificat"] as const;
+type ManualTip = typeof MANUAL_TIPURI[number];
+const MANUAL_LINES_PAGE = 100;
+
+const PAY_STATUS_LABEL: Record<string, string> = {
+  "Neplatit": "Neplătit",
+  "Platit cash": "Plătit cash",
+  "Platit cu cardul": "Plătit card",
+  "Platit prin OP": "Plătit OP",
+  "Platit Partial": "Plătit parțial",
+};
+
+function IntroduseManualPanel() {
+  const [data, setData] = createSignal<ManualReport | null>(null);
+  const [loading, setLoading] = createSignal(true);
+  const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>("rapoarte_manual_loc_ids", []);
+  const [tip, setTip] = persistedSignal<ManualTip>("rapoarte_manual_tip", "Toate");
+  const [cauta, setCauta] = createSignal("");
+  const [liniiVizibile, setLiniiVizibile] = createSignal(MANUAL_LINES_PAGE);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({ date_from: periodFrom(), date_to: periodTo() });
+      for (const id of selectedLocIds()) qs.append("location_ids", String(id));
+      const res = await reportsApiFetch(`/api/reports/introduse-manual?${qs.toString()}`);
+      if (!res.ok) {
+        notify(`Eroare ${res.status} la încărcarea raportului.`, "error");
+        return;
+      }
+      setData(await res.json());
+      setLiniiVizibile(MANUAL_LINES_PAGE);
+    } catch {
+      notify("Eroare de conexiune.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  onMount(ensureLocationsLoaded);
+  createEffect(() => {
+    periodVersion();
+    selectedLocIds();
+    void load();
+  });
+
+  // Filtrele (tip, cautare) sunt pe client: raportul vine o singura data pe perioada.
+  const potriveste = (denumire: string, t: string) => {
+    if (tip() !== "Toate" && t !== tip() && !(t === "Mixt" && tip() !== "Nespecificat")) return false;
+    const q = cauta().trim().toLowerCase();
+    return !q || denumire.toLowerCase().includes(q);
+  };
+  const grupuri = createMemo(() => (data()?.grupuri ?? []).filter((g) => potriveste(g.denumire, g.tip)));
+  const linii = createMemo(() => (data()?.linii ?? []).filter((l) => potriveste(l.denumire, l.tip)));
+  const lei = (v: string | number) => `${fmtMoney(toNumber(v))} lei`;
+  const qtyFmt = (v: string) => toNumber(v).toLocaleString("ro-RO", { maximumFractionDigits: 3 });
+  const dataScurta = (iso: string) => new Date(iso).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  const perioada = () => `${fmtRoDate(periodFrom())} – ${fmtRoDate(periodTo())}`;
+  const GROUP_HEADERS = ["Denumire", "Tip", "Apariții", "Devize", "Cantitate", "Valoare (lei)", "Preț min", "Preț mediu", "Preț max", "Ultima dată", "În catalog (altă scriere)"];
+  function groupRows(): string[][] {
+    return grupuri().map((g) => [
+      g.denumire, g.tip, String(g.aparitii), String(g.devize), qtyFmt(g.cantitate), fmtMoney(toNumber(g.valoare)),
+      fmtMoney(toNumber(g.pret_min)), fmtMoney(toNumber(g.pret_mediu)), fmtMoney(toNumber(g.pret_max)),
+      dataScurta(g.ultima_data), g.in_catalog_alta_scriere ? "da" : "",
+    ]);
+  }
+  const LINE_HEADERS = ["Data", "Deviz", "Nr. mașină / titlu", "Denumire", "Tip", "Cant.", "U.M.", "Preț", "Valoare", "Angajat", "Status plată", "Locație"];
+  function lineRows(): string[][] {
+    return linii().map((l) => [
+      dataScurta(l.data), l.deviz ?? "", l.titlu, l.denumire, l.tip, qtyFmt(l.cantitate), l.um,
+      fmtMoney(toNumber(l.pret)), fmtMoney(toNumber(l.valoare)), l.angajat ?? "", PAY_STATUS_LABEL[l.status_plata] ?? l.status_plata, l.locatie ?? "",
+    ]);
+  }
+
+  return (
+    <div class="cfg-panel" style="max-width:100%">
+      <PanelHeader title="Introduse manual" />
+      <Show when={!hideExplanations()}>
+        <p class="cfg-hint" style="margin-bottom:14px;max-width:780px;line-height:1.6">
+          Produsele și serviciile scrise direct pe deviz, fără să existe în catalog (de exemplu
+          cu „Adaugă manual” din POS). Vezi ce se vinde așa, cât de des și la ce prețuri, cine le
+          introduce și ce ar merita adăugat în catalog. Aceeași denumire scrisă diferit
+          (majuscule, spații) e numărată o singură dată. Intră toate devizele din perioadă,
+          indiferent de plată; Fișele de Lucru (estimări) și devizele șterse nu intră.
+        </p>
+      </Show>
+
+      <PeriodSlicer />
+      <LocationFilter selected={selectedLocIds} setSelected={setSelectedLocIds} />
+
+      <Show when={loading() && !data()}>
+        <div style="padding:24px;text-align:center;color:var(--text-muted,#8b90a0)">Se încarcă...</div>
+      </Show>
+
+      <Show when={data()}>
+        {(d) => (
+          <>
+            <div class="rapoarte-kpi-grid">
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Valoare introdusă manual</span>
+                <span class="locatii-kpi__value">{lei(d().kpi.valoare_totala)}</span>
+              </div>
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Din vânzările perioadei</span>
+                <span class="locatii-kpi__value">{d().kpi.pondere_pct.toFixed(1)}%</span>
+              </div>
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Linii manuale</span>
+                <span class="locatii-kpi__value">{d().kpi.linii}</span>
+              </div>
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Devize cu linii manuale</span>
+                <span class="locatii-kpi__value">{d().kpi.devize}</span>
+              </div>
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Denumiri diferite</span>
+                <span class="locatii-kpi__value">{d().kpi.denumiri}</span>
+              </div>
+              <div class="locatii-kpi">
+                <span class="locatii-kpi__label">Produse · Servicii · Nespecificat</span>
+                <span class="locatii-kpi__value" style="font-size:0.95rem">
+                  {fmtMoneyInt(toNumber(d().kpi.valoare_produse))} · {fmtMoneyInt(toNumber(d().kpi.valoare_servicii))} · {fmtMoneyInt(toNumber(d().kpi.valoare_nespecificat))} lei
+                </span>
+              </div>
+            </div>
+
+            <div class="manual-toolbar">
+              <div class="manual-tip" role="group" aria-label="Tip">
+                <For each={MANUAL_TIPURI}>
+                  {(t) => (
+                    <button
+                      type="button"
+                      class="btn btn-sm"
+                      classList={{ "btn-primary": tip() === t, "btn-ghost": tip() !== t }}
+                      aria-pressed={tip() === t}
+                      onClick={() => setTip(t)}
+                    >{t === "Toate" ? "Toate" : t === "Produs" ? "Produse" : t === "Serviciu" ? "Servicii" : "Nespecificat"}</button>
+                  )}
+                </For>
+              </div>
+              <input
+                class="input manual-cauta"
+                type="search"
+                placeholder="Caută denumire..."
+                value={cauta()}
+                onInput={(e) => setCauta(e.currentTarget.value)}
+              />
+            </div>
+
+            <div class="locatii-charts" style="margin-top:14px">
+              <div class="locatii-chart-card" style="flex:1;min-width:0">
+                <div class="manual-card-head">
+                  <div>
+                    <div class="locatii-chart-title">Pe denumire</div>
+                    <div class="locatii-chart-subtitle">
+                      {grupuri().length} denumiri · ordonate după valoare · „în catalog” = există un produs cu același nume scris altfel
+                    </div>
+                  </div>
+                  <ExportMenu
+                    onCSV={() => sharedExportCSV(`Introduse manual pe denumire ${perioada()}`, GROUP_HEADERS, groupRows())}
+                    onPDF={() => sharedExportPDF(`Introduse manual pe denumire ${perioada()}`, GROUP_HEADERS, groupRows())}
+                  />
+                </div>
+                <Show
+                  when={grupuri().length > 0}
+                  fallback={<div class="manual-empty">Nicio linie introdusă manual în perioada și filtrele alese.</div>}
+                >
+                  <div class="rapoarte-table-scroll manual-table-scroll" style="margin-top:10px">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="text-align:left">Denumire</th>
+                          <th style="text-align:left">Tip</th>
+                          <th class="num">Apariții</th>
+                          <th class="num">Devize</th>
+                          <th class="num">Cantitate</th>
+                          <th class="num">Valoare</th>
+                          <th class="num">Preț min</th>
+                          <th class="num">Preț mediu</th>
+                          <th class="num">Preț max</th>
+                          <th class="num">Ultima dată</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={grupuri()}>
+                          {(g) => (
+                            <tr>
+                              <td>
+                                {g.denumire}
+                                <Show when={g.in_catalog_alta_scriere}>
+                                  <span class="manual-badge" title="Există în catalog un produs cu același nume, scris altfel (majuscule / spații). Linia nu s-a legat de el.">în catalog</span>
+                                </Show>
+                              </td>
+                              <td class="nowrap muted">{g.tip}</td>
+                              <td class="num bold">{g.aparitii}</td>
+                              <td class="num">{g.devize}</td>
+                              <td class="num">{qtyFmt(g.cantitate)}</td>
+                              <td class="num bold nowrap">{lei(g.valoare)}</td>
+                              <td class="num nowrap">{fmtMoney(toNumber(g.pret_min))}</td>
+                              <td class="num nowrap">{fmtMoney(toNumber(g.pret_mediu))}</td>
+                              <td class="num nowrap">{fmtMoney(toNumber(g.pret_max))}</td>
+                              <td class="num nowrap">{dataScurta(g.ultima_data)}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <div class="locatii-charts" style="margin-top:14px">
+              <div class="locatii-chart-card" style="flex:1;min-width:0">
+                <div class="locatii-chart-title">Pe angajat</div>
+                <div class="locatii-chart-subtitle">Cine introduce linii manuale (toate tipurile, toate denumirile)</div>
+                <Show when={d().angajati.length > 0} fallback={<div class="manual-empty">Nicio linie.</div>}>
+                  <div class="rapoarte-table-scroll" style="margin-top:10px">
+                    <table style="min-width:0">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left">Angajat</th>
+                          <th class="num">Linii</th>
+                          <th class="num">Valoare</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={d().angajati}>
+                          {(e) => (
+                            <tr>
+                              <td>{e.employee_name}</td>
+                              <td class="num bold">{e.linii}</td>
+                              <td class="num nowrap">{lei(e.valoare)}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                </Show>
+              </div>
+            </div>
+
+            <div class="locatii-charts" style="margin-top:14px">
+              <div class="locatii-chart-card" style="flex:1;min-width:0">
+                <div class="manual-card-head">
+                  <div>
+                    <div class="locatii-chart-title">Toate liniile</div>
+                    <div class="locatii-chart-subtitle">
+                      Cele mai noi întâi · {linii().length} linii
+                      <Show when={d().linii_total > d().linii.length}>
+                        {" "}(din {d().linii_total}; se afișează cele mai noi {d().linii.length} — restrânge perioada pentru restul)
+                      </Show>
+                    </div>
+                  </div>
+                  <ExportMenu
+                    onCSV={() => sharedExportCSV(`Linii introduse manual ${perioada()}`, LINE_HEADERS, lineRows())}
+                    onPDF={() => sharedExportPDF(`Linii introduse manual ${perioada()}`, LINE_HEADERS, lineRows())}
+                  />
+                </div>
+                <Show when={linii().length > 0} fallback={<div class="manual-empty">Nicio linie.</div>}>
+                  <div class="rapoarte-table-scroll" style="margin-top:10px">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="text-align:left">Data</th>
+                          <th style="text-align:left">Deviz</th>
+                          <th style="text-align:left">Denumire</th>
+                          <th style="text-align:left">Tip</th>
+                          <th class="num">Cant.</th>
+                          <th class="num">Preț</th>
+                          <th class="num">Valoare</th>
+                          <th style="text-align:left">Angajat</th>
+                          <th style="text-align:left">Plată</th>
+                          <th style="text-align:left">Locație</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <For each={linii().slice(0, liniiVizibile())}>
+                          {(l) => (
+                            <tr>
+                              <td class="nowrap">{dataScurta(l.data)}</td>
+                              <td class="nowrap">
+                                <span class="bold">{l.titlu}</span>
+                                <Show when={l.deviz}><span class="muted"> · {l.deviz}</span></Show>
+                              </td>
+                              <td>{l.denumire}</td>
+                              <td class="nowrap muted">{l.tip}</td>
+                              <td class="num nowrap">{qtyFmt(l.cantitate)} {l.um}</td>
+                              <td class="num nowrap">{fmtMoney(toNumber(l.pret))}</td>
+                              <td class="num bold nowrap">{lei(l.valoare)}</td>
+                              <td class="nowrap">{l.angajat ?? "—"}</td>
+                              <td class="nowrap">{PAY_STATUS_LABEL[l.status_plata] ?? l.status_plata}</td>
+                              <td class="nowrap muted">{l.locatie ?? "—"}</td>
+                            </tr>
+                          )}
+                        </For>
+                      </tbody>
+                    </table>
+                  </div>
+                  <Show when={linii().length > liniiVizibile()}>
+                    <button
+                      type="button"
+                      class="btn btn-ghost btn-sm"
+                      style="margin-top:8px"
+                      onClick={() => setLiniiVizibile((n) => n + MANUAL_LINES_PAGE)}
+                    >
+                      Arată încă {Math.min(MANUAL_LINES_PAGE, linii().length - liniiVizibile())} linii
+                    </button>
+                  </Show>
+                </Show>
+              </div>
+            </div>
+          </>
+        )}
+      </Show>
+    </div>
+  );
+}
+
 export default function Rapoarte() {
   const [active, setActive] = persistedSignal<SectionId>("rapoarte_active_section", "target-angajati");
 
@@ -3831,6 +4216,7 @@ export default function Rapoarte() {
             <Match when={active() === "locatii"}><LocatiiPanel /></Match>
             <Match when={active() === "comparare-yoy"}><CompareYoYPanel /></Match>
             <Match when={active() === "produse-servicii"}><ProduseServiciiPanel /></Match>
+            <Match when={active() === "introduse-manual"}><IntroduseManualPanel /></Match>
             <Match when={active() === "angajati"}><AngajatiPanel /></Match>
             <Match when={active() === "hotel-anvelope" && !isHotelHidden()}><HotelAnvelopePanel /></Match>
             <Match when={active() === "clienti"}><ClientiPanel /></Match>
