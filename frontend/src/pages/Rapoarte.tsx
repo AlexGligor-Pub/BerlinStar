@@ -3848,6 +3848,8 @@ interface ManualReport {
 const MANUAL_TIPURI = ["Toate", "Produs", "Serviciu", "Nespecificat"] as const;
 type ManualTip = typeof MANUAL_TIPURI[number];
 const MANUAL_LINES_PAGE = 100;
+// Cati angajati apar separat in donut; restul se aduna in „Alții”, ca graficul sa ramana lizibil.
+const MANUAL_DONUT_TOP = 8;
 
 const PAY_STATUS_LABEL: Record<string, string> = {
   "Neplatit": "Neplătit",
@@ -3889,6 +3891,24 @@ function IntroduseManualPanel() {
     periodVersion();
     selectedLocIds();
     void load();
+  });
+
+  // Donut: repartizarea valorii introduse manual pe angajati.
+  let empDonutRef: HTMLDivElement | undefined;
+  createEffect(() => {
+    const d = data();
+    if (!d || !empDonutRef) return;
+    const sorted = [...d.angajati].sort((a, b) => toNumber(b.valoare) - toNumber(a.valoare));
+    const top = sorted.slice(0, MANUAL_DONUT_TOP);
+    const restul = sorted.slice(MANUAL_DONUT_TOP).reduce((sum, e) => sum + toNumber(e.valoare), 0);
+    const items: DonutItem[] = top.map((e, i) => ({
+      label: e.employee_name,
+      value: toNumber(e.valoare),
+      // Liniile fara angajat in gri, ca sa nu para un coleg.
+      color: e.employee_id === null ? "#8b90a0" : colorByIndex(i),
+    }));
+    if (restul > 0) items.push({ label: `Alții (${sorted.length - MANUAL_DONUT_TOP})`, value: restul, color: "#c4c7d0" });
+    drawDonut(empDonutRef, items, "lei total");
   });
 
   // Filtrele (tip, cautare) sunt pe client: raportul vine o singura data pe perioada.
@@ -4062,7 +4082,7 @@ function IntroduseManualPanel() {
             </div>
 
             <div class="locatii-charts" style="margin-top:14px">
-              <div class="locatii-chart-card" style="flex:1;min-width:0">
+              <div class="locatii-chart-card" style="flex:2;min-width:0">
                 <div class="locatii-chart-title">Pe angajat</div>
                 <div class="locatii-chart-subtitle">Cine introduce linii manuale (toate tipurile, toate denumirile)</div>
                 <Show when={d().angajati.length > 0} fallback={<div class="manual-empty">Nicio linie.</div>}>
@@ -4073,6 +4093,7 @@ function IntroduseManualPanel() {
                           <th style="text-align:left">Angajat</th>
                           <th class="num">Linii</th>
                           <th class="num">Valoare</th>
+                          <th class="num">%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4082,6 +4103,11 @@ function IntroduseManualPanel() {
                               <td>{e.employee_name}</td>
                               <td class="num bold">{e.linii}</td>
                               <td class="num nowrap">{lei(e.valoare)}</td>
+                              <td class="num nowrap muted">
+                                {toNumber(d().kpi.valoare_totala) > 0
+                                  ? `${(toNumber(e.valoare) / toNumber(d().kpi.valoare_totala) * 100).toFixed(1)}%`
+                                  : "—"}
+                              </td>
                             </tr>
                           )}
                         </For>
@@ -4089,6 +4115,11 @@ function IntroduseManualPanel() {
                     </table>
                   </div>
                 </Show>
+              </div>
+              <div class="locatii-chart-card manual-donut-card" style="flex:1;min-width:260px">
+                <div class="locatii-chart-title">Repartizare pe angajați</div>
+                <div class="locatii-chart-subtitle">procent din valoarea introdusă manual</div>
+                <div ref={empDonutRef} style="margin-top:8px;display:flex;flex-direction:column;align-items:center" />
               </div>
             </div>
 
