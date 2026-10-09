@@ -929,6 +929,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
 
   const isFdl = createMemo(() => live().source === "fdl");
 
+  // Deviz platit partial, cu avans incasat: lista arata restul de plata.
+  const areAvans = () => !isFdl() && live().metodaPlata === "Platit Partial" && (live().partialPay ?? 0) > 0;
+
   return (
     <div class="rcard" classList={{ "rcard--open": expanded(), "rcard--fdl": isFdl() }}>
       {/* Header card — click pentru expand */}
@@ -978,17 +981,14 @@ function ReceiptCard(props: { receipt: Receipt }) {
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">
-            {/* Cu avans: in fata e ce mai are de platit clientul; totalul si avansul,
-                mai mic, dedesubt. Fara avans ramane totalul, ca pana acum. */}
+            {/* Cu avans: in fata e ce mai are de platit clientul; totalul si avansul
+                apar mai mic, in eticheta de status. Fara avans ramane totalul. */}
             <Show
-              when={!isFdl() && live().metodaPlata === "Platit Partial" && (live().partialPay ?? 0) > 0}
+              when={areAvans()}
               fallback={<span class="rcard-total">{live().total.toFixed(2)} lei</span>}
             >
               <span class="rcard-total rcard-rest" title="Rest de plată">
                 Rest {Math.max(0, live().total - (live().partialPay ?? 0)).toFixed(2)} lei
-              </span>
-              <span class="rcard-avans-detail">
-                Total {live().total.toFixed(2)} · Avans {(live().partialPay ?? 0).toFixed(2)}
               </span>
             </Show>
             <Show
@@ -997,6 +997,9 @@ function ReceiptCard(props: { receipt: Receipt }) {
             >
               <span class="rcard-metoda" classList={{ "rcard-metoda--neplatit": !live().metodaPlata }}>
                 {displayMetoda(live().metodaPlata)}
+                <Show when={areAvans()}>
+                  {` · Total ${live().total.toFixed(2)} · Avans ${(live().partialPay ?? 0).toFixed(2)}`}
+                </Show>
               </span>
             </Show>
           </div>

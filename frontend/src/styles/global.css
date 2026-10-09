@@ -7686,9 +7686,3 @@ img.pos-theme-preview {
 
 /* Recepție: deviz cu avans — restul de plata in fata, totalul si avansul dedesubt. */
 .rcard-rest { white-space: nowrap; }
-.rcard-avans-detail {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
