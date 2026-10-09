@@ -59,8 +59,12 @@ export function exportCSV(
   const lines = preamble && preamble.length > 0
     ? [...preamble, [], headers, ...rows]
     : [headers, ...rows];
+  // Un text scris de utilizator care incepe cu = + @ (sau - urmat de altceva decat
+  // o cifra) ar fi rulat de Excel ca formula: il prefixam cu ', cum recomanda OWASP.
+  // Sumele negative („-12,50”) raman numere.
+  const safe = (c: string) => (/^[=+@\t\r]/.test(c) || /^-(?![\d.,])/.test(c) ? `'${c}` : c);
   const csv = lines
-    .map(r => r.map(c => `"${(c ?? "").replace(/"/g, '""')}"`).join(","))
+    .map(r => r.map(c => `"${safe(c ?? "").replace(/"/g, '""')}"`).join(","))
     .join("\n");
   const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);

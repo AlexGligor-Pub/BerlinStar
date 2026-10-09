@@ -5,6 +5,7 @@ programat (vezi app/services/reports/).
 """
 from __future__ import annotations
 from calendar import monthrange
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -1956,11 +1957,19 @@ async def reports_programari(
 # vandut asa, cat de des, la ce preturi si cine a introdus-o — ca sa se poata
 # decide ce merita adaugat in catalog.
 #
+# Liniile cu valoare negativa (reduceri / restituiri scrise de mana) nu sunt
+# vanzari: se numara separat (kpi.valoare_reduceri) si apar doar in lista de
+# linii, altfel ar micsora totalul, procentul si preturile.
+#
 # Citim direct din bonuri (nu din tabelele report_*), cu limitele zilei calculate
 # in Europe/Bucharest, ca interogarea sa mearga si pe SQLite (teste).
 
 _BUC = ZoneInfo("Europe/Bucharest")
 _MANUAL_LINES_LIMIT = 1000
+# Perioada maxima: toate liniile perioadei se agrega in memorie.
+_MANUAL_MAX_DAYS = 731
+# Cedila (Ş ş Ţ ţ, de pe tastaturi / importuri vechi) -> virgula (Ș ș Ț ț).
+_RO_CEDILLA = str.maketrans({0x15E: 0x218, 0x15F: 0x219, 0x162: 0x21A, 0x163: 0x21B})
 
 
 class ManualKpi(BaseModel):
@@ -1971,24 +1980,34 @@ class ManualKpi(BaseModel):
     valoare_produse: Decimal
     valoare_servicii: Decimal
     valoare_nespecificat: Decimal
-    # Toate liniile (din catalog + manuale) ale bonurilor din aceeasi perioada.
+    # Valoarea liniilor (pozitive) de pe toate devizele perioadei, din catalog si
+    # manuale: preturile liniilor, fara TVA-ul adaugat pe facturile rapide si fara
+    # reduceri — deci nu e „Total” din Locații, care e totalul devizelor.
     vanzari_totale: Decimal
     pondere_pct: float
+    # Liniile manuale cu valoare negativa (reduceri, restituiri), ca suma pozitiva.
+    valoare_reduceri: Decimal
+    linii_reduceri: int
 
 
 class ManualGroup(BaseModel):
     denumire: str
     tip: str  # "Produs" / "Serviciu" / "Nespecificat" / "Mixt"
+    tipuri: list[str]  # tipurile liniilor grupului (pentru filtrare)
     aparitii: int
     devize: int
     cantitate: Decimal
     valoare: Decimal
     pret_min: Decimal
     pret_max: Decimal
-    pret_mediu: Decimal
+    pret_mediu: Decimal | None
     ultima_data: date
-    # Exista in catalog un produs cu acelasi nume scris altfel (majuscule /
-    # spatii): legarea dupa nume e exacta, deci linia a ramas manuala.
+    # Exista in catalog un produs cu acelasi nume (fara diferente de majuscule /
+    # spatii / diacritice)...
+    in_catalog: bool
+    # ...dar scris altfel decat pe liniile manuale: legarea dupa nume e exacta,
+    # deci de aceea au ramas manuale. Fals cand numele e identic (produsul a fost
+    # adaugat in catalog dupa vanzare).
     in_catalog_alta_scriere: bool
 
 
@@ -2033,8 +2052,10 @@ def _bucharest_bounds(d1: date, d2: date) -> tuple[datetime, datetime]:
 
 
 def _manual_key(name: str) -> str:
-    """Aceeasi denumire scrisa diferit (majuscule, spatii) e acelasi lucru vandut."""
-    return " ".join((name or "").split()).upper()
+    """Aceeasi denumire scrisa diferit (majuscule, spatii, diacritice cu sedila sau
+    virgula, compuse sau descompuse) e acelasi lucru vandut."""
+    s = unicodedata.normalize("NFC", name or "").translate(_RO_CEDILLA)
+    return " ".join(s.split()).upper()
 
 
 def _tip_label(item_type) -> str:
@@ -2058,7 +2079,8 @@ async def reports_introduse_manual(
 
     - Bonurile sterse si Fișele de Lucru (estimari) nu intra.
     - Toate statusurile de plata intra; fiecare linie isi arata statusul.
-    - Grupare pe denumire, fara diferente de majuscule / spatii.
+    - Grupare pe denumire, fara diferente de majuscule / spatii / diacritice.
+    - Reducerile (linii negative) se numara separat si apar doar in lista de linii.
     """
     if date_from is None or date_to is None:
         d1, d2 = _default_period()
@@ -2066,6 +2088,10 @@ async def reports_introduse_manual(
         date_to = date_to or d2
     if date_to < date_from:
         raise HTTPException(422, "Data de sfârșit este înaintea datei de început.")
+    if date_from.year < 2000 or date_to.year > 2100:
+        raise HTTPException(422, "Perioada trebuie să fie între anii 2000 și 2100.")
+    if (date_to - date_from).days + 1 > _MANUAL_MAX_DAYS:
+        raise HTTPException(422, "Perioada poate avea cel mult 2 ani; alege un interval mai scurt.")
     start, end = _bucharest_bounds(date_from, date_to)
 
     base = [
@@ -2090,10 +2116,11 @@ async def reports_introduse_manual(
         .order_by(Receipt.created_at.desc(), ReceiptItem.id)
     )).all()
 
+    # Baza procentului: liniile pozitive (vanzari), din catalog si manuale.
     vanzari = (await db.execute(
         select(func.coalesce(func.sum(ReceiptItem.price * ReceiptItem.qty), 0))
         .join(Receipt, Receipt.id == ReceiptItem.receipt_id)
-        .where(*base)
+        .where(*base, ReceiptItem.price * ReceiptItem.qty > 0)
     )).scalar_one()
     vanzari_totale = Decimal(str(vanzari)).quantize(Decimal("0.01"))
 
@@ -2104,14 +2131,14 @@ async def reports_introduse_manual(
     loc_names = dict((await db.execute(
         select(Location.id, Location.name).where(Location.account_id == account_id)
     )).all())
-    catalog_keys = {
-        _manual_key(n) for n in (await db.execute(
-            select(Item.name).where(Item.account_id == account_id, Item.is_deleted == False)  # noqa: E712
-        )).scalars().all()
-    }
+    catalog_names = set((await db.execute(
+        select(Item.name).where(Item.account_id == account_id, Item.is_deleted == False)  # noqa: E712
+    )).scalars().all())
+    catalog_keys = {_manual_key(n) for n in catalog_names}
 
     zero = Decimal("0.00")
-    total = prod = serv = nesp = zero
+    total = prod = serv = nesp = reduceri = zero
+    linii_vanzare = linii_reduceri = 0
     receipts_seen: set[int] = set()
     groups: dict[str, dict] = {}
     employees: dict[int | None, dict] = {}
@@ -2122,6 +2149,25 @@ async def reports_introduse_manual(
         qty = Decimal(r.qty)
         value = (price * qty).quantize(Decimal("0.01"))
         tip = _tip_label(r.item_type)
+
+        if len(lines) < _MANUAL_LINES_LIMIT:
+            deviz = f"{r.deviz_serie or ''} {r.deviz_nr}".strip() if r.deviz_nr else None
+            lines.append(ManualLine(
+                receipt_id=r.id, data=r.created_at, titlu=r.titlu, deviz=deviz,
+                denumire=r.name, tip=tip, cantitate=qty, um=r.unit, pret=price, valoare=value,
+                angajat=emp_names.get(r.employee_id) if r.employee_id is not None else None,
+                status_plata=getattr(r.pay_method, "value", str(r.pay_method)),
+                locatie=loc_names.get(r.location_id) if r.location_id is not None else None,
+            ))
+
+        if value < 0:
+            reduceri += -value
+            linii_reduceri += 1
+            continue
+        if value == 0 and price < 0:
+            continue
+
+        linii_vanzare += 1
         total += value
         if tip == "Produs":
             prod += value
@@ -2139,7 +2185,8 @@ async def reports_introduse_manual(
                 "names": {}, "tips": set(), "aparitii": 0, "devize": set(), "cantitate": Decimal(0),
                 "valoare": zero, "pret_min": price, "pret_max": price, "ultima": local_day,
             }
-        g["names"][r.name.strip()] = g["names"].get(r.name.strip(), 0) + 1
+        shown = " ".join(r.name.split())
+        g["names"][shown] = g["names"].get(shown, 0) + 1
         g["tips"].add(tip)
         g["aparitii"] += 1
         g["devize"].add(r.id)
@@ -2149,35 +2196,26 @@ async def reports_introduse_manual(
         g["pret_max"] = max(g["pret_max"], price)
         g["ultima"] = max(g["ultima"], local_day)
 
-        emp_id = r.employee_id
-        e = employees.setdefault(emp_id, {"linii": 0, "valoare": zero})
+        e = employees.setdefault(r.employee_id, {"linii": 0, "valoare": zero})
         e["linii"] += 1
         e["valoare"] += value
-
-        if len(lines) < _MANUAL_LINES_LIMIT:
-            deviz = f"{r.deviz_serie or ''} {r.deviz_nr}".strip() if r.deviz_nr else None
-            lines.append(ManualLine(
-                receipt_id=r.id, data=r.created_at, titlu=r.titlu, deviz=deviz,
-                denumire=r.name, tip=tip, cantitate=qty, um=r.unit, pret=price, valoare=value,
-                angajat=emp_names.get(emp_id) if emp_id is not None else None,
-                status_plata=getattr(r.pay_method, "value", str(r.pay_method)),
-                locatie=loc_names.get(r.location_id) if r.location_id is not None else None,
-            ))
 
     grupuri = []
     for key, g in groups.items():
         # Denumirea afisata: scrierea cea mai folosita.
         denumire = max(g["names"].items(), key=lambda kv: (kv[1], kv[0]))[0]
-        tips = g["tips"]
-        tip = next(iter(tips)) if len(tips) == 1 else "Mixt"
+        tips = sorted(g["tips"])
         cant = g["cantitate"]
+        in_catalog = key in catalog_keys
         grupuri.append(ManualGroup(
-            denumire=denumire, tip=tip, aparitii=g["aparitii"], devize=len(g["devize"]),
+            denumire=denumire, tip=tips[0] if len(tips) == 1 else "Mixt", tipuri=tips,
+            aparitii=g["aparitii"], devize=len(g["devize"]),
             cantitate=cant, valoare=g["valoare"],
             pret_min=g["pret_min"].quantize(Decimal("0.01")), pret_max=g["pret_max"].quantize(Decimal("0.01")),
-            pret_mediu=(g["valoare"] / cant).quantize(Decimal("0.01")) if cant else zero,
+            pret_mediu=(g["valoare"] / cant).quantize(Decimal("0.01")) if cant > 0 else None,
             ultima_data=g["ultima"],
-            in_catalog_alta_scriere=key in catalog_keys,
+            in_catalog=in_catalog,
+            in_catalog_alta_scriere=in_catalog and not any(n in catalog_names for n in g["names"]),
         ))
     grupuri.sort(key=lambda x: (-x.valoare, -x.aparitii, x.denumire))
 
@@ -2193,10 +2231,11 @@ async def reports_introduse_manual(
 
     return ManualReport(
         kpi=ManualKpi(
-            valoare_totala=total, linii=len(rows), devize=len(receipts_seen), denumiri=len(groups),
+            valoare_totala=total, linii=linii_vanzare, devize=len(receipts_seen), denumiri=len(groups),
             valoare_produse=prod, valoare_servicii=serv, valoare_nespecificat=nesp,
             vanzari_totale=vanzari_totale,
             pondere_pct=float(total / vanzari_totale * 100) if vanzari_totale > 0 else 0.0,
+            valoare_reduceri=reduceri, linii_reduceri=linii_reduceri,
         ),
         grupuri=grupuri,
         angajati=angajati,

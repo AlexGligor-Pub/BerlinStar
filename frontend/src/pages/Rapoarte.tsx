@@ -3796,19 +3796,23 @@ interface ManualKpi {
   valoare_nespecificat: string;
   vanzari_totale: string;
   pondere_pct: number;
+  valoare_reduceri: string;
+  linii_reduceri: number;
 }
 
 interface ManualGroup {
   denumire: string;
   tip: string;
+  tipuri: string[];
   aparitii: number;
   devize: number;
   cantitate: string;
   valoare: string;
   pret_min: string;
   pret_max: string;
-  pret_mediu: string;
+  pret_mediu: string | null;
   ultima_data: string;
+  in_catalog: boolean;
   in_catalog_alta_scriere: boolean;
 }
 
@@ -3848,8 +3852,9 @@ interface ManualReport {
 const MANUAL_TIPURI = ["Toate", "Produs", "Serviciu", "Nespecificat"] as const;
 type ManualTip = typeof MANUAL_TIPURI[number];
 const MANUAL_LINES_PAGE = 100;
-// Cati angajati apar separat in donut; restul se aduna in „Alții”, ca graficul sa ramana lizibil.
-const MANUAL_DONUT_TOP = 8;
+// Cati angajati apar separat in donut; restul se aduna in „Alții”, ca graficul sa
+// ramana lizibil. 7 + „Alții” = 8, cate intrari deseneaza legenda lui drawDonut.
+const MANUAL_DONUT_TOP = 7;
 
 const PAY_STATUS_LABEL: Record<string, string> = {
   "Neplatit": "Neplătit",
@@ -3864,6 +3869,8 @@ function IntroduseManualPanel() {
   const [loading, setLoading] = createSignal(true);
   const [selectedLocIds, setSelectedLocIds] = persistedSignal<number[]>("rapoarte_manual_loc_ids", []);
   const [tip, setTip] = persistedSignal<ManualTip>("rapoarte_manual_tip", "Toate");
+  // O valoare veche / necunoscuta din localStorage ar lasa filtrul fara buton activ.
+  if (!(MANUAL_TIPURI as readonly string[]).includes(tip())) setTip("Toate");
   const [cauta, setCauta] = createSignal("");
   const [liniiVizibile, setLiniiVizibile] = createSignal(MANUAL_LINES_PAGE);
 
@@ -3898,7 +3905,9 @@ function IntroduseManualPanel() {
   createEffect(() => {
     const d = data();
     if (!d || !empDonutRef) return;
-    const sorted = [...d.angajati].sort((a, b) => toNumber(b.valoare) - toNumber(a.valoare));
+    const sorted = d.angajati
+      .filter((e) => toNumber(e.valoare) > 0)
+      .sort((a, b) => toNumber(b.valoare) - toNumber(a.valoare));
     const top = sorted.slice(0, MANUAL_DONUT_TOP);
     const restul = sorted.slice(MANUAL_DONUT_TOP).reduce((sum, e) => sum + toNumber(e.valoare), 0);
     const items: DonutItem[] = top.map((e, i) => ({
@@ -3912,24 +3921,30 @@ function IntroduseManualPanel() {
   });
 
   // Filtrele (tip, cautare) sunt pe client: raportul vine o singura data pe perioada.
-  const potriveste = (denumire: string, t: string) => {
-    if (tip() !== "Toate" && t !== tip() && !(t === "Mixt" && tip() !== "Nespecificat")) return false;
+  // Un grup „Mixt” apare la fiecare tip pe care il au liniile lui (ex. Serviciu +
+  // Nespecificat apare la Servicii si la Nespecificat, nu si la Produse).
+  const potriveste = (denumire: string, tipuri: string[]) => {
+    if (tip() !== "Toate" && !tipuri.includes(tip())) return false;
     const q = cauta().trim().toLowerCase();
     return !q || denumire.toLowerCase().includes(q);
   };
-  const grupuri = createMemo(() => (data()?.grupuri ?? []).filter((g) => potriveste(g.denumire, g.tip)));
-  const linii = createMemo(() => (data()?.linii ?? []).filter((l) => potriveste(l.denumire, l.tip)));
+  const grupuri = createMemo(() => (data()?.grupuri ?? []).filter((g) => potriveste(g.denumire, g.tipuri)));
+  const linii = createMemo(() => (data()?.linii ?? []).filter((l) => potriveste(l.denumire, [l.tip])));
   const lei = (v: string | number) => `${fmtMoney(toNumber(v))} lei`;
   const qtyFmt = (v: string) => toNumber(v).toLocaleString("ro-RO", { maximumFractionDigits: 3 });
   const dataScurta = (iso: string) => new Date(iso).toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" });
 
-  const perioada = () => `${fmtRoDate(periodFrom())} – ${fmtRoDate(periodTo())}`;
-  const GROUP_HEADERS = ["Denumire", "Tip", "Apariții", "Devize", "Cantitate", "Valoare (lei)", "Preț min", "Preț mediu", "Preț max", "Ultima dată", "În catalog (altă scriere)"];
+  // Perioada datelor afisate (nu cea aleasa acum, care poate fi inca in incarcare).
+  const perioada = () => {
+    const d = data();
+    return d ? `${fmtRoDate(d.period_start)} – ${fmtRoDate(d.period_end)}` : "";
+  };
+  const GROUP_HEADERS = ["Denumire", "Tip", "Apariții", "Devize", "Cantitate", "Valoare (lei)", "Preț min", "Preț mediu", "Preț max", "Ultima dată", "În catalog"];
   function groupRows(): string[][] {
     return grupuri().map((g) => [
       g.denumire, g.tip, String(g.aparitii), String(g.devize), qtyFmt(g.cantitate), fmtMoney(toNumber(g.valoare)),
-      fmtMoney(toNumber(g.pret_min)), fmtMoney(toNumber(g.pret_mediu)), fmtMoney(toNumber(g.pret_max)),
-      dataScurta(g.ultima_data), g.in_catalog_alta_scriere ? "da" : "",
+      fmtMoney(toNumber(g.pret_min)), g.pret_mediu === null ? "" : fmtMoney(toNumber(g.pret_mediu)), fmtMoney(toNumber(g.pret_max)),
+      dataScurta(g.ultima_data), g.in_catalog_alta_scriere ? "da, scris altfel" : g.in_catalog ? "da" : "",
     ]);
   }
   const LINE_HEADERS = ["Data", "Deviz", "Nr. mașină / titlu", "Denumire", "Tip", "Cant.", "U.M.", "Preț", "Valoare", "Angajat", "Status plată", "Locație"];
@@ -3948,8 +3963,11 @@ function IntroduseManualPanel() {
           Produsele și serviciile scrise direct pe deviz, fără să existe în catalog (de exemplu
           cu „Adaugă manual” din POS). Vezi ce se vinde așa, cât de des și la ce prețuri, cine le
           introduce și ce ar merita adăugat în catalog. Aceeași denumire scrisă diferit
-          (majuscule, spații) e numărată o singură dată. Intră toate devizele din perioadă,
-          indiferent de plată; Fișele de Lucru (estimări) și devizele șterse nu intră.
+          (majuscule, spații, diacritice) e numărată o singură dată. Intră toate devizele din
+          perioadă, indiferent de plată (și la angajați, spre deosebire de raportul pe angajați,
+          care numără doar devizele plătite); Fișele de Lucru și devizele șterse nu intră.
+          Reducerile scrise manual (linii negative) sunt arătate separat. Liniile fără tip apar
+          ca „Nespecificat” (alte rapoarte le numără la servicii). Perioada maximă: 2 ani.
         </p>
       </Show>
 
@@ -3969,7 +3987,7 @@ function IntroduseManualPanel() {
                 <span class="locatii-kpi__value">{lei(d().kpi.valoare_totala)}</span>
               </div>
               <div class="locatii-kpi">
-                <span class="locatii-kpi__label">Din vânzările perioadei</span>
+                <span class="locatii-kpi__label" title="Din valoarea tuturor liniilor de pe devizele perioadei (prețurile liniilor, fără TVA-ul adăugat pe facturile rapide și fără reduceri) — nu din „Total” de la Locații.">Din valoarea liniilor perioadei</span>
                 <span class="locatii-kpi__value">
                   {/* Sub 0,1% nu e zero: o pondere mica, dar reala, nu trebuie sa para „nimic”. */}
                   {d().kpi.pondere_pct > 0 && d().kpi.pondere_pct < 0.1 ? "< 0,1%" : `${d().kpi.pondere_pct.toFixed(1)}%`}
@@ -3987,6 +4005,12 @@ function IntroduseManualPanel() {
                 <span class="locatii-kpi__label">Denumiri diferite</span>
                 <span class="locatii-kpi__value">{d().kpi.denumiri}</span>
               </div>
+              <Show when={d().kpi.linii_reduceri > 0}>
+                <div class="locatii-kpi">
+                  <span class="locatii-kpi__label" title="Linii manuale cu valoare negativă (reduceri, restituiri). Nu intră în valoarea și în tabelele de mai sus; apar în lista liniilor.">Reduceri manuale</span>
+                  <span class="locatii-kpi__value">−{lei(d().kpi.valoare_reduceri)} <span style="font-size:0.75rem;font-weight:500">({d().kpi.linii_reduceri} linii)</span></span>
+                </div>
+              </Show>
               <div class="locatii-kpi">
                 <span class="locatii-kpi__label">Produse · Servicii · Nespecificat</span>
                 <span class="locatii-kpi__value" style="font-size:0.95rem">
@@ -4013,6 +4037,7 @@ function IntroduseManualPanel() {
                 class="input manual-cauta"
                 type="search"
                 placeholder="Caută denumire..."
+                aria-label="Caută denumire"
                 value={cauta()}
                 onInput={(e) => setCauta(e.currentTarget.value)}
               />
@@ -4024,7 +4049,7 @@ function IntroduseManualPanel() {
                   <div>
                     <div class="locatii-chart-title">Pe denumire</div>
                     <div class="locatii-chart-subtitle">
-                      {grupuri().length} denumiri · ordonate după valoare · „în catalog” = există un produs cu același nume scris altfel
+                      {grupuri().length} denumiri · ordonate după valoare · „în catalog” = produsul există acum în catalog (adăugat după vânzare sau scris altfel)
                     </div>
                   </div>
                   <ExportMenu
@@ -4058,8 +4083,13 @@ function IntroduseManualPanel() {
                             <tr>
                               <td>
                                 {g.denumire}
-                                <Show when={g.in_catalog_alta_scriere}>
-                                  <span class="manual-badge" title="Există în catalog un produs cu același nume, scris altfel (majuscule / spații). Linia nu s-a legat de el.">în catalog</span>
+                                <Show when={g.in_catalog}>
+                                  <Show
+                                    when={g.in_catalog_alta_scriere}
+                                    fallback={<span class="manual-badge manual-badge--later" title="Produsul există acum în catalog cu exact acest nume; probabil a fost adăugat după aceste vânzări.">în catalog</span>}
+                                  >
+                                    <span class="manual-badge" title="Există în catalog un produs cu același nume, scris altfel (majuscule, spații sau diacritice). Liniile nu s-au legat de el.">în catalog, scris altfel</span>
+                                  </Show>
                                 </Show>
                               </td>
                               <td class="nowrap muted">{g.tip}</td>
@@ -4068,7 +4098,7 @@ function IntroduseManualPanel() {
                               <td class="num">{qtyFmt(g.cantitate)}</td>
                               <td class="num bold nowrap">{lei(g.valoare)}</td>
                               <td class="num nowrap">{fmtMoney(toNumber(g.pret_min))}</td>
-                              <td class="num nowrap">{fmtMoney(toNumber(g.pret_mediu))}</td>
+                              <td class="num nowrap">{g.pret_mediu === null ? "—" : fmtMoney(toNumber(g.pret_mediu))}</td>
                               <td class="num nowrap">{fmtMoney(toNumber(g.pret_max))}</td>
                               <td class="num nowrap">{dataScurta(g.ultima_data)}</td>
                             </tr>
@@ -4146,7 +4176,7 @@ function IntroduseManualPanel() {
                       <thead>
                         <tr>
                           <th style="text-align:left">Data</th>
-                          <th style="text-align:left">Deviz</th>
+                          <th style="text-align:left">Nr. mașină / Deviz</th>
                           <th style="text-align:left">Denumire</th>
                           <th style="text-align:left">Tip</th>
                           <th class="num">Cant.</th>

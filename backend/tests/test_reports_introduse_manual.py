@@ -145,6 +145,73 @@ async def test_payment_status_is_shown_and_empty_period_is_zero():
     await raises_http(422, _report(db, acc, date_from=date(2026, 9, 30), date_to=date(2026, 9, 1)))
 
 
+async def test_discount_lines_are_counted_apart_and_listed():
+    db, acc, *_ = await _fixture()
+    r = await _receipt(db, acc, "150.00", created_at=_at(date(2026, 9, 8)))
+    await _line(db, r, "Manopera extra", "200.00", item_type=ItemType.SERVICE)
+    await _line(db, r, "Reducere fidelitate", "-50.00")
+    await db.commit()
+    out = await _report(db, acc)
+    k = out.kpi
+    assert (k.valoare_totala, k.linii, k.valoare_reduceri, k.linii_reduceri) == (Decimal("200.00"), 1, Decimal("50.00"), 1)
+    assert k.vanzari_totale == Decimal("200.00") and k.pondere_pct == 100.0
+    assert k.valoare_nespecificat == Decimal("0.00")
+    assert [g.denumire for g in out.grupuri] == ["Manopera extra"]
+    assert [(e.employee_name, e.valoare) for e in out.angajati] == [("Fără angajat", Decimal("200.00"))]
+    # lista liniilor le arata pe amandoua
+    assert sorted(ln.valoare for ln in out.linii) == [Decimal("-50.00"), Decimal("200.00")]
+    assert out.linii_total == 2
+
+
+async def test_cedilla_and_comma_diacritics_are_one_name():
+    db, acc, *_ = await _fixture()
+    r = await _receipt(db, acc, "30.00", created_at=_at(date(2026, 9, 9)))
+    await _line(db, r, "Şurub roată", "10.00")       # sedila
+    await _line(db, r, "ȘURUB ROATĂ", "10.00")        # virgula
+    await _line(db, r, "S\u0326urub roata\u0306", "10.00")  # virgula descompusa
+    await db.commit()
+    out = await _report(db, acc)
+    assert len(out.grupuri) == 1 and out.grupuri[0].aparitii == 3
+
+
+async def test_catalog_flag_tells_added_later_from_written_differently():
+    db, acc, *_ = await _fixture()      # catalogul are „Ulei motor”
+    r = await _receipt(db, acc, "200.00", created_at=_at(date(2026, 9, 5)))
+    await _line(db, r, "Ulei motor", "100.00")      # acelasi nume: adaugat in catalog dupa vanzare
+    await db.commit()
+    g = (await _report(db, acc)).grupuri[0]
+    assert (g.in_catalog, g.in_catalog_alta_scriere) == (True, False)
+
+
+async def test_groups_carry_all_their_types_for_filtering():
+    db, acc, *_ = await _fixture()
+    r = await _receipt(db, acc, "30.00", created_at=_at(date(2026, 9, 9)))
+    await _line(db, r, "Montaj", "10.00", item_type=ItemType.SERVICE)
+    await _line(db, r, "montaj", "20.00")
+    await db.commit()
+    g = (await _report(db, acc)).grupuri[0]
+    assert (g.tip, g.tipuri) == ("Mixt", ["Nespecificat", "Serviciu"])
+
+
+async def test_daylight_saving_days_have_the_right_bounds():
+    db, acc, *_ = await _fixture()
+    # 25 oct 2026: ora de vara se termina (25 de ore). 00:30 si 23:30 ora Romaniei intra in ziua respectiva.
+    for when, name in ((datetime(2026, 10, 25, 0, 30, tzinfo=BUC), "Inceput"), (datetime(2026, 10, 25, 23, 30, tzinfo=BUC), "Sfarsit"),
+                       (datetime(2026, 10, 26, 0, 30, tzinfo=BUC), "Ziua urmatoare")):
+        r = await _receipt(db, acc, "10.00", created_at=when.astimezone(timezone.utc))
+        await _line(db, r, name, "10.00")
+    await db.commit()
+    out = await _report(db, acc, date_from=date(2026, 10, 25), date_to=date(2026, 10, 25))
+    assert sorted(g.denumire for g in out.grupuri) == ["Inceput", "Sfarsit"]
+
+
+async def test_period_limits_are_validated():
+    db, acc, *_ = await _fixture()
+    await raises_http(422, _report(db, acc, date_from=date(2020, 1, 1), date_to=date(2026, 1, 1)))
+    await raises_http(422, _report(db, acc, date_from=date(9999, 12, 1), date_to=date(9999, 12, 31)))
+    await raises_http(422, _report(db, acc, date_from=date(1, 1, 1), date_to=date(1, 1, 2)))
+
+
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
 
 if __name__ == "__main__":
