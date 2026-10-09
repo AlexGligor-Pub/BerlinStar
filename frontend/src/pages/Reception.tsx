@@ -978,7 +978,19 @@ function ReceiptCard(props: { receipt: Receipt }) {
         </div>
         <div class="rcard-right">
           <div class="rcard-right-col">
-            <span class="rcard-total">{live().total.toFixed(2)} lei</span>
+            {/* Cu avans: in fata e ce mai are de platit clientul; totalul si avansul,
+                mai mic, dedesubt. Fara avans ramane totalul, ca pana acum. */}
+            <Show
+              when={!isFdl() && live().metodaPlata === "Platit Partial" && (live().partialPay ?? 0) > 0}
+              fallback={<span class="rcard-total">{live().total.toFixed(2)} lei</span>}
+            >
+              <span class="rcard-total rcard-rest" title="Rest de plată">
+                Rest {Math.max(0, live().total - (live().partialPay ?? 0)).toFixed(2)} lei
+              </span>
+              <span class="rcard-avans-detail">
+                Total {live().total.toFixed(2)} · Avans {(live().partialPay ?? 0).toFixed(2)}
+              </span>
+            </Show>
             <Show
               when={!isFdl()}
               fallback={<span class="rcard-fdl-badge" style="font-size:0.6rem">Estimare</span>}
