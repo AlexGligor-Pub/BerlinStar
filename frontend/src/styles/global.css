@@ -7680,3 +7680,6 @@ img.pos-theme-preview {
   vertical-align: middle; white-space: nowrap;
 }
 .manual-empty { padding: 24px; text-align: center; color: var(--text-muted, #8b90a0); font-size: 0.85rem; }
+
+.manual-table-scroll th { position: sticky; top: 0; z-index: 1; background: var(--surface, #fff); }
+.manual-badge--later { color: #2563eb; border-color: #93c5fd; background: #eff6ff; }
